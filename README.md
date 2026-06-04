@@ -7,6 +7,8 @@ structured-output grammars, provider contracts, and token budgets.
 
 ```bash
 promptabi verify --config examples/minimal/promptabi.json
+# or, inside a repo with promptabi.json:
+promptabi verify --artifact schema=schemas/answer.json --fail-on warning
 ```
 
 ```text
@@ -35,9 +37,10 @@ messages -> chat template -> byte/string prompt -> tokenizer -> token stream
 The roadmap targets three high-value checks first: role-boundary
 non-forgeability, stop/grammar/tokenizer reachability, and must-survive
 token-budget verification. The repository already has the typed Python package,
-core artifact model, stable diagnostic contract, text/JSON/SARIF renderers, CLI
-entrypoint, docs, examples, fixture layout, benchmarks, and contribution path
-needed to grow those checks without changing the public surface.
+core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,
+discoverable `promptabi verify` workflow, docs, examples, fixture layout,
+benchmarks, and contribution path needed to grow those checks without changing
+the public surface.
 
 ## Why this is clearly distinct from TensorGuard
 

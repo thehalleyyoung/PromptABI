@@ -4,17 +4,32 @@ from __future__ import annotations
 
 import json
 from collections import OrderedDict
+from pathlib import Path
 
 from .session import VerificationResult
 
 
-def render_text(result: VerificationResult) -> str:
+def render_text(
+    result: VerificationResult,
+    *,
+    verbosity: int = 0,
+    config_path: Path | None = None,
+    cache_dir: Path | None = None,
+) -> str:
     lines = [
         f"PromptABI verification: {result.config.name}",
         f"checks: {', '.join(result.config.checks) if result.config.checks else '(none)'}",
         f"status: {'PASS' if result.ok else 'FAIL'}",
     ]
+    if verbosity > 0:
+        if config_path is not None:
+            lines.append(f"config: {config_path}")
+        if cache_dir is not None:
+            lines.append(f"cache: {cache_dir}")
+        lines.append(f"artifacts: {len(result.config.artifact_bundle.artifacts)}")
     for diagnostic in result.diagnostics:
+        if verbosity < 0 and diagnostic.severity.value == "info":
+            continue
         lines.append(
             f"{diagnostic.severity.value.upper()} {diagnostic.rule_id}: {diagnostic.message}"
         )

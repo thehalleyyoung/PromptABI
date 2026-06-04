@@ -7,7 +7,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .artifacts import ArtifactBundle, artifact_from_config, local_artifact_paths
+from .artifacts import (
+    Artifact,
+    ArtifactBundle,
+    artifact_from_cli_override,
+    artifact_from_config,
+    local_artifact_paths,
+)
 
 
 class ConfigError(ValueError):
@@ -72,6 +78,28 @@ class VerificationConfig:
             "max_context_tokens": self.max_context_tokens,
         }
 
+    def with_artifact_overrides(self, overrides: dict[str, str], *, base_dir: Path) -> "VerificationConfig":
+        """Return a config with CLI-provided artifact paths or URIs applied."""
+
+        if not overrides:
+            return self
+        artifacts_by_name: dict[str, Artifact] = {artifact.name: artifact for artifact in self.artifact_bundle}
+        for name, value in sorted(overrides.items()):
+            artifacts_by_name[name] = artifact_from_cli_override(
+                name,
+                value,
+                base_dir=base_dir,
+                existing=artifacts_by_name.get(name),
+            )
+        artifact_bundle = ArtifactBundle(tuple(artifacts_by_name.values()))
+        return VerificationConfig(
+            name=self.name,
+            artifacts=local_artifact_paths(artifact_bundle),
+            artifact_bundle=artifact_bundle,
+            checks=self.checks,
+            max_context_tokens=self.max_context_tokens,
+        )
+
 
 def load_config(path: str | Path) -> VerificationConfig:
     """Load a JSON PromptABI config file from disk."""
@@ -87,3 +115,21 @@ def load_config(path: str | Path) -> VerificationConfig:
     if not isinstance(raw, dict):
         raise ConfigError("config root must be a JSON object")
     return VerificationConfig.from_mapping(raw, base_dir=config_path.parent)
+
+
+CONFIG_FILENAMES = ("promptabi.json", ".promptabi.json")
+
+
+def discover_config(start: str | Path = ".") -> Path:
+    """Find a PromptABI config by walking from ``start`` toward the filesystem root."""
+
+    current = Path(start).resolve()
+    if current.is_file():
+        current = current.parent
+    for directory in (current, *current.parents):
+        for filename in CONFIG_FILENAMES:
+            candidate = directory / filename
+            if candidate.is_file():
+                return candidate
+    names = ", ".join(CONFIG_FILENAMES)
+    raise ConfigError(f"no PromptABI config found from {current} (looked for {names})")

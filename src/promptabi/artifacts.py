@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -514,6 +514,25 @@ def artifact_from_config(name: str, spec: str | dict[str, Any], *, base_dir: Pat
     raise AssertionError(f"unhandled artifact kind: {kind}")
 
 
+def artifact_from_cli_override(
+    name: str,
+    value: str,
+    *,
+    base_dir: Path,
+    existing: Artifact | None = None,
+) -> Artifact:
+    """Build or relocate an artifact from a ``NAME=PATH_OR_URI`` CLI override."""
+
+    if not name:
+        raise ValueError("artifact override names must be non-empty")
+    if not value:
+        raise ValueError(f"artifact override '{name}' must point to a path or URI")
+    location = _location_from_uri_or_path(value, base_dir)
+    if existing is None:
+        return SchemaArtifact(kind=ArtifactKind.SCHEMA, name=name, location=location)
+    return replace(existing, location=location)
+
+
 def local_artifact_paths(bundle: ArtifactBundle) -> dict[str, str]:
     return {
         artifact.name: artifact.location.path
@@ -546,6 +565,12 @@ def _location_from_path(path: str, base_dir: Path) -> ArtifactLocation:
     if not raw_path.is_absolute():
         raw_path = base_dir / raw_path
     return ArtifactLocation(path=str(raw_path.resolve()))
+
+
+def _location_from_uri_or_path(value: str, base_dir: Path) -> ArtifactLocation:
+    if "://" in value:
+        return ArtifactLocation(uri=value)
+    return _location_from_path(value, base_dir)
 
 
 def _optional_str(spec: dict[str, Any], key: str) -> str | None:

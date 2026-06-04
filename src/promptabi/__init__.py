@@ -26,7 +26,7 @@ from .artifacts import (
     ToolDefinitionArtifact,
     TruncationStrategy,
 )
-from .config import ConfigError, VerificationConfig, load_config
+from .config import ConfigError, VerificationConfig, discover_config, load_config
 from .diagnostics import (
     ArtifactRef,
     Diagnostic,
@@ -66,5 +66,6 @@ __all__ = [
     "VerificationSession",
     "WitnessStep",
     "WitnessTrace",
+    "discover_config",
     "load_config",
 ]

@@ -27,7 +27,7 @@ artifacts that will be used in production.
 
 This paper presents the repository as it now stands and the research system it
 is designed to become. The implementation already contains a typed Python
-package, a deterministic command line entrypoint, a public embedding API, a
+package, a deterministic command line workflow, a public embedding API, a
 typed artifact model, a stable diagnostic contract with text, JSON, and SARIF
 renderers, a minimal verification session, focused tests, examples, a fixture
 corpus layout, a CPU-only benchmark, documentation, and contribution guidance.
@@ -82,10 +82,12 @@ metadata in \texttt{pyproject.toml}, exposes the \texttt{promptabi} console
 entrypoint, ships \texttt{py.typed}, and includes focused tests for the public
 API, artifact model, diagnostic contract, configuration loader, and CLI behavior.
 The implementation is intentionally small, but it is not a paper mockup: it
-loads real JSON configuration, normalizes artifact paths, builds typed artifact
-bundles, emits deterministic typed diagnostics in text, JSON, and SARIF, returns
-a stable process exit code, and runs a CPU-only smoke benchmark against an
-example bundle.
+loads real JSON configuration, discovers configs from subdirectories, accepts
+explicit artifact overrides, normalizes artifact paths, builds typed artifact
+bundles, prepares a cache directory for future expensive products, emits
+deterministic typed diagnostics in text, JSON, and SARIF, returns stable
+policy-controlled process exit codes, and runs a CPU-only smoke benchmark
+against an example bundle.
 
 The repository layout is designed to scale:
 
@@ -250,16 +252,29 @@ structures.
 The command line entrypoint is:
 
 \begin{verbatim}
+promptabi verify
 promptabi verify --config examples/minimal/promptabi.json
+promptabi verify --artifact schema=schemas/answer.json --fail-on warning
 promptabi verify --config examples/minimal/promptabi.json --format json
 promptabi verify --config examples/minimal/promptabi.json --format sarif
+promptabi verify --cache-dir .cache/promptabi --verbose
 \end{verbatim}
 
 In the current milestone the workflow validates repository wiring and artifact
-existence. It exits with code 0 when no error-level diagnostics are present, code
-1 when verification finds error-level diagnostics, and code 2 when the config is
-invalid. This convention leaves room for CI to distinguish malformed invocation
-from a real contract failure.
+existence. It discovers \texttt{promptabi.json} or \texttt{.promptabi.json} by
+walking upward from the current directory unless \texttt{--config} is explicit.
+It accepts repeated \texttt{--artifact NAME=PATH\_OR\_URI} overrides so CI can
+verify generated or matrix-selected artifacts without rewriting the repository
+config. It prepares a cache directory selected by \texttt{--cache-dir},
+\texttt{PROMPTABI\_CACHE\_DIR}, \texttt{XDG\_CACHE\_HOME}, or a user cache
+fallback. It provides quiet and verbose text modes while keeping JSON and SARIF
+stable for machines.
+
+The exit-code policy is configurable. The default fails only on error-level
+diagnostics. CI can instead fail on warnings, fail on any diagnostic, or never
+fail the process while still emitting machine-readable results. Malformed
+invocations and invalid configs return code 2, preserving the distinction
+between a broken workflow and a real artifact-contract finding.
 
 The same behavior is available through the embedding API:
 
@@ -276,7 +291,10 @@ checkers have an integration path. A LangChain plugin, a pre-commit hook, a
 GitHub Action, a notebook visualization, and a provider-fixture replay harness
 can all depend on the same session and result objects. That prevents the common
 research-tool failure mode where each experiment has its own incompatible input
-format and output convention.
+format and output convention. The first workflow milestone also establishes
+practical CI affordances---discovery, overrides, caches, verbosity, deterministic
+rendering, and explicit failure thresholds---before expensive formal checkers
+arrive.
 
 \clearpage
 \section{Role-Boundary Non-Forgeability}
@@ -578,21 +596,24 @@ for researchers to reproduce.
 \section{Current Smoke Results}
 
 The current codebase was validated with focused tests for the package, artifact
-model, configuration loader, public API, and CLI. The CLI was also run against
-the minimal typed-artifact example configuration, producing a passing
-informational diagnostic. The smoke benchmark runs the skeleton verifier
-repeatedly on the example config and reports a deterministic JSON result. These
-are small but important baselines: they prove that the repository can already
-execute code, not just describe a future tool.
+model, configuration loader, public API, and CLI workflow. The CLI tests exercise
+config discovery from nested directories, artifact-location overrides,
+deterministic JSON output, SARIF output, missing-artifact failures, cache
+directory preparation, quiet/verbose text controls, and configurable exit-code
+thresholds. The CLI was also run against the minimal typed-artifact example
+configuration, producing a passing informational diagnostic. The smoke benchmark
+runs the skeleton verifier repeatedly on the example config and reports a
+deterministic JSON result. These are small but important baselines: they prove
+that the repository can already execute code, not just describe a future tool.
 
 \begin{center}
 \begin{tabular}{|p{0.30\linewidth}|p{0.50\linewidth}|}
 \hline
 \textbf{Line} & \textbf{Current status} \\
 \hline
-Focused tests & Artifact model, public API, config loading, and CLI behavior pass in isolation. \\
+Focused tests & Artifact model, public API, config loading, and CLI workflow behavior pass in isolation. \\
 \hline
-CLI smoke & \texttt{promptabi verify --config examples/minimal/promptabi.json} returns pass. \\
+CLI smoke & \texttt{promptabi verify --config examples/minimal/promptabi.json} returns pass, and \texttt{--fail-on}, \texttt{--artifact}, \texttt{--cache-dir}, \texttt{--quiet}, and \texttt{--verbose} are covered. \\
 \hline
 Benchmark smoke & Repeated config load and verification completes on CPU with JSON output. \\
 \hline

@@ -13,6 +13,29 @@ def test_verify_text_output_passes_for_example_config(capsys) -> None:
     assert captured.err == ""
 
 
+def test_verify_discovers_config_from_nested_directory(tmp_path, monkeypatch, capsys) -> None:
+    config_dir = tmp_path / "project"
+    nested = config_dir / "app" / "prompts"
+    nested.mkdir(parents=True)
+    config = config_dir / "promptabi.json"
+    schema = config_dir / "schema.json"
+    cache_dir = tmp_path / "cache"
+    schema.write_text("{}", encoding="utf-8")
+    config.write_text(
+        '{"name": "discovered", "artifacts": {"schema": "schema.json"}}',
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(nested)
+
+    exit_code = main(["verify", "--cache-dir", str(cache_dir)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "PromptABI verification: discovered" in captured.out
+    assert cache_dir.is_dir()
+    assert captured.err == ""
+
+
 def test_verify_json_output_is_stable(capsys) -> None:
     exit_code = main(["verify", "--config", "examples/minimal/promptabi.json", "--format", "json"])
 
@@ -24,6 +47,35 @@ def test_verify_json_output_is_stable(capsys) -> None:
     assert "fingerprint" in payload["diagnostics"][0]
     assert payload["diagnostics"][0]["witness"]["steps"][0]["action"] == "load JSON config"
     assert list(payload) == ["config", "diagnostics", "ok"]
+
+
+def test_verify_artifact_override_replaces_configured_location(tmp_path, capsys) -> None:
+    config = tmp_path / "promptabi.json"
+    existing = tmp_path / "schema.json"
+    missing = tmp_path / "missing.schema.json"
+    existing.write_text("{}", encoding="utf-8")
+    config.write_text(
+        f'{{"name": "override", "artifacts": {{"schema": "{missing.name}"}}}}',
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "verify",
+            "--config",
+            str(config),
+            "--artifact",
+            f"schema={existing}",
+            "--format",
+            "json",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["ok"] is True
+    assert payload["config"]["artifacts"] == {"schema": str(existing)}
 
 
 def test_verify_missing_artifact_fails_with_error(tmp_path, capsys) -> None:
@@ -41,6 +93,44 @@ def test_verify_missing_artifact_fails_with_error(tmp_path, capsys) -> None:
     assert payload["ok"] is False
     assert payload["diagnostics"][0]["rule_id"] == "artifact-missing"
     assert payload["diagnostics"][0]["witness"]["steps"][1]["output"] == "missing"
+
+
+def test_verify_exit_code_policy_can_fail_on_any_diagnostic(capsys) -> None:
+    exit_code = main(["verify", "--config", "examples/minimal/promptabi.json", "--fail-on", "any"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "INFO repository-skeleton" in captured.out
+    assert captured.err == ""
+
+
+def test_verify_quiet_suppresses_info_diagnostics(capsys) -> None:
+    exit_code = main(["verify", "--config", "examples/minimal/promptabi.json", "--quiet"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "status: PASS" in captured.out
+    assert "INFO repository-skeleton" not in captured.out
+
+
+def test_verify_verbose_prints_workflow_metadata(tmp_path, capsys) -> None:
+    cache_dir = tmp_path / "promptabi-cache"
+
+    exit_code = main(
+        [
+            "verify",
+            "--config",
+            "examples/minimal/promptabi.json",
+            "--cache-dir",
+            str(cache_dir),
+            "--verbose",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert f"cache: {cache_dir}" in captured.out
+    assert "artifacts: 3" in captured.out
 
 
 def test_verify_sarif_output_is_code_scanning_compatible(capsys) -> None:
