@@ -117,7 +117,7 @@ configs, truncation configs, prompt segments, and training/fine-tuning manifests
 proving or refuting prompt-budget survival, stop/control-token exclusion,
 role-region non-forgeability, tool-schema required-parameter satisfiability,
 tool/provider compatibility, and supervised target-role alignment with concrete
-models or unsat cores,
+models, explicit proof classifications, or minimized unsat cores,
 a CPU-only benchmark, documentation, and contribution guidance.
 The remaining checkers fit into that surface rather than requiring a rewrite. We
 describe the transducer-oriented formalism, the artifact model, the diagnostic
@@ -361,8 +361,12 @@ constraints to Z3, including explicit domain restrictions for bounded strings.
 When Z3 is absent, the same contract runs through deterministic exhaustive
 finite-domain enumeration. Both backends return a stable result object with
 \texttt{sat}, \texttt{unsat}, or \texttt{unknown} status, backend provenance,
-counterexample assignments for satisfiable bad states, checked-assignment counts,
-and minimal enumerated unsat cores when no assignment exists.
+counterexample assignments for satisfiable bad states, explicit
+counterexample/proof/abstention conclusions, checked-assignment counts, and
+minimal unsat cores when no assignment exists. Z3 cores are deletion-minimized
+against the tracked named constraints while finite-domain restrictions remain
+background assumptions, so the proof object shown to a developer is not merely
+the first raw solver core.
 
 The repository now uses that core as a real static-verification layer, not just
 as a toy solver. The \texttt{static-contracts} check derives independent
@@ -380,10 +384,12 @@ every required argument is declared under the tool's properties, or returns a
 missing-parameter model. Tool definitions and provider configs become a
 provider-family compatibility query. Training manifests and chat-template role
 declarations become a target-role alignment query for supervised data
-pipelines. Satisfiable bad-state queries produce concrete assignments;
-unsatisfiable queries produce proof diagnostics with the solver backend and
-unsat core. Unsupported or insufficiently finite inputs abstain explicitly
-rather than widening into a claim the implementation cannot justify.
+pipelines. Satisfiable bad-state queries produce concrete model assignments and
+are reported as counterexample witnesses. Unsatisfiable queries produce proof
+diagnostics with the solver backend, minimized core, and a safety or
+incompatibility classification. Unsupported or insufficiently finite inputs
+abstain explicitly rather than widening into a claim the implementation cannot
+justify.
 
 The core now adds the missing relational layer: finite-state transducers over
 explicit input and output alphabets. A transducer transition carries an input
@@ -414,8 +420,11 @@ projections recover accepted input and output languages through epsilon labels,
 that projection-based over-approximation intentionally admits independent pairs,
 that a finite contract emits a concrete role-forgery counterexample, that
 contradictory role constraints produce a minimal unsat core, that Boolean
-compositions are recognized as unsatisfiable, and that the installed Z3 backend
-returns the same kind of concrete assignment for a satisfiable finite contract.
+compositions are recognized as unsatisfiable, that the installed Z3 backend
+returns the same kind of concrete assignment for a satisfiable finite contract,
+that raw Z3 cores are minimized deterministically before becoming diagnostics,
+and that CLI static-contract findings classify proof-of-safety and concrete
+counterexample outcomes in the witness trace.
 This is the first formal benchline on which role-boundary, stop-reachability,
 grammar-emptiness, and must-survive budget checkers can be built.
 

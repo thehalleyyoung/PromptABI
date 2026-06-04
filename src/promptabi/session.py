@@ -11,6 +11,7 @@ from .budgets import TokenBudgetFinding, TokenBudgetReport, analyze_token_budget
 from .chat_templates import ChatTemplateParseError, parse_hf_tokenizer_config_chat_template
 from .config import VerificationConfig, load_config
 from .diagnostics import CheckMode, Diagnostic, DiagnosticSeverity, SourceSpan, WitnessStep, WitnessTrace, diagnostic_sort_key
+from .formal import SolverStatus
 from .grammar_emptiness import (
     GrammarTokenizerEmptinessReport,
     GrammarTokenizerEmptinessStatus,
@@ -1088,7 +1089,7 @@ def _static_contract_finding_diagnostic(report: StaticContractReport, finding: S
     if finding.severity == "error":
         rule_id = "static-contract-violation"
         severity = DiagnosticSeverity.ERROR
-        summary = "PromptABI found a satisfiable bad state in a finite static contract."
+        summary = "PromptABI extracted a concrete counterexample for a satisfiable finite static contract."
     elif finding.status.value == "unknown" or finding.result is None:
         rule_id = "static-contract-abstained" if finding.name == "static-contract-abstained" else "static-contract-unknown"
         severity = DiagnosticSeverity.WARNING
@@ -1115,11 +1116,21 @@ def _static_contract_finding_diagnostic(report: StaticContractReport, finding: S
                 output=finding.result.status.value,
             )
         )
+        steps.append(
+            WitnessStep(
+                action="classify SMT diagnostic",
+                input=finding.result.conclusion.value,
+                output=_static_contract_outcome(finding),
+            )
+        )
         if finding.result.assignment:
             assignment = ", ".join(f"{key}={value!r}" for key, value in sorted(finding.result.assignment.items()))
-            steps.append(WitnessStep(action="extract SMT model", output=assignment))
+            model_action = "extract Z3 model" if finding.result.backend.value == "z3" else "extract finite model"
+            steps.append(WitnessStep(action=model_action, output=assignment))
+            steps.append(WitnessStep(action="record concrete counterexample", output=assignment))
         if finding.result.unsat_core:
-            steps.append(WitnessStep(action="extract unsat core", output=", ".join(finding.result.unsat_core)))
+            core_action = "extract minimized Z3 unsat core" if finding.result.backend.value == "z3" else "extract minimal unsat core"
+            steps.append(WitnessStep(action=core_action, output=", ".join(finding.result.unsat_core)))
     steps.extend(
         WitnessStep(action="record contract evidence", input=key, output=value)
         for key, value in finding.evidence
@@ -1135,6 +1146,20 @@ def _static_contract_finding_diagnostic(report: StaticContractReport, finding: S
         suggestions=(finding.suggestion,),
         witness=WitnessTrace(summary=summary, steps=tuple(steps)),
     )
+
+
+def _static_contract_outcome(finding: StaticContractFinding) -> str:
+    if finding.result is None or finding.status is SolverStatus.UNKNOWN:
+        return "abstention outside the finite modeled fragment"
+    if finding.result.sat:
+        if finding.severity == "error":
+            return "concrete counterexample witness"
+        return "proof of incompatibility"
+    if finding.result.unsat:
+        if finding.severity == "error":
+            return "proof of incompatibility"
+        return "proof of safety"
+    return "abstention outside the finite modeled fragment"
 
 
 def _token_budget_finding_diagnostic(report: TokenBudgetReport, finding: TokenBudgetFinding) -> Diagnostic:

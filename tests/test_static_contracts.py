@@ -333,4 +333,58 @@ def test_verify_static_contracts_cli_reports_z3_backed_contract(tmp_path: Path, 
     diagnostics = [diagnostic for diagnostic in payload["diagnostics"] if diagnostic["rule_id"] == "static-contract-proved"]
     assert diagnostics
     assert diagnostics[0]["check_modes"] == ["bounded", "sound", "z3-backed-smt"]
-    assert any(step["action"] == "solve finite contract" for step in diagnostics[0]["witness"]["steps"])
+    steps = diagnostics[0]["witness"]["steps"]
+    assert any(step["action"] == "solve finite contract" for step in steps)
+    assert any(
+        step["action"] == "classify SMT diagnostic" and step["output"] == "proof of safety"
+        for step in steps
+    )
+    assert any(step["action"].endswith("unsat core") for step in steps)
+
+
+def test_verify_static_contracts_cli_reports_concrete_counterexample(tmp_path: Path, capsys) -> None:
+    segments = tmp_path / "segments.json"
+    budget = tmp_path / "budget.json"
+    segments.write_text(
+        json.dumps({"segments": [{"name": "system", "role": "system", "required": True, "token_count": 12}]}),
+        encoding="utf-8",
+    )
+    budget.write_text("{}", encoding="utf-8")
+    config = tmp_path / "promptabi.json"
+    config.write_text(
+        json.dumps(
+            {
+                "name": "static-contract-counterexample-cli",
+                "checks": ["static-contracts"],
+                "artifacts": {
+                    "segments": {
+                        "kind": "prompt-segment",
+                        "path": segments.name,
+                        "segments": [{"name": "system", "role": "system", "required": True, "token_count": 12}],
+                    },
+                    "budget": {
+                        "kind": "framework-truncation-config",
+                        "path": budget.name,
+                        "framework": "vllm",
+                        "strategy": "left",
+                        "max_context_tokens": 8,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["verify", "--config", str(config), "--format", "json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 1
+    diagnostics = [diagnostic for diagnostic in payload["diagnostics"] if diagnostic["rule_id"] == "static-contract-violation"]
+    assert diagnostics
+    steps = diagnostics[0]["witness"]["steps"]
+    assert any(
+        step["action"] == "classify SMT diagnostic" and step["output"] == "concrete counterexample witness"
+        for step in steps
+    )
+    assert any(step["action"] in {"extract Z3 model", "extract finite model"} for step in steps)
+    assert any(step["action"] == "record concrete counterexample" for step in steps)

@@ -11,10 +11,12 @@ from promptabi.formal import (
     FiniteContractProblem,
     FiniteStateTransducer,
     Implies,
+    InSet,
     IntRangeDomain,
     Length,
     NamedConstraint,
     Ne,
+    SolverConclusion,
     SolverStatus,
     Value,
     Var,
@@ -111,6 +113,7 @@ def test_finite_contract_solver_finds_counterexample_for_role_forgery() -> None:
     result = problem.solve(prefer_z3=False)
 
     assert result.status is SolverStatus.SAT
+    assert result.conclusion is SolverConclusion.COUNTEREXAMPLE
     assert result.assignment == {
         "content": "<a>",
         "escaped": False,
@@ -171,4 +174,24 @@ def test_finite_contract_solver_uses_z3_when_available() -> None:
 
     assert result.sat is True
     assert result.to_dict()["backend"] == "z3"
+    assert result.to_dict()["conclusion"] == "concrete-counterexample"
     assert result.assignment == {"escaped": False, "role": "user"}
+
+
+def test_finite_contract_solver_minimizes_z3_unsat_core_when_available() -> None:
+    pytest.importorskip("z3")
+    problem = FiniteContractProblem(
+        variables=(EnumDomain("role", ("user", "assistant")),),
+        constraints=(
+            NamedConstraint("must-be-user", Eq(Var("role"), Value("user"))),
+            NamedConstraint("must-be-assistant", Eq(Var("role"), Value("assistant"))),
+            NamedConstraint("tautological-role-domain", InSet(Var("role"), ("user", "assistant"))),
+        ),
+    )
+
+    result = problem.solve(prefer_z3=True)
+
+    assert result.unsat is True
+    assert result.backend.value == "z3"
+    assert result.conclusion is SolverConclusion.UNSAT_CORE_PROOF
+    assert result.unsat_core == ("must-be-user", "must-be-assistant")

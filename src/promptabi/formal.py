@@ -734,6 +734,12 @@ class SolverBackend(StrEnum):
     FINITE_ENUMERATION = "finite-enumeration"
 
 
+class SolverConclusion(StrEnum):
+    COUNTEREXAMPLE = "concrete-counterexample"
+    UNSAT_CORE_PROOF = "unsat-core-proof"
+    ABSTENTION = "abstention"
+
+
 class Expression(Protocol):
     def evaluate(self, assignment: Assignment) -> bool | int | str:
         ...
@@ -1168,15 +1174,19 @@ class FiniteContractProblem:
 
         context = _Z3Context(z3=z3, variables={})
         solver = z3.Solver()
+        domain_constraints: list[Any] = []
         for variable in self.variables:
             z3_variable = variable.z3_variable(context)
             context.variables[variable.name] = z3_variable
-            solver.add(variable.z3_domain_constraint(z3_variable, context))
-        tracker_names: dict[str, str] = {}
+            domain_constraint = variable.z3_domain_constraint(z3_variable, context)
+            domain_constraints.append(domain_constraint)
+            solver.add(domain_constraint)
+        tracked_constraints: list[tuple[str, str, Any]] = []
         for index, constraint in enumerate(self.constraints):
             tracker = f"constraint_{index}_{constraint.name}"
-            tracker_names[tracker] = constraint.name
-            solver.assert_and_track(constraint.expression.to_z3(context), tracker)
+            expression = constraint.expression.to_z3(context)
+            tracked_constraints.append((tracker, constraint.name, expression))
+            solver.assert_and_track(expression, tracker)
         status = solver.check()
         if status == z3.sat:
             model = solver.model()
@@ -1191,11 +1201,17 @@ class FiniteContractProblem:
                 checked_assignments=1,
             )
         if status == z3.unsat:
-            core = tuple(tracker_names.get(str(item), str(item)) for item in solver.unsat_core())
+            core_trackers = tuple(str(item) for item in solver.unsat_core())
+            core = _minimize_z3_unsat_core(
+                z3,
+                domain_constraints,
+                tracked_constraints,
+                core_trackers,
+            )
             return SolverResult(
                 status=SolverStatus.UNSAT,
                 backend=SolverBackend.Z3,
-                unsat_core=core or tuple(tracker_names.values()),
+                unsat_core=core,
                 checked_assignments=0,
             )
         return SolverResult(status=SolverStatus.UNKNOWN, backend=SolverBackend.Z3, checked_assignments=0)
@@ -1255,10 +1271,19 @@ class SolverResult:
     def unsat(self) -> bool:
         return self.status is SolverStatus.UNSAT
 
+    @property
+    def conclusion(self) -> SolverConclusion:
+        if self.status is SolverStatus.SAT:
+            return SolverConclusion.COUNTEREXAMPLE
+        if self.status is SolverStatus.UNSAT:
+            return SolverConclusion.UNSAT_CORE_PROOF
+        return SolverConclusion.ABSTENTION
+
     def to_dict(self) -> dict[str, object]:
         data: dict[str, object] = {
             "status": self.status.value,
             "backend": self.backend.value,
+            "conclusion": self.conclusion.value,
             "checked_assignments": self.checked_assignments,
         }
         if self.assignment is not None:
@@ -1284,3 +1309,44 @@ def _is_satisfiable(variables: Sequence[VariableDomain], constraints: Sequence[N
         all(bool(constraint.expression.evaluate(assignment)) for constraint in constraints)
         for assignment in _assignments(variables)
     )
+
+
+def _minimize_z3_unsat_core(
+    z3: Any,
+    domain_constraints: Sequence[Any],
+    tracked_constraints: Sequence[tuple[str, str, Any]],
+    core_trackers: Sequence[str],
+) -> tuple[str, ...]:
+    """Return a deletion-minimal unsat core over named constraints.
+
+    Z3's tracked core is not guaranteed to be minimal. PromptABI diagnostics use
+    the core as a user-facing proof object, so we deterministically shrink it
+    while retaining all finite-domain restrictions as background assumptions.
+    """
+
+    by_tracker = {tracker: (name, expression) for tracker, name, expression in tracked_constraints}
+    if core_trackers:
+        remaining = [tracker for tracker, _, _ in tracked_constraints if tracker in set(core_trackers)]
+    else:
+        remaining = [tracker for tracker, _, _ in tracked_constraints]
+    changed = True
+    while changed and len(remaining) > 1:
+        changed = False
+        for tracker in tuple(remaining):
+            candidate = [item for item in remaining if item != tracker]
+            if _z3_constraints_unsat(
+                z3,
+                domain_constraints,
+                tuple(by_tracker[item][1] for item in candidate),
+            ):
+                remaining = candidate
+                changed = True
+                break
+    return tuple(by_tracker[tracker][0] for tracker in remaining)
+
+
+def _z3_constraints_unsat(z3: Any, domain_constraints: Sequence[Any], constraints: Sequence[Any]) -> bool:
+    solver = z3.Solver()
+    solver.add(*domain_constraints)
+    solver.add(*constraints)
+    return solver.check() == z3.unsat

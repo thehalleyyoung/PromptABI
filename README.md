@@ -41,9 +41,10 @@ enums, integer ranges, membership, lengths, and bounded strings. It derives real
 cross-artifact SMT obligations for prompt-budget survival, stop/control-token
 exclusion, role-region non-forgeability, tool-schema required-parameter
 satisfiability, provider/tool compatibility, and training target role alignment;
-when Z3 is absent, tightly bounded contracts fall back to exhaustive finite
-enumeration, still emitting concrete counterexamples without logits, GPUs,
-inference, or network calls.
+diagnostics now classify safety proofs, incompatibilities, abstentions, and
+concrete counterexamples with extracted models or minimized unsat cores. When Z3
+is absent, tightly bounded contracts fall back to exhaustive finite enumeration
+without logits, GPUs, inference, or network calls.
 
 PromptABI now ships a bounded, sanitizer-aware role-boundary non-forgeability check:
 unsanitized user/tool/function content and dynamic role fields are checked against
