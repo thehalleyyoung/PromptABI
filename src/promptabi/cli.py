@@ -36,6 +36,16 @@ from .lockfiles import (
     lockfile_error_diagnostic,
     write_lockfile,
 )
+from .minimization import (
+    MinimizationError,
+    MinimizationOracle,
+    contains_oracle,
+    diagnostic_oracle,
+    load_minimization_case,
+    minimize_repro,
+    render_minimization_json,
+    render_minimization_text,
+)
 from .plugins import PluginError, PluginRegistry, load_plugin_modules
 from .render import SarifRenderOptions, render_github_annotations, render_html, render_json, render_sarif, render_text
 from .seed_corpus import SeedCorpusError, build_seed_corpus_manifest, write_seed_corpus_manifest
@@ -251,6 +261,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="import an additional PromptABI plugin before building the matrix; may be repeated",
     )
     matrix.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+
+    minimize = subparsers.add_parser(
+        "minimize",
+        help="shrink failing PromptABI artifacts into compact upstream repros",
+    )
+    minimize.add_argument("case", help="JSON file with {'kind': ..., 'input': ...}")
+    minimize.add_argument(
+        "--oracle",
+        choices=tuple(oracle.value for oracle in MinimizationOracle),
+        default=MinimizationOracle.CONTAINS.value,
+        help="failure-preservation oracle (default: contains)",
+    )
+    minimize.add_argument(
+        "--keep-substring",
+        help="substring that must remain in the minimized JSON/text for the contains oracle",
+    )
+    minimize.add_argument("--config", help="PromptABI config for the diagnostic oracle")
+    minimize.add_argument("--artifact-name", help="artifact name to replace for the diagnostic oracle")
+    minimize.add_argument("--rule-id", help="diagnostic rule id that must continue firing")
+    minimize.add_argument(
+        "--artifact-output",
+        help="scratch artifact path used by the diagnostic oracle (default: <case>.candidate)",
+    )
+    minimize.add_argument("--max-steps", type=int, help="maximum accepted shrink steps before stopping")
+    minimize.add_argument(
         "--format",
         choices=("text", "json"),
         default="text",
@@ -585,6 +625,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(output, end="")
         return 0
 
+    if args.command == "minimize":
+        try:
+            if args.max_steps is not None and args.max_steps <= 0:
+                parser.error("--max-steps must be positive")
+            kind, value = load_minimization_case(args.case)
+            predicate = _minimization_predicate(args, parser)
+            result = minimize_repro(value, predicate, kind=kind, max_steps=args.max_steps)
+            output = render_minimization_json(result) if args.format == "json" else render_minimization_text(result)
+        except (ConfigError, MinimizationError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        print(output, end="")
+        return 0
+
     if args.command == "github-action":
         try:
             run = run_github_action(
@@ -675,6 +729,32 @@ def _parse_artifact_overrides(values: Sequence[str], parser: argparse.ArgumentPa
             parser.error("--artifact values must use NAME=PATH_OR_URI")
         overrides[name] = location
     return overrides
+
+
+def _minimization_predicate(args, parser: argparse.ArgumentParser):
+    if args.oracle == MinimizationOracle.CONTAINS.value:
+        if not args.keep_substring:
+            parser.error("--keep-substring is required for --oracle contains")
+        return contains_oracle(args.keep_substring)
+    if args.oracle == MinimizationOracle.DIAGNOSTIC.value:
+        missing = [
+            flag
+            for flag, value in (
+                ("--config", args.config),
+                ("--artifact-name", args.artifact_name),
+                ("--rule-id", args.rule_id),
+            )
+            if not value
+        ]
+        if missing:
+            parser.error(f"{', '.join(missing)} required for --oracle diagnostic")
+        return diagnostic_oracle(
+            config_path=args.config,
+            artifact_name=args.artifact_name,
+            rule_id=args.rule_id,
+            case_path=args.artifact_output or f"{args.case}.candidate",
+        )
+    parser.error(f"unsupported minimization oracle: {args.oracle}")
 
 
 def _add_github_output_arguments(parser: argparse.ArgumentParser) -> None:

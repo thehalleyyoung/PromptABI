@@ -13,6 +13,8 @@ promptabi verify --config examples/token-budget/promptabi.json --format html --f
 promptabi init --stack openai-tools --output-dir .promptabi-demo
 # explain one failing structural witness:
 promptabi explain --config examples/role-boundary/unsafe.promptabi.json --index 1
+# shrink a failing artifact into an upstreamable repro:
+promptabi minimize repro.json --keep-substring "<|im_start|>" --format json
 # or, inside a repo with promptabi.json:
 promptabi verify --artifact schema=schemas/answer.json --fail-on warning
 # gate upgrades:
@@ -72,7 +74,10 @@ LlamaIndex, Outlines, xgrammar, llguidance, Pydantic, MCP, and Z3 adapter
 surfaces without weakening deterministic sessions or CLI output; `promptabi
 matrix` reports the exact sound/bounded/Z3/heuristic/abstaining guarantees for
 each check across tokenizer, template, grammar, provider, framework, and
-training-manifest surfaces. `--format html` emits a web-free report with
+training-manifest surfaces. `promptabi minimize` shrinks failing templates,
+schemas, stop strings, message sets, solver constraints, and provider fixtures
+while preserving a real failure predicate, producing compact repros for upstream
+issues. `--format html` emits a web-free report with
 diagnostic details, witnesses, budget charts, diff tables, and corpus summaries,
 while policy/suppression files keep CI strict with unexpired, justified
 accepted-risk records. `promptabi pre-commit` installs a PATH-independent local

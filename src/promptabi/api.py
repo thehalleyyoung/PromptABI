@@ -16,6 +16,14 @@ from .diagnostics import Diagnostic
 from .explain import DiagnosticExplanation, explain_diagnostic, render_explanation_json, render_explanation_text
 from .loaders import ArtifactLoader, LoadedArtifact
 from .first_party_plugins import create_first_party_plugin_registry
+from .minimization import (
+    FailurePredicate,
+    MinimizationKind,
+    MinimizationResult,
+    minimize_repro,
+    render_minimization_json,
+    render_minimization_text,
+)
 from .plugins import PluginRegistry
 from .policies import Suppression, VerificationPolicy, apply_policy_diagnostics, load_policy_file
 from .render import SarifRenderOptions, render_github_annotations, render_html, render_json, render_sarif, render_text
@@ -174,6 +182,28 @@ def render_explanation(
         return render_explanation_text(explanation)
     if output_format == "json":
         return render_explanation_json(explanation)
+    raise ValueError("output_format must be one of: text, json")
+
+
+def minimize_failure_repro(
+    value,
+    predicate: FailurePredicate,
+    *,
+    kind: str | MinimizationKind,
+    max_steps: int | None = None,
+) -> MinimizationResult:
+    """Shrink a failing PromptABI repro while the failure predicate still holds."""
+
+    return minimize_repro(value, predicate, kind=kind, max_steps=max_steps)
+
+
+def render_minimization(result: MinimizationResult, *, output_format: str = "text") -> str:
+    """Render a minimization result as text or JSON."""
+
+    if output_format == "text":
+        return render_minimization_text(result)
+    if output_format == "json":
+        return render_minimization_json(result)
     raise ValueError("output_format must be one of: text, json")
 
 

@@ -63,6 +63,12 @@ artifacts, or paths; require reviewed justifications, owners, accepted-risk
 statements, and expiration dates; enforce repository severity thresholds; and
 render audited suppression diagnostics without letting stale or unjustified
 exceptions weaken CI,
+a \texttt{promptabi minimize} workflow and public API that shrink failing
+templates, JSON Schemas, stop-string sets, message sets, finite solver-constraint
+lists, and provider fixtures under a failure-preserving predicate into compact
+upstreamable repros, including a safe substring oracle for local triage and a
+diagnostic oracle that rewrites a candidate artifact and proves a selected
+PromptABI rule still fires,
 a \texttt{promptabi init} workflow that writes verifiable starter contracts and
 local fixture stubs for OpenAI tools, Hugging Face local models, vLLM
 OpenAI-compatible servers, llama.cpp, LangChain RAG, LlamaIndex agents, and
@@ -859,6 +865,19 @@ descriptions of the proof modes, the witness trace, the likely production
 symptom, and the attached fix suggestions. This makes a code-scanning finding
 actionable without weakening CI determinism or sending prompts to a service.
 
+The minimization workflow is the bridge from local finding to upstream issue. It
+accepts JSON cases for templates, schemas, stop strings, message sets, solver
+constraints, and provider fixtures, canonicalizes unordered surfaces, and then
+uses deterministic chunk and element deletion with memoized predicate calls. A
+candidate is accepted only when the original failure predicate still holds; the
+tool rejects non-reproducing originals rather than emitting success-shaped
+garbage. The CLI exposes safe local oracles such as substring preservation and a
+diagnostic oracle that rewrites a scratch artifact, reruns PromptABI, and checks
+that a selected rule still fires. The public API accepts richer in-process
+predicates, so tests can prove that a minimized stop-string set still triggers
+the real tokenizer collision analyzer rather than merely preserving a token in a
+string.
+
 \clearpage
 \section{CLI and Embedding API}
 
@@ -871,6 +890,7 @@ promptabi verify --config examples/role-boundary/unsafe.promptabi.json
 promptabi verify --config examples/role-boundary/safe.promptabi.json
 promptabi explain --config examples/role-boundary/unsafe.promptabi.json --index 1
 promptabi explain --config examples/minimal/promptabi.json --rule-id repository-skeleton --format json
+promptabi minimize repro.json --keep-substring "<|im_start|>" --format json
 promptabi init --stack openai-tools --output-dir .promptabi-demo
 promptabi verify --artifact schema=schemas/answer.json --fail-on warning
 promptabi verify --config examples/minimal/promptabi.json --format json
