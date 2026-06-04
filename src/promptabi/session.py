@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .config import VerificationConfig, load_config
 from .diagnostics import Diagnostic, DiagnosticSeverity, SourceSpan, WitnessStep, WitnessTrace, diagnostic_sort_key
+from .loaders import ArtifactLoadError, ArtifactLoadWarning, ArtifactLoader
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +34,7 @@ class VerificationSession:
 
     def __init__(self, config: VerificationConfig) -> None:
         self.config = config
+        self.loader = ArtifactLoader()
 
     @classmethod
     def from_config_file(cls, path: str | Path) -> "VerificationSession":
@@ -40,7 +42,9 @@ class VerificationSession:
 
     def run(self) -> VerificationResult:
         diagnostics = [self._repository_skeleton_diagnostic()]
-        diagnostics.extend(self._artifact_existence_diagnostics())
+        missing_paths = self._missing_local_paths()
+        diagnostics.extend(self._artifact_existence_diagnostics(missing_paths))
+        diagnostics.extend(self._artifact_loader_diagnostics(missing_paths))
         diagnostics.sort(key=diagnostic_sort_key)
         return VerificationResult(config=self.config, diagnostics=tuple(diagnostics))
 
@@ -63,30 +67,93 @@ class VerificationSession:
             ),
         )
 
-    def _artifact_existence_diagnostics(self) -> tuple[Diagnostic, ...]:
+    def _missing_local_paths(self) -> set[str]:
+        return {
+            artifact.location.path
+            for artifact in self.config.artifact_bundle
+            if artifact.location.path is not None and not Path(artifact.location.path).exists()
+        }
+
+    def _artifact_existence_diagnostics(self, missing_paths: set[str]) -> tuple[Diagnostic, ...]:
         diagnostics: list[Diagnostic] = []
         for artifact_model in self.config.artifact_bundle:
             path = artifact_model.location.path
-            if path is None:
+            if path is None or path not in missing_paths:
                 continue
             artifact = artifact_model.to_ref()
-            if not Path(path).exists():
-                diagnostics.append(
-                    Diagnostic(
-                        rule_id="artifact-missing",
-                        severity=DiagnosticSeverity.ERROR,
-                        message=f"artifact '{artifact_model.name}' does not exist",
-                        artifact=artifact,
-                        span=SourceSpan(path=path),
-                        suggestions=("Check the path relative to the PromptABI config file.",),
-                        witness=WitnessTrace(
-                            summary="The configured local artifact path was resolved but was absent on disk.",
-                            steps=(
-                                WitnessStep(action="resolve artifact path", output=path),
-                                WitnessStep(action="check local filesystem", output="missing"),
-                            ),
-                            artifacts=(artifact,),
+            diagnostics.append(
+                Diagnostic(
+                    rule_id="artifact-missing",
+                    severity=DiagnosticSeverity.ERROR,
+                    message=f"artifact '{artifact_model.name}' does not exist",
+                    artifact=artifact,
+                    span=SourceSpan(path=path),
+                    suggestions=("Check the path relative to the PromptABI config file.",),
+                    witness=WitnessTrace(
+                        summary="The configured local artifact path was resolved but was absent on disk.",
+                        steps=(
+                            WitnessStep(action="resolve artifact path", output=path),
+                            WitnessStep(action="check local filesystem", output="missing"),
                         ),
-                    )
+                        artifacts=(artifact,),
+                    ),
                 )
+            )
         return tuple(diagnostics)
+
+    def _artifact_loader_diagnostics(self, missing_paths: set[str]) -> tuple[Diagnostic, ...]:
+        diagnostics: list[Diagnostic] = []
+        for artifact_model in self.config.artifact_bundle:
+            if artifact_model.location.path in missing_paths:
+                continue
+            try:
+                loaded = self.loader.load(artifact_model)
+            except ArtifactLoadError as exc:
+                diagnostics.append(self._load_error_diagnostic(artifact_model, exc))
+                continue
+            for warning in loaded.warnings:
+                diagnostics.append(self._load_warning_diagnostic(artifact_model, warning))
+        return tuple(diagnostics)
+
+    def _load_error_diagnostic(self, artifact_model, exc: ArtifactLoadError) -> Diagnostic:
+        artifact = artifact_model.to_ref()
+        return Diagnostic(
+            rule_id=exc.rule_id,
+            severity=DiagnosticSeverity.ERROR,
+            message=exc.message,
+            artifact=artifact,
+            span=_artifact_span(artifact_model.location.path),
+            suggestions=(exc.suggestion,),
+            witness=WitnessTrace(
+                summary="PromptABI could not load the configured artifact deterministically.",
+                steps=_witness_steps(exc.steps),
+                artifacts=(artifact,),
+            ),
+        )
+
+    def _load_warning_diagnostic(self, artifact_model, warning: ArtifactLoadWarning) -> Diagnostic:
+        artifact = artifact_model.to_ref()
+        return Diagnostic(
+            rule_id=warning.rule_id,
+            severity=DiagnosticSeverity.WARNING,
+            message=warning.message,
+            artifact=artifact,
+            span=_artifact_span(artifact_model.location.path),
+            suggestions=(warning.suggestion,),
+            witness=WitnessTrace(
+                summary="The artifact loaded, but its provenance is not fully reproducible.",
+                steps=_witness_steps(warning.steps),
+                artifacts=(artifact,),
+            ),
+        )
+
+
+def _artifact_span(path: str | None) -> SourceSpan | None:
+    return SourceSpan(path=path) if path is not None else None
+
+
+def _witness_steps(raw_steps: tuple[tuple[str, str | None, str | None], ...]) -> tuple[WitnessStep, ...]:
+    return tuple(
+        WitnessStep(action=action, input=input_value, output=output_value)
+        for action, input_value, output_value in raw_steps
+    )

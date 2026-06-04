@@ -6,6 +6,7 @@
     "messages": {
       "kind": "prompt-segment",
       "path": "messages.json",
+      "sha256": "f093612573390600fcf389a6a33b50fd583570ef5a7409b686d4a1ab708b28c4",
       "segments": [
         { "name": "system-policy", "role": "system", "required": true },
         { "name": "user-request", "role": "user", "required": true }
@@ -14,11 +15,13 @@
     "schema": {
       "kind": "schema",
       "path": "answer.schema.json",
+      "sha256": "270333c6545088686053714b69baa24b702fa742e6693b6765c0c873da98a271",
       "dialect": "json-schema-2020-12"
     },
     "tools": {
       "kind": "tool-definition",
       "path": "tools.json",
+      "sha256": "7a1f057b57700b758716153d562caaadb5ddf8f44ddc576ce41778ec25c709f8",
       "provider": "openai",
       "tool_names": ["refund_user"]
     }

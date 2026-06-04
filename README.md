@@ -38,9 +38,9 @@ The roadmap targets three high-value checks first: role-boundary
 non-forgeability, stop/grammar/tokenizer reachability, and must-survive
 token-budget verification. The repository already has the typed Python package,
 core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,
-discoverable `promptabi verify` workflow, docs, examples, fixture layout,
-benchmarks, and contribution path needed to grow those checks without changing
-the public surface.
+discoverable `promptabi verify` workflow, offline version-pinned artifact
+loading, docs, examples, fixture layout, benchmarks, and contribution path needed
+to grow those checks without changing the public surface.
 
 ## Why this is clearly distinct from TensorGuard
 

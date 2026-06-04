@@ -35,6 +35,7 @@ from .diagnostics import (
     WitnessStep,
     WitnessTrace,
 )
+from .loaders import ArtifactLoadError, ArtifactLoader, ArtifactLoadWarning, LoadedArtifact, load_artifact
 from .session import VerificationResult, VerificationSession
 
 __all__ = [
@@ -42,6 +43,9 @@ __all__ = [
     "ArtifactBundle",
     "ArtifactKind",
     "ArtifactLocation",
+    "ArtifactLoadError",
+    "ArtifactLoadWarning",
+    "ArtifactLoader",
     "ArtifactProvenance",
     "ArtifactRef",
     "ChatTemplateArtifact",
@@ -50,6 +54,7 @@ __all__ = [
     "DiagnosticSeverity",
     "FrameworkTruncationConfigArtifact",
     "GrammarArtifact",
+    "LoadedArtifact",
     "PromptSegment",
     "PromptSegmentArtifact",
     "ProviderConfigArtifact",
@@ -67,5 +72,6 @@ __all__ = [
     "WitnessStep",
     "WitnessTrace",
     "discover_config",
+    "load_artifact",
     "load_config",
 ]

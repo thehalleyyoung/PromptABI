@@ -29,8 +29,9 @@ This paper presents the repository as it now stands and the research system it
 is designed to become. The implementation already contains a typed Python
 package, a deterministic command line workflow, a public embedding API, a
 typed artifact model, a stable diagnostic contract with text, JSON, and SARIF
-renderers, a minimal verification session, focused tests, examples, a fixture
-corpus layout, a CPU-only benchmark, documentation, and contribution guidance.
+renderers, offline version-pinned artifact loading, a minimal verification
+session, focused tests, examples, a fixture corpus layout, a CPU-only benchmark,
+documentation, and contribution guidance.
 The remaining checkers fit into that surface rather than requiring a rewrite. We
 describe the transducer-oriented formalism, the artifact model, the diagnostic
 contract, the first benchmark line, and the planned evaluation against real tokenizer, template,
@@ -84,10 +85,11 @@ API, artifact model, diagnostic contract, configuration loader, and CLI behavior
 The implementation is intentionally small, but it is not a paper mockup: it
 loads real JSON configuration, discovers configs from subdirectories, accepts
 explicit artifact overrides, normalizes artifact paths, builds typed artifact
-bundles, prepares a cache directory for future expensive products, emits
+bundles, materializes local and metadata-only remote artifacts, validates sha256
+pins, prepares a cache directory for future expensive products, emits
 deterministic typed diagnostics in text, JSON, and SARIF, returns stable
-policy-controlled process exit codes, and runs a CPU-only smoke benchmark
-against an example bundle.
+policy-controlled process exit codes, and runs a CPU-only smoke benchmark against
+an example bundle.
 
 The repository layout is designed to scale:
 
@@ -96,7 +98,7 @@ The repository layout is designed to scale:
 \hline
 \textbf{Path} & \textbf{Purpose} \\
 \hline
-\texttt{src/promptabi} & Typed package, artifact model, CLI, configuration loading, diagnostic model, renderers, and verification session. \\
+\texttt{src/promptabi} & Typed package, artifact model, offline loaders, CLI, configuration loading, diagnostic model, renderers, and verification session. \\
 \hline
 \texttt{tests} & Focused tests for package API and CLI determinism. \\
 \hline
@@ -191,6 +193,55 @@ CLI output: diagnostics refer to the same canonical artifact no matter where the
 command is launched from.
 
 \clearpage
+\section{Version-Pinned Artifact Loading}
+
+Artifact identity is not enough for a verifier. A checker that proves a property
+about \texttt{tokenizer\_config.json} must know which bytes, directory manifest,
+provider snapshot, or upstream revision it inspected. PromptABI therefore adds an
+offline loader layer that turns typed artifact references into deterministic
+\texttt{LoadedArtifact} summaries. The loader does not contact third-party
+services and does not require tokenizer, provider, or grammar libraries. It
+validates the reproducibility envelope first, so deeper semantic checkers inherit
+stable inputs.
+
+The implemented loader covers the artifact sources that appear earliest in real
+LLM interface workflows:
+
+\begin{center}
+\begin{tabular}{|p{0.30\linewidth}|p{0.55\linewidth}|}
+\hline
+\textbf{Source} & \textbf{Loaded summary} \\
+\hline
+Local files & Streamed sha256 digest, byte size, pin validation, and mismatch diagnostics. \\
+\hline
+Hugging Face refs & Offline repository ID, optional artifact path, revision extraction, and warnings for missing or movable revisions. \\
+\hline
+Tokenizer directories & Stable manifest over sorted relative file names, file sizes, and content hashes; requires tokenizer metadata. \\
+\hline
+GGUF stubs & Header-level GGUF magic, version, tensor count, metadata-key count, and streamed file hash without loading weights. \\
+\hline
+Provider snapshots & Deterministic JSON validation for provider name and captured request, response, or streaming shape metadata. \\
+\hline
+Fixture archives & Zip/tar member lists and archive-byte hashes without extraction or timestamp-dependent manifests. \\
+\hline
+\end{tabular}
+\end{center}
+
+Pinning is intentionally behavior-safe. A missing local file is an error because
+the verifier cannot inspect it. A malformed sha256 or mismatched sha256 is an
+error because the configured claim is contradicted. An otherwise readable but
+unpinned artifact is a warning by default, allowing existing projects to adopt
+strict reproducibility incrementally or fail on warnings in CI. In-memory API
+artifacts are treated as embedded objects rather than external supply-chain
+inputs.
+
+This capability is more than bookkeeping. It is the first supply-chain boundary
+for the research system: every future role-boundary, stop-reachability,
+grammar-emptiness, provider-migration, and budget-survival finding can cite the
+exact artifact reference, actual hash, revision strength, and loader witness that
+made the claim reproducible.
+
+\clearpage
 \section{Diagnostic Contract}
 
 PromptABI's diagnostic contract is designed for CI, code scanning, embeddings,
@@ -260,12 +311,13 @@ promptabi verify --config examples/minimal/promptabi.json --format sarif
 promptabi verify --cache-dir .cache/promptabi --verbose
 \end{verbatim}
 
-In the current milestone the workflow validates repository wiring and artifact
-existence. It discovers \texttt{promptabi.json} or \texttt{.promptabi.json} by
-walking upward from the current directory unless \texttt{--config} is explicit.
-It accepts repeated \texttt{--artifact NAME=PATH\_OR\_URI} overrides so CI can
-verify generated or matrix-selected artifacts without rewriting the repository
-config. It prepares a cache directory selected by \texttt{--cache-dir},
+In the current milestone the workflow validates repository wiring, local
+existence, reproducible pins, and loader compatibility. It discovers
+\texttt{promptabi.json} or \texttt{.promptabi.json} by walking upward from the
+current directory unless \texttt{--config} is explicit. It accepts repeated
+\texttt{--artifact NAME=PATH\_OR\_URI} overrides so CI can verify generated or
+matrix-selected artifacts without rewriting the repository config. It prepares a
+cache directory selected by \texttt{--cache-dir},
 \texttt{PROMPTABI\_CACHE\_DIR}, \texttt{XDG\_CACHE\_HOME}, or a user cache
 fallback. It provides quiet and verbose text modes while keeping JSON and SARIF
 stable for machines.
@@ -407,6 +459,7 @@ The testing strategy has three tiers:
 
 \begin{itemize}
 \item unit tests for public API and deterministic rendering;
+\item loader tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, and fixture archives;
 \item fixture tests for minimized artifact bundles with expected diagnostics;
 \item corpus tests for popular model and framework configurations pinned by revision.
 \end{itemize}
@@ -443,9 +496,10 @@ fast, reproducible, and privacy-preserving.
 \section{Benchmark Lines}
 
 The first benchmark line is deliberately modest: repeatedly load the minimal
-configuration and run the skeleton verifier. Its value is not in absolute
-runtime; it proves that benchmarks are CPU-only, deterministic, executable from
-the repository, and able to fail if verification unexpectedly emits an error.
+configuration, validate its pinned artifacts, and run the skeleton verifier. Its
+value is not in absolute runtime; it proves that benchmarks are CPU-only,
+deterministic, executable from the repository, and able to fail if verification
+unexpectedly emits an error.
 
 Future benchmark lines should measure:
 
