@@ -32,6 +32,7 @@ from .parser_compatibility import (
     ParserCompatibilityStatus,
     analyze_parser_compatibility,
 )
+from .provider_migration import ProviderMigrationFinding, analyze_provider_migration
 from .loaders import ArtifactLoadError, ArtifactLoadWarning, ArtifactLoader, LoadedArtifact
 from .role_boundaries import RoleBoundaryForgeryFinding, analyze_role_boundary_nonforgeability
 from .stop_analysis import (
@@ -90,6 +91,7 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "parser-compatibility-abstained": (CheckMode.ABSTAINING, CheckMode.HEURISTIC),
     "parser-compatibility-agreement": (CheckMode.HEURISTIC,),
     "parser-compatibility-mismatch": (CheckMode.HEURISTIC,),
+    "provider-migration": (CheckMode.BOUNDED, CheckMode.HEURISTIC),
     "tool-schema-ingestion": (CheckMode.SOUND, CheckMode.COMPLETE),
     "tool-serialization": (CheckMode.BOUNDED, CheckMode.HEURISTIC),
     "check-unknown": (CheckMode.SOUND, CheckMode.COMPLETE),
@@ -155,6 +157,7 @@ class VerificationSession:
             "grammar-tokenizer-ambiguity": self._grammar_tokenizer_ambiguity_check,
             "grammar-tokenizer-emptiness": self._grammar_tokenizer_emptiness_check,
             "parser-compatibility": self._parser_compatibility_check,
+            "provider-migration": self._provider_migration_check,
             "tool-schema-ingestion": self._tool_schema_ingestion_check,
             "tool-serialization": self._tool_serialization_check,
         }
@@ -465,6 +468,10 @@ class VerificationSession:
     def _tool_serialization_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
         report = analyze_tool_call_serialization(context.loaded_artifacts)
         return tuple(_tool_serialization_diagnostic(finding) for finding in report.findings)
+
+    def _provider_migration_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        report = analyze_provider_migration(context.loaded_artifacts)
+        return tuple(_provider_migration_diagnostic(finding) for finding in report.findings)
 
     def _missing_local_paths(self) -> set[str]:
         return {
@@ -1053,6 +1060,41 @@ def _tool_serialization_diagnostic(finding: ToolSerializationFinding) -> Diagnos
         suggestions=(finding.suggestion,),
         witness=WitnessTrace(
             summary="A bounded recorded tool-call serialization contract disagreed across selected artifacts.",
+            steps=tuple(context_steps) + evidence_steps,
+        ),
+    )
+
+
+def _provider_migration_diagnostic(finding: ProviderMigrationFinding) -> Diagnostic:
+    severity = (
+        DiagnosticSeverity.ERROR
+        if finding.severity == "error"
+        else DiagnosticSeverity.WARNING
+        if finding.severity == "warning"
+        else DiagnosticSeverity.INFO
+    )
+    context_steps = [
+        WitnessStep(action="select source provider", input=finding.source_artifact_name, output=finding.source_provider),
+    ]
+    if finding.target_artifact_name is not None:
+        context_steps.append(
+            WitnessStep(action="select target provider", input=finding.target_artifact_name, output=finding.target_provider)
+        )
+    else:
+        context_steps.append(WitnessStep(action="select target provider", input=finding.target_provider))
+    evidence_steps = tuple(
+        WitnessStep(action="compare provider migration field", input=key, output=value)
+        for key, value in finding.evidence
+    )
+    return Diagnostic(
+        rule_id="provider-migration",
+        severity=severity,
+        message=f"{finding.kind.value}: {finding.message}",
+        span=finding.span,
+        check_modes=CHECK_MODE_CATALOG["provider-migration"],
+        suggestions=(finding.suggestion,),
+        witness=WitnessTrace(
+            summary="A bounded recorded provider migration contract disagreed across source and target fixtures.",
             steps=tuple(context_steps) + evidence_steps,
         ),
     )

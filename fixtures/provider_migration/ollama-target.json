@@ -1,0 +1,17 @@
+{
+  "provider": "ollama",
+  "request_shape": {"messages": "array", "tools": "array"},
+  "response_shape": {"message": "object"},
+  "streaming_deltas": {"message": "object"},
+  "migration_compatibility": {
+    "provider_family": "ollama",
+    "request": {"required_fields": ["messages", "model", "tools"]},
+    "response": {"required_fields": ["message", "tool_calls"]},
+    "tools": {"argument_encoding": "json-object", "supports_parallel_tool_calls": false},
+    "streaming": {"emits_argument_fragments": false},
+    "stops": {"sequences": ["<|end|>"]},
+    "limits": {"max_input_tokens": 8192, "max_output_tokens": 2048},
+    "structured_outputs": {"modes": ["json_object"]},
+    "errors": {"code_path": "error", "rate_limit_path": "error"}
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "provider": "llama.cpp server",
+  "request_shape": {"messages": "array", "tools": "array"},
+  "response_shape": {"choices": "array"},
+  "streaming_deltas": {"choices": "array"},
+  "migration_compatibility": {
+    "provider_family": "llama.cpp server",
+    "request": {"required_fields": ["messages", "model", "tools"]},
+    "response": {"required_fields": ["choices", "finish_reason"]},
+    "tools": {"argument_encoding": "json-string", "supports_parallel_tool_calls": false},
+    "streaming": {"emits_argument_fragments": true},
+    "stops": {"sequences": ["</tool_call>"]},
+    "limits": {"max_input_tokens": 4096, "max_output_tokens": 1024},
+    "structured_outputs": {"modes": []},
+    "errors": {"code_path": "error.message", "rate_limit_path": "error.message"}
+  }
+}

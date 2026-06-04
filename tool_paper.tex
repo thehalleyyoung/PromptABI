@@ -92,7 +92,12 @@ tools, and provider tool-call envelopes into source-mapped typed function schema
 plus a bounded tool-call serialization checker that compares recorded provider,
 template, stop-policy, and parser contracts for tool names, JSON-object versus
 JSON-string arguments, escaping guarantees, tool-call IDs, parallel calls,
-streaming chunk assembly, and tool-call delimiters, and now takes the bounded tokenizer x grammar product to prove whether compiled
+streaming chunk assembly, and tool-call delimiters, a bounded provider migration
+checker that compares recorded OpenAI, Azure OpenAI, Anthropic, Gemini, Bedrock,
+Together, Groq, Ollama, llama.cpp server, vLLM OpenAI server, and LiteLLM
+contracts for request/response field loss, tool argument encoding, tool-call IDs,
+parallel-call support, streaming chunks, stop sequences, context limits,
+structured-output modes, error envelopes, and LiteLLM routing, and now takes the bounded tokenizer x grammar product to prove whether compiled
 witnesses survive real tokenizer encode-normalize-decode assumptions, plus a
 bounded tokenizer x grammar ambiguity check that validates JSON lexical variants
 and detects tokenizer-path conflicts, decoded-text conflicts, whitespace and
@@ -185,6 +190,9 @@ aliases,
 checks recorded tool-call serialization contracts for provider/schema/parser
 agreement over names, argument encodings, escaping, IDs, parallel calls,
 streaming fragments, chat-template tool rendering, and stop delimiters,
+checks recorded provider migration contracts across all current first-party
+provider families for request, response, tool, stop, streaming, context,
+structured-output, error, and routing compatibility,
 returns stable policy-controlled process exit codes,
 and runs a CPU-only smoke benchmark against an example bundle.
 

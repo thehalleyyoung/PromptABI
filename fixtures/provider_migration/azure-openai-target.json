@@ -1,0 +1,17 @@
+{
+  "provider": "azure-openai",
+  "request_shape": {"messages": "array", "tools": "array"},
+  "response_shape": {"choices": "array", "tool_calls": "array"},
+  "streaming_deltas": {"tool_calls": "array"},
+  "migration_compatibility": {
+    "provider_family": "Azure OpenAI",
+    "request": {"required_fields": ["messages", "model", "tools", "tool_choice", "response_format"]},
+    "response": {"required_fields": ["choices", "finish_reason", "tool_calls", "usage"]},
+    "tools": {"argument_encoding": "json-string", "id_path": "choices[].message.tool_calls[].id", "supports_parallel_tool_calls": true},
+    "streaming": {"emits_argument_fragments": true},
+    "stops": {"sequences": ["</tool_call>", "<|end|>"]},
+    "limits": {"max_input_tokens": 128000, "max_output_tokens": 4096},
+    "structured_outputs": {"modes": ["json_schema", "json_object"]},
+    "errors": {"code_path": "error.code", "rate_limit_path": "error.type"}
+  }
+}

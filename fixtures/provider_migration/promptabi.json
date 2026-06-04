@@ -1,0 +1,78 @@
+{
+  "name": "provider-migration-contracts",
+  "checks": ["provider-migration"],
+  "artifacts": {
+    "openai-source": {
+      "kind": "provider-config",
+      "provider": "openai",
+      "api_family": "openai",
+      "path": "openai-source.json"
+    },
+    "azure-openai-target": {
+      "kind": "provider-config",
+      "provider": "azure-openai",
+      "api_family": "azure-openai",
+      "path": "azure-openai-target.json"
+    },
+    "anthropic-target": {
+      "kind": "provider-config",
+      "provider": "anthropic",
+      "api_family": "anthropic",
+      "path": "anthropic-target.json"
+    },
+    "gemini-target": {
+      "kind": "provider-config",
+      "provider": "gemini",
+      "api_family": "gemini",
+      "path": "gemini-target.json"
+    },
+    "bedrock-target": {
+      "kind": "provider-config",
+      "provider": "bedrock",
+      "api_family": "bedrock",
+      "path": "bedrock-target.json"
+    },
+    "together-target": {
+      "kind": "provider-config",
+      "provider": "together",
+      "api_family": "together",
+      "path": "together-target.json"
+    },
+    "groq-target": {
+      "kind": "provider-config",
+      "provider": "groq",
+      "api_family": "groq",
+      "path": "groq-target.json"
+    },
+    "ollama-target": {
+      "kind": "provider-config",
+      "provider": "ollama",
+      "api_family": "ollama",
+      "path": "ollama-target.json"
+    },
+    "llamacpp-target": {
+      "kind": "provider-config",
+      "provider": "llama.cpp server",
+      "api_family": "llama.cpp server",
+      "path": "llamacpp-target.json"
+    },
+    "vllm-target": {
+      "kind": "provider-config",
+      "provider": "vLLM OpenAI server",
+      "api_family": "vLLM OpenAI server",
+      "path": "vllm-target.json"
+    },
+    "litellm-target": {
+      "kind": "provider-config",
+      "provider": "LiteLLM",
+      "api_family": "LiteLLM",
+      "path": "litellm-target.json"
+    },
+    "unsupported-target": {
+      "kind": "provider-config",
+      "provider": "experimental-internal-provider",
+      "api_family": "experimental-internal-provider",
+      "path": "unsupported-target.json"
+    }
+  }
+}

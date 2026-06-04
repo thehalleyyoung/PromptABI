@@ -1,0 +1,17 @@
+{
+  "provider": "bedrock",
+  "request_shape": {"messages": "array", "toolConfig": "object"},
+  "response_shape": {"output": "object"},
+  "streaming_deltas": {"contentBlockDelta": "object"},
+  "migration_compatibility": {
+    "provider_family": "bedrock",
+    "request": {"required_fields": ["messages", "model", "toolConfig"]},
+    "response": {"required_fields": ["output", "stopReason", "usage"]},
+    "tools": {"argument_encoding": "json-object", "id_path": "output.message.content[].toolUse.toolUseId", "supports_parallel_tool_calls": true},
+    "streaming": {"emits_argument_fragments": true},
+    "stops": {"sequences": ["</tool_call>"]},
+    "limits": {"max_input_tokens": 32000, "max_output_tokens": 4096},
+    "structured_outputs": {"modes": ["tool_schema"]},
+    "errors": {"code_path": "code", "rate_limit_path": "throttling"}
+  }
+}

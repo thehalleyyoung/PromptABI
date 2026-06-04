@@ -1,0 +1,17 @@
+{
+  "provider": "together",
+  "request_shape": {"messages": "array", "tools": "array"},
+  "response_shape": {"choices": "array"},
+  "streaming_deltas": {"choices": "array"},
+  "migration_compatibility": {
+    "provider_family": "together",
+    "request": {"required_fields": ["messages", "model", "tools", "tool_choice"]},
+    "response": {"required_fields": ["choices", "finish_reason", "tool_calls"]},
+    "tools": {"argument_encoding": "json-string", "id_path": "choices[].message.tool_calls[].id", "supports_parallel_tool_calls": true},
+    "streaming": {"emits_argument_fragments": true},
+    "stops": {"sequences": ["</tool_call>", "<|end|>"]},
+    "limits": {"max_input_tokens": 128000, "max_output_tokens": 4096},
+    "structured_outputs": {"modes": ["json_object"]},
+    "errors": {"code_path": "error.code", "rate_limit_path": "error.type"}
+  }
+}
