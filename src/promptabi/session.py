@@ -53,6 +53,7 @@ from .stop_overreachability import (
     StopOverreachabilityReport,
     analyze_stop_overreachability,
 )
+from .tool_serialization import ToolSerializationFinding, analyze_tool_call_serialization
 from .tokenizers import TokenizerError, load_tokenizer
 
 
@@ -90,6 +91,7 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "parser-compatibility-agreement": (CheckMode.HEURISTIC,),
     "parser-compatibility-mismatch": (CheckMode.HEURISTIC,),
     "tool-schema-ingestion": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "tool-serialization": (CheckMode.BOUNDED, CheckMode.HEURISTIC),
     "check-unknown": (CheckMode.SOUND, CheckMode.COMPLETE),
     "check-failed": (CheckMode.HEURISTIC,),
 }
@@ -154,6 +156,7 @@ class VerificationSession:
             "grammar-tokenizer-emptiness": self._grammar_tokenizer_emptiness_check,
             "parser-compatibility": self._parser_compatibility_check,
             "tool-schema-ingestion": self._tool_schema_ingestion_check,
+            "tool-serialization": self._tool_serialization_check,
         }
         if checks:
             self.checks.update(checks)
@@ -458,6 +461,10 @@ class VerificationSession:
             if loaded.artifact.kind is ArtifactKind.TOOL_DEFINITION
             and loaded.source_type == "tool-definition-schema"
         )
+
+    def _tool_serialization_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        report = analyze_tool_call_serialization(context.loaded_artifacts)
+        return tuple(_tool_serialization_diagnostic(finding) for finding in report.findings)
 
     def _missing_local_paths(self) -> set[str]:
         return {
@@ -1012,6 +1019,41 @@ def _tool_schema_ingestion_diagnostic(loaded: LoadedArtifact) -> Diagnostic:
                 WitnessStep(action="record ingestion issues", output=str(issue_count)),
             ),
             artifacts=(loaded.artifact.to_ref(),),
+        ),
+    )
+
+
+def _tool_serialization_diagnostic(finding: ToolSerializationFinding) -> Diagnostic:
+    severity = (
+        DiagnosticSeverity.ERROR
+        if finding.severity == "error"
+        else DiagnosticSeverity.WARNING
+        if finding.severity == "warning"
+        else DiagnosticSeverity.INFO
+    )
+    context_steps = []
+    if finding.provider_name is not None:
+        context_steps.append(WitnessStep(action="select provider contract", input=finding.provider_name))
+    if finding.tool_artifact_name is not None:
+        context_steps.append(WitnessStep(action="select tool schema", input=finding.tool_artifact_name))
+    if finding.template_name is not None:
+        context_steps.append(WitnessStep(action="select chat template", input=finding.template_name))
+    if finding.stop_policy_name is not None:
+        context_steps.append(WitnessStep(action="select stop policy", input=finding.stop_policy_name))
+    evidence_steps = tuple(
+        WitnessStep(action="compare serialization field", input=key, output=value)
+        for key, value in finding.evidence
+    )
+    return Diagnostic(
+        rule_id="tool-serialization",
+        severity=severity,
+        message=f"{finding.kind.value}: {finding.message}",
+        span=finding.span,
+        check_modes=CHECK_MODE_CATALOG["tool-serialization"],
+        suggestions=(finding.suggestion,),
+        witness=WitnessTrace(
+            summary="A bounded recorded tool-call serialization contract disagreed across selected artifacts.",
+            steps=tuple(context_steps) + evidence_steps,
         ),
     )
 

@@ -1,0 +1,38 @@
+{
+  "name": "structured-schema-tool-serialization-contract",
+  "checks": ["tool-schema-ingestion", "tool-serialization"],
+  "artifacts": {
+    "chat-template": {
+      "kind": "chat-template",
+      "path": "tokenizer_config.json",
+      "source": "synthetic-tool-serialization-contract",
+      "version": "structured-schemas-v1",
+      "license": "fixture-only"
+    },
+    "openai-provider": {
+      "kind": "provider-config",
+      "path": "provider.json",
+      "provider": "openai-compatible",
+      "source": "synthetic-tool-serialization-contract",
+      "version": "structured-schemas-v1",
+      "license": "fixture-only"
+    },
+    "openai-stops": {
+      "kind": "stop-policy",
+      "path": "stops.json",
+      "source_family": "openai-compatible",
+      "source": "synthetic-tool-serialization-contract",
+      "version": "structured-schemas-v1",
+      "license": "fixture-only"
+    },
+    "openai-tools": {
+      "kind": "tool-definition",
+      "path": "tools.json",
+      "provider": "openai",
+      "tool_names": ["lookup_order", "refund_order"],
+      "source": "synthetic-tool-serialization-contract",
+      "version": "structured-schemas-v1",
+      "license": "fixture-only"
+    }
+  }
+}

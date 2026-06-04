@@ -197,6 +197,12 @@ from .tool_schemas import (
     ToolSchemaProvider,
     ingest_tool_schema_mapping,
 )
+from .tool_serialization import (
+    ToolSerializationFinding,
+    ToolSerializationFindingKind,
+    ToolSerializationReport,
+    analyze_tool_call_serialization,
+)
 from .stop_analysis import (
     StopCollision,
     StopPolicyTokenizerAnalysisReport,
@@ -403,6 +409,9 @@ __all__ = [
     "ToolDefinitionArtifact",
     "ToolDefinition",
     "ToolParameterSummary",
+    "ToolSerializationFinding",
+    "ToolSerializationFindingKind",
+    "ToolSerializationReport",
     "ToolSchemaIngestionError",
     "ToolSchemaIngestionResult",
     "ToolSchemaIssue",
@@ -453,6 +462,7 @@ __all__ = [
     "parse_stop_policy_config",
     "ingest_tool_schema_mapping",
     "analyze_stop_policy_tokenizer",
+    "analyze_tool_call_serialization",
     "analyze_stop_overreachability",
     "load_stop_trace_cases",
     "render_chat_template_supported_fragment",

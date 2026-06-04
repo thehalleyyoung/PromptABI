@@ -1,0 +1,6 @@
+{
+  "chat_template": "{{ bos_token }}{% for message in messages %}<|start|>{{ message['role'] }}\n{{ message['content'] }}<|end|>{% endfor %}{% if add_generation_prompt %}<|start|>assistant\n{% endif %}",
+  "bos_token": "<s>",
+  "eos_token": "<|end|>",
+  "additional_special_tokens": ["<|start|>", "<|end|>"]
+}

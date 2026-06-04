@@ -82,9 +82,11 @@ JSON Schema, XML-ish tool-call, markdown-fence, and custom-delimiter parser
 models, reporting parser-broader and grammar-broader disagreements without
 claiming full language equivalence; tool/function schema ingestion now normalizes
 OpenAI, Anthropic, LangChain, Pydantic, TypeScript-style, MCP, and provider
-tool-call envelopes into source-mapped typed schemas; a new labeled
-structured-schema corpus turns open-source-agent reductions, anonymized patterns,
-and synthetic tool-call stress cases into manifest-pinned CLI fixtures. The repository
+tool-call envelopes into source-mapped typed schemas; tool-call serialization
+analysis now checks recorded provider/template/parser contracts for name,
+argument-encoding, escaping, ID, parallel-call, streaming-chunk, and stop-delimiter
+agreement; a labeled structured-schema corpus turns open-source-agent reductions,
+anonymized patterns, and synthetic tool-call stress cases into manifest-pinned CLI fixtures. The repository
 already has the typed Python package,
 core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,
 snapshot-locked output stability, discoverable `promptabi verify` workflow,

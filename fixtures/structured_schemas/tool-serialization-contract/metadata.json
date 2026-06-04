@@ -1,0 +1,31 @@
+{
+  "id": "tool-serialization-contract",
+  "entry_type": "tool-definition",
+  "source_category": "synthetic-stress",
+  "display_name": "Tool-call serialization contract fixture",
+  "source": "synthetic-tool-serialization-contract",
+  "license": "fixture-only",
+  "fixture_revision": "structured-schemas-v1",
+  "upstream_reference": "synthetic reduction of provider/tool/parser serialization failure modes",
+  "upstream_revision": "reduction-v1",
+  "download_required": false,
+  "anonymized": true,
+  "reproducibility_notes": "Records names, argument encoding, escaping, IDs, parallel tool calls, streaming chunks, template tool rendering, and stop delimiter agreement in one offline fixture.",
+  "artifact": "tools.json",
+  "provider": "openai",
+  "tool_names": ["lookup_order", "refund_order"],
+  "parser_format": "json-schema",
+  "parser_compatibility": {
+    "samples": []
+  },
+  "labels": [
+    "tool-serialization",
+    "provider-envelope",
+    "streaming-tool-calls"
+  ],
+  "expected_parser_compatibility_status": "agreement",
+  "expected_rule_ids": [
+    "tool-schema-ingestion",
+    "tool-serialization"
+  ]
+}

@@ -89,8 +89,10 @@ per-entry PromptABI configs, deterministic hashes, and manifest generation, a
 tool/function schema ingestion layer that normalizes OpenAI tools, Anthropic
 tools, LangChain tools, Pydantic model schemas, TypeScript-style functions, MCP
 tools, and provider tool-call envelopes into source-mapped typed function schemas,
-and
-now takes the bounded tokenizer x grammar product to prove whether compiled
+plus a bounded tool-call serialization checker that compares recorded provider,
+template, stop-policy, and parser contracts for tool names, JSON-object versus
+JSON-string arguments, escaping guarantees, tool-call IDs, parallel calls,
+streaming chunk assembly, and tool-call delimiters, and now takes the bounded tokenizer x grammar product to prove whether compiled
 witnesses survive real tokenizer encode-normalize-decode assumptions, plus a
 bounded tokenizer x grammar ambiguity check that validates JSON lexical variants
 and detects tokenizer-path conflicts, decoded-text conflicts, whitespace and
@@ -180,6 +182,9 @@ checks tokenizer x grammar ambiguity by pairing schema-valid JSON lexical
 variants with real tokenizer encode/decode behavior to find conflicting token
 paths, decoded-text collapses, Unicode or whitespace byte aliases, and added-token
 aliases,
+checks recorded tool-call serialization contracts for provider/schema/parser
+agreement over names, argument encodings, escaping, IDs, parallel calls,
+streaming fragments, chat-template tool rendering, and stop delimiters,
 returns stable policy-controlled process exit codes,
 and runs a CPU-only smoke benchmark against an example bundle.
 
@@ -868,6 +873,21 @@ constraint paths, tool-call IDs, streaming chunk evidence, source spans, and
 ingestion issues such as open parameter objects. This gives later serialization,
 provider-migration, stop-overreach, and budget checks a typed schema substrate.
 
+The next layer is now executable as \texttt{tool-serialization}. A recorded
+provider snapshot can declare the request tool names it accepts, the response
+tool-call names it emits, whether arguments are JSON objects or JSON-encoded
+strings, whether those strings are escaped, where tool-call IDs appear, whether
+parallel calls are enabled or observed, how streaming deltas fragment arguments,
+which parser names and encodings are accepted, and which delimiter belongs to the
+tool-call envelope. PromptABI compares that contract against the selected tool
+definition, chat template, stop policy, and parser declaration. It reports bounded
+diagnostics for name mismatches, argument-encoding mismatches, raw escaping risk,
+missing IDs, single-call parsers behind parallel providers, parsers that read each
+delta instead of assembling chunks, templates that do not render selected tools,
+and stop policies that omit the recorded tool-call delimiter. The fixture-backed
+test drives all of those findings through \texttt{promptabi verify}, with source
+spans into the provider JSON and witness steps for the compared fields.
+
 PromptABI now normalizes the supported JSON Schema subset into a typed tree that
 preserves objects, arrays, required fields, enum and const terminals, string and
 numeric constraints, type and composition unions, local reference expansion,
@@ -948,7 +968,7 @@ The testing strategy has three tiers:
 \item unit and structured snapshot tests for public API and deterministic text, JSON, and SARIF rendering;
 \item tokenizer abstraction tests against real Hugging Face \texttt{tokenizers}, \texttt{tiktoken}, SentencePiece, and byte-level adapters;
 \item chat-template parser, symbolic-executor, concrete-renderer, role-region, and role-boundary non-forgeability tests across real \texttt{tokenizer\_config.json} fixtures and known delimiter-collision regressions, including ChatML, Llama header tokens, Mistral instruction tags, XML-ish tool tags, markdown fences, fine-tune hash headers, generation-prompt extraction, dynamic role headers, content-control delimiter collisions, role assumptions, field references, special tokens, bounded message/tool loops, filters, whitespace controls, path budgets, empty tool lists, tool-role messages, and unsupported constructs, with concrete outputs differentially checked against Hugging Face's renderer;
-\item loader and parser tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, tool-definition schemas spanning OpenAI, Anthropic, LangChain, Pydantic, TypeScript-style, MCP, and provider tool-call envelopes, stop-policy configs spanning OpenAI-compatible, Hugging Face, llama.cpp/Ollama, vLLM, LiteLLM, wrapper kwargs, fixture archives, and source-mapped JSON fields;
+\item loader and parser tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, tool-definition schemas spanning OpenAI, Anthropic, LangChain, Pydantic, TypeScript-style, MCP, and provider tool-call envelopes, tool-serialization contracts over names, arguments, escaping, IDs, parallel calls, streaming chunks, template tool rendering, and stop delimiters, stop-policy configs spanning OpenAI-compatible, Hugging Face, llama.cpp/Ollama, vLLM, LiteLLM, wrapper kwargs, fixture archives, and source-mapped JSON fields;
 \item stop-tokenizer, stop-differential, and stop-overreachability tests that exercise byte/string/token alignments, multi-token stops, invalid stop-token IDs, normalization collisions, prefix/suffix collisions, added/special-token interactions, OpenAI-compatible and Hugging Face delimiter-retention semantics, provider fixture replay, CLI mismatch diagnostics, serialized stop offsets, parser-state truncation witnesses, supported schema/tool string witnesses, structural delimiter collisions, real-world Qwen/Gemma/llama.cpp stop bug reductions, and a real Hugging Face \texttt{tokenizers} BPE fixture;
 \item fixture and corpus tests for minimized tokenizer/chat-template bundles, public real-bug provenance, expected behaviors, sentinel consistency, artifact materialization, deterministic manifest generation, labeled structured-schema reductions, anonymized contracts, synthetic parser stress cases, tool-definition bundles, and real CLI replay of every included structured-schema config;
 \item future corpus tests for popular model and framework configurations pinned by immutable upstream revisions.
@@ -1008,7 +1028,9 @@ The structured-schema layer is executable as well. It includes a reduced
 open-source-agent ticket-routing schema, an anonymized markdown-fence response
 contract, a synthetic XML tool-call parser-broader stress case, and an
 OpenAI-style tool-definition bundle that now runs through the real
-tool-schema-ingestion CLI check. \texttt{load\_structured\_schema\_corpus()}
+tool-schema-ingestion CLI check, and a synthetic tool-serialization contract that
+drives provider/tool/parser disagreement diagnostics through the real CLI.
+\texttt{load\_structured\_schema\_corpus()}
 validates required source-category coverage, schema/grammar/tool entry types,
 labels, expected parser-compatibility status, per-entry artifact hashes, and
 runnable PromptABI configs. \texttt{promptabi corpus structured-schema-manifest}
@@ -1240,7 +1262,7 @@ metadata, artifact materialization through the real offline loader, manifest
 generation, manifest writing, and the \texttt{promptabi corpus manifest} CLI.
 The structured-schema corpus tests validate required source categories,
 schema/grammar/tool-definition artifact materialization, tool-schema ingestion,
-labeled parser-compatibility replay, per-fixture CLI diagnostics, manifest
+labeled parser-compatibility replay, tool-serialization fixture replay, per-fixture CLI diagnostics, manifest
 writing, and the \texttt{promptabi corpus structured-schema-manifest} CLI.
 Stop differential tests replay recorded provider-style chunks through CPU-only
 OpenAI-compatible and Hugging Face simulators, assert delimiter-retention behavior,
@@ -1281,7 +1303,7 @@ CLI smoke & \texttt{promptabi verify --config examples/minimal/promptabi.json} r
 \hline
 Corpus smoke & \texttt{promptabi corpus manifest} validates ten minimized instruct-template families and emits stable per-entry hashes without downloads. \\
 \hline
-Structured-schema corpus & \texttt{promptabi corpus structured-schema-manifest} validates labeled structured-output/tool-calling fixtures from OSS reductions, anonymized contracts, and synthetic stress cases; tests replay every label through real parser-compatibility code and CLI configs. \\
+Structured-schema corpus & \texttt{promptabi corpus structured-schema-manifest} validates labeled structured-output/tool-calling fixtures from OSS reductions, anonymized contracts, and synthetic stress cases; tests replay parser compatibility, tool-schema ingestion, tool serialization, and CLI configs. \\
 \hline
 Benchmark smoke & Repeated config load and verification completes on CPU with JSON output. \\
 \hline

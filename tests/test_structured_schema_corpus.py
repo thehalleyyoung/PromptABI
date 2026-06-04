@@ -67,7 +67,7 @@ def test_structured_schema_corpus_cli_configs_match_expected_rule_ids(capsys) ->
 
         assert captured.err == ""
         assert set(entry.expected_rule_ids).issubset(rule_ids)
-        assert exit_code == (1 if "parser-compatibility-mismatch" in rule_ids else 0)
+        assert exit_code == (0 if payload["ok"] else 1)
 
 
 def test_structured_schema_manifest_records_hashes_and_writes(tmp_path: Path) -> None:

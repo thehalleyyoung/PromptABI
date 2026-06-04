@@ -1,0 +1,43 @@
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "lookup_order",
+        "description": "Look up an anonymized order record.",
+        "parameters": {
+          "type": "object",
+          "required": ["order_id"],
+          "additionalProperties": false,
+          "properties": {
+            "order_id": {
+              "type": "string",
+              "pattern": "^ORD-[0-9]{4}$"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "refund_order",
+        "description": "Issue a bounded refund decision.",
+        "parameters": {
+          "type": "object",
+          "required": ["order_id", "reason"],
+          "additionalProperties": false,
+          "properties": {
+            "order_id": {
+              "type": "string",
+              "pattern": "^ORD-[0-9]{4}$"
+            },
+            "reason": {
+              "enum": ["duplicate", "damaged", "courtesy"]
+            }
+          }
+        }
+      }
+    }
+  ]
+}
