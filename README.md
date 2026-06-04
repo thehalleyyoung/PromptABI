@@ -54,8 +54,9 @@ core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,
 snapshot-locked output stability, discoverable `promptabi verify` workflow,
 source-mapped diagnostics that point to exact config and artifact lines, offline
 version-pinned artifact loading, Hugging Face chat-template parsing plus bounded
-symbolic/concrete rendering and role-region non-forgeability checked across the seed
-corpus, a real tokenizer abstraction spanning byte-level, Hugging Face
+symbolic/concrete rendering, and role-region non-forgeability checked across the seed
+corpus and a delimiter-collision regression suite covering ChatML, Llama, Mistral,
+XML tool tags, markdown fences, and fine-tune headers. It also has a real tokenizer abstraction spanning byte-level, Hugging Face
 `tokenizers`, `tiktoken`, and SentencePiece backends, differential harnesses
 checked against actual libraries, an embedding API for custom checks and typed
 results, a curated CPU-only seed corpus with a reproducible manifest pipeline,

@@ -47,8 +47,10 @@ tokenization, and the exact forged boundary, a role-boundary model that
 decomposes symbolic renders into system, user, assistant, tool, developer,
 function, and provider-specific structural regions, a
 concrete renderer differentially checked against Hugging Face
-\texttt{apply\_chat\_template} behavior across the seed corpus, a CPU-only
-benchmark, documentation, and contribution guidance.
+\texttt{apply\_chat\_template} behavior across the seed corpus, a delimiter-
+collision regression suite covering ChatML, Llama header tokens, Mistral
+instruction tags, XML-ish tool tags, markdown role fences, and fine-tune hash
+headers, a CPU-only benchmark, documentation, and contribution guidance.
 The remaining checkers fit into that surface rather than requiring a rewrite. We
 describe the transducer-oriented formalism, the artifact model, the diagnostic
 contract, the first benchmark line, and the planned evaluation against real tokenizer, template,
@@ -110,7 +112,7 @@ pins, adapts real tokenizer backends into stable encode/decode metadata,
 extracts Hugging Face chat-template structure from \texttt{tokenizer\_config.json},
 derives sanitizer-aware role-boundary regions over bounded rendered prompt patterns,
 emits minimized role-forgery witnesses with attacker input, rendered excerpt,
-token evidence, exact boundary offsets, and explicit sanitizer metadata,
+token evidence centered on the forged marker, exact boundary offsets, and explicit sanitizer metadata,
 extracts automata, transducer, and solver witnesses for finite formal contracts, prepares a cache directory for future expensive products, emits deterministic
 typed diagnostics in text, JSON, and SARIF with structured snapshot coverage, exposes an embedding API for custom
 checks and typed results, returns stable policy-controlled process exit codes,
@@ -394,6 +396,17 @@ URL or base64 wrapper filters, and sanitizer-preserving \texttt{set} bindings ar
 recorded in the role-boundary model and suppress only the findings for the
 protected expression. Raw interpolation remains forgeable, and Jinja's
 \texttt{safe} marker is deliberately not treated as escaping.
+
+The regression suite now exercises the known delimiter-collision families against
+the executable checker rather than against string literals. ChatML cases verify
+\texttt{<|im\_start|>}, \texttt{<|im\_end|>}, assistant prefixes, and raw dynamic
+role headers. Llama-style cases cover start/end header IDs and end-of-turn
+tokens. Mistral-style cases cover \texttt{[INST]}, \texttt{[/INST]}, and EOS
+sentinels. XML-ish tool cases cover opening and closing tool-call tags, markdown
+cases cover role-bearing code fences, and custom fine-tune cases cover
+\texttt{\#\#\# User:} / \texttt{\#\#\# Assistant:} headers. The tests also assert
+that every expected finding carries a minimized malicious input, rendered excerpt,
+byte-level token evidence, and monotonic boundary offsets.
 
 PromptABI also now has a concrete evaluator for that same supported fragment. It
 renders real message and tool inputs through the position-preserving lexer and
@@ -757,7 +770,7 @@ The testing strategy has three tiers:
 \begin{itemize}
 \item unit and structured snapshot tests for public API and deterministic text, JSON, and SARIF rendering;
 \item tokenizer abstraction tests against real Hugging Face \texttt{tokenizers}, \texttt{tiktoken}, SentencePiece, and byte-level adapters;
-\item chat-template parser, symbolic-executor, concrete-renderer, role-region, and role-boundary non-forgeability tests across real \texttt{tokenizer\_config.json} fixtures, including generation-prompt extraction, dynamic role headers, content-control delimiter collisions, role assumptions, field references, special tokens, bounded message/tool loops, filters, whitespace controls, path budgets, empty tool lists, tool-role messages, and unsupported constructs, with concrete outputs differentially checked against Hugging Face's renderer;
+\item chat-template parser, symbolic-executor, concrete-renderer, role-region, and role-boundary non-forgeability tests across real \texttt{tokenizer\_config.json} fixtures and known delimiter-collision regressions, including ChatML, Llama header tokens, Mistral instruction tags, XML-ish tool tags, markdown fences, fine-tune hash headers, generation-prompt extraction, dynamic role headers, content-control delimiter collisions, role assumptions, field references, special tokens, bounded message/tool loops, filters, whitespace controls, path budgets, empty tool lists, tool-role messages, and unsupported constructs, with concrete outputs differentially checked against Hugging Face's renderer;
 \item loader tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, fixture archives, and source-mapped JSON fields;
 \item fixture and corpus tests for minimized tokenizer/chat-template bundles, expected behaviors, sentinel consistency, artifact materialization, and deterministic manifest generation;
 \item future corpus tests for popular model and framework configurations pinned by immutable upstream revisions.
@@ -1018,7 +1031,7 @@ Tokenizer differential tests & Byte-level normalization and added-token behavior
 \hline
 Chat-template symbolic tests & Hugging Face \texttt{tokenizer\_config.json} templates across ten seed families expose template source, special tokens, generation prompts, roles, fields, tools, filters, whitespace controls, bounded symbolic paths, and unsupported constructs. \\
 \hline
-Role-boundary checker tests & Bounded non-forgeability diagnostics catch dynamic role-header forgery and user-content control delimiter forgery, preserve deterministic JSON output, and prove that JSON/escape filters plus sanitizer-preserving bindings suppress only protected-expression false positives. \\
+Role-boundary checker tests & Bounded non-forgeability diagnostics catch dynamic role-header forgery and user-content delimiter forgery across ChatML, Llama, Mistral, XML tool tags, markdown fences, and fine-tune hash headers; witnesses include minimized inputs, rendered excerpts, centered token evidence, and exact offsets, while sanitizer tests prove JSON/escape filters plus sanitizer-preserving bindings suppress only protected-expression false positives. \\
 \hline
 CLI smoke & \texttt{promptabi verify --config examples/minimal/promptabi.json} returns pass, and \texttt{--fail-on}, \texttt{--artifact}, \texttt{--cache-dir}, \texttt{--quiet}, and \texttt{--verbose} are covered. \\
 \hline

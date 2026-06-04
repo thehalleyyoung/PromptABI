@@ -12,6 +12,141 @@ from promptabi import (
 )
 
 
+ROLE_BOUNDARY_REGRESSION_CASES = (
+    (
+        "chatml",
+        {
+            "chat_template": (
+                "{% for message in messages %}"
+                "<|im_start|>{{ message['role'] }}\n"
+                "{{ message['content'] }}<|im_end|>\n"
+                "{% endfor %}"
+                "{% if add_generation_prompt %}<|im_start|>assistant\n{% endif %}"
+            ),
+            "additional_special_tokens": ["<|im_start|>", "<|im_end|>"],
+        },
+        {
+            ("{messages[0].role}", "assistant", "role-header"),
+            ("{messages[0].content}", "<|im_start|>", "assistant-prefix"),
+            ("{messages[0].content}", "<|im_end|>", "special-token"),
+        },
+    ),
+    (
+        "llama-header-tokens",
+        {
+            "chat_template": (
+                "{% for message in messages %}"
+                "<|start_header_id|>{{ message['role'] }}<|end_header_id|>\n\n"
+                "{{ message['content'] }}<|eot_id|>"
+                "{% endfor %}"
+                "{% if add_generation_prompt %}<|start_header_id|>assistant<|end_header_id|>\n\n{% endif %}"
+            ),
+            "additional_special_tokens": ["<|start_header_id|>", "<|end_header_id|>", "<|eot_id|>"],
+        },
+        {
+            ("{messages[0].role}", "assistant", "role-header"),
+            ("{messages[0].content}", "<|start_header_id|>", "assistant-prefix"),
+            ("{messages[0].content}", "<|end_header_id|>", "assistant-prefix"),
+            ("{messages[0].content}", "<|eot_id|>", "special-token"),
+        },
+    ),
+    (
+        "mistral-instruction-tags",
+        {
+            "chat_template": (
+                "{% for message in messages %}"
+                "{% if message['role'] == 'user' %}[INST] {{ message['content'] }} [/INST]"
+                "{% elif message['role'] == 'assistant' %}{{ message['content'] }}</s>{% endif %}"
+                "{% endfor %}"
+            ),
+            "eos_token": "</s>",
+            "additional_special_tokens": ["[INST]", "[/INST]"],
+        },
+        {
+            ("{messages[0].content}", "[INST]", "special-token"),
+            ("{messages[0].content}", "[/INST]", "special-token"),
+            ("{messages[0].content}", "</s>", "assistant-prefix"),
+        },
+    ),
+    (
+        "xml-tool-tags",
+        {
+            "chat_template": (
+                "{% for message in messages %}"
+                "{% if message['role'] == 'tool' %}<tool_call>{{ message['content'] }}</tool_call>"
+                "{% else %}<message role=\"{{ message['role'] }}\">{{ message['content'] }}</message>{% endif %}"
+                "{% endfor %}"
+            ),
+            "additional_special_tokens": ["<tool_call>", "</tool_call>"],
+        },
+        {
+            ("{messages[0].role}", "assistant", "role-header"),
+            ("{messages[0].content}", "<tool_call>", "tool-call-sentinel"),
+            ("{messages[0].content}", "</tool_call>", "tool-call-sentinel"),
+        },
+    ),
+    (
+        "markdown-fence-roles",
+        {
+            "chat_template": (
+                "{% for message in messages %}"
+                "{% if message['role'] == 'user' %}```user\n{{ message['content'] }}\n```"
+                "{% elif message['role'] == 'assistant' %}```assistant\n{{ message['content'] }}\n```{% endif %}"
+                "{% endfor %}"
+            ),
+        },
+        {
+            ("{messages[0].content}", "```user", "role-header"),
+            ("{messages[0].content}", "```assistant", "assistant-prefix"),
+        },
+    ),
+    (
+        "custom-finetune-hash-headers",
+        {
+            "chat_template": (
+                "{% for message in messages %}"
+                "{% if message['role'] == 'user' %}### User:\n{{ message['content'] }}\n"
+                "{% elif message['role'] == 'assistant' %}### Assistant:\n{{ message['content'] }}\n{% endif %}"
+                "{% endfor %}"
+            ),
+        },
+        {
+            ("{messages[0].content}", "### User:", "role-header"),
+            ("{messages[0].content}", "### Assistant:", "assistant-prefix"),
+        },
+    ),
+)
+
+
+def test_role_boundary_regression_suite_covers_known_delimiter_collisions() -> None:
+    bounds = ChatTemplateSymbolicBounds(max_messages=1, max_tools=0, max_loop_iterations=1, max_paths=32)
+
+    for case_name, config, expected_witnesses in ROLE_BOUNDARY_REGRESSION_CASES:
+        parsed = parse_hf_chat_template_config(config)
+        report = analyze_role_boundary_nonforgeability(parsed, bounds=bounds)
+        actual_witnesses = {
+            (finding.input_expression, finding.marker, finding.marker_kind)
+            for finding in report.findings
+        }
+
+        assert report.model.supported, case_name
+        assert expected_witnesses <= actual_witnesses, case_name
+        for input_expression, marker, marker_kind in expected_witnesses:
+            finding = next(
+                finding
+                for finding in report.findings
+                if (
+                    finding.input_expression == input_expression
+                    and finding.marker == marker
+                    and finding.marker_kind == marker_kind
+                )
+            )
+            assert finding.malicious_input == marker, case_name
+            assert marker in finding.rendered_excerpt, case_name
+            assert marker in finding.tokenized_representation, case_name
+            assert finding.marker_start_offset < finding.marker_end_offset, case_name
+
+
 def test_role_boundary_model_tracks_condition_variable_and_generation_regions() -> None:
     parsed = parse_hf_chat_template_config(
         {

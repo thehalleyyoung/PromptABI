@@ -723,11 +723,15 @@ def _literal_control_runs(control_text: str) -> tuple[str, ...]:
 _ANGLE_SENTINEL_RE = re.compile(r"</?[A-Za-z][A-Za-z0-9_:-]*(?:\s[^>\n]{0,120})?>|<\|[^|\n]{1,120}\|>")
 _BRACKET_SENTINEL_RE = re.compile(r"\[/?[A-Za-z][A-Za-z0-9_ -]{1,80}\]")
 _FENCE_SENTINEL_RE = re.compile(r"```[A-Za-z0-9_-]*")
+_HASH_HEADER_SENTINEL_RE = re.compile(
+    r"(?m)^[ \t]*#{2,6}[ \t]*(?:assistant|system|developer|tool|function|user)[A-Za-z0-9 _-]{0,60}:",
+    re.IGNORECASE,
+)
 
 
 def _extract_marker_candidates(literal: str) -> tuple[str, ...]:
     candidates: list[str] = []
-    for regex in (_ANGLE_SENTINEL_RE, _BRACKET_SENTINEL_RE, _FENCE_SENTINEL_RE):
+    for regex in (_ANGLE_SENTINEL_RE, _BRACKET_SENTINEL_RE, _FENCE_SENTINEL_RE, _HASH_HEADER_SENTINEL_RE):
         candidates.extend(match.group(0) for match in regex.finditer(literal))
     stripped = literal.strip()
     if _significant_marker(stripped) and any(role in stripped for role in DEFAULT_STRUCTURAL_ROLES):
@@ -740,7 +744,7 @@ def _significant_marker(marker: str) -> bool:
         return False
     if marker.strip() in DEFAULT_STRUCTURAL_ROLES:
         return False
-    return bool(re.search(r"[<>\[\]`|/]", marker))
+    return bool(re.search(r"[<>\[\]`|/#]", marker))
 
 
 def _marker_kind(marker: str, region: RoleBoundaryRegion) -> str:
@@ -833,8 +837,21 @@ def _rendered_excerpt_from_offsets(rendered: str, marker_start: int, marker_end:
 def _tokenized_representation(excerpt: str, marker: str) -> str:
     tokenizer = ByteLevelTokenizer(added_tokens=(marker,), special_tokens={marker: 256})
     encoded = tokenizer.encode(excerpt)
+    marker_indexes = [index for index, token in enumerate(encoded.tokens) if token.text == marker]
+    if marker_indexes and len(encoded.tokens) > 48:
+        marker_index = marker_indexes[0]
+        start_index = max(0, marker_index - 23)
+        end_index = min(len(encoded.tokens), start_index + 48)
+        start_index = max(0, end_index - 48)
+        visible_tokens = encoded.tokens[start_index:end_index]
+    else:
+        start_index = 0
+        end_index = min(len(encoded.tokens), 48)
+        visible_tokens = encoded.tokens[start_index:end_index]
     token_pieces = []
-    for token in encoded.tokens[:48]:
+    if start_index > 0:
+        token_pieces.append(f"...+{start_index} tokens")
+    for token in visible_tokens:
         text = token.text if token.text is not None else ""
         flags = []
         if token.special:
@@ -843,6 +860,6 @@ def _tokenized_representation(excerpt: str, marker: str) -> str:
             flags.append("added")
         flag_suffix = f"/{','.join(flags)}" if flags else ""
         token_pieces.append(f"{token.token_id}:{text!r}{flag_suffix}")
-    if len(encoded.tokens) > 48:
-        token_pieces.append(f"...+{len(encoded.tokens) - 48} tokens")
+    if end_index < len(encoded.tokens):
+        token_pieces.append(f"...+{len(encoded.tokens) - end_index} tokens")
     return "byte-level " + " ".join(token_pieces)
