@@ -6,6 +6,12 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from .config import VerificationConfig, load_config
+from .compatibility_matrix import (
+    CompatibilityMatrix,
+    build_compatibility_matrix,
+    render_compatibility_matrix_json,
+    render_compatibility_matrix_text,
+)
 from .diagnostics import Diagnostic
 from .explain import DiagnosticExplanation, explain_diagnostic, render_explanation_json, render_explanation_text
 from .loaders import ArtifactLoader, LoadedArtifact
@@ -160,6 +166,36 @@ def render_explanation(
         return render_explanation_text(explanation)
     if output_format == "json":
         return render_explanation_json(explanation)
+    raise ValueError("output_format must be one of: text, json")
+
+
+def compatibility_matrix(
+    *,
+    plugin_registry: PluginRegistry | None = None,
+    include_plugins: bool = True,
+) -> CompatibilityMatrix:
+    """Return the check compatibility matrix used by the CLI and docs."""
+
+    return build_compatibility_matrix(plugin_registry=plugin_registry, include_plugins=include_plugins)
+
+
+def render_compatibility_matrix(
+    matrix: CompatibilityMatrix | None = None,
+    *,
+    output_format: str = "text",
+    plugin_registry: PluginRegistry | None = None,
+    include_plugins: bool = True,
+) -> str:
+    """Render a compatibility matrix as text or JSON."""
+
+    resolved = matrix or build_compatibility_matrix(
+        plugin_registry=plugin_registry,
+        include_plugins=include_plugins,
+    )
+    if output_format == "text":
+        return render_compatibility_matrix_text(resolved)
+    if output_format == "json":
+        return render_compatibility_matrix_json(resolved)
     raise ValueError("output_format must be one of: text, json")
 
 

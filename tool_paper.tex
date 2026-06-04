@@ -282,6 +282,11 @@ expands a selected diagnostic with \texttt{promptabi explain} into a local
 debugging narrative that includes artifact snippets, the formal property, witness
 trace, likely production symptom, and fix suggestions while handling repeated
 logical findings deterministically,
+publishes \texttt{promptabi matrix} as a machine-readable compatibility table
+that aggregates every check's emitted rule IDs into explicit
+sound/complete/bounded/Z3/heuristic/abstaining modes across tokenizer families,
+template dialects, grammar backends, providers, frameworks, and the currently
+modeled training-manifest surface,
 and runs CPU-only performance benchmarks over tokenizer, template, grammar,
 stop, SMT, budget, corpus, and cache paths.
 
@@ -361,6 +366,12 @@ symbolic contract is lowered to Z3 when the optional solver is present;
 \emph{abstaining} means the checker deliberately declines unsupported cases.
 That taxonomy is crucial: it lets the tool be useful where it is precise and
 honest where it is not.
+The same taxonomy is now executable metadata: the compatibility matrix derives
+check rows from scheduler dependencies and per-rule diagnostic modes, so, for
+example, stop-tokenizer analysis is shown as a mixture of sound unreachable-stop
+results, heuristic collision evidence, and abstentions, while static contracts
+are shown as bounded Z3-backed SMT over all artifact kinds, including finite
+supervised target-role alignment for training manifests.
 
 \clearpage
 \section{Artifact Model}

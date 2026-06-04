@@ -15,6 +15,8 @@ promptabi explain --config examples/role-boundary/unsafe.promptabi.json --index 
 promptabi verify --artifact schema=schemas/answer.json --fail-on warning
 # gate upgrades:
 promptabi diff promptabi.baseline.json promptabi.json
+# audit check guarantees and supported surfaces:
+promptabi matrix --format json
 ```
 
 ```text
@@ -61,7 +63,10 @@ the same proofs scale to tokenizer-sized alphabets without changing the public
 diagnostic contract. A typed plugin registry and default first-party plugin pack
 now expose Hugging Face, OpenAI-compatible, vLLM, llama.cpp, LangChain,
 LlamaIndex, Outlines, xgrammar, llguidance, Pydantic, MCP, and Z3 adapter
-surfaces without weakening deterministic sessions or CLI output.
+surfaces without weakening deterministic sessions or CLI output; `promptabi
+matrix` reports the exact sound/bounded/Z3/heuristic/abstaining guarantees for
+each check across tokenizer, template, grammar, provider, framework, and
+training-manifest surfaces.
 
 PromptABI now ships a bounded, sanitizer-aware role-boundary non-forgeability check:
 unsanitized user/tool/function content and dynamic role fields are checked against

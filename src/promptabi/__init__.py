@@ -8,10 +8,12 @@ blocks that later checkers can reuse without changing the embedding API.
 
 from ._version import __version__
 from .api import (
+    compatibility_matrix,
     collect_diagnostics,
     create_session,
     explain_result,
     load_artifacts,
+    render_compatibility_matrix,
     render_explanation,
     render_result,
     run_verification,
@@ -73,6 +75,15 @@ from .chat_templates import (
     symbolically_execute_chat_template,
 )
 from .config import ConfigError, VerificationConfig, discover_config, load_config
+from .compatibility_matrix import (
+    CHECK_RULE_IDS,
+    CompatibilityMatrix,
+    CompatibilityMatrixEntry,
+    CompatibilitySurface,
+    build_compatibility_matrix,
+    render_compatibility_matrix_json,
+    render_compatibility_matrix_text,
+)
 from .diagnostics import (
     ArtifactRef,
     CheckMode,
@@ -385,12 +396,16 @@ __all__ = [
     "ChatTemplateSymbolicPath",
     "ChatTemplateSymbolicSegment",
     "ChatTemplateUnsupportedConstruct",
+    "CHECK_RULE_IDS",
     "CheckCallable",
     "CheckContext",
     "CheckMode",
     "ConfigError",
     "ConfigDiffInputs",
     "Contains",
+    "CompatibilityMatrix",
+    "CompatibilityMatrixEntry",
+    "CompatibilitySurface",
     "ByteLevelTokenizer",
     "DecodeResult",
     "DEFAULT_PROVIDER_FIXTURE_PACK_ROOT",
@@ -572,6 +587,7 @@ __all__ = [
     "WitnessTrace",
     "apply_normalization",
     "collect_diagnostics",
+    "compatibility_matrix",
     "create_session",
     "create_first_party_plugin_registry",
     "discover_config",
@@ -580,6 +596,7 @@ __all__ = [
     "explain_diagnostic",
     "explain_result",
     "build_json_source_map",
+    "build_compatibility_matrix",
     "build_provider_fixture_pack_manifest",
     "compile_json_schema_mapping",
     "ingest_grammar_file",
@@ -611,6 +628,9 @@ __all__ = [
     "load_tokenizer_config_snapshot",
     "load_plugin_modules",
     "render_result",
+    "render_compatibility_matrix",
+    "render_compatibility_matrix_json",
+    "render_compatibility_matrix_text",
     "render_explanation",
     "render_plugin_capabilities",
     "run_verification",

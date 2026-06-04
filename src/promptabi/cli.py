@@ -11,6 +11,11 @@ from pathlib import Path
 
 from ._version import __version__
 from .config import ConfigError, discover_config, load_config
+from .compatibility_matrix import (
+    build_compatibility_matrix,
+    render_compatibility_matrix_json,
+    render_compatibility_matrix_text,
+)
 from .diff import diff_config_files
 from .explain import ExplainError, explain_diagnostic, render_explanation_json, render_explanation_text
 from .first_party_plugins import create_first_party_plugin_registry, render_plugin_capabilities
@@ -226,6 +231,21 @@ def build_parser() -> argparse.ArgumentParser:
         default="text",
         help="output format (default: text)",
     )
+
+    matrix = subparsers.add_parser("matrix", help="show check compatibility and guarantee modes")
+    matrix.add_argument(
+        "--plugin",
+        action="append",
+        default=[],
+        metavar="MODULE[:OBJECT]",
+        help="import an additional PromptABI plugin before building the matrix; may be repeated",
+    )
+    matrix.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
     return parser
 
 
@@ -428,6 +448,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             registry = _load_cli_plugins(args.plugin)
             output = render_plugin_capabilities(registry, output_format=args.format)
+        except (PluginError, ValueError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        print(output, end="")
+        return 0
+
+    if args.command == "matrix":
+        try:
+            registry = _load_cli_plugins(args.plugin)
+            matrix = build_compatibility_matrix(plugin_registry=registry)
+            if args.format == "json":
+                output = render_compatibility_matrix_json(matrix)
+            else:
+                output = render_compatibility_matrix_text(matrix)
         except (PluginError, ValueError) as exc:
             print(f"promptabi: {exc}", file=sys.stderr)
             return 2
