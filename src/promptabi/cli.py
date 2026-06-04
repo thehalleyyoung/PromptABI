@@ -22,6 +22,12 @@ from .explain import ExplainError, explain_diagnostic, render_explanation_json, 
 from .first_party_plugins import create_first_party_plugin_registry, render_plugin_capabilities
 from .github_action import GitHubActionError, run_github_action
 from .init import InitError, available_stacks, scaffold_promptabi_project
+from .local_workflows import (
+    LocalWorkflowError,
+    install_pre_commit_hook,
+    render_local_workflow_text,
+    run_local_workflow,
+)
 from .lockfiles import (
     LockfileError,
     build_lockfile,
@@ -303,6 +309,55 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="also emit GitHub workflow command annotations to stdout",
     )
+
+    pre_commit = subparsers.add_parser(
+        "pre-commit",
+        help="install or run local PromptABI pre-commit verification workflows",
+    )
+    pre_commit_subparsers = pre_commit.add_subparsers(dest="pre_commit_command", required=True)
+    pre_commit_install = pre_commit_subparsers.add_parser(
+        "install",
+        help="install a PromptABI-managed git pre-commit hook",
+    )
+    _add_pre_commit_common_arguments(pre_commit_install)
+    pre_commit_install.add_argument(
+        "--force",
+        action="store_true",
+        help="overwrite an existing non-PromptABI pre-commit hook",
+    )
+    pre_commit_install.add_argument(
+        "--all",
+        action="store_true",
+        help="install a hook that runs verification for every commit instead of changed PromptABI inputs only",
+    )
+
+    pre_commit_run = pre_commit_subparsers.add_parser(
+        "run",
+        help="run local PromptABI verification, optionally gated to changed inputs",
+    )
+    _add_pre_commit_common_arguments(pre_commit_run)
+    pre_commit_run.add_argument(
+        "--changed-only",
+        action="store_true",
+        help="skip when no staged PromptABI config, schema, template, tokenizer, tool, budget, or training input changed",
+    )
+    pre_commit_run.add_argument(
+        "--mode",
+        choices=("staged", "unstaged", "working-tree"),
+        default="staged",
+        help="git changed-path view used with --changed-only (default: staged)",
+    )
+    pre_commit_run.add_argument(
+        "--changed-path",
+        action="append",
+        default=[],
+        help="explicit repo-relative changed path for tests or custom wrappers; may be repeated",
+    )
+    pre_commit_run.add_argument(
+        "--allow-unstaged",
+        action="store_true",
+        help="allow verification when selected staged PromptABI inputs also have unstaged edits",
+    )
     return parser
 
 
@@ -566,6 +621,48 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         return run.exit_code
 
+    if args.command == "pre-commit" and args.pre_commit_command == "install":
+        try:
+            hook_path = install_pre_commit_hook(
+                config_path=args.config,
+                repo_root=args.repo_root,
+                cache_dir=args.cache_dir,
+                fail_on=args.fail_on,
+                require_lockfile=args.require_lockfile,
+                changed_only=not args.all,
+                force=args.force,
+            )
+        except (ConfigError, LocalWorkflowError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot install pre-commit hook: {exc}", file=sys.stderr)
+            return 2
+        print(f"installed PromptABI pre-commit hook: {hook_path}")
+        return 0
+
+    if args.command == "pre-commit" and args.pre_commit_command == "run":
+        try:
+            run = run_local_workflow(
+                config_path=args.config,
+                repo_root=args.repo_root,
+                cache_dir=args.cache_dir,
+                fail_on=args.fail_on,
+                require_lockfile=args.require_lockfile,
+                changed_only=args.changed_only,
+                mode=args.mode,
+                changed_paths=args.changed_path or None,
+                allow_unstaged=args.allow_unstaged,
+            )
+        except (ConfigError, LocalWorkflowError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot run pre-commit workflow: {exc}", file=sys.stderr)
+            return 2
+        print(render_local_workflow_text(run), end="")
+        return run.exit_code
+
     parser.error(f"unknown command: {args.command}")
     return 2
 
@@ -593,6 +690,32 @@ def _add_github_output_arguments(parser: argparse.ArgumentParser) -> None:
         "--sarif-include-invocation",
         action="store_true",
         help="include deterministic invocation metadata in SARIF output",
+    )
+
+
+def _add_pre_commit_common_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--config",
+        help="path to a PromptABI JSON config; defaults to discovering promptabi.json from the repo root",
+    )
+    parser.add_argument(
+        "--repo-root",
+        help="repository root (default: git rev-parse --show-toplevel or cwd)",
+    )
+    parser.add_argument(
+        "--cache-dir",
+        help="directory for reusable PromptABI analysis caches",
+    )
+    parser.add_argument(
+        "--fail-on",
+        choices=("error", "warning", "any", "never"),
+        default="error",
+        help="exit with code 1 at this diagnostic threshold (default: error)",
+    )
+    parser.add_argument(
+        "--require-lockfile",
+        action="store_true",
+        help="fail if artifacts or diagnostics drift from the PromptABI lockfile",
     )
 
 

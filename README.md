@@ -19,6 +19,8 @@ promptabi diff promptabi.baseline.json promptabi.json
 promptabi matrix --format json
 # GitHub code scanning with cache + lockfile gates:
 promptabi github-action --config examples/minimal/promptabi.json --require-lockfile
+# local commit gate for changed prompt artifacts:
+promptabi pre-commit install --config examples/minimal/promptabi.json
 ```
 
 ```text
@@ -68,7 +70,10 @@ LlamaIndex, Outlines, xgrammar, llguidance, Pydantic, MCP, and Z3 adapter
 surfaces without weakening deterministic sessions or CLI output; `promptabi
 matrix` reports the exact sound/bounded/Z3/heuristic/abstaining guarantees for
 each check across tokenizer, template, grammar, provider, framework, and
-training-manifest surfaces.
+training-manifest surfaces. `promptabi pre-commit` installs a PATH-independent
+local hook and fail-closed changed-artifact gate for schemas, templates,
+tokenizers, tools, budgets, training manifests, configs, and lockfiles before
+they reach CI.
 
 PromptABI now ships a bounded, sanitizer-aware role-boundary non-forgeability check:
 unsanitized user/tool/function content and dynamic role fields are checked against
