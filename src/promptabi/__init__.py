@@ -126,6 +126,13 @@ from .stop_analysis import (
     StopTokenIdAnalysis,
     analyze_stop_policy_tokenizer,
 )
+from .stop_overreachability import (
+    StopOverreachabilityAbstention,
+    StopOverreachabilityFinding,
+    StopOverreachabilityReport,
+    StructuredOutputRegion,
+    analyze_stop_overreachability,
+)
 from .tokenizer_diff import (
     TokenizerDifferentialCase,
     TokenizerDifferentialMismatch,
@@ -241,9 +248,13 @@ __all__ = [
     "StopPolicyParseResult",
     "StopPolicySource",
     "StopCollision",
+    "StopOverreachabilityAbstention",
+    "StopOverreachabilityFinding",
+    "StopOverreachabilityReport",
     "StopPolicyTokenizerAnalysisReport",
     "StopSequenceAnalysis",
     "StopTokenIdAnalysis",
+    "StructuredOutputRegion",
     "TiktokenAdapter",
     "TokenizerDifferentialCase",
     "TokenizerDifferentialMismatch",
@@ -284,6 +295,7 @@ __all__ = [
     "parse_hf_tokenizer_config_chat_template",
     "parse_stop_policy_config",
     "analyze_stop_policy_tokenizer",
+    "analyze_stop_overreachability",
     "render_chat_template_supported_fragment",
     "run_tokenizer_differential",
     "run_chat_template_differential",

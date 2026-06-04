@@ -19,6 +19,12 @@ from .stop_analysis import (
     StopTokenIdAnalysis,
     analyze_stop_policy_tokenizer,
 )
+from .stop_overreachability import (
+    StopOverreachabilityAbstention,
+    StopOverreachabilityFinding,
+    StopOverreachabilityReport,
+    analyze_stop_overreachability,
+)
 from .tokenizers import TokenizerError, load_tokenizer
 
 
@@ -38,6 +44,9 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "stop-tokenizer-collision": (CheckMode.HEURISTIC,),
     "stop-tokenizer-special-interaction": (CheckMode.HEURISTIC,),
     "stop-tokenizer-unreachable": (CheckMode.SOUND,),
+    "stop-overreach-abstained": (CheckMode.ABSTAINING, CheckMode.BOUNDED),
+    "stop-overreach-content": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "stop-overreach-structural": (CheckMode.SOUND, CheckMode.BOUNDED),
     "check-unknown": (CheckMode.SOUND, CheckMode.COMPLETE),
     "check-failed": (CheckMode.HEURISTIC,),
 }
@@ -94,6 +103,7 @@ class VerificationSession:
         self.checks: dict[str, CheckCallable] = {
             "repository-skeleton": self._repository_skeleton_check,
             "role-boundary-nonforgeability": self._role_boundary_nonforgeability_check,
+            "stop-overreachability": self._stop_overreachability_check,
             "stop-tokenizer-analysis": self._stop_tokenizer_analysis_check,
         }
         if checks:
@@ -237,6 +247,34 @@ class VerificationSession:
                     diagnostics.append(_stop_tokenizer_abstained_diagnostic(stop_loaded, tokenizer_loaded, exc))
                     continue
                 diagnostics.extend(_stop_tokenizer_report_diagnostics(stop_loaded, tokenizer_loaded, report))
+        return tuple(diagnostics)
+
+    def _stop_overreachability_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        diagnostics: list[Diagnostic] = []
+        stop_policies = [
+            loaded for loaded in context.loaded_artifacts if loaded.artifact.kind is ArtifactKind.STOP_POLICY
+        ]
+        structured_artifacts = [
+            loaded.artifact
+            for loaded in context.loaded_artifacts
+            if loaded.artifact.kind
+            in {
+                ArtifactKind.SCHEMA,
+                ArtifactKind.TOOL_DEFINITION,
+                ArtifactKind.PROVIDER_CONFIG,
+                ArtifactKind.GRAMMAR,
+            }
+        ]
+        for stop_loaded in stop_policies:
+            report = analyze_stop_overreachability(stop_loaded.artifact, structured_artifacts)
+            diagnostics.extend(
+                _stop_overreachability_finding_diagnostic(stop_loaded, report, finding)
+                for finding in report.findings
+            )
+            diagnostics.extend(
+                _stop_overreachability_abstention_diagnostic(stop_loaded, report, abstention)
+                for abstention in report.abstentions
+            )
         return tuple(diagnostics)
 
     def _missing_local_paths(self) -> set[str]:
@@ -593,6 +631,77 @@ def _stop_alignment_diagnostic(
                 WitnessStep(action="encode stop strings", output=alignment),
             ),
             artifacts=(stop_loaded.artifact.to_ref(), tokenizer_loaded.artifact.to_ref()),
+        ),
+    )
+
+
+def _stop_overreachability_finding_diagnostic(
+    stop_loaded: LoadedArtifact,
+    report: StopOverreachabilityReport,
+    finding: StopOverreachabilityFinding,
+) -> Diagnostic:
+    rule_id = f"stop-overreach-{finding.category}"
+    severity = DiagnosticSeverity.ERROR
+    region = finding.region
+    return Diagnostic(
+        rule_id=rule_id,
+        severity=severity,
+        message=(
+            f"stop sequence {finding.stop_sequence!r} can fire in {region.kind} region "
+            f"'{region.name}' at {region.path}"
+        ),
+        artifact=stop_loaded.artifact.to_ref(),
+        span=_artifact_span(stop_loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG[rule_id],
+        suggestions=(
+            "Use a stop delimiter that cannot occur in valid structured output, or require parser-aware completion.",
+            "Prefer grammar/tool-call termination over raw substring stops for structured outputs.",
+        ),
+        witness=WitnessTrace(
+            summary=(
+                "A bounded valid structured-output witness contains the configured stop before "
+                "the parser has reached a complete safe state."
+            ),
+            steps=(
+                WitnessStep(action="select stop policy", input=report.stop_policy_name, output=report.bound),
+                WitnessStep(action="build structured-output region", input=region.kind, output=region.description),
+                WitnessStep(
+                    action="locate stop firing point",
+                    input=finding.stop_sequence,
+                    output=f"offset {finding.firing_offset}",
+                ),
+                WitnessStep(action="record parser state at truncation", output=finding.resulting_state),
+                WitnessStep(action="show valid output prefix through stop", output=finding.valid_output_prefix),
+                WitnessStep(action="show runtime-truncated prefix", output=finding.truncated_prefix),
+            ),
+            artifacts=(stop_loaded.artifact.to_ref(),),
+        ),
+    )
+
+
+def _stop_overreachability_abstention_diagnostic(
+    stop_loaded: LoadedArtifact,
+    report: StopOverreachabilityReport,
+    abstention: StopOverreachabilityAbstention,
+) -> Diagnostic:
+    return Diagnostic(
+        rule_id="stop-overreach-abstained",
+        severity=DiagnosticSeverity.WARNING,
+        message=(
+            f"structured artifact '{abstention.artifact_name}' is outside the bounded "
+            f"stop-overreachability fragment"
+        ),
+        artifact=stop_loaded.artifact.to_ref(),
+        span=_artifact_span(stop_loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG["stop-overreach-abstained"],
+        suggestions=("Add a minimized JSON Schema or tool-parameter fixture in the supported object/string fragment.",),
+        witness=WitnessTrace(
+            summary="PromptABI did not claim content overreachability for an unsupported structured artifact.",
+            steps=(
+                WitnessStep(action="select stop policy", input=report.stop_policy_name, output=report.bound),
+                WitnessStep(action="abstain on structured artifact", input=abstention.artifact_name, output=abstention.reason),
+            ),
+            artifacts=(stop_loaded.artifact.to_ref(),),
         ),
     )
 
