@@ -16,6 +16,7 @@ from .artifacts import Artifact, ArtifactKind, GrammarArtifact, SchemaArtifact, 
 from .chat_templates import ChatTemplateParseError, parse_hf_tokenizer_config_chat_template, symbolically_execute_chat_template
 from .diagnostics import SourceSpan
 from .grammars import GrammarIngestionError, ingest_grammar_file, ingest_json_schema_mapping
+from .json_schema import normalize_json_schema_mapping
 from .role_boundaries import build_role_boundary_model
 from .source import build_json_source_map
 from .stop_policies import StopPolicyParseError, parse_stop_policy_config
@@ -453,6 +454,7 @@ class ArtifactLoader:
             source_map = build_json_source_map(text, path)
             declared_type = artifact.dialect if isinstance(artifact, SchemaArtifact) else "json-schema"
             parsed = ingest_json_schema_mapping(raw, declared_type=declared_type, source_map=source_map)
+            normalized = normalize_json_schema_mapping(raw, source_map=source_map)
         except GrammarIngestionError as exc:
             raise ArtifactLoadError(
                 rule_id="artifact-load-failed",
@@ -469,8 +471,8 @@ class ArtifactLoader:
             resolved=loaded.resolved,
             actual_sha256=loaded.actual_sha256,
             size_bytes=loaded.size_bytes,
-            metadata=parsed.to_metadata(),
-            source_spans=parsed.source_spans or loaded.source_spans,
+            metadata=_merge_metadata(parsed.to_metadata(), normalized.to_metadata()),
+            source_spans=normalized.source_spans or parsed.source_spans or loaded.source_spans,
             warnings=loaded.warnings,
         )
 
@@ -606,6 +608,14 @@ def load_artifact(artifact: Artifact) -> LoadedArtifact:
     """Load one artifact with the default offline loader."""
 
     return ArtifactLoader().load(artifact)
+
+
+def _merge_metadata(
+    primary: tuple[tuple[str, object], ...],
+    secondary: tuple[tuple[str, object], ...],
+) -> tuple[tuple[str, object], ...]:
+    primary_keys = {key for key, _value in primary}
+    return (*primary, *((key, value) for key, value in secondary if key not in primary_keys))
 
 
 def _has_pin(artifact: Artifact) -> bool:

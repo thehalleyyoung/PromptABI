@@ -9,8 +9,10 @@ from promptabi import (
     GrammarArtifact,
     GrammarDialect,
     GrammarIngestionError,
+    JsonSchemaNodeKind,
     SchemaArtifact,
     ingest_grammar_text,
+    normalize_json_schema_mapping,
 )
 from promptabi.loaders import ArtifactLoadError, ArtifactLoader
 
@@ -27,7 +29,7 @@ def test_json_schema_ingestion_records_supported_features_and_abstentions(tmp_pa
                     "count": {"type": "integer", "minimum": 0},
                 },
                 "required": ["status"],
-                "oneOf": [{"required": ["count"]}],
+                "dependentRequired": {"count": ["status"]},
             },
             sort_keys=True,
         ),
@@ -49,7 +51,91 @@ def test_json_schema_ingestion_records_supported_features_and_abstentions(tmp_pa
     assert metadata["terminals"] == ("ok", "error")
     assert metadata["supported_fragment"] is False
     assert metadata["issue_codes"] == ("json-schema-unsupported-keyword",)
+    assert metadata["root_kind"] == "object"
+    assert metadata["node_count"] == 3
+    assert metadata["property_paths"] == ("properties.count", "properties.status")
     assert any(name == "properties.status.enum.0" for name, _span in loaded.source_spans)
+
+
+def test_json_schema_normalization_covers_nested_supported_fragment() -> None:
+    result = normalize_json_schema_mapping(
+        {
+            "$defs": {
+                "tag": {"type": "string", "minLength": 2, "maxLength": 12, "pattern": "^[a-z]+$"},
+            },
+            "type": "object",
+            "required": ["answer", "scores"],
+            "additionalProperties": False,
+            "properties": {
+                "answer": {"const": "yes"},
+                "scores": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 3,
+                    "items": {"type": "number", "minimum": 0, "maximum": 1, "multipleOf": 0.5},
+                },
+                "tag": {"$ref": "#/$defs/tag"},
+                "nullable_note": {"type": ["string", "null"]},
+                "state": {"oneOf": [{"enum": ["open", "closed"]}, {"const": "unknown"}]},
+            },
+        }
+    )
+
+    assert result.supported_fragment is True
+    assert result.root.kind is JsonSchemaNodeKind.OBJECT
+    assert result.root.required == ("answer", "scores")
+    assert result.root.additional_properties is False
+    assert result.node_count == 11
+    assert result.max_depth == 3
+    assert set(result.features) >= {
+        "$ref",
+        "additionalProperties",
+        "array",
+        "array-constraints",
+        "const",
+        "enum",
+        "numeric-constraints",
+        "object",
+        "oneOf",
+        "properties",
+        "required",
+        "string-constraints",
+        "union",
+    }
+    tag = next(property.schema for property in result.root.properties if property.name == "tag")
+    assert tag.ref == "#/$defs/tag"
+    assert tag.min_length == 2
+    state = next(property.schema for property in result.root.properties if property.name == "state")
+    assert state.kind is JsonSchemaNodeKind.UNION
+    assert state.union_kind == "oneOf"
+    assert state.variants[0].enum_values == ('"open"', '"closed"')
+
+
+def test_json_schema_normalization_abstains_on_recursion_and_tuple_items() -> None:
+    result = normalize_json_schema_mapping(
+        {
+            "$defs": {
+                "node": {
+                    "type": "object",
+                    "properties": {
+                        "child": {"$ref": "#/$defs/node"},
+                    },
+                }
+            },
+            "anyOf": [
+                {"$ref": "#/$defs/node"},
+                {"type": "array", "items": [{"type": "string"}, {"type": "integer"}]},
+            ],
+        },
+        max_ref_depth=3,
+    )
+
+    assert result.supported_fragment is False
+    assert [issue.code for issue in result.issues] == [
+        "json-schema-recursion-limit",
+        "json-schema-tuple-items",
+    ]
+    assert result.root.kind is JsonSchemaNodeKind.UNION
 
 
 def test_regex_ingestion_accepts_supported_subset_and_flags_lookaround() -> None:

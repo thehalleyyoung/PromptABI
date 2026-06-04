@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .diagnostics import SourceSpan
+from .json_schema import JsonSchemaIssue, normalize_json_schema_mapping
 from .source import JsonSourceMap, build_json_source_map
 
 
@@ -192,37 +193,8 @@ def _ingest_json_schema(
     declared_type: str,
     source_map: JsonSourceMap | None,
 ) -> GrammarIngestionResult:
-    supported_keywords = {
-        "$schema",
-        "$id",
-        "additionalProperties",
-        "const",
-        "description",
-        "enum",
-        "format",
-        "items",
-        "maxItems",
-        "maximum",
-        "maxLength",
-        "minItems",
-        "minimum",
-        "minLength",
-        "pattern",
-        "properties",
-        "required",
-        "title",
-        "type",
-    }
-    unsupported = sorted(_json_schema_keywords(raw) - supported_keywords)
-    issues = tuple(
-        GrammarIngestionIssue(
-            code="json-schema-unsupported-keyword",
-            message=f"JSON Schema keyword '{keyword}' is outside the ingestion fragment",
-            severity="abstention",
-            span=_span(source_map, keyword),
-        )
-        for keyword in unsupported
-    )
+    normalized = normalize_json_schema_mapping(raw, source_map=source_map)
+    issues = tuple(_schema_issue_to_grammar_issue(issue) for issue in normalized.issues)
     properties = raw.get("properties", {})
     rules: list[GrammarRule] = [GrammarRule("schema", json.dumps(_shape_preview(raw), sort_keys=True), _span(source_map, ()))]
     if isinstance(properties, dict):
@@ -236,7 +208,7 @@ def _ingest_json_schema(
                     )
                 )
     terminals = _schema_terminals(raw, source_map)
-    features = sorted(key for key in supported_keywords if key in _json_schema_keywords(raw))
+    features = normalized.features
     return GrammarIngestionResult(
         dialect=GrammarDialect.JSON_SCHEMA,
         declared_type=declared_type,
@@ -245,7 +217,7 @@ def _ingest_json_schema(
         terminals=tuple(terminals),
         features=tuple(features),
         issues=issues,
-        source_spans=_source_spans(source_map),
+        source_spans=normalized.source_spans or _source_spans(source_map),
     )
 
 
@@ -598,17 +570,13 @@ def _normalize_type(value: str) -> GrammarDialect:
         raise GrammarIngestionError(f"unsupported grammar_type '{value}' (expected one of {allowed})") from exc
 
 
-def _json_schema_keywords(value: Any, *, in_properties: bool = False) -> set[str]:
-    keywords: set[str] = set()
-    if isinstance(value, dict):
-        for key, child in value.items():
-            if isinstance(key, str) and not in_properties:
-                keywords.add(key)
-            keywords.update(_json_schema_keywords(child, in_properties=key == "properties"))
-    elif isinstance(value, list):
-        for child in value:
-            keywords.update(_json_schema_keywords(child))
-    return keywords
+def _schema_issue_to_grammar_issue(issue: JsonSchemaIssue) -> GrammarIngestionIssue:
+    return GrammarIngestionIssue(
+        code=issue.code,
+        message=issue.message,
+        severity=issue.severity,
+        span=issue.span,
+    )
 
 
 def _schema_terminals(value: Any, source_map: JsonSourceMap | None, path: tuple[str, ...] = ()) -> tuple[GrammarTerminal, ...]:

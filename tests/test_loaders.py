@@ -33,11 +33,12 @@ def test_loader_hashes_and_validates_pinned_local_files(tmp_path: Path) -> None:
 
     loaded = ArtifactLoader().load(artifact)
 
-    assert loaded.source_type == "local-file"
+    assert loaded.source_type == "json-schema"
     assert loaded.pinned is True
     assert loaded.resolved is True
     assert loaded.actual_sha256 == digest
     assert loaded.size_bytes == len(schema.read_bytes())
+    assert dict(loaded.metadata)["root_kind"] == "object"
     assert loaded.warnings == ()
 
 

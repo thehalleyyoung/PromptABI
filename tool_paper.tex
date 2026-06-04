@@ -70,6 +70,9 @@ Qwen/Gemma-style tool argument truncation, and XML tool-call parser-boundary
 stops, a grammar ingestion layer that normalizes JSON Schema, regex, EBNF,
 Outlines, xgrammar, llguidance, and PromptABI grammars into typed rules,
 terminals, source spans, supported-fragment metadata, and explicit abstentions,
+plus a JSON Schema normalizer for objects, arrays, enums, consts, required
+fields, numeric and string constraints, type and composition unions, bounded
+local references, recursion-limit abstentions, and additional-property semantics,
 a CPU-only benchmark, documentation, and contribution guidance.
 The remaining checkers fit into that surface rather than requiring a rewrite. We
 describe the transducer-oriented formalism, the artifact model, the diagnostic
@@ -137,7 +140,10 @@ extracts automata, transducer, and solver witnesses for finite formal contracts,
 typed diagnostics in text, JSON, and SARIF with structured snapshot coverage, exposes an embedding API for custom
 checks and typed results, ingests JSON Schema, regex, EBNF, Outlines,
 xgrammar, llguidance, and PromptABI grammar artifacts into typed rule and
-terminal summaries with source spans and abstention issues, returns stable policy-controlled process exit codes,
+terminal summaries with source spans and abstention issues, normalizes supported
+JSON Schema objects, arrays, unions, references, constraints, and
+additional-property policies into a typed tree for later grammar compilation,
+returns stable policy-controlled process exit codes,
 and runs a CPU-only smoke benchmark against an example bundle.
 
 The repository layout is designed to scale:
@@ -345,7 +351,7 @@ Provider snapshots & Deterministic JSON validation for provider name, captured r
 \hline
 Stop-policy configs & Deterministic extraction of stop strings, stop token IDs, EOS behavior, source family, ignored empty stops, and source paths from OpenAI-compatible, Hugging Face, llama.cpp/Ollama, vLLM, LiteLLM, and wrapper shapes. \\
 \hline
-Schema and grammar files & JSON Schema feature extraction plus ingestion for regex, EBNF, Outlines, xgrammar, llguidance, and PromptABI grammars, recording rules, terminals, references, source spans, and unsupported-fragment abstentions. \\
+Schema and grammar files & JSON Schema normalization for objects, arrays, required fields, enums, consts, constraints, unions, bounded local references, recursion-limit abstentions, and additional properties; ingestion for regex, EBNF, Outlines, xgrammar, llguidance, and PromptABI grammars records rules, terminals, references, source spans, and unsupported-fragment abstentions. \\
 \hline
 Fixture archives & Zip/tar member lists and archive-byte hashes without extraction or timestamp-dependent manifests. \\
 \hline
@@ -811,10 +817,13 @@ specific backend. A grammar may accept strings the application parser rejects. A
 tokenizer may expose Unicode, escaping, whitespace, or added-token behavior that
 creates ambiguous structured outputs.
 
-PromptABI should normalize the supported JSON Schema subset into a grammar IR
-with source maps. It should compile that subset to automata or a backend-neutral
-grammar representation, then differentially compare behavior against real
-validators and structured-output libraries where possible. The key theorem
+PromptABI now normalizes the supported JSON Schema subset into a typed tree that
+preserves objects, arrays, required fields, enum and const terminals, string and
+numeric constraints, type and composition unions, local reference expansion,
+bounded recursion abstentions, and additional-property semantics. The next
+milestone is compiling that tree into a grammar IR with source maps, automata or
+a backend-neutral grammar representation, and differential comparisons against
+real validators and structured-output libraries where possible. The key theorem
 shape is: under the supported fragment assumptions, if the product is empty,
 then no sequence accepted by the tokenizer and grammar backend can produce a
 valid application object.
