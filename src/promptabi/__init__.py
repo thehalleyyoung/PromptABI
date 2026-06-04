@@ -29,10 +29,14 @@ from .artifacts import (
 )
 from .chat_templates import (
     ChatTemplateCondition,
+    ChatTemplateDifferentialMismatch,
+    ChatTemplateDifferentialReport,
     ChatTemplateFieldUse,
     ChatTemplateLoop,
     ChatTemplateParseError,
     ChatTemplateParseResult,
+    ChatTemplateRenderCase,
+    ChatTemplateRenderError,
     ChatTemplateSpecialToken,
     ChatTemplateSymbolicAbstention,
     ChatTemplateSymbolicBounds,
@@ -42,6 +46,8 @@ from .chat_templates import (
     ChatTemplateUnsupportedConstruct,
     parse_hf_chat_template_config,
     parse_hf_tokenizer_config_chat_template,
+    render_chat_template_supported_fragment,
+    run_chat_template_differential,
     symbolically_execute_chat_template,
 )
 from .config import ConfigError, VerificationConfig, discover_config, load_config
@@ -137,10 +143,14 @@ __all__ = [
     "BoundedStringDomain",
     "ChatTemplateArtifact",
     "ChatTemplateCondition",
+    "ChatTemplateDifferentialMismatch",
+    "ChatTemplateDifferentialReport",
     "ChatTemplateFieldUse",
     "ChatTemplateLoop",
     "ChatTemplateParseError",
     "ChatTemplateParseResult",
+    "ChatTemplateRenderCase",
+    "ChatTemplateRenderError",
     "ChatTemplateSpecialToken",
     "ChatTemplateSymbolicAbstention",
     "ChatTemplateSymbolicBounds",
@@ -232,7 +242,9 @@ __all__ = [
     "run_verification",
     "parse_hf_chat_template_config",
     "parse_hf_tokenizer_config_chat_template",
+    "render_chat_template_supported_fragment",
     "run_tokenizer_differential",
+    "run_chat_template_differential",
     "symbolically_execute_chat_template",
     "write_seed_corpus_manifest",
 ]

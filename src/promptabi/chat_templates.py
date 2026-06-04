@@ -6,6 +6,7 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from .diagnostics import SourceSpan
@@ -299,8 +300,78 @@ class ChatTemplateSymbolicExecution:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class ChatTemplateRenderCase:
+    """One concrete chat-template rendering case with an oracle expectation."""
+
+    name: str
+    messages: tuple[Mapping[str, object], ...]
+    expected_rendered: str
+    add_generation_prompt: bool = False
+    tools: tuple[Mapping[str, object], ...] = ()
+    variables: tuple[tuple[str, object], ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise ValueError("chat-template render case name must be non-empty")
+        object.__setattr__(self, "messages", tuple(self.messages))
+        object.__setattr__(self, "tools", tuple(self.tools))
+        object.__setattr__(self, "variables", tuple(sorted(self.variables, key=lambda item: item[0])))
+
+
+@dataclass(frozen=True, slots=True)
+class ChatTemplateDifferentialMismatch:
+    """A concrete divergence between PromptABI rendering and an oracle renderer."""
+
+    case_name: str
+    field: str
+    expected: object
+    actual: object
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "case_name": self.case_name,
+            "field": self.field,
+            "expected": self.expected,
+            "actual": self.actual,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ChatTemplateDifferentialReport:
+    """Stable result for concrete chat-template differential cases."""
+
+    template_format: str
+    cases_run: int
+    mismatches: tuple[ChatTemplateDifferentialMismatch, ...]
+
+    @property
+    def ok(self) -> bool:
+        return not self.mismatches
+
+    def assert_ok(self) -> None:
+        if not self.ok:
+            summary = "; ".join(
+                f"{mismatch.case_name}.{mismatch.field}: expected {mismatch.expected!r}, got {mismatch.actual!r}"
+                for mismatch in self.mismatches
+            )
+            raise AssertionError(f"chat-template differential mismatch for {self.template_format}: {summary}")
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "template_format": self.template_format,
+            "cases_run": self.cases_run,
+            "ok": self.ok,
+            "mismatches": [mismatch.to_dict() for mismatch in self.mismatches],
+        }
+
+
 class ChatTemplateParseError(ValueError):
     """Raised when tokenizer_config.json cannot yield a chat template."""
+
+
+class ChatTemplateRenderError(ValueError):
+    """Raised when a concrete template render leaves PromptABI's supported fragment."""
 
 
 def parse_hf_tokenizer_config_chat_template(
@@ -404,6 +475,76 @@ def symbolically_execute_chat_template(
     paths = executor.execute(nodes)
     abstentions.extend(executor.abstentions)
     return ChatTemplateSymbolicExecution(bounds=active_bounds, paths=paths, abstentions=tuple(abstentions))
+
+
+def render_chat_template_supported_fragment(
+    parsed: ChatTemplateParseResult,
+    messages: Sequence[Mapping[str, object]],
+    *,
+    add_generation_prompt: bool = False,
+    tools: Sequence[Mapping[str, object]] | None = None,
+    variables: Mapping[str, object] | None = None,
+) -> str:
+    """Render concrete inputs through PromptABI's supported HF/Jinja fragment.
+
+    This is intentionally strict: unsupported syntax, unknown variables, and
+    unsupported filters raise instead of silently producing a plausible string.
+    Differential tests use it against Hugging Face's real renderer to keep the
+    symbolic fragment honest.
+    """
+
+    if parsed.unsupported_constructs:
+        unsupported = ", ".join(item.expression for item in parsed.unsupported_constructs)
+        raise ChatTemplateRenderError(f"chat template contains unsupported constructs: {unsupported}")
+    segments = _lex_symbolic_segments(parsed.template_source)
+    parser = _SymbolicParser(segments)
+    nodes = parser.parse()
+    if parser.abstentions:
+        unsupported = ", ".join(item.expression for item in parser.abstentions)
+        raise ChatTemplateRenderError(f"chat template could not be parsed for concrete rendering: {unsupported}")
+    renderer = _ConcreteRenderer(parsed)
+    environment: dict[str, object] = {
+        "messages": tuple(messages),
+        "tools": tuple(tools or ()),
+        "add_generation_prompt": add_generation_prompt,
+    }
+    if variables:
+        environment.update(variables)
+    return renderer.render(nodes, environment)
+
+
+def run_chat_template_differential(
+    parsed: ChatTemplateParseResult,
+    cases: Sequence[ChatTemplateRenderCase],
+) -> ChatTemplateDifferentialReport:
+    """Compare PromptABI concrete rendering with oracle expectations."""
+
+    mismatches: list[ChatTemplateDifferentialMismatch] = []
+    for case in cases:
+        try:
+            actual = render_chat_template_supported_fragment(
+                parsed,
+                case.messages,
+                add_generation_prompt=case.add_generation_prompt,
+                tools=case.tools,
+                variables=dict(case.variables),
+            )
+        except ChatTemplateRenderError as exc:
+            actual = f"ERROR: {exc}"
+        if actual != case.expected_rendered:
+            mismatches.append(
+                ChatTemplateDifferentialMismatch(
+                    case_name=case.name,
+                    field="rendered",
+                    expected=case.expected_rendered,
+                    actual=actual,
+                )
+            )
+    return ChatTemplateDifferentialReport(
+        template_format=parsed.template_format,
+        cases_run=len(cases),
+        mismatches=tuple(mismatches),
+    )
 
 
 def _extract_special_tokens(config: dict[str, object]) -> tuple[ChatTemplateSpecialToken, ...]:
@@ -1053,6 +1194,155 @@ class _SymbolicExecutor:
         self.abstentions.append(ChatTemplateSymbolicAbstention(kind=kind, expression=expression, reason=reason))
 
 
+class _ConcreteRenderer:
+    def __init__(self, parsed: ChatTemplateParseResult) -> None:
+        self.special_tokens = {token.name: token.text for token in parsed.special_tokens}
+        self.special_tokens.update(_canonical_special_token_names(parsed.special_tokens))
+
+    def render(self, nodes: tuple[_Node, ...], environment: Mapping[str, object]) -> str:
+        output: list[str] = []
+        bindings: dict[str, object] = {}
+        self._render_nodes(nodes, dict(environment), bindings, output)
+        return "".join(output)
+
+    def _render_nodes(
+        self,
+        nodes: tuple[_Node, ...],
+        environment: dict[str, object],
+        bindings: dict[str, object],
+        output: list[str],
+    ) -> None:
+        for node in nodes:
+            if isinstance(node, _LiteralNode):
+                output.append(node.text)
+            elif isinstance(node, _ExpressionNode):
+                output.append(str(self._evaluate_expression(node.expression, environment, bindings)))
+            elif isinstance(node, _SetNode):
+                bindings[node.name] = self._evaluate_expression(node.expression, environment, bindings)
+            elif isinstance(node, _ForNode):
+                self._render_for(node, environment, bindings, output)
+            elif isinstance(node, _IfNode):
+                self._render_if(node, environment, bindings, output)
+
+    def _render_for(
+        self,
+        node: _ForNode,
+        environment: dict[str, object],
+        bindings: dict[str, object],
+        output: list[str],
+    ) -> None:
+        iterable = self._lookup_name(node.iterable, environment, bindings)
+        if not isinstance(iterable, Sequence) or isinstance(iterable, (str, bytes, bytearray)):
+            raise ChatTemplateRenderError(f"loop iterable is not a sequence: {node.iterable}")
+        previous_variable = environment.get(node.variable)
+        previous_loop = environment.get("loop")
+        had_variable = node.variable in environment
+        had_loop = "loop" in environment
+        for index, item in enumerate(iterable):
+            environment[node.variable] = item
+            environment["loop"] = {"last": index == len(iterable) - 1}
+            self._render_nodes(node.body, environment, dict(bindings), output)
+        if had_variable:
+            environment[node.variable] = previous_variable
+        else:
+            environment.pop(node.variable, None)
+        if had_loop:
+            environment["loop"] = previous_loop
+        else:
+            environment.pop("loop", None)
+
+    def _render_if(
+        self,
+        node: _IfNode,
+        environment: dict[str, object],
+        bindings: dict[str, object],
+        output: list[str],
+    ) -> None:
+        for branch in node.branches:
+            if branch.condition is None or self._evaluate_condition(branch.condition, environment, bindings):
+                self._render_nodes(branch.body, environment, dict(bindings), output)
+                return
+
+    def _evaluate_condition(
+        self,
+        condition: str,
+        environment: Mapping[str, object],
+        bindings: Mapping[str, object],
+    ) -> bool:
+        expression = condition.strip()
+        negated = False
+        if expression.startswith("not "):
+            negated = True
+            expression = expression[4:].strip()
+        for operator in ("==", "!="):
+            if operator in expression:
+                left, right = (part.strip() for part in expression.split(operator, 1))
+                left_value = self._evaluate_expression(left, environment, bindings)
+                right_value = self._evaluate_expression(right, environment, bindings)
+                result = left_value == right_value if operator == "==" else left_value != right_value
+                return not result if negated else result
+        result = bool(self._evaluate_expression(expression, environment, bindings))
+        return not result if negated else result
+
+    def _evaluate_expression(
+        self,
+        expression: str,
+        environment: Mapping[str, object],
+        bindings: Mapping[str, object],
+    ) -> object:
+        base, filters = _split_filters(expression)
+        value = self._evaluate_base(base, environment, bindings)
+        for filter_name in filters:
+            if filter_name == "tojson":
+                value = json.dumps(value, ensure_ascii=False)
+            else:
+                raise ChatTemplateRenderError(f"unsupported filter in concrete renderer: {filter_name}")
+        return value
+
+    def _evaluate_base(
+        self,
+        expression: str,
+        environment: Mapping[str, object],
+        bindings: Mapping[str, object],
+    ) -> object:
+        literal = _string_literal(expression)
+        if literal is not None:
+            return literal
+        if expression in {"true", "True"}:
+            return True
+        if expression in {"false", "False"}:
+            return False
+        if expression in bindings:
+            return bindings[expression]
+        if expression in self.special_tokens:
+            return self.special_tokens[expression]
+        return self._lookup_name(expression, environment, bindings)
+
+    def _lookup_name(
+        self,
+        expression: str,
+        environment: Mapping[str, object],
+        bindings: Mapping[str, object],
+    ) -> object:
+        if expression in bindings:
+            return bindings[expression]
+        if expression in environment:
+            return environment[expression]
+        path = _variable_path(expression)
+        if path is None:
+            raise ChatTemplateRenderError(f"unsupported expression in concrete renderer: {expression}")
+        root, fields = path
+        if root in bindings:
+            value = bindings[root]
+        elif root in environment:
+            value = environment[root]
+        else:
+            raise ChatTemplateRenderError(f"unknown variable in concrete renderer: {root}")
+        for field in fields:
+            value = _lookup_field(value, field, expression)
+        return value
+
+
 def _canonical_special_token_names(tokens: tuple[ChatTemplateSpecialToken, ...]) -> dict[str, str]:
     result: dict[str, str] = {}
     for token in tokens:
@@ -1098,3 +1388,19 @@ def _variable_path(expression: str) -> tuple[str, tuple[str, ...]] | None:
     if not fields and root not in {"loop"}:
         return None
     return root, tuple(fields)
+
+
+def _lookup_field(value: object, field: str, expression: str) -> object:
+    if isinstance(value, Mapping):
+        if field not in value:
+            raise ChatTemplateRenderError(f"field {field!r} is missing while evaluating {expression!r}")
+        return value[field]
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)) and field.isdigit():
+        index = int(field)
+        try:
+            return value[index]
+        except IndexError as exc:
+            raise ChatTemplateRenderError(f"index {index} is out of range while evaluating {expression!r}") from exc
+    if hasattr(value, field):
+        return getattr(value, field)
+    raise ChatTemplateRenderError(f"cannot read field {field!r} while evaluating {expression!r}")

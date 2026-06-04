@@ -38,7 +38,9 @@ solver, a minimal verification session, focused tests, examples, a fixture
 corpus layout, a curated ten-family seed corpus, a deterministic corpus manifest
 pipeline, a Hugging Face \texttt{tokenizer\_config.json} chat-template parser,
 a bounded symbolic executor for the supported Jinja chat-template fragment, a
-CPU-only benchmark, documentation, and contribution guidance.
+concrete renderer differentially checked against Hugging Face
+\texttt{apply\_chat\_template} behavior across the seed corpus, a CPU-only
+benchmark, documentation, and contribution guidance.
 The remaining checkers fit into that surface rather than requiring a rewrite. We
 describe the transducer-oriented formalism, the artifact model, the diagnostic
 contract, the first benchmark line, and the planned evaluation against real tokenizer, template,
@@ -332,10 +334,10 @@ from standard tokenizer fields, message and tool field references, loops over
 branches, filters, constants, whitespace-control usage, and unsupported Jinja
 constructs that require abstention by later symbolic checks.
 
-This is intentionally a parser for verification inputs, not a replacement Jinja
-runtime. It recognizes the bounded fragment used by the seed corpus and records
-unsupported macros, imports, blocks, complex loops, and runtime globals such as
-\texttt{raise\_exception}. The offline loader now recognizes chat-template
+This is intentionally a parser for verification inputs, not a general-purpose
+Jinja runtime. It recognizes the bounded fragment used by the seed corpus and
+records unsupported macros, imports, blocks, complex loops, and runtime globals
+such as \texttt{raise\_exception}. The offline loader now recognizes chat-template
 artifacts backed by \texttt{tokenizer\_config.json}, validates the template,
 attaches parsed metadata to the loaded artifact, preserves source spans, and
 keeps malformed or missing \texttt{chat\_template} fields as deterministic loader
@@ -356,6 +358,19 @@ finite set of symbolic paths with rendered patterns, path conditions, loop
 iteration counts, and explicit abstentions when unsupported constructs or path
 budgets are reached. Loader metadata records whether symbolic execution was
 precise and how many bounded paths were produced for a real artifact.
+
+PromptABI also now has a concrete evaluator for that same supported fragment. It
+renders real message and tool inputs through the position-preserving lexer and
+bounded parser, evaluating role conditionals, generation-prompt branches,
+\texttt{messages} and \texttt{tools} loops, special-token variables, simple
+bindings, \texttt{loop.last}, and JSON filters without silently approximating
+unknown expressions. A reusable differential harness compares concrete renders
+with oracle strings collected from Hugging Face's real chat-template renderer.
+The deployed tests exercise every seed-corpus template with role/system variants,
+generation prompts, Unicode and sentinel-like content, structural whitespace,
+special-token insertion, empty tool lists, tool-role messages, and a focused tool
+loop using \texttt{tojson}. This closes the loop between the symbolic abstraction
+and the renderer developers actually run.
 
 \clearpage
 \section{Tokenizer Abstraction Layer}
@@ -699,7 +714,7 @@ The testing strategy has three tiers:
 \begin{itemize}
 \item unit and structured snapshot tests for public API and deterministic text, JSON, and SARIF rendering;
 \item tokenizer abstraction tests against real Hugging Face \texttt{tokenizers}, \texttt{tiktoken}, SentencePiece, and byte-level adapters;
-\item chat-template parser and symbolic-executor tests across every seed-corpus \texttt{tokenizer\_config.json}, including generation-prompt extraction, role assumptions, field references, special tokens, bounded message/tool loops, filters, whitespace controls, path budgets, and unsupported constructs;
+\item chat-template parser, symbolic-executor, and concrete-renderer tests across every seed-corpus \texttt{tokenizer\_config.json}, including generation-prompt extraction, role assumptions, field references, special tokens, bounded message/tool loops, filters, whitespace controls, path budgets, empty tool lists, tool-role messages, and unsupported constructs, with concrete outputs differentially checked against Hugging Face's renderer;
 \item loader tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, fixture archives, and source-mapped JSON fields;
 \item fixture and corpus tests for minimized tokenizer/chat-template bundles, expected behaviors, sentinel consistency, artifact materialization, and deterministic manifest generation;
 \item future corpus tests for popular model and framework configurations pinned by immutable upstream revisions.
