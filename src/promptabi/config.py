@@ -14,6 +14,8 @@ from .artifacts import (
     artifact_from_config,
     local_artifact_paths,
 )
+from .diagnostics import SourceSpan
+from .source import JsonSourceMap, build_json_source_map
 
 
 class ConfigError(ValueError):
@@ -31,7 +33,13 @@ class VerificationConfig:
     max_context_tokens: int | None = None
 
     @classmethod
-    def from_mapping(cls, data: dict[str, Any], *, base_dir: Path) -> "VerificationConfig":
+    def from_mapping(
+        cls,
+        data: dict[str, Any],
+        *,
+        base_dir: Path,
+        source_map: JsonSourceMap | None = None,
+    ) -> "VerificationConfig":
         name = data.get("name", "unnamed")
         if not isinstance(name, str) or not name.strip():
             raise ConfigError("config field 'name' must be a non-empty string")
@@ -44,7 +52,14 @@ class VerificationConfig:
             if not isinstance(key, str) or not key:
                 raise ConfigError("artifact names must be non-empty strings")
             try:
-                typed_artifacts.append(artifact_from_config(key, value, base_dir=base_dir))
+                typed_artifacts.append(
+                    artifact_from_config(
+                        key,
+                        value,
+                        base_dir=base_dir,
+                        source_span=_artifact_config_span(source_map, key),
+                    )
+                )
             except ValueError as exc:
                 raise ConfigError(str(exc)) from exc
         artifact_bundle = ArtifactBundle(tuple(typed_artifacts))
@@ -106,15 +121,28 @@ def load_config(path: str | Path) -> VerificationConfig:
 
     config_path = Path(path)
     try:
-        raw = json.loads(config_path.read_text(encoding="utf-8"))
+        text = config_path.read_text(encoding="utf-8")
+        raw = json.loads(text)
     except FileNotFoundError as exc:
         raise ConfigError(f"config file not found: {config_path}") from exc
     except json.JSONDecodeError as exc:
-        raise ConfigError(f"config file is not valid JSON: {exc.msg}") from exc
+        raise ConfigError(
+            f"config file is not valid JSON at {config_path}:{exc.lineno}:{exc.colno}: {exc.msg}"
+        ) from exc
 
     if not isinstance(raw, dict):
         raise ConfigError("config root must be a JSON object")
-    return VerificationConfig.from_mapping(raw, base_dir=config_path.parent)
+    try:
+        source_map = build_json_source_map(text, config_path)
+    except ValueError as exc:
+        raise ConfigError(f"config source map could not be built: {exc}") from exc
+    return VerificationConfig.from_mapping(raw, base_dir=config_path.parent, source_map=source_map)
+
+
+def _artifact_config_span(source_map: JsonSourceMap | None, name: str) -> SourceSpan | None:
+    if source_map is None:
+        return None
+    return source_map.span_for(("artifacts", name)) or source_map.key_span_for(("artifacts", name))
 
 
 CONFIG_FILENAMES = ("promptabi.json", ".promptabi.json")

@@ -67,6 +67,7 @@ from .formal import (
 )
 from .loaders import ArtifactLoadError, ArtifactLoader, ArtifactLoadWarning, LoadedArtifact, load_artifact
 from .session import VerificationResult, VerificationSession
+from .source import JsonSourceMap, build_json_source_map
 from .tokenizer_diff import (
     TokenizerDifferentialCase,
     TokenizerDifferentialMismatch,
@@ -127,6 +128,7 @@ __all__ = [
     "Implies",
     "InSet",
     "IntRangeDomain",
+    "JsonSourceMap",
     "Length",
     "LoadedArtifact",
     "NamedConstraint",
@@ -170,6 +172,7 @@ __all__ = [
     "WitnessTrace",
     "apply_normalization",
     "discover_config",
+    "build_json_source_map",
     "load_artifact",
     "load_config",
     "load_tokenizer",

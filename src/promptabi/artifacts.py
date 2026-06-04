@@ -7,7 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from .diagnostics import ArtifactRef
+from .diagnostics import ArtifactRef, SourceSpan
 
 
 class ArtifactKind(StrEnum):
@@ -155,6 +155,7 @@ class BaseArtifact:
     location: ArtifactLocation
     provenance: ArtifactProvenance = field(default_factory=ArtifactProvenance)
     metadata: tuple[tuple[str, object], ...] = ()
+    source_span: SourceSpan | None = None
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -185,6 +186,8 @@ class BaseArtifact:
             data["provenance"] = provenance
         if self.metadata:
             data["metadata"] = dict(self.metadata)
+        if self.source_span is not None:
+            data["source_span"] = self.source_span.to_dict()
         return data
 
 
@@ -428,12 +431,23 @@ class ArtifactBundle:
         return {"artifacts": [artifact.to_dict() for artifact in self.artifacts]}
 
 
-def artifact_from_config(name: str, spec: str | dict[str, Any], *, base_dir: Path) -> Artifact:
+def artifact_from_config(
+    name: str,
+    spec: str | dict[str, Any],
+    *,
+    base_dir: Path,
+    source_span: SourceSpan | None = None,
+) -> Artifact:
     """Build a typed artifact from legacy or typed config syntax."""
 
     if isinstance(spec, str):
         location = _location_from_path(spec, base_dir)
-        return SchemaArtifact(kind=ArtifactKind.SCHEMA, name=name, location=location)
+        return SchemaArtifact(
+            kind=ArtifactKind.SCHEMA,
+            name=name,
+            location=location,
+            source_span=source_span,
+        )
 
     if not isinstance(spec, dict):
         raise ValueError(f"artifact '{name}' must be a path string or object")
@@ -463,6 +477,7 @@ def artifact_from_config(name: str, spec: str | dict[str, Any], *, base_dir: Pat
         "location": location,
         "provenance": provenance,
         "metadata": metadata,
+        "source_span": source_span,
     }
     if kind is ArtifactKind.TOKENIZER:
         return TokenizerArtifact(

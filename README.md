@@ -45,8 +45,9 @@ The roadmap targets three high-value checks first: role-boundary
 non-forgeability, stop/grammar/tokenizer reachability, and must-survive
 token-budget verification. The repository already has the typed Python package,
 core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,
-discoverable `promptabi verify` workflow, offline version-pinned artifact
-loading, a real tokenizer abstraction spanning byte-level, Hugging Face
+discoverable `promptabi verify` workflow, source-mapped diagnostics that point to
+exact config and artifact lines, offline version-pinned artifact loading, a real
+tokenizer abstraction spanning byte-level, Hugging Face
 `tokenizers`, `tiktoken`, and SentencePiece backends, a differential harness that
 checks those adapters against the actual libraries, plus docs, examples,
 fixtures, benchmarks, and a contribution path for growing checks without

@@ -99,7 +99,7 @@ class VerificationSession:
                     severity=DiagnosticSeverity.ERROR,
                     message=f"artifact '{artifact_model.name}' does not exist",
                     artifact=artifact,
-                    span=SourceSpan(path=path),
+                    span=_artifact_span(artifact_model),
                     check_modes=CHECK_MODE_CATALOG["artifact-missing"],
                     suggestions=("Check the path relative to the PromptABI config file.",),
                     witness=WitnessTrace(
@@ -135,7 +135,7 @@ class VerificationSession:
             severity=DiagnosticSeverity.ERROR,
             message=exc.message,
             artifact=artifact,
-            span=_artifact_span(artifact_model.location.path),
+            span=exc.span or _artifact_span(artifact_model),
             check_modes=_catalog_modes(exc.rule_id),
             suggestions=(exc.suggestion,),
             witness=WitnessTrace(
@@ -152,7 +152,7 @@ class VerificationSession:
             severity=DiagnosticSeverity.WARNING,
             message=warning.message,
             artifact=artifact,
-            span=_artifact_span(artifact_model.location.path),
+            span=_artifact_span(artifact_model),
             check_modes=_catalog_modes(warning.rule_id),
             suggestions=(warning.suggestion,),
             witness=WitnessTrace(
@@ -163,7 +163,10 @@ class VerificationSession:
         )
 
 
-def _artifact_span(path: str | None) -> SourceSpan | None:
+def _artifact_span(artifact_model) -> SourceSpan | None:
+    if artifact_model.source_span is not None:
+        return artifact_model.source_span
+    path = artifact_model.location.path
     return SourceSpan(path=path) if path is not None else None
 
 

@@ -13,6 +13,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .artifacts import Artifact, ArtifactKind
+from .diagnostics import SourceSpan
+from .source import build_json_source_map
 
 
 _SHA256_RE = re.compile(r"^[0-9a-fA-F]{64}$")
@@ -32,11 +34,13 @@ class LoadedArtifact:
     manifest_sha256: str | None = None
     members: tuple[str, ...] = ()
     metadata: tuple[tuple[str, object], ...] = ()
+    source_spans: tuple[tuple[str, SourceSpan], ...] = ()
     warnings: tuple["ArtifactLoadWarning", ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "members", tuple(sorted(dict.fromkeys(self.members))))
         object.__setattr__(self, "metadata", tuple(sorted(self.metadata, key=lambda item: item[0])))
+        object.__setattr__(self, "source_spans", tuple(sorted(self.source_spans, key=lambda item: item[0])))
         object.__setattr__(self, "warnings", tuple(self.warnings))
 
     def to_dict(self) -> dict[str, object]:
@@ -56,6 +60,10 @@ class LoadedArtifact:
             data["members"] = list(self.members)
         if self.metadata:
             data["metadata"] = dict(self.metadata)
+        if self.source_spans:
+            data["source_spans"] = {
+                name: span.to_dict() for name, span in self.source_spans
+            }
         if self.warnings:
             data["warnings"] = [warning.to_dict() for warning in self.warnings]
         return data
@@ -92,6 +100,7 @@ class ArtifactLoadError(ValueError):
     message: str
     suggestion: str
     steps: tuple[tuple[str, str | None, str | None], ...] = field(default_factory=tuple)
+    span: SourceSpan | None = None
 
     def __str__(self) -> str:
         return self.message
@@ -220,6 +229,7 @@ class ArtifactLoader:
             )
         actual_sha256, size_bytes = _hash_directory_manifest(path, files)
         warnings = self._validate_pin(artifact, actual_sha256, source_type="tokenizer-directory")
+        source_spans = _directory_source_spans(artifact, path, members)
         return LoadedArtifact(
             artifact=artifact,
             source_type="tokenizer-directory",
@@ -229,12 +239,14 @@ class ArtifactLoader:
             size_bytes=size_bytes,
             manifest_sha256=actual_sha256,
             members=members,
+            source_spans=source_spans,
             warnings=warnings,
         )
 
     def _load_file(self, artifact: Artifact, path: Path, *, source_type: str) -> LoadedArtifact:
         actual_sha256, size_bytes = _hash_file(path)
         warnings = self._validate_pin(artifact, actual_sha256, source_type=source_type)
+        source_spans = _file_source_spans(artifact, path)
         return LoadedArtifact(
             artifact=artifact,
             source_type=source_type,
@@ -242,6 +254,7 @@ class ArtifactLoader:
             resolved=True,
             actual_sha256=actual_sha256,
             size_bytes=size_bytes,
+            source_spans=source_spans,
             warnings=warnings,
         )
 
@@ -254,6 +267,7 @@ class ArtifactLoader:
                 message=f"provider snapshot artifact '{artifact.name}' is not valid JSON",
                 suggestion="Store provider snapshots as deterministic JSON objects.",
                 steps=(("parse provider snapshot", str(path), exc.msg),),
+                span=SourceSpan(path=str(path), start_line=exc.lineno, start_column=exc.colno),
             ) from exc
         if not isinstance(raw, dict):
             raise ArtifactLoadError(
@@ -286,6 +300,7 @@ class ArtifactLoader:
             actual_sha256=loaded.actual_sha256,
             size_bytes=loaded.size_bytes,
             metadata=(("provider", provider),),
+            source_spans=loaded.source_spans,
             warnings=loaded.warnings,
         )
 
@@ -329,6 +344,7 @@ class ArtifactLoader:
             actual_sha256=actual_sha256,
             size_bytes=size_bytes,
             members=members,
+            source_spans=_archive_source_spans(path, members),
             warnings=warnings,
         )
 
@@ -444,3 +460,110 @@ def _archive_members(path: Path) -> tuple[str, ...]:
             suggestion="Use a valid zip, tar, tar.gz, tar.xz, or tar.bz2 fixture bundle.",
             steps=(("read fixture bundle archive", str(path), str(exc)),),
         ) from exc
+
+
+def _directory_source_spans(
+    artifact: Artifact,
+    root: Path,
+    members: tuple[str, ...],
+) -> tuple[tuple[str, SourceSpan], ...]:
+    spans: list[tuple[str, SourceSpan]] = []
+    if artifact.kind is not ArtifactKind.TOKENIZER:
+        return ()
+    for member in members:
+        if member not in {"tokenizer.json", "tokenizer_config.json", "special_tokens_map.json"}:
+            continue
+        member_path = root / member
+        for name, span in _file_source_spans(artifact, member_path):
+            spans.append((f"{member}:{name}", span))
+    return tuple(spans)
+
+
+def _archive_source_spans(path: Path, members: tuple[str, ...]) -> tuple[tuple[str, SourceSpan], ...]:
+    spans: list[tuple[str, SourceSpan]] = []
+    if path.suffix.lower() == ".zip":
+        with zipfile.ZipFile(path) as archive:
+            for member in members:
+                if not member.endswith(".json"):
+                    continue
+                try:
+                    text = archive.read(member).decode("utf-8")
+                except UnicodeDecodeError as exc:
+                    raise ArtifactLoadError(
+                        rule_id="artifact-load-failed",
+                        message=f"fixture bundle member '{member}' is not UTF-8 JSON",
+                        suggestion="Store fixture JSON members as UTF-8 text.",
+                        steps=(("decode fixture bundle member", member, str(exc)),),
+                    ) from exc
+                spans.extend(_json_source_spans(text, f"{path}!/{member}", prefix=member))
+        return tuple(spans)
+    with tarfile.open(path) as archive:
+        for member in members:
+            if not member.endswith(".json"):
+                continue
+            extracted = archive.extractfile(member)
+            if extracted is None:
+                continue
+            try:
+                text = extracted.read().decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise ArtifactLoadError(
+                    rule_id="artifact-load-failed",
+                    message=f"fixture bundle member '{member}' is not UTF-8 JSON",
+                    suggestion="Store fixture JSON members as UTF-8 text.",
+                    steps=(("decode fixture bundle member", member, str(exc)),),
+                ) from exc
+            spans.extend(_json_source_spans(text, f"{path}!/{member}", prefix=member))
+    return tuple(spans)
+
+
+def _file_source_spans(artifact: Artifact, path: Path) -> tuple[tuple[str, SourceSpan], ...]:
+    if path.suffix.lower() == ".json":
+        text = path.read_text(encoding="utf-8")
+        try:
+            json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"{artifact.kind.value} artifact '{artifact.name}' is not valid JSON",
+                suggestion="Use valid UTF-8 JSON for tokenizer configs, schemas, tools, and PromptABI metadata.",
+                steps=(("parse JSON artifact", str(path), exc.msg),),
+                span=SourceSpan(path=str(path), start_line=exc.lineno, start_column=exc.colno),
+            ) from exc
+        return _json_source_spans(text, str(path))
+    if artifact.kind is ArtifactKind.CHAT_TEMPLATE:
+        return (("template", _whole_file_span(path)),)
+    return ()
+
+
+def _json_source_spans(
+    text: str,
+    path: str,
+    *,
+    prefix: str | None = None,
+) -> tuple[tuple[str, SourceSpan], ...]:
+    try:
+        source_map = build_json_source_map(text, path)
+    except ValueError as exc:
+        raise ArtifactLoadError(
+            rule_id="artifact-load-failed",
+            message=f"JSON artifact '{path}' could not be source-mapped",
+            suggestion="Use standard JSON syntax so PromptABI can attach precise diagnostics.",
+            steps=(("source-map JSON artifact", path, str(exc)),),
+        ) from exc
+    spans = source_map.prefixed(())
+    if prefix is None:
+        return spans
+    return tuple((f"{prefix}:{name}", span) for name, span in spans)
+
+
+def _whole_file_span(path: Path) -> SourceSpan:
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines() or [""]
+    return SourceSpan(
+        path=str(path),
+        start_line=1,
+        start_column=1,
+        end_line=len(lines),
+        end_column=max(1, len(lines[-1])),
+    )

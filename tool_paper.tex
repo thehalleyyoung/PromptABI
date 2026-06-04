@@ -29,8 +29,9 @@ This paper presents the repository as it now stands and the research system it
 is designed to become. The implementation already contains a typed Python
 package, a deterministic command line workflow, a public embedding API, a
 typed artifact model, a stable diagnostic contract with text, JSON, and SARIF
-renderers, offline version-pinned artifact loading, a tokenizer abstraction and
-differential harness validated against real Hugging Face \texttt{tokenizers},
+renderers, position-aware source spans for configs and JSON artifacts, offline
+version-pinned artifact loading, a tokenizer abstraction and differential harness
+validated against real Hugging Face \texttt{tokenizers},
 \texttt{tiktoken}, and SentencePiece libraries, deterministic finite automata,
 finite-state transducers with composition and projection, a finite-contract
 solver, a minimal verification session, focused tests, examples, a fixture
@@ -90,7 +91,8 @@ API, artifact model, diagnostic contract, configuration loader, and CLI behavior
 The implementation is intentionally small, but it is not a paper mockup: it
 loads real JSON configuration, discovers configs from subdirectories, accepts
 explicit artifact overrides, normalizes artifact paths, builds typed artifact
-bundles, materializes local and metadata-only remote artifacts, validates sha256
+bundles, records source spans for config declarations and parsed JSON artifact
+fields, materializes local and metadata-only remote artifacts, validates sha256
 pins, adapts real tokenizer backends into stable encode/decode metadata,
 extracts automata, transducer, and solver witnesses for finite formal contracts, prepares a cache directory for future expensive products, emits deterministic
 typed diagnostics in text, JSON, and SARIF, returns stable policy-controlled
@@ -191,18 +193,20 @@ truncation configs. It also provides \texttt{ArtifactRef},
 \begin{itemize}
 \item artifacts have stable kinds, names, local paths or URIs, provenance, and optional versions, revisions, hashes, licenses, and sources;
 \item kind-specific fields capture stop strings, schema dialects, grammar types, tool names, prompt segment requirements, provider families, and truncation strategies;
-\item spans are one-based and validated at construction time;
+\item spans are one-based, validated at construction time, and source-mapped from PromptABI configs plus tokenizer, schema, tool, provider, and fixture JSON artifacts;
 \item witnesses are explicit traces, not prose hidden in the message string;
 \item diagnostics have rule IDs, severities, artifacts, spans, witnesses, suggestions, and explicit verification modes;
 \item results serialize to deterministic dictionaries for JSON and snapshots.
 \end{itemize}
 
 The config loader exercises the model by accepting both legacy path strings and
-typed artifact objects, resolving local paths relative to the config file, and
-retaining URI-backed artifacts without subjecting them to local existence
-checks. This small behavior prevents a future class of flaky tests and confusing
-CLI output: diagnostics refer to the same canonical artifact no matter where the
-command is launched from.
+typed artifact objects, resolving local paths relative to the config file,
+attaching a declaration span to each artifact, and retaining URI-backed artifacts
+without subjecting them to local existence checks. This small behavior prevents a
+future class of flaky tests and confusing CLI output: diagnostics refer to the
+same canonical artifact no matter where the command is launched from, while
+missing-artifact and pinning findings point at the exact config entry that caused
+the run to inspect that artifact.
 
 \clearpage
 \section{Formal Verification Core}
@@ -284,7 +288,7 @@ LLM interface workflows:
 \hline
 \textbf{Source} & \textbf{Loaded summary} \\
 \hline
-Local files & Streamed sha256 digest, byte size, pin validation, and mismatch diagnostics. \\
+Local files & Streamed sha256 digest, byte size, pin validation, JSON source-map extraction, and mismatch diagnostics. \\
 \hline
 Hugging Face refs & Offline repository ID, optional artifact path, revision extraction, and warnings for missing or movable revisions. \\
 \hline
@@ -292,7 +296,7 @@ Tokenizer directories & Stable manifest over sorted relative file names, file si
 \hline
 GGUF stubs & Header-level GGUF magic, version, tensor count, metadata-key count, and streamed file hash without loading weights. \\
 \hline
-Provider snapshots & Deterministic JSON validation for provider name and captured request, response, or streaming shape metadata. \\
+Provider snapshots & Deterministic JSON validation for provider name and captured request, response, or streaming shape metadata, with parse-error line and column diagnostics. \\
 \hline
 Fixture archives & Zip/tar member lists and archive-byte hashes without extraction or timestamp-dependent manifests. \\
 \hline
@@ -307,11 +311,11 @@ strict reproducibility incrementally or fail on warnings in CI. In-memory API
 artifacts are treated as embedded objects rather than external supply-chain
 inputs.
 
-This capability is more than bookkeeping. It is the first supply-chain boundary
-for the research system: every future role-boundary, stop-reachability,
-grammar-emptiness, provider-migration, and budget-survival finding can cite the
-exact artifact reference, actual hash, revision strength, and loader witness that
-made the claim reproducible.
+This capability is more than bookkeeping. It is the first supply-chain and
+debuggability boundary for the research system: every future role-boundary,
+stop-reachability, grammar-emptiness, provider-migration, and budget-survival
+finding can cite the exact artifact reference, actual hash, revision strength,
+loader witness, and source span that made the claim reproducible.
 
 \clearpage
 \section{Tokenizer Abstraction Layer}
@@ -444,6 +448,18 @@ check-mode metadata as JSON and text output. This makes the first CLI workflow
 immediately compatible with GitHub code scanning while keeping the diagnostic
 source of truth in Python types rather than renderer-specific structures.
 
+The source-region layer is executable rather than aspirational. PromptABI now
+builds a small recursive JSON source map over the exact text that is later
+decoded, converts offsets to one-based line and column spans, and keeps those
+spans outside generic metadata so JSON and SARIF remain serializable. Config
+artifact declarations carry spans into the typed artifact model; local JSON
+artifacts expose field-level spans for tokenizer configs, schemas, tool
+definitions, provider snapshots, and archived fixture members; malformed JSON
+loader errors carry the decoder's line and column. This gives early diagnostics
+the same property future formal witnesses need: a developer can jump directly to
+the config entry, \texttt{chat\_template}, schema field, or tool declaration that
+made the finding possible.
+
 \clearpage
 \section{CLI and Embedding API}
 
@@ -459,7 +475,8 @@ promptabi verify --cache-dir .cache/promptabi --verbose
 \end{verbatim}
 
 In the current milestone the workflow validates repository wiring, local
-existence, reproducible pins, loader compatibility, and check-mode reporting. It discovers
+existence, reproducible pins, loader compatibility, source-span reporting, and
+check-mode reporting. It discovers
 \texttt{promptabi.json} or \texttt{.promptabi.json} by walking upward from the
 current directory unless \texttt{--config} is explicit. It accepts repeated
 \texttt{--artifact NAME=PATH\_OR\_URI} overrides so CI can verify generated or
@@ -607,7 +624,7 @@ The testing strategy has three tiers:
 \begin{itemize}
 \item unit tests for public API and deterministic rendering;
 \item tokenizer abstraction tests against real Hugging Face \texttt{tokenizers}, \texttt{tiktoken}, SentencePiece, and byte-level adapters;
-\item loader tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, and fixture archives;
+\item loader tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, fixture archives, and source-mapped JSON fields;
 \item fixture tests for minimized artifact bundles with expected diagnostics;
 \item corpus tests for popular model and framework configurations pinned by revision.
 \end{itemize}
@@ -782,10 +799,10 @@ whether their composed contract remains valid as artifacts evolve.
 The roadmap is best understood as a progression from stable surfaces to formal
 checks to ecosystem integration. The skeleton, core artifact model, loader layer,
 diagnostic contract, CLI, tokenizer abstraction, finite automata layer,
-finite-state transducer layer, and finite-contract solver now provide stable
-surfaces. The next phase should implement source-span tracking, deterministic diagnostic
-snapshots, and the first role-boundary, stop-reachability, grammar-emptiness, and
-budget-survival checkers. Corpus growth, lockfiles, drift
+finite-state transducer layer, finite-contract solver, and source-span tracking
+now provide stable surfaces. The next phase should implement deterministic
+diagnostic snapshots and the first role-boundary, stop-reachability,
+grammar-emptiness, and budget-survival checkers. Corpus growth, lockfiles, drift
 detection, SARIF, GitHub Actions, pre-commit hooks, HTML reports, suppression
 policies, and plugin APIs turn the verifier from a library into an everyday CI
 tool.
@@ -802,7 +819,7 @@ for researchers to reproduce.
 \section{Current Smoke Results}
 
 The current codebase was validated with focused tests for the package, artifact
-model, formal core, tokenizer abstraction, configuration loader, public API, and CLI workflow.
+model, formal core, tokenizer abstraction, source-span mapping, configuration loader, public API, and CLI workflow.
 The tokenizer tests exercise normalization, added tokens, special tokens,
 round-trip metadata, Hugging Face ByteLevel BPE behavior, \texttt{tiktoken}
 \texttt{cl100k\_base}, and a trained SentencePiece model. The CLI tests exercise
@@ -810,7 +827,10 @@ config discovery from nested directories, artifact-location overrides,
 deterministic JSON output, SARIF output, missing-artifact failures, cache
 directory preparation, quiet/verbose text controls, and configurable exit-code
 thresholds. The public API and CLI tests also prove that check-mode metadata is
-preserved across diagnostic objects, JSON, human text, and SARIF. The formal tests exercise automata intersection, difference,
+preserved across diagnostic objects, JSON, human text, and SARIF. New source-span
+tests prove that PromptABI config declarations, tokenizer \texttt{chat\_template}
+fields, JSON Schema fields, tool definition names, and malformed JSON parse
+errors produce exact line-oriented spans against real files. The formal tests exercise automata intersection, difference,
 emptiness, shortest witnesses, transducer composition, projection,
 over-approximation, finite-domain counterexample extraction, minimal
 unsat cores, and the installed Z3 backend. The CLI was also run against the minimal typed-artifact example
@@ -881,9 +901,9 @@ API, diagnostics, tests, docs, examples, fixtures, benchmarks, and contribution
 guidance. The research foundation is the transducer view of prompts, tokenizers, grammars, stop
 policies, parsers, and budget policies.
 
-The next milestones should add source spans, stable diagnostic snapshots, and
-then the first formal checkers without changing the public surface. If the
-project maintains deterministic outputs, minimized witnesses,
+The next milestones should add stable diagnostic snapshots and then the first
+formal checkers without changing the public surface. If the project maintains
+deterministic outputs, minimized witnesses,
 clear abstention boundaries, and real corpus validation, it can become both a
 practical CI tool and a credible systems research contribution. The core insight
 is simple but powerful: many production LLM failures happen before the neural
