@@ -82,7 +82,10 @@ a structured-output parser compatibility checker that replays bounded
 grammar/schema witnesses and declared runtime samples against JSON, JSON Schema,
 XML-ish tool-call, markdown-fence, and custom-delimiter parser models while
 separating parser-broader from grammar-broader disagreements and explicitly
-marking the result as heuristic evidence rather than language equivalence, and
+marking the result as heuristic evidence rather than language equivalence, a
+labeled structured-schema corpus with open-source-agent reductions, anonymized
+production-style contracts, synthetic stress cases, tool-definition bundles,
+per-entry PromptABI configs, deterministic hashes, and manifest generation, and
 now takes the bounded tokenizer x grammar product to prove whether compiled
 witnesses survive real tokenizer encode-normalize-decode assumptions, plus a
 bounded tokenizer x grammar ambiguity check that validates JSON lexical variants
@@ -193,7 +196,7 @@ The repository layout is designed to scale:
 \hline
 \texttt{examples/stop-policies} & A vLLM sampling-parameter fixture that exercises real stop-policy artifact loading and normalization. \\
 \hline
-\texttt{fixtures} & Curated seed corpus plus real-world bug reductions for tokenizer, chat-template, stop-policy, and tool-call bundles with provenance metadata, expected behaviors, reproducibility notes, and deterministic hashes. \\
+\texttt{fixtures} & Curated seed corpus, real-world bug reductions, grammar differential cases, and labeled structured-schema/tool-calling fixtures with provenance metadata, expected behaviors, reproducibility notes, runnable configs, and deterministic hashes. \\
 \hline
 \texttt{benchmarks} & CPU-only benchmark entrypoints for repeatable performance baselines. \\
 \hline
@@ -930,7 +933,7 @@ The testing strategy has three tiers:
 \item chat-template parser, symbolic-executor, concrete-renderer, role-region, and role-boundary non-forgeability tests across real \texttt{tokenizer\_config.json} fixtures and known delimiter-collision regressions, including ChatML, Llama header tokens, Mistral instruction tags, XML-ish tool tags, markdown fences, fine-tune hash headers, generation-prompt extraction, dynamic role headers, content-control delimiter collisions, role assumptions, field references, special tokens, bounded message/tool loops, filters, whitespace controls, path budgets, empty tool lists, tool-role messages, and unsupported constructs, with concrete outputs differentially checked against Hugging Face's renderer;
 \item loader and parser tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, stop-policy configs spanning OpenAI-compatible, Hugging Face, llama.cpp/Ollama, vLLM, LiteLLM, wrapper kwargs, fixture archives, and source-mapped JSON fields;
 \item stop-tokenizer, stop-differential, and stop-overreachability tests that exercise byte/string/token alignments, multi-token stops, invalid stop-token IDs, normalization collisions, prefix/suffix collisions, added/special-token interactions, OpenAI-compatible and Hugging Face delimiter-retention semantics, provider fixture replay, CLI mismatch diagnostics, serialized stop offsets, parser-state truncation witnesses, supported schema/tool string witnesses, structural delimiter collisions, real-world Qwen/Gemma/llama.cpp stop bug reductions, and a real Hugging Face \texttt{tokenizers} BPE fixture;
-\item fixture and corpus tests for minimized tokenizer/chat-template bundles, public real-bug provenance, expected behaviors, sentinel consistency, artifact materialization, and deterministic manifest generation;
+\item fixture and corpus tests for minimized tokenizer/chat-template bundles, public real-bug provenance, expected behaviors, sentinel consistency, artifact materialization, deterministic manifest generation, labeled structured-schema reductions, anonymized contracts, synthetic parser stress cases, tool-definition bundles, and real CLI replay of every included structured-schema config;
 \item future corpus tests for popular model and framework configurations pinned by immutable upstream revisions.
 \end{itemize}
 
@@ -982,10 +985,19 @@ appear in either the template or special-token metadata, verifies
 sha256 hashes for metadata and tokenizer configs, and materializes entries as
 PromptABI tokenizer and parsed chat-template artifacts. The same path is exposed through
 \texttt{promptabi corpus manifest}, which produces a deterministic manifest for
-CI and paper artifacts. The next corpus layer should add exact immutable
-upstream revisions for vendored tokenizer configs, llama.cpp GGUF metadata, real
-tool schemas from open-source agents, anonymized provider traces, and synthetic
-stress cases with known labels.
+CI and paper artifacts.
+
+The structured-schema layer is executable as well. It includes a reduced
+open-source-agent ticket-routing schema, an anonymized markdown-fence response
+contract, a synthetic XML tool-call parser-broader stress case, and an
+OpenAI-style tool-definition bundle. \texttt{load\_structured\_schema\_corpus()}
+validates required source-category coverage, schema/grammar/tool entry types,
+labels, expected parser-compatibility status, per-entry artifact hashes, and
+runnable PromptABI configs. \texttt{promptabi corpus structured-schema-manifest}
+emits a stable manifest for release checks and paper tables. The next corpus
+layer should add exact immutable upstream revisions for vendored tokenizer
+configs, llama.cpp GGUF metadata, provider traces, and structured-output
+libraries.
 
 The corpus should avoid secrets and network requirements. Provider fixtures
 should be recorded request and response shapes, not live API calls. Model
@@ -1086,6 +1098,12 @@ unit: a run can validate ten families, materialize twenty PromptABI artifacts,
 and compare the resulting manifest hash across revisions. Future experiments can
 swap minimized fixtures for revision-pinned upstream tokenizer configs while
 keeping the same manifest schema.
+
+The structured-schema corpus supplies the first labeled schema/tool-call
+compatibility unit: tests replay expected agreement or mismatch labels through
+real schema and regex artifacts, execute every fixture's PromptABI config through
+the CLI, and produce a deterministic manifest containing source categories,
+expected rule IDs, hashes, and provenance.
 
 The real-world bug corpus supplies the first labeled detection experiment. In
 the current snapshot, four public bug patterns map to executable checks:
@@ -1202,6 +1220,10 @@ unsat cores, and the installed Z3 backend. The new corpus tests validate require
 family coverage, sentinel/template consistency, metadata hashes, reproducibility
 metadata, artifact materialization through the real offline loader, manifest
 generation, manifest writing, and the \texttt{promptabi corpus manifest} CLI.
+The structured-schema corpus tests validate required source categories,
+schema/grammar/tool-definition artifact materialization, labeled
+parser-compatibility replay, per-fixture CLI diagnostics, manifest writing, and
+the \texttt{promptabi corpus structured-schema-manifest} CLI.
 Stop differential tests replay recorded provider-style chunks through CPU-only
 OpenAI-compatible and Hugging Face simulators, assert delimiter-retention behavior,
 exercise mismatch diagnostics through the real CLI, and the
@@ -1240,6 +1262,8 @@ Stop differential tests & Recorded provider/framework chunks replay through CPU-
 CLI smoke & \texttt{promptabi verify --config examples/minimal/promptabi.json} returns pass, and \texttt{--fail-on}, \texttt{--artifact}, \texttt{--cache-dir}, \texttt{--quiet}, and \texttt{--verbose} are covered. \\
 \hline
 Corpus smoke & \texttt{promptabi corpus manifest} validates ten minimized instruct-template families and emits stable per-entry hashes without downloads. \\
+\hline
+Structured-schema corpus & \texttt{promptabi corpus structured-schema-manifest} validates labeled structured-output/tool-calling fixtures from OSS reductions, anonymized contracts, and synthetic stress cases; tests replay every label through real parser-compatibility code and CLI configs. \\
 \hline
 Benchmark smoke & Repeated config load and verification completes on CPU with JSON output. \\
 \hline

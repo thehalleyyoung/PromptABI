@@ -1,0 +1,26 @@
+{
+  "name": "structured-schema-open-source-agent-ticket",
+  "checks": ["parser-compatibility"],
+  "artifacts": {
+    "ticket-routing-schema": {
+      "kind": "schema",
+      "path": "schema.json",
+      "dialect": "json-schema",
+      "source": "synthetic-minimized-from-open-source-agent-patterns",
+      "version": "structured-schemas-v1",
+      "license": "fixture-only",
+      "metadata": {
+        "parser_format": "json",
+        "parser_compatibility": {
+          "accepts": [
+            "{\"action\":\"route\",\"ticket_id\":\"TCK-123\",\"priority\":\"high\"}"
+          ],
+          "rejects": [
+            "{}",
+            "{\"action\":\"delete\",\"ticket_id\":\"TCK-123\",\"priority\":\"high\"}"
+          ]
+        }
+      }
+    }
+  }
+}

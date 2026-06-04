@@ -1,0 +1,23 @@
+{
+  "name": "structured-schema-anonymized-markdown-json",
+  "checks": ["parser-compatibility"],
+  "artifacts": {
+    "incident-fence": {
+      "kind": "grammar",
+      "path": "grammar.regex",
+      "grammar_type": "regex",
+      "source": "anonymized-production-pattern",
+      "version": "structured-schemas-v1",
+      "license": "fixture-only",
+      "metadata": {
+        "parser_format": "markdown-fence",
+        "fence_language": "json",
+        "parser_compatibility": {
+          "samples": [
+            "```json\nok\n```\n"
+          ]
+        }
+      }
+    }
+  }
+}

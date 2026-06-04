@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "required": ["action", "ticket_id", "priority"],
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "enum": ["route", "close", "escalate"]
+    },
+    "ticket_id": {
+      "enum": ["TCK-123", "TCK-456"]
+    },
+    "priority": {
+      "enum": ["low", "normal", "high"]
+    }
+  }
+}

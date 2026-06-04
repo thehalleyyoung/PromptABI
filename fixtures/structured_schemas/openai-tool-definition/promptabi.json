@@ -1,0 +1,15 @@
+{
+  "name": "structured-schema-openai-tool-definition",
+  "checks": ["repository-skeleton"],
+  "artifacts": {
+    "openai-tool-bundle": {
+      "kind": "tool-definition",
+      "path": "tools.json",
+      "provider": "openai",
+      "tool_names": ["lookup_order", "refund_order"],
+      "source": "synthetic-minimized-from-open-source-agent-patterns",
+      "version": "structured-schemas-v1",
+      "license": "fixture-only"
+    }
+  }
+}

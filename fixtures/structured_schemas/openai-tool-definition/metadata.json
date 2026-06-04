@@ -1,0 +1,30 @@
+{
+  "id": "openai-tool-definition",
+  "entry_type": "tool-definition",
+  "source_category": "open-source-agent-reduction",
+  "display_name": "Reduced OpenAI-style tool definition bundle",
+  "source": "synthetic-minimized-from-open-source-agent-patterns",
+  "license": "fixture-only",
+  "fixture_revision": "structured-schemas-v1",
+  "upstream_reference": "reduced from common OSS weather/search/refund tool definitions; no upstream code copied",
+  "upstream_revision": "reduction-v1",
+  "download_required": false,
+  "anonymized": true,
+  "reproducibility_notes": "Tool bundle records provider-specific function envelopes and JSON Schema parameter labels for future ingestion and serialization checks.",
+  "artifact": "tools.json",
+  "provider": "openai",
+  "tool_names": ["lookup_order", "refund_order"],
+  "parser_format": "json-schema",
+  "parser_compatibility": {
+    "samples": []
+  },
+  "labels": [
+    "openai-tools",
+    "function-parameters",
+    "provider-envelope"
+  ],
+  "expected_parser_compatibility_status": "agreement",
+  "expected_rule_ids": [
+    "repository-skeleton"
+  ]
+}

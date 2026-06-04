@@ -80,7 +80,9 @@ backend installs. Structured-output parser compatibility checks now replay
 bounded grammar/schema witnesses plus declared runtime samples against JSON,
 JSON Schema, XML-ish tool-call, markdown-fence, and custom-delimiter parser
 models, reporting parser-broader and grammar-broader disagreements without
-claiming full language equivalence. The repository
+claiming full language equivalence; a new labeled structured-schema corpus turns
+open-source-agent reductions, anonymized patterns, and synthetic tool-call stress
+cases into manifest-pinned CLI fixtures. The repository
 already has the typed Python package,
 core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,
 snapshot-locked output stability, discoverable `promptabi verify` workflow,

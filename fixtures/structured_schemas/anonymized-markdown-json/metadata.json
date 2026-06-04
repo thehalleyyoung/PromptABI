@@ -1,0 +1,31 @@
+{
+  "id": "anonymized-markdown-json",
+  "entry_type": "grammar",
+  "source_category": "anonymized-production-pattern",
+  "display_name": "Anonymized markdown-fenced JSON response contract",
+  "source": "anonymized-production-pattern",
+  "license": "fixture-only",
+  "fixture_revision": "structured-schemas-v1",
+  "upstream_reference": "anonymized internal-style incident-summary output; no sensitive payload retained",
+  "upstream_revision": "anonymized-v1",
+  "download_required": false,
+  "anonymized": true,
+  "reproducibility_notes": "Finite regex fixture checks that a markdown-fence parser agrees with the constrained output contract on fenced text shape.",
+  "artifact": "grammar.regex",
+  "grammar_type": "regex",
+  "parser_format": "markdown-fence",
+  "parser_compatibility": {
+    "samples": [
+      "```json\nok\n```\n"
+    ]
+  },
+  "labels": [
+    "markdown-fence",
+    "parser-agreement",
+    "anonymized"
+  ],
+  "expected_parser_compatibility_status": "agreement",
+  "expected_rule_ids": [
+    "parser-compatibility-agreement"
+  ]
+}

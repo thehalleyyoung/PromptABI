@@ -14,6 +14,11 @@ from .config import ConfigError, discover_config, load_config
 from .render import render_json, render_sarif, render_text
 from .seed_corpus import SeedCorpusError, build_seed_corpus_manifest, write_seed_corpus_manifest
 from .session import VerificationSession
+from .structured_schema_corpus import (
+    StructuredSchemaCorpusError,
+    build_structured_schema_corpus_manifest,
+    write_structured_schema_corpus_manifest,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -66,6 +71,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         help="write manifest JSON to this path instead of stdout",
     )
+    schema_manifest = corpus_subparsers.add_parser(
+        "structured-schema-manifest",
+        help="validate structured-output/tool schema corpus and emit its manifest",
+    )
+    schema_manifest.add_argument(
+        "--root",
+        help="structured schema corpus root (default: repository fixtures/structured_schemas)",
+    )
+    schema_manifest.add_argument(
+        "--output",
+        help="write manifest JSON to this path instead of stdout",
+    )
     return parser
 
 
@@ -112,6 +129,22 @@ def main(argv: Sequence[str] | None = None) -> int:
                 manifest = build_seed_corpus_manifest(args.root)
                 print(json.dumps(manifest, indent=2, sort_keys=True))
         except SeedCorpusError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write corpus manifest: {exc}", file=sys.stderr)
+            return 2
+        return 0
+
+    if args.command == "corpus" and args.corpus_command == "structured-schema-manifest":
+        try:
+            if args.output:
+                manifest = write_structured_schema_corpus_manifest(args.output, root=args.root)
+                print(f"wrote structured schema corpus manifest: {args.output} ({manifest['entry_count']} entries)")
+            else:
+                manifest = build_structured_schema_corpus_manifest(args.root)
+                print(json.dumps(manifest, indent=2, sort_keys=True))
+        except StructuredSchemaCorpusError as exc:
             print(f"promptabi: {exc}", file=sys.stderr)
             return 2
         except OSError as exc:

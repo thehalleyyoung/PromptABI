@@ -1,0 +1,23 @@
+{
+  "name": "structured-schema-synthetic-xml-tool-call",
+  "checks": ["parser-compatibility"],
+  "artifacts": {
+    "refund-tool-call": {
+      "kind": "grammar",
+      "path": "grammar.regex",
+      "grammar_type": "regex",
+      "source": "synthetic-stress",
+      "version": "structured-schemas-v1",
+      "license": "fixture-only",
+      "metadata": {
+        "parser_format": "xml-tool-call",
+        "parser_compatibility": {
+          "samples": [
+            "<tool_call name=\"refund\">{\"id\":1}</tool_call>",
+            "<tool_call name=\"refund\">{\"id\":2}</tool_call>"
+          ]
+        }
+      }
+    }
+  }
+}

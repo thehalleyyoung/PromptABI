@@ -168,6 +168,18 @@ from .seed_corpus import (
     write_seed_corpus_manifest,
 )
 from .session import CheckCallable, CheckContext, VerificationResult, VerificationSession
+from .structured_schema_corpus import (
+    DEFAULT_STRUCTURED_SCHEMA_CORPUS_ROOT,
+    REQUIRED_STRUCTURED_SCHEMA_SOURCES,
+    STRUCTURED_SCHEMA_CORPUS_MANIFEST_VERSION,
+    StructuredSchemaCorpus,
+    StructuredSchemaCorpusEntry,
+    StructuredSchemaCorpusError,
+    build_structured_schema_corpus_manifest,
+    load_structured_schema_corpus,
+    validate_structured_schema_entry,
+    write_structured_schema_corpus_manifest,
+)
 from .source import JsonSourceMap, build_json_source_map
 from .stop_policies import (
     StopPolicyParseError,
@@ -265,6 +277,7 @@ __all__ = [
     "ByteLevelTokenizer",
     "DecodeResult",
     "DEFAULT_STRUCTURAL_ROLES",
+    "DEFAULT_STRUCTURED_SCHEMA_CORPUS_ROOT",
     "DeterministicFiniteAutomaton",
     "Diagnostic",
     "DiagnosticSeverity",
@@ -333,6 +346,7 @@ __all__ = [
     "RoleBoundarySanitizer",
     "RoundTripResult",
     "REQUIRED_FAMILIES",
+    "REQUIRED_STRUCTURED_SCHEMA_SOURCES",
     "SchemaArtifact",
     "SeedCorpus",
     "SeedCorpusEntry",
@@ -363,6 +377,10 @@ __all__ = [
     "StopTraceCase",
     "StopTraceExpectation",
     "StructuredOutputRegion",
+    "StructuredSchemaCorpus",
+    "StructuredSchemaCorpusEntry",
+    "StructuredSchemaCorpusError",
+    "STRUCTURED_SCHEMA_CORPUS_MANIFEST_VERSION",
     "TiktokenAdapter",
     "TokenizerDifferentialCase",
     "TokenizerDifferentialMismatch",
@@ -403,11 +421,13 @@ __all__ = [
     "analyze_tokenizer_grammar_emptiness",
     "build_role_boundary_model",
     "build_seed_corpus_manifest",
+    "build_structured_schema_corpus_manifest",
     "analyze_stop_differential",
     "load_artifact",
     "load_artifacts",
     "load_config",
     "load_seed_corpus",
+    "load_structured_schema_corpus",
     "load_tokenizer",
     "render_result",
     "run_verification",
@@ -423,4 +443,6 @@ __all__ = [
     "simulate_stop_trace",
     "symbolically_execute_chat_template",
     "write_seed_corpus_manifest",
+    "validate_structured_schema_entry",
+    "write_structured_schema_corpus_manifest",
 ]

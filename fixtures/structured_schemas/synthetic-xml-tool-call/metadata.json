@@ -1,0 +1,32 @@
+{
+  "id": "synthetic-xml-tool-call",
+  "entry_type": "grammar",
+  "source_category": "synthetic-stress",
+  "display_name": "Synthetic XML tool-call parser-broader stress case",
+  "source": "synthetic-stress",
+  "license": "fixture-only",
+  "fixture_revision": "structured-schemas-v1",
+  "upstream_reference": "synthetic PromptABI stress case",
+  "upstream_revision": "synthetic-v1",
+  "download_required": false,
+  "anonymized": false,
+  "reproducibility_notes": "Regex constrains a single refund call but the modeled XML tool parser accepts a different argument object with the same tag.",
+  "artifact": "grammar.regex",
+  "grammar_type": "regex",
+  "parser_format": "xml-tool-call",
+  "parser_compatibility": {
+    "samples": [
+      "<tool_call name=\"refund\">{\"id\":1}</tool_call>",
+      "<tool_call name=\"refund\">{\"id\":2}</tool_call>"
+    ]
+  },
+  "labels": [
+    "tool-call-parser-broader",
+    "xml-tool-call",
+    "argument-contract"
+  ],
+  "expected_parser_compatibility_status": "mismatch",
+  "expected_rule_ids": [
+    "parser-compatibility-mismatch"
+  ]
+}
