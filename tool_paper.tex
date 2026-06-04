@@ -74,7 +74,9 @@ plus a JSON Schema path that normalizes objects, arrays, enums, consts, required
 fields, numeric and string constraints, type and composition unions, bounded
 local references, recursion-limit abstentions, and additional-property semantics,
 then compiles the supported subset into grammar IR, parser states, DFA witnesses,
-source maps, and real \texttt{jsonschema} validator round-trips,
+source maps, and real \texttt{jsonschema} validator round-trips, and now takes
+the bounded tokenizer x grammar product to prove whether compiled witnesses
+survive real tokenizer encode-normalize-decode assumptions,
 a CPU-only benchmark, documentation, and contribution guidance.
 The remaining checkers fit into that surface rather than requiring a rewrite. We
 describe the transducer-oriented formalism, the artifact model, the diagnostic
@@ -355,7 +357,7 @@ Provider snapshots & Deterministic JSON validation for provider name, captured r
 \hline
 Stop-policy configs & Deterministic extraction of stop strings, stop token IDs, EOS behavior, source family, ignored empty stops, and source paths from OpenAI-compatible, Hugging Face, llama.cpp/Ollama, vLLM, LiteLLM, and wrapper shapes. \\
 \hline
-Schema and grammar files & JSON Schema normalization and bounded compilation for objects, arrays, required fields, enums, consts, constraints, unions, bounded local references, recursion-limit abstentions, and additional properties; compiled metadata records grammar rules, parser states, DFA witness size, source spans, and real \texttt{jsonschema} round-trip acceptance, while ingestion for regex, EBNF, Outlines, xgrammar, llguidance, and PromptABI grammars records rules, terminals, references, source spans, and unsupported-fragment abstentions. \\
+Schema and grammar files & JSON Schema normalization and bounded compilation for objects, arrays, required fields, enums, consts, constraints, unions, bounded local references, recursion-limit abstentions, and additional properties; compiled metadata records grammar rules, parser states, DFA witness size, source spans, and real \texttt{jsonschema} round-trip acceptance, while tokenizer x grammar emptiness diagnostics prove whether bounded witnesses survive tokenizer encode/decode assumptions. Ingestion for regex, EBNF, Outlines, xgrammar, llguidance, and PromptABI grammars records rules, terminals, references, source spans, and unsupported-fragment abstentions. \\
 \hline
 Fixture archives & Zip/tar member lists and archive-byte hashes without extraction or timestamp-dependent manifests. \\
 \hline
@@ -800,8 +802,9 @@ text valid data. All offsets are computed on the serialized wire text, including
 escaped characters, so the witness is not merely "the stop appears." It is a
 valid output prefix, the exact line and column where the stop fires, the parser
 state at truncation, and the malformed or prematurely accepted structure received
-by the application parser. PromptABI should next analyze stop policies jointly
-with full grammars. A useful witness for grammar-level unreachability includes the stop
+by the application parser. PromptABI now analyzes the adjacent tokenizer x grammar emptiness product for
+bounded JSON Schema grammars, and should next combine stop policies with full
+grammars. A useful witness for grammar-level stop unreachability includes the stop
 sequence, its byte form, the tokenizer segmentation, and the grammar state that
 prevents production.
 
@@ -828,10 +831,17 @@ bounded recursion abstentions, and additional-property semantics. It also
 compiles that tree into a bounded grammar IR with source maps, per-node parser
 states, a deterministic finite automaton over generated JSON witnesses, and
 round-trip checks against the real \texttt{jsonschema} Draft 2020-12 validator.
-The next milestone is taking the product with tokenizer and grammar-backend
-assumptions. The key theorem shape is: under the supported fragment assumptions,
-if that product is empty, then no sequence accepted by the tokenizer and grammar
-backend can produce a valid application object.
+The implemented \texttt{grammar-tokenizer-emptiness} check then pairs each local
+tokenizer artifact with each schema or grammar artifact. For the supported JSON
+Schema fragment it enumerates bounded DFA witnesses, encodes them with the real
+selected tokenizer adapter, decodes the resulting token IDs, and accepts only if
+the decoded text is still accepted by the grammar automaton. A satisfiable report
+records the JSON witness, token IDs, token surfaces, decoded text, grammar state
+path, and backend assumptions. An empty report shows the rejected candidate, such
+as a required \texttt{"OK"} literal rewritten by a lowercase-normalizing tokenizer
+into \texttt{"ok"}. Under the stated bounded assumptions, if that product is empty,
+then the constrained-decoding backend cannot produce a valid object through that
+tokenizer path.
 
 Equally important is abstention. Arbitrary schemas with recursive references,
 custom validators, remote references, or backend-specific extensions should not
@@ -1046,6 +1056,12 @@ tool-call parser-boundary stop failure. PromptABI detects all four with bounded
 structural witnesses. The result is intentionally modest but important: the
 evaluation is no longer only synthetic, and each claimed detection is backed by
 a minimized fixture that can run in ordinary CPU-only CI.
+
+The grammar-emptiness benchline adds a complementary satisfiability experiment:
+one fixture proves that an ordinary byte-level tokenizer can produce the bounded
+JSON Schema object witness \texttt{\{\}}, while another proves that tokenizer
+normalization can make a const-schema product empty. Both cases run through the
+same public API and CLI diagnostic contract rather than private test helpers.
 
 The strongest paper result would be upstreamable bugs: minimized reports that
 maintainers of templates, adapters, structured-output libraries, or framework

@@ -10,6 +10,11 @@ from .artifacts import ArtifactKind
 from .chat_templates import ChatTemplateParseError, parse_hf_tokenizer_config_chat_template
 from .config import VerificationConfig, load_config
 from .diagnostics import CheckMode, Diagnostic, DiagnosticSeverity, SourceSpan, WitnessStep, WitnessTrace, diagnostic_sort_key
+from .grammar_emptiness import (
+    GrammarTokenizerEmptinessReport,
+    GrammarTokenizerEmptinessStatus,
+    analyze_tokenizer_grammar_emptiness,
+)
 from .loaders import ArtifactLoadError, ArtifactLoadWarning, ArtifactLoader, LoadedArtifact
 from .role_boundaries import RoleBoundaryForgeryFinding, analyze_role_boundary_nonforgeability
 from .stop_analysis import (
@@ -56,6 +61,9 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "stop-overreach-abstained": (CheckMode.ABSTAINING, CheckMode.BOUNDED),
     "stop-overreach-content": (CheckMode.SOUND, CheckMode.BOUNDED),
     "stop-overreach-structural": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "grammar-tokenizer-abstained": (CheckMode.ABSTAINING, CheckMode.BOUNDED),
+    "grammar-tokenizer-empty": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "grammar-tokenizer-satisfiable": (CheckMode.SOUND, CheckMode.BOUNDED),
     "check-unknown": (CheckMode.SOUND, CheckMode.COMPLETE),
     "check-failed": (CheckMode.HEURISTIC,),
 }
@@ -115,6 +123,7 @@ class VerificationSession:
             "stop-differential": self._stop_differential_check,
             "stop-overreachability": self._stop_overreachability_check,
             "stop-tokenizer-analysis": self._stop_tokenizer_analysis_check,
+            "grammar-tokenizer-emptiness": self._grammar_tokenizer_emptiness_check,
         }
         if checks:
             self.checks.update(checks)
@@ -309,6 +318,33 @@ class VerificationSession:
             )
             if report.matches:
                 diagnostics.append(_stop_differential_agreement_diagnostic(stop_loaded, report))
+        return tuple(diagnostics)
+
+    def _grammar_tokenizer_emptiness_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        diagnostics: list[Diagnostic] = []
+        tokenizers = [loaded for loaded in context.loaded_artifacts if loaded.artifact.kind is ArtifactKind.TOKENIZER]
+        grammars = [
+            loaded
+            for loaded in context.loaded_artifacts
+            if loaded.artifact.kind in {ArtifactKind.SCHEMA, ArtifactKind.GRAMMAR}
+        ]
+        for tokenizer_loaded in tokenizers:
+            tokenizer_artifact = tokenizer_loaded.artifact
+            try:
+                tokenizer = load_tokenizer(tokenizer_artifact)
+            except TokenizerError as exc:
+                diagnostics.extend(
+                    _grammar_tokenizer_abstained_diagnostic(tokenizer_loaded, grammar_loaded, str(exc))
+                    for grammar_loaded in grammars
+                )
+                continue
+            for grammar_loaded in grammars:
+                report = analyze_tokenizer_grammar_emptiness(
+                    tokenizer_artifact,
+                    grammar_loaded.artifact,
+                    tokenizer,
+                )
+                diagnostics.append(_grammar_tokenizer_report_diagnostic(tokenizer_loaded, grammar_loaded, report))
         return tuple(diagnostics)
 
     def _missing_local_paths(self) -> set[str]:
@@ -837,6 +873,103 @@ def _stop_differential_agreement_diagnostic(
                 WitnessStep(action="replay stop traces", output=f"{len(report.matches)} matched"),
             ),
             artifacts=(stop_loaded.artifact.to_ref(),),
+        ),
+    )
+
+
+def _grammar_tokenizer_report_diagnostic(
+    tokenizer_loaded: LoadedArtifact,
+    grammar_loaded: LoadedArtifact,
+    report: GrammarTokenizerEmptinessReport,
+) -> Diagnostic:
+    if report.status is GrammarTokenizerEmptinessStatus.SATISFIABLE:
+        assert report.witness is not None
+        return Diagnostic(
+            rule_id="grammar-tokenizer-satisfiable",
+            severity=DiagnosticSeverity.INFO,
+            message=(
+                f"grammar '{grammar_loaded.artifact.name}' has a tokenizer-compatible witness "
+                f"under tokenizer '{tokenizer_loaded.artifact.name}'"
+            ),
+            artifact=grammar_loaded.artifact.to_ref(),
+            span=_artifact_span(grammar_loaded.artifact),
+            check_modes=CHECK_MODE_CATALOG["grammar-tokenizer-satisfiable"],
+            witness=WitnessTrace(
+                summary="A bounded grammar witness survived tokenizer encode-normalize-decode assumptions.",
+                steps=(
+                    WitnessStep(action="select tokenizer", input=tokenizer_loaded.artifact.name, output=report.tokenizer_backend),
+                    WitnessStep(action="compile bounded grammar", input=grammar_loaded.artifact.name, output=report.grammar_kind),
+                    WitnessStep(action="enumerate grammar witnesses", output=f"{report.checked_candidates} checked"),
+                    WitnessStep(action="encode grammar witness", input=report.witness.grammar_text, output=str(report.witness.token_ids)),
+                    WitnessStep(action="decode token path", input=str(report.witness.token_ids), output=report.witness.decoded_text),
+                    WitnessStep(action="accept decoded text", output="accepted by grammar automaton"),
+                ),
+                artifacts=(tokenizer_loaded.artifact.to_ref(), grammar_loaded.artifact.to_ref()),
+            ),
+        )
+    if report.status is GrammarTokenizerEmptinessStatus.EMPTY:
+        first_attempt = report.attempts[0] if report.attempts else None
+        steps = [
+            WitnessStep(action="select tokenizer", input=tokenizer_loaded.artifact.name, output=report.tokenizer_backend),
+            WitnessStep(action="compile bounded grammar", input=grammar_loaded.artifact.name, output=report.grammar_kind),
+            WitnessStep(action="enumerate grammar witnesses", output=f"{report.checked_candidates} checked"),
+        ]
+        if first_attempt is not None:
+            steps.extend(
+                [
+                    WitnessStep(action="encode grammar witness", input=first_attempt.grammar_text, output=str(first_attempt.token_ids)),
+                    WitnessStep(action="decode token path", input=str(first_attempt.token_ids), output=first_attempt.decoded_text),
+                    WitnessStep(action="reject decoded text", output=first_attempt.reason),
+                ]
+            )
+        else:
+            steps.append(WitnessStep(action="prove no accepting grammar path", output=report.reason))
+        return Diagnostic(
+            rule_id="grammar-tokenizer-empty",
+            severity=DiagnosticSeverity.ERROR,
+            message=(
+                f"grammar '{grammar_loaded.artifact.name}' is empty under tokenizer "
+                f"'{tokenizer_loaded.artifact.name}' assumptions"
+            ),
+            artifact=grammar_loaded.artifact.to_ref(),
+            span=_artifact_span(grammar_loaded.artifact),
+            check_modes=CHECK_MODE_CATALOG["grammar-tokenizer-empty"],
+            suggestions=(
+                "Verify that the constrained-decoding backend tokenizes grammar literals with the same tokenizer settings.",
+                "Avoid tokenizer normalization or added-token rules that rewrite required grammar terminals.",
+            ),
+            witness=WitnessTrace(
+                summary=report.reason or "No bounded grammar witness was tokenizer-compatible.",
+                steps=tuple(steps),
+                artifacts=(tokenizer_loaded.artifact.to_ref(), grammar_loaded.artifact.to_ref()),
+            ),
+        )
+    return _grammar_tokenizer_abstained_diagnostic(tokenizer_loaded, grammar_loaded, report.reason or "unsupported grammar product")
+
+
+def _grammar_tokenizer_abstained_diagnostic(
+    tokenizer_loaded: LoadedArtifact,
+    grammar_loaded: LoadedArtifact,
+    reason: str,
+) -> Diagnostic:
+    return Diagnostic(
+        rule_id="grammar-tokenizer-abstained",
+        severity=DiagnosticSeverity.WARNING,
+        message=(
+            f"grammar '{grammar_loaded.artifact.name}' could not be checked against tokenizer "
+            f"'{tokenizer_loaded.artifact.name}'"
+        ),
+        artifact=grammar_loaded.artifact.to_ref(),
+        span=_artifact_span(grammar_loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG["grammar-tokenizer-abstained"],
+        suggestions=("Use a local JSON Schema artifact in PromptABI's bounded supported subset.",),
+        witness=WitnessTrace(
+            summary="PromptABI abstained instead of guessing tokenizer x grammar emptiness outside the supported product.",
+            steps=(
+                WitnessStep(action="select tokenizer", input=tokenizer_loaded.artifact.name),
+                WitnessStep(action="compile bounded grammar", input=grammar_loaded.artifact.name, output=reason),
+            ),
+            artifacts=(tokenizer_loaded.artifact.to_ref(), grammar_loaded.artifact.to_ref()),
         ),
     )
 
