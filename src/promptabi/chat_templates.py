@@ -173,6 +173,132 @@ class ChatTemplateParseResult:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class ChatTemplateSymbolicBounds:
+    """Finite limits for bounded chat-template symbolic execution."""
+
+    max_messages: int = 2
+    max_tools: int = 1
+    max_loop_iterations: int = 2
+    max_paths: int = 128
+
+    def __post_init__(self) -> None:
+        for name in ("max_messages", "max_tools", "max_loop_iterations", "max_paths"):
+            value = getattr(self, name)
+            if value < 0:
+                raise ValueError(f"{name} must be non-negative")
+        if self.max_paths == 0:
+            raise ValueError("max_paths must be positive")
+
+    def limit_for(self, iterable: str) -> int:
+        if iterable == "messages":
+            return min(self.max_messages, self.max_loop_iterations)
+        if iterable == "tools":
+            return min(self.max_tools, self.max_loop_iterations)
+        return self.max_loop_iterations
+
+    def to_dict(self) -> dict[str, int]:
+        return {
+            "max_messages": self.max_messages,
+            "max_tools": self.max_tools,
+            "max_loop_iterations": self.max_loop_iterations,
+            "max_paths": self.max_paths,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ChatTemplateSymbolicSegment:
+    """One literal or symbolic output segment produced by a bounded template path."""
+
+    kind: str
+    value: str
+    expression: str | None = None
+    filters: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.kind not in {"literal", "variable", "constant", "unknown"}:
+            raise ValueError(f"unsupported symbolic segment kind: {self.kind}")
+        if not self.value:
+            raise ValueError("symbolic segment value must be non-empty")
+        object.__setattr__(self, "filters", tuple(self.filters))
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {"kind": self.kind, "value": self.value}
+        if self.expression is not None:
+            data["expression"] = self.expression
+        if self.filters:
+            data["filters"] = list(self.filters)
+        return data
+
+
+@dataclass(frozen=True, slots=True)
+class ChatTemplateSymbolicPath:
+    """A single bounded control-flow path through a chat template."""
+
+    conditions: tuple[str, ...] = ()
+    segments: tuple[ChatTemplateSymbolicSegment, ...] = ()
+    loop_iterations: tuple[tuple[str, int], ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "conditions", tuple(self.conditions))
+        object.__setattr__(self, "segments", tuple(self.segments))
+        object.__setattr__(self, "loop_iterations", tuple(self.loop_iterations))
+
+    @property
+    def rendered_pattern(self) -> str:
+        return "".join(segment.value for segment in self.segments)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "conditions": list(self.conditions),
+            "segments": [segment.to_dict() for segment in self.segments],
+            "loop_iterations": [
+                {"iterable": iterable, "count": count}
+                for iterable, count in self.loop_iterations
+            ],
+            "rendered_pattern": self.rendered_pattern,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ChatTemplateSymbolicAbstention:
+    """Reason the symbolic executor declined to prove a fragment precisely."""
+
+    kind: str
+    expression: str
+    reason: str
+
+    def to_dict(self) -> dict[str, str]:
+        return {"kind": self.kind, "expression": self.expression, "reason": self.reason}
+
+
+@dataclass(frozen=True, slots=True)
+class ChatTemplateSymbolicExecution:
+    """Bounded symbolic execution result for a supported HF/Jinja chat template."""
+
+    bounds: ChatTemplateSymbolicBounds
+    paths: tuple[ChatTemplateSymbolicPath, ...] = ()
+    abstentions: tuple[ChatTemplateSymbolicAbstention, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "paths", tuple(self.paths))
+        unique = {(item.kind, item.expression, item.reason): item for item in self.abstentions}
+        object.__setattr__(self, "abstentions", tuple(unique[key] for key in sorted(unique)))
+
+    @property
+    def supported(self) -> bool:
+        return not self.abstentions
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "bounds": self.bounds.to_dict(),
+            "supported": self.supported,
+            "path_count": len(self.paths),
+            "paths": [path.to_dict() for path in self.paths],
+            "abstentions": [abstention.to_dict() for abstention in self.abstentions],
+        }
+
+
 class ChatTemplateParseError(ValueError):
     """Raised when tokenizer_config.json cannot yield a chat template."""
 
@@ -244,6 +370,40 @@ def parse_hf_chat_template_config(
         uses_whitespace_control=any(raw.startswith(("{%-", "{{-", "{#-")) or raw.endswith(("-}", "-}}", "-#}")) for _kind, _body, raw in tokens),
         unsupported_constructs=unsupported,
     )
+
+
+def symbolically_execute_chat_template(
+    parsed: ChatTemplateParseResult,
+    *,
+    bounds: ChatTemplateSymbolicBounds | None = None,
+) -> ChatTemplateSymbolicExecution:
+    """Boundedly execute the supported HF/Jinja chat-template fragment.
+
+    The executor mirrors the Hugging Face chat-template Jinja environment's
+    structural whitespace behavior (`trim_blocks=True`, `lstrip_blocks=True`)
+    and returns symbolic output paths rather than invoking Jinja. It abstains
+    when the template uses unsupported constructs or exceeds finite bounds.
+    """
+
+    active_bounds = bounds or ChatTemplateSymbolicBounds()
+    abstentions = [
+        ChatTemplateSymbolicAbstention(
+            kind=item.kind,
+            expression=item.expression,
+            reason=item.reason,
+        )
+        for item in parsed.unsupported_constructs
+    ]
+    segments = _lex_symbolic_segments(parsed.template_source)
+    parser = _SymbolicParser(segments)
+    nodes = parser.parse()
+    abstentions.extend(parser.abstentions)
+    if parser.abstentions:
+        return ChatTemplateSymbolicExecution(bounds=active_bounds, paths=(), abstentions=tuple(abstentions))
+    executor = _SymbolicExecutor(parsed, active_bounds)
+    paths = executor.execute(nodes)
+    abstentions.extend(executor.abstentions)
+    return ChatTemplateSymbolicExecution(bounds=active_bounds, paths=paths, abstentions=tuple(abstentions))
 
 
 def _extract_special_tokens(config: dict[str, object]) -> tuple[ChatTemplateSpecialToken, ...]:
@@ -449,3 +609,492 @@ def _generation_prompt_excerpts(template: str) -> tuple[str, ...]:
 
 def _strip_jinja(text: str) -> str:
     return _JINJA_TOKEN_RE.sub("", text)
+
+
+@dataclass(frozen=True, slots=True)
+class _SymbolicSegment:
+    kind: str
+    body: str
+    raw: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class _LiteralNode:
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
+class _ExpressionNode:
+    expression: str
+
+
+@dataclass(frozen=True, slots=True)
+class _SetNode:
+    name: str
+    expression: str
+
+
+@dataclass(frozen=True, slots=True)
+class _ForNode:
+    variable: str
+    iterable: str
+    body: tuple["_Node", ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _IfBranch:
+    condition: str | None
+    body: tuple["_Node", ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _IfNode:
+    branches: tuple[_IfBranch, ...]
+
+
+_Node = _LiteralNode | _ExpressionNode | _SetNode | _ForNode | _IfNode
+
+
+@dataclass(frozen=True, slots=True)
+class _PathState:
+    conditions: tuple[str, ...] = ()
+    segments: tuple[ChatTemplateSymbolicSegment, ...] = ()
+    loop_iterations: tuple[tuple[str, int], ...] = ()
+    bindings: tuple[tuple[str, ChatTemplateSymbolicSegment], ...] = ()
+
+    def bind(self, name: str, value: ChatTemplateSymbolicSegment) -> "_PathState":
+        bindings = {key: segment for key, segment in self.bindings}
+        bindings[name] = value
+        return _PathState(
+            conditions=self.conditions,
+            segments=self.segments,
+            loop_iterations=self.loop_iterations,
+            bindings=tuple(sorted(bindings.items())),
+        )
+
+    def with_condition(self, condition: str) -> "_PathState":
+        return _PathState(
+            conditions=self.conditions + (condition,),
+            segments=self.segments,
+            loop_iterations=self.loop_iterations,
+            bindings=self.bindings,
+        )
+
+    def with_loop_iterations(self, iterable: str, count: int) -> "_PathState":
+        return _PathState(
+            conditions=self.conditions,
+            segments=self.segments,
+            loop_iterations=self.loop_iterations + ((iterable, count),),
+            bindings=self.bindings,
+        )
+
+    def with_segment(self, segment: ChatTemplateSymbolicSegment) -> "_PathState":
+        return _PathState(
+            conditions=self.conditions,
+            segments=self.segments + (segment,),
+            loop_iterations=self.loop_iterations,
+            bindings=self.bindings,
+        )
+
+    def to_public(self) -> ChatTemplateSymbolicPath:
+        return ChatTemplateSymbolicPath(
+            conditions=self.conditions,
+            segments=self.segments,
+            loop_iterations=self.loop_iterations,
+        )
+
+
+def _lex_symbolic_segments(template: str) -> tuple[_SymbolicSegment, ...]:
+    segments: list[_SymbolicSegment] = []
+    position = 0
+    trim_leading_whitespace = False
+    trim_one_newline = False
+    for match in _JINJA_TOKEN_RE.finditer(template):
+        raw = match.group(1)
+        literal = template[position : match.start()]
+        if trim_leading_whitespace:
+            literal = literal.lstrip()
+        elif trim_one_newline:
+            literal = re.sub(r"^\r?\n", "", literal, count=1)
+
+        kind, body, left_trim, right_trim = _symbolic_token_parts(raw)
+        if kind == "tag":
+            literal = _apply_lstrip_blocks(literal)
+        if left_trim:
+            literal = literal.rstrip()
+        if literal:
+            segments.append(_SymbolicSegment(kind="literal", body=literal))
+        if kind != "comment":
+            segments.append(_SymbolicSegment(kind=kind, body=body, raw=raw))
+        position = match.end()
+        trim_leading_whitespace = right_trim
+        trim_one_newline = kind == "tag" and not right_trim
+
+    literal = template[position:]
+    if trim_leading_whitespace:
+        literal = literal.lstrip()
+    elif trim_one_newline:
+        literal = re.sub(r"^\r?\n", "", literal, count=1)
+    if literal:
+        segments.append(_SymbolicSegment(kind="literal", body=literal))
+    return tuple(segments)
+
+
+def _symbolic_token_parts(raw: str) -> tuple[str, str, bool, bool]:
+    if raw.startswith("{{"):
+        kind = "expression"
+        body = raw[2:-2]
+        left_trim = raw.startswith("{{-")
+        right_trim = raw.endswith("-}}")
+    elif raw.startswith("{%"):
+        kind = "tag"
+        body = raw[2:-2]
+        left_trim = raw.startswith("{%-")
+        right_trim = raw.endswith("-%}")
+    else:
+        kind = "comment"
+        body = raw[2:-2]
+        left_trim = raw.startswith("{#-")
+        right_trim = raw.endswith("-#}")
+    return kind, body.strip().strip("-").strip(), left_trim, right_trim
+
+
+def _apply_lstrip_blocks(literal: str) -> str:
+    newline = max(literal.rfind("\n"), literal.rfind("\r"))
+    prefix = literal[newline + 1 :]
+    if prefix and all(character in " \t" for character in prefix):
+        return literal[: newline + 1]
+    return literal
+
+
+class _SymbolicParser:
+    def __init__(self, segments: tuple[_SymbolicSegment, ...]) -> None:
+        self.segments = segments
+        self.abstentions: list[ChatTemplateSymbolicAbstention] = []
+
+    def parse(self) -> tuple[_Node, ...]:
+        nodes, stop_tag, _index = self._parse_block(0, ())
+        if stop_tag is not None:
+            self._abstain("tag", stop_tag, "Jinja block terminator does not have a matching opener.")
+        return nodes
+
+    def _parse_block(
+        self,
+        index: int,
+        stop_prefixes: tuple[str, ...],
+    ) -> tuple[tuple[_Node, ...], str | None, int]:
+        nodes: list[_Node] = []
+        while index < len(self.segments):
+            segment = self.segments[index]
+            if segment.kind == "literal":
+                nodes.append(_LiteralNode(segment.body))
+                index += 1
+                continue
+            if segment.kind == "expression":
+                nodes.append(_ExpressionNode(segment.body))
+                index += 1
+                continue
+            if segment.kind != "tag":
+                index += 1
+                continue
+            body = segment.body
+            if stop_prefixes and body.startswith(stop_prefixes):
+                return tuple(nodes), body, index
+            if body.startswith("for "):
+                node, index = self._parse_for(body, index)
+                if node is not None:
+                    nodes.append(node)
+                continue
+            if body.startswith("if "):
+                node, index = self._parse_if(body, index)
+                if node is not None:
+                    nodes.append(node)
+                continue
+            if body.startswith("set "):
+                node = self._parse_set(body)
+                if node is not None:
+                    nodes.append(node)
+                index += 1
+                continue
+            if body in {"endif", "endfor"} or body.startswith(("elif ", "else")):
+                return tuple(nodes), body, index
+            self._abstain("tag", body, "Jinja tag is outside the bounded symbolic executor fragment.")
+            index += 1
+        return tuple(nodes), None, index
+
+    def _parse_for(self, body: str, index: int) -> tuple[_ForNode | None, int]:
+        match = re.fullmatch(r"for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+([A-Za-z_][A-Za-z0-9_\.]*)", body)
+        if not match:
+            self._abstain("loop", body, "Only simple 'for variable in iterable' loops are modeled.")
+            return None, index + 1
+        child_nodes, stop_tag, child_index = self._parse_block(index + 1, ("endfor",))
+        if stop_tag != "endfor":
+            self._abstain("loop", body, "For loop is missing a matching endfor tag.")
+            return None, child_index
+        return _ForNode(variable=match.group(1), iterable=match.group(2), body=child_nodes), child_index + 1
+
+    def _parse_if(self, body: str, index: int) -> tuple[_IfNode | None, int]:
+        branches: list[_IfBranch] = []
+        condition = body[3:].strip()
+        next_index = index + 1
+        saw_else = False
+        while True:
+            child_nodes, stop_tag, child_index = self._parse_block(next_index, ("elif ", "else", "endif"))
+            branches.append(_IfBranch(condition=condition, body=child_nodes))
+            if stop_tag == "endif":
+                if not saw_else:
+                    branches.append(_IfBranch(condition=None, body=()))
+                return _IfNode(branches=tuple(branches)), child_index + 1
+            if stop_tag is None:
+                self._abstain("condition", body, "If block is missing a matching endif tag.")
+                return None, child_index
+            if stop_tag.startswith("elif "):
+                if saw_else:
+                    self._abstain("condition", stop_tag, "Elif tag cannot follow an else tag.")
+                    return None, child_index + 1
+                condition = stop_tag[5:].strip()
+                next_index = child_index + 1
+                continue
+            if stop_tag == "else":
+                saw_else = True
+                condition = None
+                next_index = child_index + 1
+                continue
+            self._abstain("condition", stop_tag, "Unsupported if-block terminator.")
+            return None, child_index + 1
+
+    def _parse_set(self, body: str) -> _SetNode | None:
+        match = re.fullmatch(r"set\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)", body)
+        if not match:
+            self._abstain("set", body, "Only simple scalar set assignments are modeled.")
+            return None
+        return _SetNode(name=match.group(1), expression=match.group(2).strip())
+
+    def _abstain(self, kind: str, expression: str, reason: str) -> None:
+        self.abstentions.append(ChatTemplateSymbolicAbstention(kind=kind, expression=expression, reason=reason))
+
+
+class _SymbolicExecutor:
+    def __init__(self, parsed: ChatTemplateParseResult, bounds: ChatTemplateSymbolicBounds) -> None:
+        self.parsed = parsed
+        self.bounds = bounds
+        self.abstentions: list[ChatTemplateSymbolicAbstention] = []
+        self.special_tokens = {token.name: token.text for token in parsed.special_tokens}
+        self.special_tokens.update(_canonical_special_token_names(parsed.special_tokens))
+
+    def execute(self, nodes: tuple[_Node, ...]) -> tuple[ChatTemplateSymbolicPath, ...]:
+        states = self._execute_nodes(nodes, (_PathState(),), {})
+        return tuple(state.to_public() for state in states[: self.bounds.max_paths])
+
+    def _execute_nodes(
+        self,
+        nodes: tuple[_Node, ...],
+        states: tuple[_PathState, ...],
+        environment: dict[str, str],
+    ) -> tuple[_PathState, ...]:
+        active = states
+        local_environment = dict(environment)
+        for node in nodes:
+            if not active:
+                return ()
+            if isinstance(node, _LiteralNode):
+                segment = ChatTemplateSymbolicSegment(kind="literal", value=node.text)
+                active = tuple(state.with_segment(segment) for state in active)
+            elif isinstance(node, _ExpressionNode):
+                active = self._execute_expression(node.expression, active, local_environment)
+            elif isinstance(node, _SetNode):
+                active = self._execute_set(node, active, local_environment)
+            elif isinstance(node, _ForNode):
+                active = self._execute_for(node, active, local_environment)
+            elif isinstance(node, _IfNode):
+                active = self._execute_if(node, active, local_environment)
+            active = self._enforce_path_bound(active)
+        return active
+
+    def _execute_expression(
+        self,
+        expression: str,
+        states: tuple[_PathState, ...],
+        environment: dict[str, str],
+    ) -> tuple[_PathState, ...]:
+        return tuple(
+            state.with_segment(self._expression_segment(expression, environment, state.bindings))
+            for state in states
+        )
+
+    def _execute_set(
+        self,
+        node: _SetNode,
+        states: tuple[_PathState, ...],
+        environment: dict[str, str],
+    ) -> tuple[_PathState, ...]:
+        return tuple(
+            state.bind(node.name, self._expression_segment(node.expression, environment, state.bindings))
+            for state in states
+        )
+
+    def _execute_for(
+        self,
+        node: _ForNode,
+        states: tuple[_PathState, ...],
+        environment: dict[str, str],
+    ) -> tuple[_PathState, ...]:
+        if node.iterable not in {"messages", "tools"}:
+            self._abstain("loop", node.iterable, "Only loops over messages and tools are symbolically bounded.")
+            return ()
+        all_states: list[_PathState] = []
+        for state in states:
+            for count in range(self.bounds.limit_for(node.iterable) + 1):
+                repeated_states = (state.with_loop_iterations(node.iterable, count),)
+                for iteration in range(count):
+                    child_environment = dict(environment)
+                    child_environment[node.variable] = f"{node.iterable}[{iteration}]"
+                    child_environment["loop"] = f"{node.iterable}.loop[{iteration}]"
+                    child_environment["loop.last"] = "true" if iteration == count - 1 else "false"
+                    repeated_states = self._execute_nodes(node.body, repeated_states, child_environment)
+                    if not repeated_states:
+                        break
+                all_states.extend(repeated_states)
+                if len(all_states) > self.bounds.max_paths:
+                    return self._enforce_path_bound(tuple(all_states))
+        return tuple(all_states)
+
+    def _execute_if(
+        self,
+        node: _IfNode,
+        states: tuple[_PathState, ...],
+        environment: dict[str, str],
+    ) -> tuple[_PathState, ...]:
+        all_states: list[_PathState] = []
+        prior_conditions: list[str] = []
+        for branch in node.branches:
+            condition = branch.condition
+            branch_label = "else" if condition is None else self._condition_label(condition, environment)
+            if condition is None and prior_conditions:
+                branch_label = "else after " + " and ".join(f"not({item})" for item in prior_conditions)
+            branch_states = tuple(state.with_condition(branch_label) for state in states)
+            all_states.extend(self._execute_nodes(branch.body, branch_states, environment))
+            if condition is not None:
+                prior_conditions.append(self._condition_label(condition, environment))
+            if len(all_states) > self.bounds.max_paths:
+                return self._enforce_path_bound(tuple(all_states))
+        return tuple(all_states)
+
+    def _expression_segment(
+        self,
+        expression: str,
+        environment: dict[str, str],
+        bindings: tuple[tuple[str, ChatTemplateSymbolicSegment], ...],
+    ) -> ChatTemplateSymbolicSegment:
+        base, filters = _split_filters(expression)
+        bound_segment = dict(bindings).get(base)
+        if bound_segment is not None:
+            if filters:
+                return ChatTemplateSymbolicSegment(
+                    kind=bound_segment.kind,
+                    value=bound_segment.value,
+                    expression=expression,
+                    filters=bound_segment.filters + filters,
+                )
+            return bound_segment
+        literal = _string_literal(base)
+        if literal is not None:
+            return ChatTemplateSymbolicSegment(kind="literal", value=literal, expression=expression, filters=filters)
+        if base in {"true", "True", "false", "False"}:
+            return ChatTemplateSymbolicSegment(kind="constant", value=base.lower(), expression=expression, filters=filters)
+        if base in self.special_tokens:
+            return ChatTemplateSymbolicSegment(kind="constant", value=self.special_tokens[base], expression=expression, filters=filters)
+        if base in environment:
+            value = environment[base]
+            kind = "constant" if value in {"true", "false"} else "variable"
+            rendered = value if kind == "constant" else "{" + value + "}"
+            return ChatTemplateSymbolicSegment(kind=kind, value=rendered, expression=expression, filters=filters)
+        if base == "add_generation_prompt":
+            return ChatTemplateSymbolicSegment(
+                kind="variable",
+                value="{add_generation_prompt}",
+                expression=expression,
+                filters=filters,
+            )
+        if base == "loop.last":
+            return ChatTemplateSymbolicSegment(kind="variable", value="{loop.last}", expression=expression, filters=filters)
+        bound = self._bound_name(base, environment)
+        if bound is not None:
+            return ChatTemplateSymbolicSegment(kind="variable", value="{" + bound + "}", expression=expression, filters=filters)
+        self._abstain("expression", expression, "Expression is outside the bounded symbolic evaluator fragment.")
+        return ChatTemplateSymbolicSegment(kind="unknown", value="{" + expression + "}", expression=expression, filters=filters)
+
+    def _bound_name(self, expression: str, environment: dict[str, str]) -> str | None:
+        path = _variable_path(expression)
+        if path is None:
+            return None
+        root, fields = path
+        if root in environment:
+            return ".".join((environment[root],) + fields)
+        return ".".join((root,) + fields)
+
+    def _condition_label(self, condition: str, environment: dict[str, str]) -> str:
+        label = condition
+        for variable, replacement in sorted(environment.items(), key=lambda item: len(item[0]), reverse=True):
+            label = re.sub(rf"\b{re.escape(variable)}\b", replacement, label)
+        return label
+
+    def _enforce_path_bound(self, states: tuple[_PathState, ...]) -> tuple[_PathState, ...]:
+        if len(states) <= self.bounds.max_paths:
+            return states
+        self._abstain(
+            "bounds",
+            f"{len(states)} paths",
+            f"Symbolic execution exceeded max_paths={self.bounds.max_paths}.",
+        )
+        return states[: self.bounds.max_paths]
+
+    def _abstain(self, kind: str, expression: str, reason: str) -> None:
+        self.abstentions.append(ChatTemplateSymbolicAbstention(kind=kind, expression=expression, reason=reason))
+
+
+def _canonical_special_token_names(tokens: tuple[ChatTemplateSpecialToken, ...]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for token in tokens:
+        if token.name.startswith("added_tokens_decoder.") or token.name.startswith("additional_special_tokens."):
+            continue
+        result[token.name] = token.text
+    return result
+
+
+def _split_filters(expression: str) -> tuple[str, tuple[str, ...]]:
+    parts = [part.strip() for part in expression.split("|")]
+    base = parts[0]
+    filters = tuple(part.split("(", 1)[0].strip() for part in parts[1:] if part.strip())
+    return base, filters
+
+
+def _string_literal(expression: str) -> str | None:
+    match = re.fullmatch(r"""(['"])(.*)\1""", expression, re.DOTALL)
+    if not match:
+        return None
+    return bytes(match.group(2), "utf-8").decode("unicode_escape")
+
+
+def _variable_path(expression: str) -> tuple[str, tuple[str, ...]] | None:
+    root_match = re.match(r"^([A-Za-z_][A-Za-z0-9_]*)", expression)
+    if root_match is None:
+        return None
+    root = root_match.group(1)
+    position = root_match.end()
+    fields: list[str] = []
+    while position < len(expression):
+        dot = re.match(r"\.([A-Za-z_][A-Za-z0-9_]*)", expression[position:])
+        if dot is not None:
+            fields.append(dot.group(1))
+            position += dot.end()
+            continue
+        bracket = re.match(r"""\[['"]([^'"]+)['"]\]""", expression[position:])
+        if bracket is not None:
+            fields.append(bracket.group(1))
+            position += bracket.end()
+            continue
+        return None
+    if not fields and root not in {"loop"}:
+        return None
+    return root, tuple(fields)

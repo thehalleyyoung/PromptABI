@@ -8,9 +8,11 @@ from promptabi import (
     ArtifactLoader,
     ChatTemplateArtifact,
     ChatTemplateParseError,
+    ChatTemplateSymbolicBounds,
     load_seed_corpus,
     parse_hf_chat_template_config,
     parse_hf_tokenizer_config_chat_template,
+    symbolically_execute_chat_template,
 )
 
 
@@ -88,6 +90,9 @@ def test_chat_template_loader_attaches_parsed_metadata() -> None:
     assert metadata["message_fields"] == ("content", "role")
     assert metadata["role_assumptions"] == ("assistant",)
     assert metadata["uses_generation_prompt"] is True
+    assert metadata["symbolic_supported_fragment"] is True
+    assert metadata["symbolic_path_count"] > 0
+    assert metadata["symbolic_abstentions"] == ()
     assert metadata["supported_fragment"] is True
     assert any(name == "chat_template" for name, _span in loaded.source_spans)
 
@@ -95,3 +100,102 @@ def test_chat_template_loader_attaches_parsed_metadata() -> None:
 def test_parser_rejects_tokenizer_config_without_chat_template() -> None:
     with pytest.raises(ChatTemplateParseError, match="chat_template"):
         parse_hf_chat_template_config({"eos_token": "</s>"})
+
+
+def test_symbolic_executor_reconstructs_hf_whitespace_and_special_tokens() -> None:
+    parsed = parse_hf_chat_template_config(
+        {
+            "chat_template": (
+                "{{ bos_token }}\n"
+                "{% for message in messages %}\n"
+                "  <|{{ message['role'] }}|>\n"
+                "  {{ message['content'] }}\n"
+                "{% endfor %}"
+                "{% if add_generation_prompt %}<|assistant|>\n{% endif %}"
+            ),
+            "bos_token": "<s>",
+            "additional_special_tokens": ["<|user|>", "<|assistant|>"],
+        }
+    )
+
+    execution = symbolically_execute_chat_template(
+        parsed,
+        bounds=ChatTemplateSymbolicBounds(max_messages=1, max_tools=0, max_loop_iterations=1),
+    )
+
+    assert execution.supported
+    assert len(execution.paths) == 4
+    one_message_with_generation = [
+        path
+        for path in execution.paths
+        if ("messages", 1) in path.loop_iterations and "add_generation_prompt" in path.conditions
+    ][0]
+    assert one_message_with_generation.rendered_pattern == (
+        "<s>\n  <|{messages[0].role}|>\n"
+        "  {messages[0].content}\n"
+        "<|assistant|>\n"
+    )
+    assert one_message_with_generation.segments[0].kind == "constant"
+    assert one_message_with_generation.segments[0].value == "<s>"
+
+
+def test_symbolic_executor_bounds_seed_corpus_conditionals_and_loops() -> None:
+    parsed = parse_hf_tokenizer_config_chat_template("fixtures/seed_corpus/mistral/tokenizer_config.json")
+
+    execution = symbolically_execute_chat_template(
+        parsed,
+        bounds=ChatTemplateSymbolicBounds(max_messages=2, max_tools=0, max_loop_iterations=2, max_paths=64),
+    )
+
+    assert execution.supported
+    assert len(execution.paths) == 21
+    assert any("messages[0]['role'] == 'user'" in path.conditions for path in execution.paths)
+    assert any("messages[1]['role'] == 'assistant'" in path.conditions for path in execution.paths)
+    assert any("{messages[0].content}" in path.rendered_pattern for path in execution.paths)
+    assert any(path.loop_iterations == (("messages", 2),) for path in execution.paths)
+
+
+def test_symbolic_executor_records_filters_sets_tools_and_path_budget() -> None:
+    parsed = parse_hf_chat_template_config(
+        {
+            "chat_template": (
+                "{% set prefix = '<tool>' %}"
+                "{% for tool in tools %}"
+                "{{ prefix }}{{ tool['function']['name']|tojson }}"
+                "{% endfor %}"
+            ),
+            "additional_special_tokens": ["<tool>"],
+        }
+    )
+
+    execution = symbolically_execute_chat_template(
+        parsed,
+        bounds=ChatTemplateSymbolicBounds(max_messages=0, max_tools=2, max_loop_iterations=2, max_paths=2),
+    )
+
+    assert not execution.supported
+    assert any(item.kind == "bounds" for item in execution.abstentions)
+    assert len(execution.paths) == 2
+    assert any(
+        segment.value == "{tools[0].function.name}" and segment.filters == ("tojson",)
+        for path in execution.paths
+        for segment in path.segments
+    )
+
+
+def test_symbolic_executor_abstains_on_unsupported_constructs() -> None:
+    parsed = parse_hf_chat_template_config(
+        {
+            "chat_template": (
+                "{% for message in messages recursive %}"
+                "{{ raise_exception('bad') }}"
+                "{% endfor %}"
+            )
+        }
+    )
+
+    execution = symbolically_execute_chat_template(parsed)
+
+    assert not execution.supported
+    assert execution.paths == ()
+    assert {item.kind for item in execution.abstentions} >= {"loop", "global"}

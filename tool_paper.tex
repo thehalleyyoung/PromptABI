@@ -37,7 +37,8 @@ finite-state transducers with composition and projection, a finite-contract
 solver, a minimal verification session, focused tests, examples, a fixture
 corpus layout, a curated ten-family seed corpus, a deterministic corpus manifest
 pipeline, a Hugging Face \texttt{tokenizer\_config.json} chat-template parser,
-a CPU-only benchmark, documentation, and contribution guidance.
+a bounded symbolic executor for the supported Jinja chat-template fragment, a
+CPU-only benchmark, documentation, and contribution guidance.
 The remaining checkers fit into that surface rather than requiring a rewrite. We
 describe the transducer-oriented formalism, the artifact model, the diagnostic
 contract, the first benchmark line, and the planned evaluation against real tokenizer, template,
@@ -321,7 +322,7 @@ finding can cite the exact artifact reference, actual hash, revision strength,
 loader witness, and source span that made the claim reproducible.
 
 \clearpage
-\section{Chat-Template Parsing}
+\section{Chat-Template Parsing and Symbolic Execution}
 
 PromptABI now parses Hugging Face \texttt{tokenizer\_config.json} chat templates
 into a typed summary instead of treating them as opaque strings. The parser
@@ -343,6 +344,18 @@ and targeted fixtures for tools, filters, whitespace controls, generation prompt
 special-token declarations, and unsupported constructs. This creates the concrete
 input contract needed for bounded symbolic execution and role-boundary
 non-forgeability checks.
+
+The next layer is now executable. PromptABI includes a position-preserving lexer
+and bounded symbolic executor for the supported Hugging Face Jinja fragment. It
+models loops over \texttt{messages} and \texttt{tools}, \texttt{if}/\texttt{elif}/\texttt{else}
+branches, simple \texttt{set} bindings, constants, special-token variables,
+message and tool fields, filters as symbolic wrappers, explicit whitespace
+controls, and Hugging Face's \texttt{trim\_blocks}/\texttt{lstrip\_blocks}
+structural whitespace behavior. The result is not a single rendered prompt but a
+finite set of symbolic paths with rendered patterns, path conditions, loop
+iteration counts, and explicit abstentions when unsupported constructs or path
+budgets are reached. Loader metadata records whether symbolic execution was
+precise and how many bounded paths were produced for a real artifact.
 
 \clearpage
 \section{Tokenizer Abstraction Layer}
@@ -686,7 +699,7 @@ The testing strategy has three tiers:
 \begin{itemize}
 \item unit and structured snapshot tests for public API and deterministic text, JSON, and SARIF rendering;
 \item tokenizer abstraction tests against real Hugging Face \texttt{tokenizers}, \texttt{tiktoken}, SentencePiece, and byte-level adapters;
-\item chat-template parser tests across every seed-corpus \texttt{tokenizer\_config.json}, including generation-prompt extraction, role assumptions, field references, special tokens, filters, tools, whitespace controls, and unsupported constructs;
+\item chat-template parser and symbolic-executor tests across every seed-corpus \texttt{tokenizer\_config.json}, including generation-prompt extraction, role assumptions, field references, special tokens, bounded message/tool loops, filters, whitespace controls, path budgets, and unsupported constructs;
 \item loader tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, fixture archives, and source-mapped JSON fields;
 \item fixture and corpus tests for minimized tokenizer/chat-template bundles, expected behaviors, sentinel consistency, artifact materialization, and deterministic manifest generation;
 \item future corpus tests for popular model and framework configurations pinned by immutable upstream revisions.
@@ -754,7 +767,7 @@ Future benchmark lines should measure:
 \hline
 Tokenizer abstraction & Encode/decode metadata extraction, special-token handling, and normalization cost. \\
 \hline
-Template execution & Supported Jinja fragment rendering, symbolic execution, and abstention detection. \\
+Template execution & Supported Jinja fragment lexing, bounded symbolic path generation, Hugging Face whitespace handling, filter preservation, and abstention detection. \\
 \hline
 Automata and transducers & Completion, union, intersection, difference, emptiness, transducer composition, projection, over-approximation, and shortest witness extraction. \\
 \hline
@@ -945,7 +958,7 @@ Check-mode taxonomy tests & Diagnostic objects, JSON output, text output, and SA
 \hline
 Tokenizer differential tests & Byte-level normalization and added-token behavior, Hugging Face ByteLevel BPE, \texttt{tiktoken}, and SentencePiece adapters match real backend behavior. \\
 \hline
-Chat-template parser tests & Hugging Face \texttt{tokenizer\_config.json} templates across ten seed families expose template source, special tokens, generation prompts, roles, fields, tools, filters, whitespace controls, and unsupported constructs. \\
+Chat-template symbolic tests & Hugging Face \texttt{tokenizer\_config.json} templates across ten seed families expose template source, special tokens, generation prompts, roles, fields, tools, filters, whitespace controls, bounded symbolic paths, and unsupported constructs. \\
 \hline
 CLI smoke & \texttt{promptabi verify --config examples/minimal/promptabi.json} returns pass, and \texttt{--fail-on}, \texttt{--artifact}, \texttt{--cache-dir}, \texttt{--quiet}, and \texttt{--verbose} are covered. \\
 \hline

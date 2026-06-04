@@ -13,7 +13,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .artifacts import Artifact, ArtifactKind
-from .chat_templates import ChatTemplateParseError, parse_hf_tokenizer_config_chat_template
+from .chat_templates import ChatTemplateParseError, parse_hf_tokenizer_config_chat_template, symbolically_execute_chat_template
 from .diagnostics import SourceSpan
 from .source import build_json_source_map
 
@@ -320,6 +320,7 @@ class ArtifactLoader:
                 suggestion="Point Hugging Face chat-template artifacts at tokenizer_config.json with a string chat_template.",
                 steps=(("parse Hugging Face chat template", str(path), str(exc)),),
             ) from exc
+        symbolic = symbolically_execute_chat_template(parsed)
         metadata = (
             ("filters", parsed.filters),
             ("generation_prompt_excerpts", parsed.generation_prompt_excerpts),
@@ -330,6 +331,9 @@ class ArtifactLoader:
             ("template_format", parsed.template_format),
             ("template_length", len(parsed.template_source)),
             ("tool_fields", tuple(field.field for field in parsed.tool_fields)),
+            ("symbolic_abstentions", tuple(item.expression for item in symbolic.abstentions)),
+            ("symbolic_path_count", len(symbolic.paths)),
+            ("symbolic_supported_fragment", symbolic.supported),
             ("unsupported_constructs", tuple(item.expression for item in parsed.unsupported_constructs)),
             ("uses_generation_prompt", parsed.uses_generation_prompt),
             ("uses_tools", parsed.uses_tools),

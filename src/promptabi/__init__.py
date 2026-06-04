@@ -34,9 +34,15 @@ from .chat_templates import (
     ChatTemplateParseError,
     ChatTemplateParseResult,
     ChatTemplateSpecialToken,
+    ChatTemplateSymbolicAbstention,
+    ChatTemplateSymbolicBounds,
+    ChatTemplateSymbolicExecution,
+    ChatTemplateSymbolicPath,
+    ChatTemplateSymbolicSegment,
     ChatTemplateUnsupportedConstruct,
     parse_hf_chat_template_config,
     parse_hf_tokenizer_config_chat_template,
+    symbolically_execute_chat_template,
 )
 from .config import ConfigError, VerificationConfig, discover_config, load_config
 from .diagnostics import (
@@ -136,6 +142,11 @@ __all__ = [
     "ChatTemplateParseError",
     "ChatTemplateParseResult",
     "ChatTemplateSpecialToken",
+    "ChatTemplateSymbolicAbstention",
+    "ChatTemplateSymbolicBounds",
+    "ChatTemplateSymbolicExecution",
+    "ChatTemplateSymbolicPath",
+    "ChatTemplateSymbolicSegment",
     "ChatTemplateUnsupportedConstruct",
     "CheckCallable",
     "CheckContext",
@@ -222,5 +233,6 @@ __all__ = [
     "parse_hf_chat_template_config",
     "parse_hf_tokenizer_config_chat_template",
     "run_tokenizer_differential",
+    "symbolically_execute_chat_template",
     "write_seed_corpus_manifest",
 ]

@@ -49,12 +49,13 @@ core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,
 snapshot-locked output stability, discoverable `promptabi verify` workflow,
 source-mapped diagnostics that point to exact config and artifact lines, offline
 version-pinned artifact loading, a Hugging Face `tokenizer_config.json`
-chat-template parser, a real tokenizer abstraction spanning byte-level,
-Hugging Face `tokenizers`, `tiktoken`, and SentencePiece backends, a
-differential harness checked against actual libraries, an embedding API for
-custom checks and typed results, a curated CPU-only seed corpus with a
-reproducible manifest pipeline, plus docs, examples, fixtures, benchmarks, and a
-contribution path for growing checks without changing the public surface.
+chat-template parser and bounded symbolic executor for supported Jinja paths, a
+real tokenizer abstraction spanning byte-level, Hugging Face `tokenizers`,
+`tiktoken`, and SentencePiece backends, a differential harness checked against
+actual libraries, an embedding API for custom checks and typed results, a curated
+CPU-only seed corpus with a reproducible manifest pipeline, plus docs, examples,
+fixtures, benchmarks, and a contribution path for growing checks without
+changing the public surface.
 
 ## Why this is clearly distinct from TensorGuard
 
