@@ -40,7 +40,10 @@ pipeline, a Hugging Face \texttt{tokenizer\_config.json} chat-template parser,
 a stop-policy parser that normalizes OpenAI-compatible request snapshots,
 Hugging Face generation configs, llama.cpp/Ollama options, vLLM sampling params,
 LiteLLM passthrough params, and common framework wrapper kwargs into one typed
-artifact model with source spans,
+artifact model with source spans, a stop-tokenizer analyzer that records
+byte/string/token alignments, multi-token stops, invalid stop-token IDs,
+normalization-sensitive stops, prefix/suffix collisions, and special or added
+token interactions against real tokenizer adapters,
 a bounded symbolic executor for the supported Jinja chat-template fragment, a
 bounded role-boundary non-forgeability checker that detects unsanitized content
 and role fields capable of rendering control delimiters, special tokens,
@@ -462,8 +465,9 @@ SentencePiece & Local \texttt{.model} loading, piece/id extraction, decode compa
 
 This abstraction is deliberately thinner than a tokenizer reimplementation. Its
 job is to expose the observable behavior of real libraries in a stable shape that
-formal checks can consume. A stop-reachability checker can ask for byte spans and
-token IDs without knowing whether the source was ByteLevel BPE, SentencePiece, or
+formal checks can consume. The implemented stop-tokenizer checker asks for byte
+spans, token IDs, token surfaces, decoded text, and special/added-token flags
+without knowing whether the source was ByteLevel BPE, SentencePiece, or
 \texttt{tiktoken}. A role-boundary checker can see whether a delimiter is an
 ordinary byte sequence, an added token, or a special token. A drift checker can
 compare normalized text, token IDs, token surfaces, and decode results across
@@ -716,8 +720,8 @@ same visible text. It can overreach because the string appears inside a valid
 JSON string, tool argument, markdown fence, or XML-like field before the
 structured object is complete.
 
-PromptABI now implements the first concrete layer for this family: stop-policy
-parsing. A dedicated parser accepts the shapes developers actually check into
+PromptABI now implements the first two concrete layers for this family:
+stop-policy parsing and tokenizer-backed stop alignment. A dedicated parser accepts the shapes developers actually check into
 repositories or capture from serving stacks: OpenAI-compatible \texttt{stop}
 request fields, Hugging Face \texttt{generation\_config} objects with
 \texttt{stop\_strings} and EOS token IDs, llama.cpp/Ollama
@@ -730,13 +734,26 @@ artifact containing sorted unique stop sequences, stop token IDs, EOS behavior,
 source-family metadata, ignored empty stops, and JSON source spans. Malformed
 fields become deterministic loader errors rather than silent fallbacks.
 
-PromptABI should analyze stop policies jointly with tokenizers and grammars. A
-useful witness for overreachability is not just "the stop appears." It is a
-valid output prefix, the parser state at truncation, the exact stop firing point,
-and the malformed or prematurely accepted structure received by the application
-parser. A useful witness for unreachability includes the stop sequence, its byte
-form, the relevant tokenizer segmentation, and the grammar state that prevents
-production.
+The new tokenizer-backed layer analyzes every stop string under the selected
+tokenizer adapter and emits concrete byte/string/token alignment witnesses. It
+records UTF-8 bytes, token IDs, token surfaces, byte spans, normalized text,
+decoded text, round-trip metadata, multi-token segmentation, and special or
+added-token participation. It reports proper prefix and suffix collisions at the
+string, byte, and token-ID levels, normalization collisions where distinct
+configured stops collapse to the same tokenizer surface, and conservative
+unreachability findings for configured stop-token IDs that the chosen tokenizer
+cannot decode. The checker is intentionally careful not to claim that a string
+stop is unreachable merely because it does not round-trip through an encoder:
+many serving stacks match stop strings against decoded text streams. Those cases
+are reported as tokenizer-sensitive ambiguity instead, with heuristic modes.
+
+PromptABI should next analyze stop policies jointly with grammars. A useful
+witness for overreachability is not just "the stop appears." It is a valid
+output prefix, the parser state at truncation, the exact stop firing point, and
+the malformed or prematurely accepted structure received by the application
+parser. A useful witness for grammar-level unreachability includes the stop
+sequence, its byte form, the tokenizer segmentation, and the grammar state that
+prevents production.
 
 This check family is attractive because it is both practical and formal. It
 catches flaky production bugs, and it can be stated as a reachability property
@@ -809,6 +826,7 @@ The testing strategy has three tiers:
 \item tokenizer abstraction tests against real Hugging Face \texttt{tokenizers}, \texttt{tiktoken}, SentencePiece, and byte-level adapters;
 \item chat-template parser, symbolic-executor, concrete-renderer, role-region, and role-boundary non-forgeability tests across real \texttt{tokenizer\_config.json} fixtures and known delimiter-collision regressions, including ChatML, Llama header tokens, Mistral instruction tags, XML-ish tool tags, markdown fences, fine-tune hash headers, generation-prompt extraction, dynamic role headers, content-control delimiter collisions, role assumptions, field references, special tokens, bounded message/tool loops, filters, whitespace controls, path budgets, empty tool lists, tool-role messages, and unsupported constructs, with concrete outputs differentially checked against Hugging Face's renderer;
 \item loader and parser tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, stop-policy configs spanning OpenAI-compatible, Hugging Face, llama.cpp/Ollama, vLLM, LiteLLM, wrapper kwargs, fixture archives, and source-mapped JSON fields;
+\item stop-tokenizer analysis tests that exercise byte/string/token alignments, multi-token stops, invalid stop-token IDs, normalization collisions, prefix/suffix collisions, added/special-token interactions, CLI diagnostics, and a real Hugging Face \texttt{tokenizers} BPE fixture;
 \item fixture and corpus tests for minimized tokenizer/chat-template bundles, expected behaviors, sentinel consistency, artifact materialization, and deterministic manifest generation;
 \item future corpus tests for popular model and framework configurations pinned by immutable upstream revisions.
 \end{itemize}
@@ -881,7 +899,7 @@ Automata and transducers & Completion, union, intersection, difference, emptines
 \hline
 Finite-contract solving & Z3 and exhaustive finite-domain solving over booleans, enums, integer ranges, bounded strings, length, membership, and containment constraints. \\
 \hline
-Stop analysis & Reachability and overreachability across JSON, markdown, and tool-call regions. \\
+Stop analysis & Stop-policy parsing, tokenizer alignment, invalid token-ID detection, prefix/suffix collisions, special-token interactions, and future overreachability across JSON, markdown, and tool-call regions. \\
 \hline
 Budget verification & Segment accounting and truncation simulation for framework policies. \\
 \hline

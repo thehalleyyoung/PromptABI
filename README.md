@@ -51,8 +51,10 @@ rendered excerpts, byte-level token evidence, and exact forged-boundary
 locations; `examples/role-boundary/` demonstrates the unsafe and sanitized cases
 against the real CLI. Stop policies are now normalized from OpenAI-compatible
 requests, Hugging Face generation configs, llama.cpp/Ollama options, vLLM sampling
-params, LiteLLM params, and common wrapper kwargs, setting up the next
-stop/grammar/tokenizer reachability checks. The repository already has the typed Python package,
+params, LiteLLM params, and common wrapper kwargs, then checked against real
+tokenizer adapters for byte/string/token alignments, multi-token stops,
+unreachable token IDs, normalization ambiguity, prefix/suffix collisions, and
+special/added-token interactions. The repository already has the typed Python package,
 core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,
 snapshot-locked output stability, discoverable `promptabi verify` workflow,
 source-mapped diagnostics that point to exact config and artifact lines, offline

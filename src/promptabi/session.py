@@ -12,6 +12,14 @@ from .config import VerificationConfig, load_config
 from .diagnostics import CheckMode, Diagnostic, DiagnosticSeverity, SourceSpan, WitnessStep, WitnessTrace, diagnostic_sort_key
 from .loaders import ArtifactLoadError, ArtifactLoadWarning, ArtifactLoader, LoadedArtifact
 from .role_boundaries import RoleBoundaryForgeryFinding, analyze_role_boundary_nonforgeability
+from .stop_analysis import (
+    StopCollision,
+    StopPolicyTokenizerAnalysisReport,
+    StopSequenceAnalysis,
+    StopTokenIdAnalysis,
+    analyze_stop_policy_tokenizer,
+)
+from .tokenizers import TokenizerError, load_tokenizer
 
 
 CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
@@ -24,6 +32,12 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "artifact-hash-mismatch": (CheckMode.SOUND, CheckMode.COMPLETE),
     "role-boundary-abstained": (CheckMode.ABSTAINING, CheckMode.BOUNDED),
     "role-boundary-nonforgeability": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "stop-tokenizer-abstained": (CheckMode.ABSTAINING,),
+    "stop-tokenizer-alignment": (CheckMode.HEURISTIC,),
+    "stop-tokenizer-ambiguous": (CheckMode.HEURISTIC,),
+    "stop-tokenizer-collision": (CheckMode.HEURISTIC,),
+    "stop-tokenizer-special-interaction": (CheckMode.HEURISTIC,),
+    "stop-tokenizer-unreachable": (CheckMode.SOUND,),
     "check-unknown": (CheckMode.SOUND, CheckMode.COMPLETE),
     "check-failed": (CheckMode.HEURISTIC,),
 }
@@ -80,6 +94,7 @@ class VerificationSession:
         self.checks: dict[str, CheckCallable] = {
             "repository-skeleton": self._repository_skeleton_check,
             "role-boundary-nonforgeability": self._role_boundary_nonforgeability_check,
+            "stop-tokenizer-analysis": self._stop_tokenizer_analysis_check,
         }
         if checks:
             self.checks.update(checks)
@@ -200,6 +215,28 @@ class VerificationSession:
                 _role_boundary_forgery_diagnostic(artifact.to_ref(), parsed.source_span, finding)
                 for finding in report.findings
             )
+        return tuple(diagnostics)
+
+    def _stop_tokenizer_analysis_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        diagnostics: list[Diagnostic] = []
+        tokenizers = [loaded for loaded in context.loaded_artifacts if loaded.artifact.kind is ArtifactKind.TOKENIZER]
+        stop_policies = [
+            loaded for loaded in context.loaded_artifacts if loaded.artifact.kind is ArtifactKind.STOP_POLICY
+        ]
+        for stop_loaded in stop_policies:
+            stop_artifact = stop_loaded.artifact
+            for tokenizer_loaded in tokenizers:
+                tokenizer_artifact = tokenizer_loaded.artifact
+                try:
+                    tokenizer = load_tokenizer(tokenizer_artifact)
+                    report = analyze_stop_policy_tokenizer(stop_artifact, tokenizer)
+                except TokenizerError as exc:
+                    diagnostics.append(_stop_tokenizer_abstained_diagnostic(stop_loaded, tokenizer_loaded, exc))
+                    continue
+                except Exception as exc:
+                    diagnostics.append(_stop_tokenizer_abstained_diagnostic(stop_loaded, tokenizer_loaded, exc))
+                    continue
+                diagnostics.extend(_stop_tokenizer_report_diagnostics(stop_loaded, tokenizer_loaded, report))
         return tuple(diagnostics)
 
     def _missing_local_paths(self) -> set[str]:
@@ -357,6 +394,205 @@ def _role_boundary_forgery_diagnostic(artifact, span, finding: RoleBoundaryForge
                 WitnessStep(action="locate forged boundary", output=finding.forged_boundary),
             ),
             artifacts=(artifact,),
+        ),
+    )
+
+
+def _stop_tokenizer_abstained_diagnostic(
+    stop_loaded: LoadedArtifact,
+    tokenizer_loaded: LoadedArtifact,
+    exc: Exception,
+) -> Diagnostic:
+    return Diagnostic(
+        rule_id="stop-tokenizer-abstained",
+        severity=DiagnosticSeverity.WARNING,
+        message=(
+            f"stop policy '{stop_loaded.artifact.name}' could not be analyzed with tokenizer "
+            f"'{tokenizer_loaded.artifact.name}'"
+        ),
+        artifact=stop_loaded.artifact.to_ref(),
+        span=_artifact_span(stop_loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG["stop-tokenizer-abstained"],
+        suggestions=("Use a local tokenizer artifact supported by PromptABI's tokenizer adapters.",),
+        witness=WitnessTrace(
+            summary="PromptABI could not construct the concrete tokenizer analysis.",
+            steps=(
+                WitnessStep(action="load tokenizer", input=tokenizer_loaded.artifact.name, output=str(exc)),
+            ),
+            artifacts=(stop_loaded.artifact.to_ref(), tokenizer_loaded.artifact.to_ref()),
+        ),
+    )
+
+
+def _stop_tokenizer_report_diagnostics(
+    stop_loaded: LoadedArtifact,
+    tokenizer_loaded: LoadedArtifact,
+    report: StopPolicyTokenizerAnalysisReport,
+) -> tuple[Diagnostic, ...]:
+    diagnostics: list[Diagnostic] = []
+    diagnostics.extend(
+        _stop_unreachable_diagnostic(stop_loaded, tokenizer_loaded, report, token_id)
+        for token_id in report.unreachable_token_ids
+    )
+    diagnostics.extend(
+        _stop_collision_diagnostic(stop_loaded, tokenizer_loaded, report, collision)
+        for collision in (*report.collisions, *report.normalization_collisions)
+    )
+    diagnostics.extend(
+        _stop_ambiguous_diagnostic(stop_loaded, tokenizer_loaded, report, sequence)
+        for sequence in report.lossy_or_normalizing_sequences
+    )
+    diagnostics.extend(
+        _stop_special_interaction_diagnostic(stop_loaded, tokenizer_loaded, report, sequence)
+        for sequence in report.special_interactions
+    )
+    if report.sequences:
+        diagnostics.append(_stop_alignment_diagnostic(stop_loaded, tokenizer_loaded, report))
+    return tuple(diagnostics)
+
+
+def _stop_unreachable_diagnostic(
+    stop_loaded: LoadedArtifact,
+    tokenizer_loaded: LoadedArtifact,
+    report: StopPolicyTokenizerAnalysisReport,
+    token_id: StopTokenIdAnalysis,
+) -> Diagnostic:
+    return Diagnostic(
+        rule_id="stop-tokenizer-unreachable",
+        severity=DiagnosticSeverity.WARNING,
+        message=(
+            f"stop token id {token_id.token_id} from policy '{stop_loaded.artifact.name}' "
+            f"is not decodable by tokenizer '{tokenizer_loaded.artifact.name}'"
+        ),
+        artifact=stop_loaded.artifact.to_ref(),
+        span=_artifact_span(stop_loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG["stop-tokenizer-unreachable"],
+        suggestions=("Remove the token id or verify it belongs to the selected tokenizer revision.",),
+        witness=WitnessTrace(
+            summary="A configured token-id stop cannot be represented by the selected tokenizer adapter.",
+            steps=(
+                WitnessStep(action="select tokenizer", input=tokenizer_loaded.artifact.name, output=report.tokenizer_backend),
+                WitnessStep(action="decode configured stop token id", input=str(token_id.token_id), output=token_id.error),
+            ),
+            artifacts=(stop_loaded.artifact.to_ref(), tokenizer_loaded.artifact.to_ref()),
+        ),
+    )
+
+
+def _stop_collision_diagnostic(
+    stop_loaded: LoadedArtifact,
+    tokenizer_loaded: LoadedArtifact,
+    report: StopPolicyTokenizerAnalysisReport,
+    collision: StopCollision,
+) -> Diagnostic:
+    return Diagnostic(
+        rule_id="stop-tokenizer-collision",
+        severity=DiagnosticSeverity.WARNING,
+        message=(
+            f"stop sequence {collision.shorter!r} is a {collision.level} {collision.relation} "
+            f"collision with {collision.longer!r}"
+        ),
+        artifact=stop_loaded.artifact.to_ref(),
+        span=_artifact_span(stop_loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG["stop-tokenizer-collision"],
+        suggestions=("Prefer non-overlapping stop strings, or make the intended precedence explicit in tests.",),
+        witness=WitnessTrace(
+            summary="Two configured stop strings overlap under string, byte, token, or normalized surfaces.",
+            steps=(
+                WitnessStep(action="select tokenizer", input=tokenizer_loaded.artifact.name, output=report.tokenizer_backend),
+                WitnessStep(action=f"compare {collision.level} surfaces", input=collision.shorter, output=collision.witness),
+                WitnessStep(action="classify collision", input=collision.longer, output=collision.relation),
+            ),
+            artifacts=(stop_loaded.artifact.to_ref(), tokenizer_loaded.artifact.to_ref()),
+        ),
+    )
+
+
+def _stop_ambiguous_diagnostic(
+    stop_loaded: LoadedArtifact,
+    tokenizer_loaded: LoadedArtifact,
+    report: StopPolicyTokenizerAnalysisReport,
+    sequence: StopSequenceAnalysis,
+) -> Diagnostic:
+    reason = (
+        f"normalizes to {sequence.normalized_sequence!r}"
+        if sequence.normalization_changed
+        else f"decodes as {sequence.decoded_text!r}"
+    )
+    return Diagnostic(
+        rule_id="stop-tokenizer-ambiguous",
+        severity=DiagnosticSeverity.WARNING,
+        message=f"stop sequence {sequence.stop_sequence!r} is tokenizer-sensitive: {reason}",
+        artifact=stop_loaded.artifact.to_ref(),
+        span=_artifact_span(stop_loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG["stop-tokenizer-ambiguous"],
+        suggestions=("Verify whether the provider matches stops before or after tokenizer normalization/decoding.",),
+        witness=WitnessTrace(
+            summary="The stop string's configured surface differs from a tokenizer-derived surface.",
+            steps=(
+                WitnessStep(action="select tokenizer", input=tokenizer_loaded.artifact.name, output=report.tokenizer_backend),
+                WitnessStep(action="encode stop string", input=sequence.stop_sequence, output=sequence.token_summary()),
+                WitnessStep(action="decode stop token ids", input=str(sequence.token_ids), output=sequence.decoded_text),
+            ),
+            artifacts=(stop_loaded.artifact.to_ref(), tokenizer_loaded.artifact.to_ref()),
+        ),
+    )
+
+
+def _stop_special_interaction_diagnostic(
+    stop_loaded: LoadedArtifact,
+    tokenizer_loaded: LoadedArtifact,
+    report: StopPolicyTokenizerAnalysisReport,
+    sequence: StopSequenceAnalysis,
+) -> Diagnostic:
+    details = []
+    if sequence.special_token_ids:
+        details.append(f"special ids={sequence.special_token_ids}")
+    if sequence.added_token_ids:
+        details.append(f"added ids={sequence.added_token_ids}")
+    return Diagnostic(
+        rule_id="stop-tokenizer-special-interaction",
+        severity=DiagnosticSeverity.WARNING,
+        message=f"stop sequence {sequence.stop_sequence!r} intersects tokenizer special/added tokens",
+        artifact=stop_loaded.artifact.to_ref(),
+        span=_artifact_span(stop_loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG["stop-tokenizer-special-interaction"],
+        suggestions=("Confirm whether the runtime stop matcher treats added and special tokens as text or token ids.",),
+        witness=WitnessTrace(
+            summary="A configured stop string tokenizes through tokenizer control-token machinery.",
+            steps=(
+                WitnessStep(action="select tokenizer", input=tokenizer_loaded.artifact.name, output=report.tokenizer_backend),
+                WitnessStep(action="encode stop string", input=sequence.stop_sequence, output=sequence.token_summary()),
+                WitnessStep(action="classify token flags", output=", ".join(details)),
+            ),
+            artifacts=(stop_loaded.artifact.to_ref(), tokenizer_loaded.artifact.to_ref()),
+        ),
+    )
+
+
+def _stop_alignment_diagnostic(
+    stop_loaded: LoadedArtifact,
+    tokenizer_loaded: LoadedArtifact,
+    report: StopPolicyTokenizerAnalysisReport,
+) -> Diagnostic:
+    alignment = "; ".join(
+        f"{sequence.stop_sequence!r}: bytes={sequence.utf8_bytes}, ids={sequence.token_ids}"
+        for sequence in report.sequences
+    )
+    return Diagnostic(
+        rule_id="stop-tokenizer-alignment",
+        severity=DiagnosticSeverity.INFO,
+        message=f"stop policy '{stop_loaded.artifact.name}' has tokenizer alignment metadata",
+        artifact=stop_loaded.artifact.to_ref(),
+        span=_artifact_span(stop_loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG["stop-tokenizer-alignment"],
+        witness=WitnessTrace(
+            summary="PromptABI encoded configured stop strings with the selected tokenizer.",
+            steps=(
+                WitnessStep(action="select tokenizer", input=tokenizer_loaded.artifact.name, output=report.tokenizer_backend),
+                WitnessStep(action="encode stop strings", output=alignment),
+            ),
+            artifacts=(stop_loaded.artifact.to_ref(), tokenizer_loaded.artifact.to_ref()),
         ),
     )
 

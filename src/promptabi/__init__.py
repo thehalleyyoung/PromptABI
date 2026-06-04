@@ -119,6 +119,13 @@ from .stop_policies import (
     StopPolicySource,
     parse_stop_policy_config,
 )
+from .stop_analysis import (
+    StopCollision,
+    StopPolicyTokenizerAnalysisReport,
+    StopSequenceAnalysis,
+    StopTokenIdAnalysis,
+    analyze_stop_policy_tokenizer,
+)
 from .tokenizer_diff import (
     TokenizerDifferentialCase,
     TokenizerDifferentialMismatch,
@@ -233,6 +240,10 @@ __all__ = [
     "StopPolicyParseError",
     "StopPolicyParseResult",
     "StopPolicySource",
+    "StopCollision",
+    "StopPolicyTokenizerAnalysisReport",
+    "StopSequenceAnalysis",
+    "StopTokenIdAnalysis",
     "TiktokenAdapter",
     "TokenizerDifferentialCase",
     "TokenizerDifferentialMismatch",
@@ -272,6 +283,7 @@ __all__ = [
     "parse_hf_chat_template_config",
     "parse_hf_tokenizer_config_chat_template",
     "parse_stop_policy_config",
+    "analyze_stop_policy_tokenizer",
     "render_chat_template_supported_fragment",
     "run_tokenizer_differential",
     "run_chat_template_differential",
