@@ -39,8 +39,9 @@ PromptABI now includes the first formal core: deterministic finite automata,
 finite-state transducers, and a Z3-backed finite contract layer over booleans,
 enums, integer ranges, membership, lengths, and bounded strings. It derives real
 cross-artifact SMT obligations for prompt-budget survival, stop/control-token
-exclusion, provider/tool compatibility, and training target role alignment; when
-Z3 is absent, tightly bounded contracts fall back to exhaustive finite
+exclusion, role-region non-forgeability, tool-schema required-parameter
+satisfiability, provider/tool compatibility, and training target role alignment;
+when Z3 is absent, tightly bounded contracts fall back to exhaustive finite
 enumeration, still emitting concrete counterexamples without logits, GPUs,
 inference, or network calls.
 

@@ -28,6 +28,7 @@ from .formal import (
     NamedConstraint,
     Ne,
     Not,
+    Or,
     SolverResult,
     SolverStatus,
     Value,
@@ -91,8 +92,19 @@ def analyze_static_contracts(
     )
 
     findings.extend(_budget_obligation(config, prompt_segments, truncation_configs, prefer_z3=prefer_z3))
+    findings.extend(
+        _role_region_nonforgeability_obligation(
+            prompt_segments,
+            templates,
+            special_maps,
+            stop_policies,
+            tokenizers,
+            prefer_z3=prefer_z3,
+        )
+    )
     findings.extend(_stop_control_token_obligation(stop_policies, special_maps, tokenizers, prefer_z3=prefer_z3))
     findings.extend(_tool_provider_obligation(tools, loaded_artifacts, prefer_z3=prefer_z3))
+    findings.extend(_tool_schema_precondition_obligation(loaded_artifacts, prefer_z3=prefer_z3))
     findings.extend(_training_target_obligation(training_manifests, templates, prefer_z3=prefer_z3))
 
     if not findings:
@@ -223,6 +235,88 @@ def _budget_obligation(
     )
 
 
+def _role_region_nonforgeability_obligation(
+    prompt_segments: tuple[PromptSegmentArtifact, ...],
+    templates: tuple[ChatTemplateArtifact, ...],
+    special_maps: tuple[SpecialTokenMapArtifact, ...],
+    stop_policies: tuple[StopPolicyArtifact, ...],
+    tokenizers: tuple[TokenizerArtifact, ...],
+    *,
+    prefer_z3: bool,
+) -> tuple[StaticContractFinding, ...]:
+    controlled = tuple(
+        segment
+        for artifact in prompt_segments
+        for segment in artifact.segments
+        if (segment.role or "").lower() in {"user", "tool", "function", "retrieval"}
+    )
+    markers = _role_boundary_markers(templates, special_maps, stop_policies, tokenizers)
+    if not controlled or not markers:
+        return ()
+
+    region_candidates = tuple(
+        sorted(
+            {
+                _region_candidate(segment.name, content)
+                for segment in controlled
+                for content in _controlled_content_candidates(segment.content, markers)
+            }
+        )
+    )
+    if not region_candidates:
+        return ()
+    problem = FiniteContractProblem(
+        name="role-region-nonforgeability",
+        variables=(
+            EnumDomain("controlled_region", region_candidates),
+            EnumDomain("boundary_marker", markers),
+        ),
+        constraints=(
+            NamedConstraint("controlled-region-contains-boundary-marker", Contains(Var("controlled_region"), Var("boundary_marker"))),
+        ),
+    )
+    result = problem.solve(prefer_z3=prefer_z3)
+    if result.sat:
+        assignment = result.assignment or {}
+        region = str(assignment.get("controlled_region", ""))
+        marker = str(assignment.get("boundary_marker", "<unknown>"))
+        segment_name, content = _split_region_candidate(region)
+        return (
+            StaticContractFinding(
+                name=problem.name,
+                status=result.status,
+                result=result,
+                problem=problem,
+                severity="error",
+                message=f"controlled prompt region {segment_name!r} can contain boundary marker {marker!r}",
+                suggestion="Escape, JSON-encode, wrap, or reject user/tool content that can render provider or template control delimiters.",
+                evidence=(
+                    ("controlled_region", segment_name),
+                    ("boundary_marker", marker),
+                    ("malicious_content", content),
+                    ("controlled_segments", ", ".join(segment.name for segment in controlled)),
+                ),
+                artifacts=tuple(artifact.name for artifact in (*prompt_segments, *templates, *special_maps, *stop_policies, *tokenizers)),
+            ),
+        )
+    return (
+        StaticContractFinding(
+            name=problem.name,
+            status=result.status,
+            result=result,
+            problem=problem,
+            severity="info",
+            message="controlled prompt regions are disjoint from finite role/control boundary markers",
+            suggestion="Keep sanitizer assumptions and template/control-token markers pinned with the prompt artifact.",
+            evidence=(
+                ("controlled_segments", ", ".join(segment.name for segment in controlled)),
+                ("boundary_markers", ", ".join(markers)),
+            ),
+            artifacts=tuple(artifact.name for artifact in (*prompt_segments, *templates, *special_maps, *stop_policies, *tokenizers)),
+        ),
+    )
+
+
 def _stop_control_token_obligation(
     stop_policies: tuple[StopPolicyArtifact, ...],
     special_maps: tuple[SpecialTokenMapArtifact, ...],
@@ -340,6 +434,84 @@ def _tool_provider_obligation(
     )
 
 
+def _tool_schema_precondition_obligation(
+    loaded_artifacts: tuple[LoadedArtifact, ...],
+    *,
+    prefer_z3: bool,
+) -> tuple[StaticContractFinding, ...]:
+    findings: list[StaticContractFinding] = []
+    for loaded in loaded_artifacts:
+        artifact = loaded.artifact
+        if not isinstance(artifact, ToolDefinitionArtifact):
+            continue
+        metadata = dict(loaded.metadata)
+        tool_count = int(metadata.get("tool_count", 0))
+        for index in range(tool_count):
+            tool_name = str(metadata.get(f"tool_{index}_name", ""))
+            required = _metadata_tuple(metadata.get(f"tool_{index}_required"))
+            if not tool_name or not required:
+                continue
+            properties = _metadata_tuple(metadata.get(f"tool_{index}_properties"))
+            constraints = [NamedConstraint("required-parameter-not-declared", Not(InSet(Var("required_parameter"), properties)))]
+            if properties:
+                constraints.append(
+                    NamedConstraint(
+                        "declared-parameter-domain-nonempty",
+                        Or(*(Eq(Var("declared_parameter"), Value(property_name)) for property_name in properties)),
+                    )
+                )
+                variables = (
+                    EnumDomain("required_parameter", required),
+                    EnumDomain("declared_parameter", properties),
+                )
+            else:
+                variables = (EnumDomain("required_parameter", required),)
+            problem = FiniteContractProblem(
+                name="tool-schema-precondition-satisfiability",
+                variables=variables,
+                constraints=tuple(constraints),
+            )
+            result = problem.solve(prefer_z3=prefer_z3)
+            if result.sat:
+                missing = str((result.assignment or {}).get("required_parameter", "<unknown>"))
+                findings.append(
+                    StaticContractFinding(
+                        name=problem.name,
+                        status=result.status,
+                        result=result,
+                        problem=problem,
+                        severity="error",
+                        message=f"tool {tool_name!r} requires parameter {missing!r} that is absent from its declared properties",
+                        suggestion="Declare every required tool parameter under properties, or remove it from the required list.",
+                        evidence=(
+                            ("tool_name", tool_name),
+                            ("required_parameters", ", ".join(required)),
+                            ("declared_properties", ", ".join(properties) or "<none>"),
+                        ),
+                        artifacts=(artifact.name,),
+                    )
+                )
+            else:
+                findings.append(
+                    StaticContractFinding(
+                        name=problem.name,
+                        status=result.status,
+                        result=result,
+                        problem=problem,
+                        severity="info",
+                        message=f"tool {tool_name!r} declares every required parameter property",
+                        suggestion="Keep required parameter lists and schemas generated from the same typed source.",
+                        evidence=(
+                            ("tool_name", tool_name),
+                            ("required_parameters", ", ".join(required)),
+                            ("declared_properties", ", ".join(properties)),
+                        ),
+                        artifacts=(artifact.name,),
+                    )
+                )
+    return tuple(findings)
+
+
 def _training_target_obligation(
     manifests: tuple[TrainingManifestArtifact, ...],
     templates: tuple[ChatTemplateArtifact, ...],
@@ -364,6 +536,7 @@ def _training_target_obligation(
                 artifacts=tuple(manifest.name for manifest in manifests),
             ),
         )
+
     problem = FiniteContractProblem(
         name="training-target-role-alignment",
         variables=(EnumDomain("target_role", target_roles),),
@@ -394,3 +567,59 @@ def _training_target_obligation(
             artifacts=tuple(artifact.name for artifact in (*manifests, *templates)),
         ),
     )
+
+
+def _role_boundary_markers(
+    templates: tuple[ChatTemplateArtifact, ...],
+    special_maps: tuple[SpecialTokenMapArtifact, ...],
+    stop_policies: tuple[StopPolicyArtifact, ...],
+    tokenizers: tuple[TokenizerArtifact, ...],
+) -> tuple[str, ...]:
+    roles = tuple(sorted({role for template in templates for role in template.roles if role}))
+    role_markers = {
+        marker
+        for role in roles
+        for marker in (
+            f"{role}:",
+            f"<|im_start|>{role}",
+            f"<|start_header_id|>{role}<|end_header_id|>",
+            f"### {role}",
+            f"[/{role.upper()}]",
+        )
+    }
+    control_markers = {
+        token.text
+        for mapping in special_maps
+        for token in mapping.tokens
+    }.union(
+        {token for tokenizer in tokenizers for token in tokenizer.added_tokens},
+        {sequence for policy in stop_policies for sequence in policy.stop_sequences},
+    )
+    return tuple(sorted(marker for marker in role_markers.union(control_markers) if marker))
+
+
+def _controlled_content_candidates(content: str | None, markers: tuple[str, ...]) -> tuple[str, ...]:
+    if content is not None:
+        return (content,)
+    return ()
+
+
+def _region_candidate(segment_name: str, content: str) -> str:
+    return f"{segment_name}\x1f{content}"
+
+
+def _split_region_candidate(value: str) -> tuple[str, str]:
+    if "\x1f" not in value:
+        return value, value
+    name, content = value.split("\x1f", 1)
+    return name, content
+
+
+def _metadata_tuple(value: object) -> tuple[str, ...]:
+    if isinstance(value, tuple):
+        return tuple(str(item) for item in value)
+    if isinstance(value, list):
+        return tuple(str(item) for item in value)
+    if isinstance(value, str):
+        return (value,)
+    return ()

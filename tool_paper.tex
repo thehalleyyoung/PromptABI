@@ -115,6 +115,7 @@ Z3-backed static-contract layer that derives finite SMT obligations from real
 templates, tokenizers, special-token maps, stop policies, tools, provider
 configs, truncation configs, prompt segments, and training/fine-tuning manifests,
 proving or refuting prompt-budget survival, stop/control-token exclusion,
+role-region non-forgeability, tool-schema required-parameter satisfiability,
 tool/provider compatibility, and supervised target-role alignment with concrete
 models or unsat cores,
 a CPU-only benchmark, documentation, and contribution guidance.
@@ -217,8 +218,10 @@ tokens, generation-prompt tokens, model-specific special-token overhead, and
 bounded truncation-policy survival proofs with minimized failing segment sets,
 derives Z3-backed finite static contracts over cross-artifact obligations such as
 required-prompt-token budget survival, stop strings colliding with special or
-added control tokens, tool-provider family mismatches, and training target roles
-outside the serving chat-template role universe,
+added control tokens, controlled prompt regions containing role/control boundary
+markers, tool schemas requiring parameters absent from their declared properties,
+tool-provider family mismatches, and training target roles outside the serving
+chat-template role universe,
 returns stable policy-controlled process exit codes,
 and runs a CPU-only smoke benchmark against an example bundle.
 
@@ -368,13 +371,19 @@ segments and framework truncation configs become an integer SMT query asking
 whether required tokens can exceed the finite input budget. Stop policies,
 special-token maps, and tokenizer added-token metadata become a bounded
 string/enum query asking whether an application stop is also a model control
-token. Tool definitions and provider configs become a provider-family
-compatibility query. Training manifests and chat-template role declarations
-become a target-role alignment query for supervised data pipelines. Satisfiable
-bad-state queries produce concrete assignments; unsatisfiable queries produce
-proof diagnostics with the solver backend and unsat core. Unsupported or
-insufficiently finite inputs abstain explicitly rather than widening into a
-claim the implementation cannot justify.
+token. Prompt segments, chat-template role universes, stop policies, special
+tokens, and tokenizer added-token metadata become a role-region
+non-forgeability query that asks whether controlled user, tool, function, or
+retrieval regions can contain a finite boundary marker. Source-mapped tool
+schema metadata becomes a required-parameter satisfiability query that proves
+every required argument is declared under the tool's properties, or returns a
+missing-parameter model. Tool definitions and provider configs become a
+provider-family compatibility query. Training manifests and chat-template role
+declarations become a target-role alignment query for supervised data
+pipelines. Satisfiable bad-state queries produce concrete assignments;
+unsatisfiable queries produce proof diagnostics with the solver backend and
+unsat core. Unsupported or insufficiently finite inputs abstain explicitly
+rather than widening into a claim the implementation cannot justify.
 
 The core now adds the missing relational layer: finite-state transducers over
 explicit input and output alphabets. A transducer transition carries an input
