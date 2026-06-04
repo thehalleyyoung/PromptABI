@@ -1,0 +1,11 @@
+[
+  {
+    "role": "system",
+    "content": "Answer with JSON that matches the supplied schema."
+  },
+  {
+    "role": "user",
+    "content": "Find whether the refund tool can be called safely."
+  }
+]
+

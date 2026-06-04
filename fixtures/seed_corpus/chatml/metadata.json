@@ -1,0 +1,8 @@
+{
+  "name": "chatml-minimized",
+  "license": "fixture-only",
+  "source": "synthetic",
+  "revision": "local",
+  "expected_fragments": ["roles", "special_tokens", "generation_prompt"]
+}
+

@@ -1,0 +1,10 @@
+site_name: PromptABI
+site_description: Static verification for LLM interface contracts.
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - Architecture: architecture.md
+  - Check families: checks.md
+  - Concepts:
+      - Artifact model: concepts/artifact-model.md
+

@@ -1,0 +1,11 @@
+{
+  "name": "minimal-chat-template",
+  "checks": ["repository-skeleton"],
+  "max_context_tokens": 4096,
+  "artifacts": {
+    "messages": "messages.json",
+    "schema": "answer.schema.json",
+    "tools": "tools.json"
+  }
+}
+

@@ -1,0 +1,18 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "refund_user",
+      "description": "Issue a refund after policy validation.",
+      "parameters": {
+        "type": "object",
+        "required": ["user_id", "reason"],
+        "properties": {
+          "user_id": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  }
+]
+
