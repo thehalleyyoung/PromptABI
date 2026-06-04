@@ -17,7 +17,7 @@ from .explain import DiagnosticExplanation, explain_diagnostic, render_explanati
 from .loaders import ArtifactLoader, LoadedArtifact
 from .first_party_plugins import create_first_party_plugin_registry
 from .plugins import PluginRegistry
-from .render import SarifRenderOptions, render_github_annotations, render_json, render_sarif, render_text
+from .render import SarifRenderOptions, render_github_annotations, render_html, render_json, render_sarif, render_text
 from .session import CheckCallable, VerificationResult, VerificationSession
 
 
@@ -120,7 +120,7 @@ def render_result(
     sarif_options: SarifRenderOptions | None = None,
     github_checkout_uri_base: str | Path | None = None,
 ) -> str:
-    """Render a typed verification result as text, JSON, SARIF, or GitHub annotations."""
+    """Render a typed verification result as text, HTML, JSON, SARIF, or GitHub annotations."""
 
     if output_format == "text":
         return render_text(
@@ -131,6 +131,8 @@ def render_result(
         )
     if output_format == "json":
         return render_json(result)
+    if output_format == "html":
+        return render_html(result)
     if output_format == "sarif":
         return render_sarif(result, options=sarif_options)
     if output_format == "github-annotations":
@@ -138,7 +140,7 @@ def render_result(
         return render_github_annotations(result, checkout_uri_base=checkout_base)
     if plugin_registry is not None and output_format in plugin_registry.renderers:
         return plugin_registry.render(output_format, result)
-    raise ValueError("output_format must be one of: text, json, sarif, github-annotations")
+    raise ValueError("output_format must be one of: text, html, json, sarif, github-annotations")
 
 
 def explain_result(

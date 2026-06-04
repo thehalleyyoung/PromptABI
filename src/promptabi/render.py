@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -91,6 +92,84 @@ def render_text(
 
 def render_json(result: VerificationResult) -> str:
     return json.dumps(result.to_dict(), indent=2, sort_keys=True) + "\n"
+
+
+def render_html(result: VerificationResult) -> str:
+    """Render a self-contained, web-free HTML verification report."""
+
+    severity_counts = _severity_counts(result)
+    diagnostic_rows = "\n".join(_diagnostic_summary_row(diagnostic, index) for index, diagnostic in enumerate(result.diagnostics, start=1))
+    diagnostic_details = "\n".join(_diagnostic_detail(diagnostic, index) for index, diagnostic in enumerate(result.diagnostics, start=1))
+    return "\n".join(
+        (
+            "<!doctype html>",
+            '<html lang="en">',
+            "<head>",
+            '<meta charset="utf-8">',
+            '<meta name="viewport" content="width=device-width, initial-scale=1">',
+            f"<title>PromptABI report: {_escape(result.config.name)}</title>",
+            "<style>",
+            _HTML_STYLE,
+            "</style>",
+            "</head>",
+            "<body>",
+            "<main>",
+            f"<h1>PromptABI static report: {_escape(result.config.name)}</h1>",
+            '<section class="hero">',
+            f'<div class="status {("pass" if result.ok else "fail")}">{"PASS" if result.ok else "FAIL"}</div>',
+            _metric_card("Diagnostics", str(len(result.diagnostics))),
+            _metric_card("Errors", str(severity_counts["error"])),
+            _metric_card("Warnings", str(severity_counts["warning"])),
+            _metric_card("Info", str(severity_counts["info"])),
+            "</section>",
+            "<section>",
+            "<h2>Configured interface contract</h2>",
+            _artifact_table(result),
+            "</section>",
+            "<section>",
+            "<h2>Diagnostics</h2>",
+            '<table class="diagnostics"><thead><tr><th>#</th><th>Severity</th><th>Rule</th><th>Message</th><th>Location</th><th>Fingerprint</th></tr></thead>',
+            f"<tbody>{diagnostic_rows}</tbody></table>",
+            diagnostic_details,
+            "</section>",
+            _specialized_section(
+                "Prompt and parser visualizations",
+                "Rendered prompt, tokenizer, role-boundary, parser, and template observations extracted from witnesses.",
+                _prompt_visualization_cards(result),
+            ),
+            _specialized_section(
+                "Automata and grammar witnesses",
+                "Finite-language, tokenizer x grammar, parser-state, and constrained-decoding evidence.",
+                _witness_cards(result, _is_automata_or_grammar_diagnostic),
+            ),
+            _specialized_section(
+                "SMT and finite-contract witnesses",
+                "Z3-backed and finite-enumeration obligations with solver statuses, models, and unsat cores.",
+                _witness_cards(result, _is_smt_diagnostic),
+            ),
+            _specialized_section(
+                "Token-budget charts",
+                "Context-window reservations, segment survival, truncation boundaries, and dropped prompt fields.",
+                _token_budget_charts(result),
+            ),
+            _specialized_section(
+                "Artifact diffs",
+                "Contract-breaking changes between baseline and current PromptABI configurations.",
+                _artifact_diff_rows(result),
+                table_headers=("Rule", "Severity", "Change", "Properties", "Fingerprint"),
+            ),
+            _specialized_section(
+                "Corpus and fixture summaries",
+                "Seed corpus, structured-schema corpus, provider-fixture, and replay summary diagnostics.",
+                _corpus_summary_rows(result),
+                table_headers=("Rule", "Severity", "Summary", "Properties", "Fingerprint"),
+            ),
+            "</main>",
+            "</body>",
+            "</html>",
+            "",
+        )
+    )
 
 
 def render_sarif(result: VerificationResult, *, options: SarifRenderOptions | None = None) -> str:
@@ -361,3 +440,371 @@ def _escape_github_command_property(value: str) -> str:
         .replace(":", "%3A")
         .replace(",", "%2C")
     )
+
+
+_HTML_STYLE = """
+:root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+body { margin: 0; background: #f6f8fa; color: #1f2328; }
+main { max-width: 1180px; margin: 0 auto; padding: 32px; }
+h1 { margin: 0 0 16px; font-size: 2rem; letter-spacing: -0.03em; }
+h2 { margin-top: 32px; border-bottom: 1px solid #d0d7de; padding-bottom: 8px; }
+h3 { margin: 0 0 8px; }
+.hero { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 20px 0 28px; }
+.status, .metric, .card, details { background: #fff; border: 1px solid #d0d7de; border-radius: 12px; box-shadow: 0 1px 2px #1f232812; }
+.status { display: grid; place-items: center; min-height: 86px; font-size: 1.5rem; font-weight: 800; }
+.pass { color: #116329; border-color: #2da44e; }
+.fail { color: #cf222e; border-color: #cf222e; }
+.metric { padding: 16px; }
+.metric strong { display: block; font-size: 1.8rem; }
+.metric span { color: #57606a; font-size: 0.9rem; }
+table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #d0d7de; border-radius: 12px; overflow: hidden; }
+th, td { border-bottom: 1px solid #d8dee4; padding: 10px; text-align: left; vertical-align: top; }
+th { background: #f3f4f6; font-size: 0.85rem; color: #57606a; }
+tr:last-child td { border-bottom: 0; }
+code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+code { background: #f6f8fa; border-radius: 6px; padding: 2px 5px; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #f6f8fa; padding: 10px; border-radius: 8px; border: 1px solid #d0d7de; }
+details { margin: 12px 0; padding: 12px; }
+summary { cursor: pointer; font-weight: 700; }
+.badge { display: inline-block; border-radius: 999px; padding: 2px 8px; font-size: 0.78rem; font-weight: 700; background: #eaeef2; margin: 0 4px 4px 0; }
+.badge.error { background: #ffebe9; color: #cf222e; }
+.badge.warning { background: #fff8c5; color: #7d4e00; }
+.badge.info { background: #ddf4ff; color: #0969da; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.card { padding: 14px; overflow: hidden; }
+.muted { color: #57606a; }
+.bar-row { display: grid; grid-template-columns: minmax(120px, 1.2fr) minmax(160px, 3fr) 72px; gap: 10px; align-items: center; margin: 8px 0; }
+.bar-track { background: #eaeef2; border-radius: 999px; overflow: hidden; min-height: 14px; }
+.bar { min-height: 14px; border-radius: 999px; background: #0969da; }
+.bar.dropped { background: #cf222e; }
+.bar.kept { background: #2da44e; }
+.bar.unknown { background: repeating-linear-gradient(45deg, #8c959f, #8c959f 4px, #afb8c1 4px, #afb8c1 8px); }
+.empty { background: #fff; border: 1px dashed #afb8c1; border-radius: 12px; padding: 12px; color: #57606a; }
+""".strip()
+
+
+def _escape(value: object) -> str:
+    return html.escape(str(value), quote=True)
+
+
+def _severity_counts(result: VerificationResult) -> dict[str, int]:
+    counts = {"error": 0, "warning": 0, "info": 0}
+    for diagnostic in result.diagnostics:
+        counts[diagnostic.severity.value] = counts.get(diagnostic.severity.value, 0) + 1
+    return counts
+
+
+def _metric_card(label: str, value: str) -> str:
+    return f'<div class="metric"><strong>{_escape(value)}</strong><span>{_escape(label)}</span></div>'
+
+
+def _artifact_table(result: VerificationResult) -> str:
+    rows = []
+    for artifact in sorted(result.config.artifact_bundle.artifacts, key=lambda item: (item.kind.value, item.name)):
+        location = artifact.location.path or artifact.location.uri or ""
+        provenance = artifact.provenance
+        pin = provenance.ref_version or ""
+        rows.append(
+            "<tr>"
+            f"<td>{_escape(artifact.kind.value)}</td>"
+            f"<td><code>{_escape(artifact.name)}</code></td>"
+            f"<td>{_escape(location)}</td>"
+            f"<td>{_escape(pin or 'unversioned')}</td>"
+            "</tr>"
+        )
+    if not rows:
+        rows.append('<tr><td colspan="4" class="muted">No artifacts configured.</td></tr>')
+    return (
+        "<table><thead><tr><th>Kind</th><th>Name</th><th>Location</th><th>Pin</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
+def _diagnostic_summary_row(diagnostic, index: int) -> str:
+    return (
+        f'<tr id="diag-{index}">'
+        f"<td>{index}</td>"
+        f'<td>{_severity_badge(diagnostic.severity.value)}</td>'
+        f"<td><code>{_escape(diagnostic.rule_id)}</code></td>"
+        f"<td>{_escape(diagnostic.message)}</td>"
+        f"<td>{_escape(_diagnostic_location(diagnostic))}</td>"
+        f"<td><code>{_escape(diagnostic.fingerprint)}</code></td>"
+        "</tr>"
+    )
+
+
+def _diagnostic_detail(diagnostic, index: int) -> str:
+    modes = "".join(f'<span class="badge">{_escape(mode.value)}</span>' for mode in diagnostic.check_modes)
+    suggestions = "".join(f"<li>{_escape(suggestion)}</li>" for suggestion in diagnostic.suggestions)
+    witness = _witness_block(diagnostic)
+    properties = _properties_block(dict(diagnostic.properties))
+    artifact = ""
+    if diagnostic.artifact is not None:
+        artifact = f"<p><strong>Artifact:</strong> {_escape(diagnostic.artifact.kind)}:<code>{_escape(diagnostic.artifact.name)}</code></p>"
+    return (
+        "<details>"
+        f"<summary>#{index} {_severity_badge(diagnostic.severity.value)} <code>{_escape(diagnostic.rule_id)}</code> {_escape(diagnostic.message)}</summary>"
+        f"<p><strong>Fingerprint:</strong> <code>{_escape(diagnostic.fingerprint)}</code></p>"
+        f"<p><strong>Location:</strong> {_escape(_diagnostic_location(diagnostic))}</p>"
+        f"{artifact}"
+        f"{'<p><strong>Modes:</strong> ' + modes + '</p>' if modes else ''}"
+        f"{'<h3>Suggestions</h3><ul>' + suggestions + '</ul>' if suggestions else ''}"
+        f"{witness}{properties}"
+        "</details>"
+    )
+
+
+def _severity_badge(severity: str) -> str:
+    return f'<span class="badge {_escape(severity)}">{_escape(severity.upper())}</span>'
+
+
+def _diagnostic_location(diagnostic) -> str:
+    if diagnostic.span is not None:
+        span = diagnostic.span
+        location = f"{span.path}:{span.start_line}:{span.start_column}"
+        if span.end_line is not None:
+            location += f"-{span.end_line}"
+            if span.end_column is not None:
+                location += f":{span.end_column}"
+        return location
+    if diagnostic.artifact is not None and diagnostic.artifact.location_uri is not None:
+        return diagnostic.artifact.location_uri
+    return "run"
+
+
+def _witness_block(diagnostic) -> str:
+    if diagnostic.witness is None:
+        return ""
+    steps = "".join(
+        "<li>"
+        f"<strong>{_escape(step.action)}</strong>"
+        f"{' input=' + _inline_code(step.input) if step.input is not None else ''}"
+        f"{' output=' + _inline_code(step.output) if step.output is not None else ''}"
+        "</li>"
+        for step in diagnostic.witness.steps
+    )
+    artifacts = "".join(
+        f"<li>{_escape(artifact.kind)}:<code>{_escape(artifact.name)}</code>"
+        f"{' ' + _escape(artifact.location_uri) if artifact.location_uri is not None else ''}</li>"
+        for artifact in diagnostic.witness.artifacts
+    )
+    return (
+        "<h3>Witness</h3>"
+        f"<p>{_escape(diagnostic.witness.summary)}</p>"
+        f"<ol>{steps}</ol>"
+        f"{'<h3>Witness artifacts</h3><ul>' + artifacts + '</ul>' if artifacts else ''}"
+    )
+
+
+def _inline_code(value: object) -> str:
+    return f"<code>{_escape(value)}</code>"
+
+
+def _properties_block(properties: dict[str, Any]) -> str:
+    if not properties:
+        return ""
+    return f"<h3>Properties</h3>{_render_value(properties)}"
+
+
+def _render_value(value: Any) -> str:
+    if isinstance(value, dict):
+        rows = "".join(
+            f"<tr><th>{_escape(key)}</th><td>{_render_value(value[key])}</td></tr>"
+            for key in sorted(value, key=str)
+        )
+        return f"<table>{rows}</table>"
+    if isinstance(value, (list, tuple)):
+        if not value:
+            return '<span class="muted">[]</span>'
+        return "<ol>" + "".join(f"<li>{_render_value(item)}</li>" for item in value) + "</ol>"
+    return _inline_code(value)
+
+
+def _specialized_section(
+    title: str,
+    description: str,
+    body: str,
+    *,
+    table_headers: tuple[str, ...] | None = None,
+) -> str:
+    if not body:
+        body = '<div class="empty">No matching diagnostics in this run.</div>'
+    elif table_headers is not None:
+        header = "".join(f"<th>{_escape(item)}</th>" for item in table_headers)
+        body = f"<table><thead><tr>{header}</tr></thead><tbody>{body}</tbody></table>"
+    return (
+        "<section>"
+        f"<h2>{_escape(title)}</h2>"
+        f'<p class="muted">{_escape(description)}</p>'
+        f"{body}"
+        "</section>"
+    )
+
+
+def _prompt_visualization_cards(result: VerificationResult) -> str:
+    cards = []
+    for diagnostic in result.diagnostics:
+        if diagnostic.witness is None:
+            continue
+        prompt_steps = [
+            step
+            for step in diagnostic.witness.steps
+            if any(
+                marker in step.action.lower()
+                for marker in ("render", "prompt", "template", "tokenize", "role", "parser", "boundary")
+            )
+        ]
+        if not prompt_steps:
+            continue
+        cards.append(_step_card(diagnostic, prompt_steps))
+    return f'<div class="cards">{"".join(cards)}</div>' if cards else ""
+
+
+def _witness_cards(result: VerificationResult, predicate) -> str:
+    cards = []
+    for diagnostic in result.diagnostics:
+        if predicate(diagnostic):
+            steps = list(diagnostic.witness.steps) if diagnostic.witness is not None else []
+            cards.append(_step_card(diagnostic, steps))
+    return f'<div class="cards">{"".join(cards)}</div>' if cards else ""
+
+
+def _step_card(diagnostic, steps) -> str:
+    rendered_steps = "".join(
+        "<li>"
+        f"<strong>{_escape(step.action)}</strong>"
+        f"{' input=' + _inline_code(step.input) if step.input is not None else ''}"
+        f"{' output=' + _inline_code(step.output) if step.output is not None else ''}"
+        "</li>"
+        for step in steps
+    )
+    if not rendered_steps:
+        rendered_steps = '<li class="muted">No explicit witness steps were emitted.</li>'
+    return (
+        '<article class="card">'
+        f"<h3><code>{_escape(diagnostic.rule_id)}</code></h3>"
+        f"<p>{_severity_badge(diagnostic.severity.value)} {_escape(diagnostic.message)}</p>"
+        f"<ol>{rendered_steps}</ol>"
+        "</article>"
+    )
+
+
+def _is_smt_diagnostic(diagnostic) -> bool:
+    if any(mode.value == "z3-backed-smt" for mode in diagnostic.check_modes):
+        return True
+    if diagnostic.witness is None:
+        return False
+    return any(
+        any(marker in step.action.lower() for marker in ("smt", "z3", "finite contract", "solver", "model", "unsat core"))
+        for step in diagnostic.witness.steps
+    )
+
+
+def _is_automata_or_grammar_diagnostic(diagnostic) -> bool:
+    if diagnostic.rule_id.startswith(("grammar-", "parser-compatibility")):
+        return True
+    if diagnostic.witness is None:
+        return False
+    return any(
+        any(marker in step.action.lower() for marker in ("dfa", "automata", "automaton", "grammar", "parser state", "constrained"))
+        for step in diagnostic.witness.steps
+    )
+
+
+def _token_budget_charts(result: VerificationResult) -> str:
+    charts = []
+    for diagnostic in result.diagnostics:
+        visualization = dict(diagnostic.properties).get("token_budget_visualization")
+        if isinstance(visualization, dict):
+            charts.append(_token_budget_chart(diagnostic, visualization))
+    return "".join(charts)
+
+
+def _token_budget_chart(diagnostic, visualization: dict[str, Any]) -> str:
+    rows = visualization.get("rows")
+    if not isinstance(rows, list):
+        rows = []
+    totals = [
+        int(row.get("total_tokens", 0))
+        for row in rows
+        if isinstance(row, dict) and isinstance(row.get("total_tokens"), int) and row.get("total_tokens", 0) > 0
+    ]
+    denominator = max([int(visualization.get("input_budget_tokens", 0) or 0), *totals, 1])
+    bar_rows = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        total = row.get("total_tokens")
+        tokens = total if isinstance(total, int) and total >= 0 else 0
+        width = max(2, min(100, round((tokens / denominator) * 100))) if tokens else 2
+        status = str(row.get("status", "unknown"))
+        css_status = status if status in {"kept", "dropped", "unknown"} else "unknown"
+        label = f"{row.get('index', '?')}. {row.get('name', '<unnamed>')}"
+        detail = "unknown" if total is None else f"{tokens} token(s)"
+        bar_rows.append(
+            '<div class="bar-row">'
+            f"<div><strong>{_escape(label)}</strong><br><span class=\"muted\">{_escape(row.get('role', 'unknown-role'))} / {_escape(status)}</span></div>"
+            '<div class="bar-track">'
+            f'<div class="bar {css_status}" style="width: {width}%"></div>'
+            "</div>"
+            f"<div>{_escape(detail)}</div>"
+            "</div>"
+        )
+    if not bar_rows:
+        bar_rows.append('<div class="empty">No prompt segments were available for charting.</div>')
+    metadata = (
+        f"context={visualization.get('max_context_tokens', 'unknown')}, "
+        f"reserved={visualization.get('reserved_total', 'unknown')}, "
+        f"input={visualization.get('input_budget_tokens', 'unknown')}, "
+        f"required={visualization.get('required_prompt_tokens', 'unknown')}, "
+        f"total={visualization.get('total_prompt_tokens', 'unknown')}, "
+        f"must-survive={visualization.get('must_survive_status', 'unknown')}"
+    )
+    return (
+        '<article class="card">'
+        f"<h3>{_escape(visualization.get('budget_source', 'context budget'))}</h3>"
+        f"<p>{_severity_badge(diagnostic.severity.value)} <code>{_escape(diagnostic.rule_id)}</code> {_escape(metadata)}</p>"
+        f"{''.join(bar_rows)}"
+        "</article>"
+    )
+
+
+def _artifact_diff_rows(result: VerificationResult) -> str:
+    rows = []
+    for diagnostic in result.diagnostics:
+        if not diagnostic.rule_id.startswith("diff-"):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td><code>{_escape(diagnostic.rule_id)}</code></td>"
+            f"<td>{_severity_badge(diagnostic.severity.value)}</td>"
+            f"<td>{_escape(diagnostic.message)}</td>"
+            f"<td>{_render_value(dict(diagnostic.properties))}</td>"
+            f"<td><code>{_escape(diagnostic.fingerprint)}</code></td>"
+            "</tr>"
+        )
+    return "".join(rows)
+
+
+def _corpus_summary_rows(result: VerificationResult) -> str:
+    rows = []
+    for diagnostic in result.diagnostics:
+        searchable = " ".join(
+            [
+                diagnostic.rule_id,
+                diagnostic.message,
+                " ".join(str(key) for key, _value in diagnostic.properties),
+            ]
+        ).lower()
+        if not any(marker in searchable for marker in ("corpus", "fixture", "provider-fixture", "structured-schema")):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td><code>{_escape(diagnostic.rule_id)}</code></td>"
+            f"<td>{_severity_badge(diagnostic.severity.value)}</td>"
+            f"<td>{_escape(diagnostic.message)}</td>"
+            f"<td>{_render_value(dict(diagnostic.properties))}</td>"
+            f"<td><code>{_escape(diagnostic.fingerprint)}</code></td>"
+            "</tr>"
+        )
+    return "".join(rows)

@@ -141,9 +141,10 @@ with deterministic manifests, replay hashes, source-mapped diagnostics, and vali
 a context-window budget model that combines named prompt segments, must-survive
 flags, declared or tokenizer-derived token counts, output reserves, tool-token
 reserves, generation-prompt tokens, and model-specific special-token overhead into
-bounded survival proofs and compact text/JSON/SARIF budget visualizations against
-real framework truncation policies, including minimized counterexamples when
-required regions can be dropped, a dedicated RAG
+bounded survival proofs, compact text/JSON/SARIF budget visualizations, and
+web-free static HTML reports with prompt, witness, chart, diff, and corpus
+sections against real framework truncation policies, including minimized
+counterexamples when required regions can be dropped, a dedicated RAG
 chunking compatibility check that verifies tokenizer identity, chunk-boundary
 stability, citation survival, overlap accounting, metadata inflation,
 prompt-template overhead, and retrieval payload limits against the same packed
@@ -231,7 +232,8 @@ solver resources, fails closed on malformed JSON or UTF-8 artifacts, corrupt
 fixture archives, partial provider snapshots, invalid schemas, missing or
 incompatible tokenizer backends, and unsupported solver fragments by emitting
 source-mapped loader diagnostics or explicit abstentions, emits deterministic
-typed diagnostics in text, JSON, and SARIF with structured snapshot coverage, exposes an embedding API for custom
+typed diagnostics in text, JSON, SARIF, GitHub annotations, and static HTML with
+structured snapshot coverage, exposes an embedding API for custom
 checks, typed plugin registries, plugin artifact-loader hooks, plugin renderers,
 and typed results, ingests JSON Schema, regex, EBNF, Outlines,
 xgrammar, llguidance, and PromptABI grammar artifacts into typed rule and

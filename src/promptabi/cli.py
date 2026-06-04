@@ -37,7 +37,7 @@ from .lockfiles import (
     write_lockfile,
 )
 from .plugins import PluginError, PluginRegistry, load_plugin_modules
-from .render import SarifRenderOptions, render_github_annotations, render_json, render_sarif, render_text
+from .render import SarifRenderOptions, render_github_annotations, render_html, render_json, render_sarif, render_text
 from .seed_corpus import SeedCorpusError, build_seed_corpus_manifest, write_seed_corpus_manifest
 from .session import VerificationSession
 from .structured_schema_corpus import (
@@ -87,7 +87,7 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument(
         "--format",
         default="text",
-        help="output format: text, json, sarif, github-annotations, or a plugin renderer (default: text)",
+        help="output format: text, html, json, sarif, github-annotations, or a plugin renderer (default: text)",
     )
     _add_github_output_arguments(verify)
     verify.add_argument(
@@ -153,7 +153,7 @@ def build_parser() -> argparse.ArgumentParser:
     diff.add_argument(
         "--format",
         default="text",
-        help="output format: text, json, sarif, github-annotations, or a plugin renderer (default: text)",
+        help="output format: text, html, json, sarif, github-annotations, or a plugin renderer (default: text)",
     )
     _add_github_output_arguments(diff)
     diff.add_argument(
@@ -780,6 +780,8 @@ def _render_verification_output(
         return render_text(result, **text_kwargs)
     if output_format == "json":
         return render_json(result)
+    if output_format == "html":
+        return render_html(result)
     if output_format == "sarif":
         return render_sarif(result, options=sarif_options)
     if output_format == "github-annotations":

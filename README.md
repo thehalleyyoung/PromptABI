@@ -7,6 +7,8 @@ structured-output grammars, provider contracts, and token budgets.
 
 ```bash
 promptabi verify --config examples/minimal/promptabi.json
+# self-contained local report:
+promptabi verify --config examples/token-budget/promptabi.json --format html --fail-on never > promptabi-report.html
 # scaffold a real stack contract:
 promptabi init --stack openai-tools --output-dir .promptabi-demo
 # explain one failing structural witness:
@@ -70,8 +72,10 @@ LlamaIndex, Outlines, xgrammar, llguidance, Pydantic, MCP, and Z3 adapter
 surfaces without weakening deterministic sessions or CLI output; `promptabi
 matrix` reports the exact sound/bounded/Z3/heuristic/abstaining guarantees for
 each check across tokenizer, template, grammar, provider, framework, and
-training-manifest surfaces. `promptabi pre-commit` installs a PATH-independent
-local hook and fail-closed changed-artifact gate for schemas, templates,
+training-manifest surfaces. `--format html` emits a web-free report with
+diagnostic details, witnesses, budget charts, diff tables, and corpus summaries.
+`promptabi pre-commit` installs a PATH-independent local hook and fail-closed
+changed-artifact gate for schemas, templates,
 tokenizers, tools, budgets, training manifests, configs, and lockfiles before
 they reach CI.
 
