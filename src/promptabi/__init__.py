@@ -92,9 +92,12 @@ from .formal import (
 from .loaders import ArtifactLoadError, ArtifactLoader, ArtifactLoadWarning, LoadedArtifact, load_artifact
 from .role_boundaries import (
     DEFAULT_STRUCTURAL_ROLES,
+    RoleBoundaryForgeryFinding,
     RoleBoundaryModel,
+    RoleBoundaryNonforgeabilityReport,
     RoleBoundaryPath,
     RoleBoundaryRegion,
+    analyze_role_boundary_nonforgeability,
     build_role_boundary_model,
 )
 from .seed_corpus import (
@@ -201,6 +204,8 @@ __all__ = [
     "PromptSegmentArtifact",
     "ProviderConfigArtifact",
     "RoleBoundaryModel",
+    "RoleBoundaryForgeryFinding",
+    "RoleBoundaryNonforgeabilityReport",
     "RoleBoundaryPath",
     "RoleBoundaryRegion",
     "RoundTripResult",
@@ -243,6 +248,7 @@ __all__ = [
     "create_session",
     "discover_config",
     "build_json_source_map",
+    "analyze_role_boundary_nonforgeability",
     "build_role_boundary_model",
     "build_seed_corpus_manifest",
     "load_artifact",

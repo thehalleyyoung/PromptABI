@@ -6,9 +6,12 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from .artifacts import ArtifactKind
+from .chat_templates import ChatTemplateParseError, parse_hf_tokenizer_config_chat_template
 from .config import VerificationConfig, load_config
 from .diagnostics import CheckMode, Diagnostic, DiagnosticSeverity, SourceSpan, WitnessStep, WitnessTrace, diagnostic_sort_key
 from .loaders import ArtifactLoadError, ArtifactLoadWarning, ArtifactLoader, LoadedArtifact
+from .role_boundaries import RoleBoundaryForgeryFinding, analyze_role_boundary_nonforgeability
 
 
 CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
@@ -19,6 +22,8 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "artifact-weak-pin": (CheckMode.SOUND, CheckMode.COMPLETE),
     "artifact-pin-invalid": (CheckMode.SOUND, CheckMode.COMPLETE),
     "artifact-hash-mismatch": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "role-boundary-abstained": (CheckMode.ABSTAINING, CheckMode.BOUNDED),
+    "role-boundary-nonforgeability": (CheckMode.SOUND, CheckMode.BOUNDED),
     "check-unknown": (CheckMode.SOUND, CheckMode.COMPLETE),
     "check-failed": (CheckMode.HEURISTIC,),
 }
@@ -72,7 +77,10 @@ class VerificationSession:
     ) -> None:
         self.config = config
         self.loader = loader or ArtifactLoader()
-        self.checks: dict[str, CheckCallable] = {"repository-skeleton": self._repository_skeleton_check}
+        self.checks: dict[str, CheckCallable] = {
+            "repository-skeleton": self._repository_skeleton_check,
+            "role-boundary-nonforgeability": self._role_boundary_nonforgeability_check,
+        }
         if checks:
             self.checks.update(checks)
 
@@ -137,6 +145,62 @@ class VerificationSession:
                 ),
             ),
         )
+
+    def _role_boundary_nonforgeability_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        diagnostics: list[Diagnostic] = []
+        for loaded in context.loaded_artifacts:
+            artifact = loaded.artifact
+            if artifact.kind is not ArtifactKind.CHAT_TEMPLATE or artifact.location.path is None:
+                continue
+            path = Path(artifact.location.path)
+            if not path.is_file() or path.suffix.lower() != ".json":
+                continue
+            try:
+                parsed = parse_hf_tokenizer_config_chat_template(path)
+            except ChatTemplateParseError as exc:
+                diagnostics.append(
+                    Diagnostic(
+                        rule_id="role-boundary-abstained",
+                        severity=DiagnosticSeverity.WARNING,
+                        message=f"chat-template artifact '{artifact.name}' is outside the supported role-boundary fragment",
+                        artifact=artifact.to_ref(),
+                        span=artifact.source_span,
+                        check_modes=CHECK_MODE_CATALOG["role-boundary-abstained"],
+                        suggestions=("Simplify the chat template or add a supported minimized fixture.",),
+                        witness=WitnessTrace(
+                            summary="PromptABI could not parse the chat template for bounded role-boundary analysis.",
+                            steps=(WitnessStep(action="parse chat template", input=str(path), output=str(exc)),),
+                            artifacts=(artifact.to_ref(),),
+                        ),
+                    )
+                )
+                continue
+            report = analyze_role_boundary_nonforgeability(parsed)
+            if not report.model.supported:
+                diagnostics.append(
+                    Diagnostic(
+                        rule_id="role-boundary-abstained",
+                        severity=DiagnosticSeverity.WARNING,
+                        message=f"chat-template artifact '{artifact.name}' uses constructs outside bounded role analysis",
+                        artifact=artifact.to_ref(),
+                        span=parsed.source_span or artifact.source_span,
+                        check_modes=CHECK_MODE_CATALOG["role-boundary-abstained"],
+                        suggestions=("Review the symbolic abstentions before trusting non-forgeability results.",),
+                        witness=WitnessTrace(
+                            summary="The bounded symbolic executor abstained on part of the template.",
+                            steps=tuple(
+                                WitnessStep(action="abstain on template construct", output=abstention)
+                                for abstention in report.model.abstentions
+                            ),
+                            artifacts=(artifact.to_ref(),),
+                        ),
+                    )
+                )
+            diagnostics.extend(
+                _role_boundary_forgery_diagnostic(artifact.to_ref(), parsed.source_span, finding)
+                for finding in report.findings
+            )
+        return tuple(diagnostics)
 
     def _missing_local_paths(self) -> set[str]:
         return {
@@ -258,6 +322,40 @@ def _witness_steps(raw_steps: tuple[tuple[str, str | None, str | None], ...]) ->
     return tuple(
         WitnessStep(action=action, input=input_value, output=output_value)
         for action, input_value, output_value in raw_steps
+    )
+
+
+def _role_boundary_forgery_diagnostic(artifact, span, finding: RoleBoundaryForgeryFinding) -> Diagnostic:
+    return Diagnostic(
+        rule_id="role-boundary-nonforgeability",
+        severity=DiagnosticSeverity.ERROR,
+        message=(
+            f"{finding.input_expression} can forge {finding.marker_kind} {finding.marker!r} "
+            f"in a {finding.input_role} region"
+        ),
+        artifact=artifact,
+        span=span,
+        check_modes=CHECK_MODE_CATALOG["role-boundary-nonforgeability"],
+        suggestions=(
+            "Render user-controlled fields through an escaping or encoding layer before adjacent role delimiters.",
+            "Avoid raw dynamic role headers; map roles through an explicit allowlist.",
+        ),
+        witness=WitnessTrace(
+            summary=finding.boundary_description,
+            steps=(
+                WitnessStep(
+                    action="build bounded role-region model",
+                    output=f"path {finding.path_index}, region {finding.region_index}",
+                ),
+                WitnessStep(
+                    action="substitute attacker-controlled field",
+                    input=finding.input_expression,
+                    output=finding.marker,
+                ),
+                WitnessStep(action="render forged boundary excerpt", output=finding.rendered_excerpt),
+            ),
+            artifacts=(artifact,),
+        ),
     )
 
 

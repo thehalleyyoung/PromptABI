@@ -42,14 +42,17 @@ sound, complete, bounded, Z3-backed, heuristic, or abstaining; the solver uses Z
 when available and otherwise exhaustively enumerates finite domains, emitting
 concrete counterexamples without logits, GPUs, inference, or network calls.
 
-The roadmap targets three high-value checks first: role-boundary
-non-forgeability, stop/grammar/tokenizer reachability, and must-survive
-token-budget verification. The repository already has the typed Python package,
+PromptABI now ships the first bounded role-boundary non-forgeability check:
+raw user/tool/function content and dynamic role fields are checked against
+provider/model control delimiters, special tokens, assistant prefixes, and
+tool-call sentinels from real chat-template artifacts. The next high-value checks
+are stop/grammar/tokenizer reachability and must-survive token-budget
+verification. The repository already has the typed Python package,
 core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,
 snapshot-locked output stability, discoverable `promptabi verify` workflow,
 source-mapped diagnostics that point to exact config and artifact lines, offline
 version-pinned artifact loading, Hugging Face chat-template parsing plus bounded
-symbolic/concrete rendering and role-region modeling checked across the seed
+symbolic/concrete rendering and role-region non-forgeability checked across the seed
 corpus, a real tokenizer abstraction spanning byte-level, Hugging Face
 `tokenizers`, `tiktoken`, and SentencePiece backends, differential harnesses
 checked against actual libraries, an embedding API for custom checks and typed

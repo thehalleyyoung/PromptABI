@@ -147,6 +147,74 @@ class RoleBoundaryModel:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class RoleBoundaryForgeryFinding:
+    """A bounded structural role-boundary forgery witness."""
+
+    path_index: int
+    region_index: int
+    input_expression: str
+    input_role: str
+    marker: str
+    marker_kind: str
+    rendered_excerpt: str
+    boundary_description: str
+
+    def __post_init__(self) -> None:
+        if self.path_index < 0:
+            raise ValueError("path_index must be non-negative")
+        if self.region_index < 0:
+            raise ValueError("region_index must be non-negative")
+        for field_name in (
+            "input_expression",
+            "input_role",
+            "marker",
+            "marker_kind",
+            "rendered_excerpt",
+            "boundary_description",
+        ):
+            if not getattr(self, field_name):
+                raise ValueError(f"{field_name} must be non-empty")
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "path_index": self.path_index,
+            "region_index": self.region_index,
+            "input_expression": self.input_expression,
+            "input_role": self.input_role,
+            "marker": self.marker,
+            "marker_kind": self.marker_kind,
+            "rendered_excerpt": self.rendered_excerpt,
+            "boundary_description": self.boundary_description,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RoleBoundaryNonforgeabilityReport:
+    """Result of the first bounded role-boundary non-forgeability check."""
+
+    model: RoleBoundaryModel
+    findings: tuple[RoleBoundaryForgeryFinding, ...] = ()
+    marker_count: int = 0
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "findings", tuple(self.findings))
+        if self.marker_count < 0:
+            raise ValueError("marker_count must be non-negative")
+
+    @property
+    def ok(self) -> bool:
+        return not self.findings and self.model.supported
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "ok": self.ok,
+            "marker_count": self.marker_count,
+            "model": self.model.to_dict(),
+            "findings": [finding.to_dict() for finding in self.findings],
+        }
+
+
 def build_role_boundary_model(
     parsed: ChatTemplateParseResult,
     *,
@@ -172,6 +240,83 @@ def build_role_boundary_model(
         roles=tuple(concrete_roles),
         paths=role_paths,
         abstentions=abstentions,
+    )
+
+
+def analyze_role_boundary_nonforgeability(
+    parsed: ChatTemplateParseResult,
+    *,
+    bounds: ChatTemplateSymbolicBounds | None = None,
+) -> RoleBoundaryNonforgeabilityReport:
+    """Check whether user-controlled fields can render structural controls.
+
+    The first check is exact for the bounded symbolic template paths it models:
+    raw message content and raw dynamic role fields are treated as arbitrary
+    attacker-controlled strings, while sanitizer recognition is intentionally
+    deferred to the later sanitizer-awareness milestone.
+    """
+
+    model = build_role_boundary_model(parsed, bounds=bounds)
+    markers = _structural_marker_catalog(parsed, model)
+    findings: list[RoleBoundaryForgeryFinding] = []
+    seen: set[tuple[int, int, str, str, str]] = set()
+
+    for path in model.paths:
+        for region in path.regions:
+            for finding in _role_header_findings(path, region):
+                key = (
+                    finding.path_index,
+                    finding.region_index,
+                    finding.input_expression,
+                    finding.marker,
+                    finding.marker_kind,
+                )
+                if key not in seen:
+                    seen.add(key)
+                    findings.append(finding)
+            if not _is_user_controlled_region(region):
+                continue
+            for expression in region.content_expressions:
+                for marker, marker_kind in markers:
+                    if marker in expression:
+                        continue
+                    finding = RoleBoundaryForgeryFinding(
+                        path_index=path.path_index,
+                        region_index=region.region_index,
+                        input_expression=expression,
+                        input_role=region.role,
+                        marker=marker,
+                        marker_kind=marker_kind,
+                        rendered_excerpt=_rendered_excerpt(path.rendered_pattern, expression, marker),
+                        boundary_description=(
+                            f"{expression} can render {marker_kind} marker {marker!r} "
+                            f"inside a {region.role} region"
+                        ),
+                    )
+                    key = (
+                        finding.path_index,
+                        finding.region_index,
+                        finding.input_expression,
+                        finding.marker,
+                        finding.marker_kind,
+                    )
+                    if key not in seen:
+                        seen.add(key)
+                        findings.append(finding)
+
+    findings.sort(
+        key=lambda finding: (
+            finding.path_index,
+            finding.region_index,
+            finding.input_expression,
+            finding.marker_kind,
+            finding.marker,
+        )
+    )
+    return RoleBoundaryNonforgeabilityReport(
+        model=model,
+        findings=tuple(findings),
+        marker_count=len(markers),
     )
 
 
@@ -397,3 +542,133 @@ def _generation_prompt_segment_indexes(
         for index, segment in enumerate(path.segments)
         if index not in assigned_segments and "assistant" in segment.value
     )
+
+
+def _role_header_findings(
+    path: RoleBoundaryPath,
+    region: RoleBoundaryRegion,
+) -> tuple[RoleBoundaryForgeryFinding, ...]:
+    if region.role_source != "variable" or region.message_index is None:
+        return ()
+    expression = f"{{messages[{region.message_index}].role}}"
+    forgeable_roles = tuple(
+        role
+        for role in DEFAULT_STRUCTURAL_ROLES
+        if role not in region.excluded_roles and role != "user"
+    )
+    findings: list[RoleBoundaryForgeryFinding] = []
+    for role in forgeable_roles:
+        findings.append(
+            RoleBoundaryForgeryFinding(
+                path_index=path.path_index,
+                region_index=region.region_index,
+                input_expression=expression,
+                input_role=region.role,
+                marker=role,
+                marker_kind="role-header",
+                rendered_excerpt=_rendered_excerpt(path.rendered_pattern, expression, role),
+                boundary_description=(
+                    f"{expression} is rendered directly into a role header and can become {role!r}"
+                ),
+            )
+        )
+    return tuple(findings)
+
+
+def _is_user_controlled_region(region: RoleBoundaryRegion) -> bool:
+    if region.role in {"user", "tool", "function"}:
+        return True
+    if region.role_source in {"variable", "residual"}:
+        return True
+    return region.role not in {"assistant", "system", "developer"}
+
+
+def _structural_marker_catalog(
+    parsed: ChatTemplateParseResult,
+    model: RoleBoundaryModel,
+) -> tuple[tuple[str, str], ...]:
+    markers: dict[str, str] = {}
+    for token in parsed.special_tokens:
+        _add_marker(markers, token.text, "special-token")
+    for path in model.paths:
+        for region in path.regions:
+            for literal in _literal_control_runs(region.control_text):
+                for marker in _extract_marker_candidates(literal):
+                    _add_marker(markers, marker, _marker_kind(marker, region))
+    return tuple(sorted(markers.items(), key=lambda item: (item[1], item[0])))
+
+
+def _literal_control_runs(control_text: str) -> tuple[str, ...]:
+    runs: list[str] = []
+    cursor = 0
+    for match in _MESSAGE_PLACEHOLDER_RE.finditer(control_text):
+        if match.start() > cursor:
+            runs.append(control_text[cursor : match.start()])
+        cursor = match.end()
+    if cursor < len(control_text):
+        runs.append(control_text[cursor:])
+    return tuple(run for run in runs if run)
+
+
+_ANGLE_SENTINEL_RE = re.compile(r"</?[A-Za-z][A-Za-z0-9_:-]*(?:\s[^>\n]{0,120})?>|<\|[^|\n]{1,120}\|>")
+_BRACKET_SENTINEL_RE = re.compile(r"\[/?[A-Za-z][A-Za-z0-9_ -]{1,80}\]")
+_FENCE_SENTINEL_RE = re.compile(r"```[A-Za-z0-9_-]*")
+
+
+def _extract_marker_candidates(literal: str) -> tuple[str, ...]:
+    candidates: list[str] = []
+    for regex in (_ANGLE_SENTINEL_RE, _BRACKET_SENTINEL_RE, _FENCE_SENTINEL_RE):
+        candidates.extend(match.group(0) for match in regex.finditer(literal))
+    stripped = literal.strip()
+    if _significant_marker(stripped) and any(role in stripped for role in DEFAULT_STRUCTURAL_ROLES):
+        candidates.append(stripped)
+    return tuple(dict.fromkeys(candidate for candidate in candidates if _significant_marker(candidate)))
+
+
+def _significant_marker(marker: str) -> bool:
+    if len(marker.strip()) < 3:
+        return False
+    if marker.strip() in DEFAULT_STRUCTURAL_ROLES:
+        return False
+    return bool(re.search(r"[<>\[\]`|/]", marker))
+
+
+def _marker_kind(marker: str, region: RoleBoundaryRegion) -> str:
+    lowered = marker.lower()
+    if "tool" in lowered or "function" in lowered:
+        return "tool-call-sentinel"
+    if region.role == "assistant" or "assistant" in lowered:
+        return "assistant-prefix"
+    if any(role in lowered for role in DEFAULT_STRUCTURAL_ROLES):
+        return "role-header"
+    return "control-delimiter"
+
+
+def _add_marker(markers: dict[str, str], marker: str, kind: str) -> None:
+    if not _significant_marker(marker):
+        return
+    previous = markers.get(marker)
+    if previous is None or _marker_kind_rank(kind) < _marker_kind_rank(previous):
+        markers[marker] = kind
+
+
+def _marker_kind_rank(kind: str) -> int:
+    return {
+        "role-header": 0,
+        "assistant-prefix": 1,
+        "tool-call-sentinel": 2,
+        "special-token": 3,
+        "control-delimiter": 4,
+    }.get(kind, 5)
+
+
+def _rendered_excerpt(rendered_pattern: str, expression: str, replacement: str) -> str:
+    rendered = rendered_pattern.replace(expression, replacement, 1)
+    index = rendered.find(replacement)
+    if index < 0:
+        return rendered[:160]
+    start = max(0, index - 60)
+    end = min(len(rendered), index + len(replacement) + 60)
+    prefix = "..." if start > 0 else ""
+    suffix = "..." if end < len(rendered) else ""
+    return prefix + rendered[start:end] + suffix

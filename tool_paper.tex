@@ -38,8 +38,11 @@ solver, a minimal verification session, focused tests, examples, a fixture
 corpus layout, a curated ten-family seed corpus, a deterministic corpus manifest
 pipeline, a Hugging Face \texttt{tokenizer\_config.json} chat-template parser,
 a bounded symbolic executor for the supported Jinja chat-template fragment, a
-role-boundary model that decomposes symbolic renders into system, user,
-assistant, tool, developer, function, and provider-specific structural regions, a
+bounded role-boundary non-forgeability checker that detects raw content and role
+fields capable of rendering control delimiters, special tokens, assistant
+prefixes, or tool-call sentinels, a role-boundary model that decomposes symbolic
+renders into system, user, assistant, tool, developer, function, and
+provider-specific structural regions, a
 concrete renderer differentially checked against Hugging Face
 \texttt{apply\_chat\_template} behavior across the seed corpus, a CPU-only
 benchmark, documentation, and contribution guidance.
@@ -373,6 +376,17 @@ and loader metadata summarizes role coverage and region counts for real
 \texttt{tokenizer\_config.json} artifacts. This is the executable substrate for
 the non-forgeability checker rather than a prose-only design.
 
+The first checker over that substrate is now implemented. It builds a global
+catalog of structural markers from declared special tokens, literal control
+fragments, generated assistant prefixes, role headers, and XML-like tool
+sentinels, then proves for each bounded symbolic path whether a raw
+user-controlled content field or dynamic role field can render one of those
+markers as structure. It explicitly flags direct \texttt{message['role']}
+interpolation as role-header forgeability and reports bounded, sound diagnostics
+with rendered excerpts. Sanitizer recognition is intentionally left to the next
+milestone, so the first checker is conservative about raw interpolation rather
+than silently treating escaping as proven.
+
 PromptABI also now has a concrete evaluator for that same supported fragment. It
 renders real message and tool inputs through the position-preserving lexer and
 bounded parser, evaluating role conditionals, generation-prompt branches,
@@ -620,8 +634,8 @@ of files into an auditable experimental input.
 \section{Role-Boundary Non-Forgeability}
 
 The first major formal checker now starts from an executable role-boundary model
-and will analyze whether user, tool, RAG, or other
-attacker-controlled fields can render as structural prompt boundaries. In
+and analyzes whether user, tool, function, or other attacker-controlled fields
+can render as structural prompt boundaries. In
 ChatML-like templates the relevant strings may be \texttt{<|im\_start|>},
 \texttt{<|im\_end|>}, role names, or assistant prefixes. In Llama-style
 templates they may be header IDs and end-of-turn sentinels. In instruction-tag
@@ -630,10 +644,14 @@ delimiters. In XML-like tool formats they may be tool-call start and end tags.
 
 PromptABI already models the rendered prompt as regions: system, user,
 assistant, tool, developer, function, provider-specific symbolic roles, and
-generated assistant prefixes. The next check asks whether content controlled by
-one region can create syntax that is interpreted as another region. A witness should include a minimized
-malicious field, a rendered excerpt, the tokenized representation, and the exact
-boundary that becomes ambiguous or forged.
+generated assistant prefixes. The checker builds one global marker catalog for a
+chat template, split around placeholders so it never fabricates impossible
+concatenated markers. It then pairs every user-controlled content expression with
+every structural marker and separately checks raw dynamic role fields. Diagnostics
+identify the exact symbolic path and region, the controlled expression, the
+forged marker kind, and a rendered excerpt showing where the forged boundary
+appears. Tokenized and minimized witnesses are deliberately left for the next
+witness-generation milestone.
 
 This property is structural, not semantic. PromptABI can prove that a template
 allows user content to create an apparent assistant turn. It cannot prove that a
@@ -729,7 +747,7 @@ The testing strategy has three tiers:
 \begin{itemize}
 \item unit and structured snapshot tests for public API and deterministic text, JSON, and SARIF rendering;
 \item tokenizer abstraction tests against real Hugging Face \texttt{tokenizers}, \texttt{tiktoken}, SentencePiece, and byte-level adapters;
-\item chat-template parser, symbolic-executor, and concrete-renderer tests across every seed-corpus \texttt{tokenizer\_config.json}, including generation-prompt extraction, role assumptions, field references, special tokens, bounded message/tool loops, filters, whitespace controls, path budgets, empty tool lists, tool-role messages, and unsupported constructs, with concrete outputs differentially checked against Hugging Face's renderer;
+\item chat-template parser, symbolic-executor, concrete-renderer, role-region, and role-boundary non-forgeability tests across real \texttt{tokenizer\_config.json} fixtures, including generation-prompt extraction, dynamic role headers, content-control delimiter collisions, role assumptions, field references, special tokens, bounded message/tool loops, filters, whitespace controls, path budgets, empty tool lists, tool-role messages, and unsupported constructs, with concrete outputs differentially checked against Hugging Face's renderer;
 \item loader tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, fixture archives, and source-mapped JSON fields;
 \item fixture and corpus tests for minimized tokenizer/chat-template bundles, expected behaviors, sentinel consistency, artifact materialization, and deterministic manifest generation;
 \item future corpus tests for popular model and framework configurations pinned by immutable upstream revisions.
@@ -989,6 +1007,8 @@ Check-mode taxonomy tests & Diagnostic objects, JSON output, text output, and SA
 Tokenizer differential tests & Byte-level normalization and added-token behavior, Hugging Face ByteLevel BPE, \texttt{tiktoken}, and SentencePiece adapters match real backend behavior. \\
 \hline
 Chat-template symbolic tests & Hugging Face \texttt{tokenizer\_config.json} templates across ten seed families expose template source, special tokens, generation prompts, roles, fields, tools, filters, whitespace controls, bounded symbolic paths, and unsupported constructs. \\
+\hline
+Role-boundary checker tests & Bounded non-forgeability diagnostics catch dynamic role-header forgery and user-content control delimiter forgery against real Llama-style fixture templates while preserving deterministic JSON output. \\
 \hline
 CLI smoke & \texttt{promptabi verify --config examples/minimal/promptabi.json} returns pass, and \texttt{--fail-on}, \texttt{--artifact}, \texttt{--cache-dir}, \texttt{--quiet}, and \texttt{--verbose} are covered. \\
 \hline

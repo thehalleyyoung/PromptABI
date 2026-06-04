@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from promptabi.cli import main
 
@@ -148,3 +149,38 @@ def test_verify_sarif_output_is_code_scanning_compatible(capsys) -> None:
     assert result["properties"]["checkModes"] == ["heuristic"]
     assert payload["runs"][0]["tool"]["driver"]["rules"][0]["properties"]["checkModes"] == ["heuristic"]
     assert "promptabiFingerprint" in result["partialFingerprints"]
+
+
+def test_verify_role_boundary_nonforgeability_reports_real_fixture(tmp_path, capsys) -> None:
+    fixture = Path("fixtures/seed_corpus/llama/tokenizer_config.json").resolve()
+    config = tmp_path / "promptabi.json"
+    config.write_text(
+        json.dumps(
+            {
+                "name": "llama-role-boundary",
+                "checks": ["role-boundary-nonforgeability"],
+                "artifacts": {
+                    "llama": {
+                        "kind": "chat-template",
+                        "path": str(fixture),
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["verify", "--config", str(config), "--format", "json"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    role_diagnostics = [
+        diagnostic
+        for diagnostic in payload["diagnostics"]
+        if diagnostic["rule_id"] == "role-boundary-nonforgeability"
+    ]
+    assert exit_code == 1
+    assert role_diagnostics
+    assert any("role-header 'assistant'" in diagnostic["message"] for diagnostic in role_diagnostics)
+    assert any("<|start_header_id|>" in diagnostic["message"] for diagnostic in role_diagnostics)
+    assert role_diagnostics[0]["check_modes"] == ["bounded", "sound"]

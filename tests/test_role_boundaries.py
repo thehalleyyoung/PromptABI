@@ -4,6 +4,7 @@ from promptabi import (
     ArtifactLoader,
     ChatTemplateArtifact,
     ChatTemplateSymbolicBounds,
+    analyze_role_boundary_nonforgeability,
     build_role_boundary_model,
     load_seed_corpus,
     parse_hf_chat_template_config,
@@ -98,3 +99,65 @@ def test_chat_template_loader_publishes_role_boundary_metadata() -> None:
     assert metadata["role_boundary_path_count"] > 0
     assert metadata["role_boundary_region_count"] > 0
     assert "assistant" in metadata["role_boundary_roles"]
+
+
+def test_role_boundary_nonforgeability_flags_raw_role_and_content_controls() -> None:
+    parsed = parse_hf_chat_template_config(
+        {
+            "chat_template": (
+                "{% for message in messages %}"
+                "<|im_start|>{{ message['role'] }}\n"
+                "{{ message['content'] }}<|im_end|>\n"
+                "{% endfor %}"
+                "{% if add_generation_prompt %}<|im_start|>assistant\n{% endif %}"
+            ),
+            "additional_special_tokens": ["<|im_start|>", "<|im_end|>"],
+        }
+    )
+
+    report = analyze_role_boundary_nonforgeability(
+        parsed,
+        bounds=ChatTemplateSymbolicBounds(max_messages=1, max_tools=0, max_loop_iterations=1, max_paths=16),
+    )
+
+    assert not report.ok
+    assert any(
+        finding.input_expression == "{messages[0].role}"
+        and finding.marker_kind == "role-header"
+        and finding.marker == "assistant"
+        for finding in report.findings
+    )
+    assert any(
+        finding.input_expression == "{messages[0].content}"
+        and finding.marker == "<|im_start|>"
+        and finding.marker_kind in {"assistant-prefix", "special-token"}
+        for finding in report.findings
+    )
+    assert any(
+        finding.input_expression == "{messages[0].content}"
+        and "<|im_start|>" in finding.rendered_excerpt
+        for finding in report.findings
+    )
+
+
+def test_role_boundary_nonforgeability_does_not_concatenate_across_content_placeholders() -> None:
+    parsed = parse_hf_chat_template_config(
+        {
+            "chat_template": (
+                "{% for message in messages %}"
+                "<safe>{{ message['content'] }}</safe>"
+                "{% endfor %}"
+            ),
+            "additional_special_tokens": ["<safe>", "</safe>"],
+        }
+    )
+
+    report = analyze_role_boundary_nonforgeability(
+        parsed,
+        bounds=ChatTemplateSymbolicBounds(max_messages=1, max_tools=0, max_loop_iterations=1, max_paths=16),
+    )
+
+    markers = {finding.marker for finding in report.findings}
+    assert "<safe>" in markers
+    assert "</safe>" in markers
+    assert "<safe></safe>" not in markers
