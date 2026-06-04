@@ -987,8 +987,9 @@ must-survive metadata.
 
 A \texttt{framework-truncation-config} artifact contributes the maximum context
 window, output reservation, reserved tool tokens, generation-prompt tokens,
-model-specific special-token overhead, framework name, strategy label, and model
-name. The \texttt{token-budget-model} check applies deterministic arithmetic:
+model-specific special-token overhead, framework name, strategy label, model
+name, optional system/tool preservation flags, and role-priority drop hints. The
+\texttt{token-budget-model} check applies deterministic arithmetic:
 \begin{verbatim}
 input_budget =
   max_context
@@ -1005,19 +1006,23 @@ tokenizer proxy. This preserves the repository's soundness boundary: arithmetic
 over declared or real-tokenizer counts is bounded and sound for the modeled
 inputs; estimates are not silently promoted into proof.
 
-The current diagnostics deliberately stop before stepwise truncation simulation.
-They report non-positive effective budgets, single segments larger than the input
-budget, required segment totals that cannot fit, and total prompt segment
-overflow for optional content. The witness records the selected budget source,
-reserved-token arithmetic, known segment counts and their sources, unknown
-segments, and the required-token sum. The
-\texttt{examples/token-budget} workflow exercises this through the real CLI: a
-vLLM-style budget reserves output, tool, generation-prompt, and special-token
-overhead, then fails because required system and user segments exceed the modeled
-input budget. Later framework-specific truncation policies can build on this
-model to prove which required segment is dropped and emit a minimized
-counterexample boundary, but that stronger survival claim is intentionally not
-made by the modeling check.
+The check now normalizes framework-specific policies for LangChain, LlamaIndex,
+vLLM, Transformers, llama.cpp/Ollama, OpenAI-compatible servers, LiteLLM,
+common message-dropping strategies, and custom RAG pipelines. Left-truncating
+serving engines drop earliest prompt regions, conversation-memory frameworks
+drop oldest non-system messages by default, right and middle strategies are
+modeled explicitly, and RAG policies can prioritize retrieval-role loss before
+required instructions. Diagnostics report non-positive effective budgets, single
+segments larger than the input budget, required segment totals that cannot fit,
+total prompt overflow for optional content, optional segments dropped by the
+framework, and required segments that a concrete truncation policy can remove.
+The witness records the selected budget source, reserved-token arithmetic, known
+segment counts and their sources, unknown segments, kept segments, dropped
+segments, and the required-token sum. The \texttt{examples/token-budget} workflow
+exercises this through the real CLI: a vLLM-style budget reserves output, tool,
+generation-prompt, and special-token overhead, then fails because required
+system and user segments exceed the modeled input budget and the selected
+truncation policy can remove required content.
 
 \clearpage
 \section{Differential Validation}
@@ -1038,7 +1043,7 @@ The testing strategy has three tiers:
 \item chat-template parser, symbolic-executor, concrete-renderer, role-region, and role-boundary non-forgeability tests across real \texttt{tokenizer\_config.json} fixtures and known delimiter-collision regressions, including ChatML, Llama header tokens, Mistral instruction tags, XML-ish tool tags, markdown fences, fine-tune hash headers, generation-prompt extraction, dynamic role headers, content-control delimiter collisions, role assumptions, field references, special tokens, bounded message/tool loops, filters, whitespace controls, path budgets, empty tool lists, tool-role messages, and unsupported constructs, with concrete outputs differentially checked against Hugging Face's renderer;
 \item loader and parser tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, tool-definition schemas spanning OpenAI, Anthropic, LangChain, Pydantic, TypeScript-style, MCP, and provider tool-call envelopes, tool-serialization contracts over names, arguments, escaping, IDs, parallel calls, streaming chunks, template tool rendering, and stop delimiters, stop-policy configs spanning OpenAI-compatible, Hugging Face, llama.cpp/Ollama, vLLM, LiteLLM, wrapper kwargs, fixture archives, and source-mapped JSON fields;
 \item stop-tokenizer, stop-differential, and stop-overreachability tests that exercise byte/string/token alignments, multi-token stops, invalid stop-token IDs, normalization collisions, prefix/suffix collisions, added/special-token interactions, OpenAI-compatible and Hugging Face delimiter-retention semantics, provider fixture replay, CLI mismatch diagnostics, serialized stop offsets, parser-state truncation witnesses, supported schema/tool string witnesses, structural delimiter collisions, real-world Qwen/Gemma/llama.cpp stop bug reductions, and a real Hugging Face \texttt{tokenizers} BPE fixture;
-\item token-budget tests that exercise context-window reservation arithmetic, required-segment overflow over declared counts, prompt-segment file/message merging, config-versus-framework budget precedence, and real CLI diagnostics for output, tool, generation-prompt, and special-token overhead;
+\item token-budget tests that exercise context-window reservation arithmetic, required-segment overflow over declared counts, prompt-segment file/message merging, config-versus-framework budget precedence, LangChain/vLLM/custom-RAG truncation simulation, optional retrieval dropping, required segment truncation, order preservation, and real CLI diagnostics for output, tool, generation-prompt, and special-token overhead;
 \item fixture and corpus tests for minimized tokenizer/chat-template bundles, public real-bug provenance, expected behaviors, sentinel consistency, artifact materialization, deterministic manifest generation, labeled structured-schema reductions, anonymized contracts, synthetic parser stress cases, tool-definition bundles, secret-free provider fixture packs with request/response/tool/stop/streaming/error/limit coverage and credential-pattern rejection, and real CLI replay of every included structured-schema config;
 \item future corpus tests for popular model and framework configurations pinned by immutable upstream revisions.
 \end{itemize}
@@ -1374,7 +1379,7 @@ Corpus smoke & \texttt{promptabi corpus manifest} validates ten minimized instru
 \hline
 Structured-schema corpus & \texttt{promptabi corpus structured-schema-manifest} validates labeled structured-output/tool-calling fixtures from OSS reductions, anonymized contracts, and synthetic stress cases; tests replay parser compatibility, tool-schema ingestion, tool serialization, and CLI configs. \\
 \hline
-Token-budget modeling & \texttt{promptabi verify --config examples/token-budget/promptabi.json} models named must-survive segments, framework context reservations, config/artifact context-window precedence, and required-token overflow with bounded diagnostics. \\
+Token-budget modeling & \texttt{promptabi verify --config examples/token-budget/promptabi.json} models named must-survive segments, framework context reservations, config/artifact context-window precedence, required-token overflow, and framework truncation decisions with bounded diagnostics. \\
 \hline
 Benchmark smoke & Repeated config load and verification completes on CPU with JSON output. \\
 \hline

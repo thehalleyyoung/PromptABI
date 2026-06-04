@@ -33,6 +33,8 @@ class TruncationStrategy(StrEnum):
     RIGHT = "right"
     OLDEST_MESSAGE = "oldest-message"
     MIDDLE = "middle"
+    SLIDING_WINDOW = "sliding-window"
+    PRIORITY = "priority"
     CUSTOM = "custom"
 
 
@@ -363,7 +365,7 @@ class PromptSegmentArtifact(BaseArtifact):
         _require_kind(self.kind, ArtifactKind.PROMPT_SEGMENT)
         if not self.segments:
             raise ValueError("prompt-segment artifacts must define at least one segment")
-        object.__setattr__(self, "segments", tuple(sorted(self.segments, key=lambda segment: segment.name)))
+        object.__setattr__(self, "segments", tuple(self.segments))
 
     @property
     def required_segments(self) -> tuple[PromptSegment, ...]:
@@ -404,10 +406,15 @@ class FrameworkTruncationConfigArtifact(BaseArtifact):
     generation_prompt_tokens: int = 0
     special_token_overhead: int = 0
     model: str | None = None
+    preserve_system: bool = False
+    preserve_tools: bool = False
+    drop_roles: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         BaseArtifact.__post_init__(self)
         _require_kind(self.kind, ArtifactKind.FRAMEWORK_TRUNCATION_CONFIG)
+        if isinstance(self.strategy, str):
+            object.__setattr__(self, "strategy", TruncationStrategy(self.strategy))
         if not self.framework:
             raise ValueError("framework name must be non-empty")
         if self.max_context_tokens is not None and self.max_context_tokens <= 0:
@@ -422,6 +429,7 @@ class FrameworkTruncationConfigArtifact(BaseArtifact):
             raise ValueError("special_token_overhead must be non-negative")
         if self.model is not None and not self.model:
             raise ValueError("model must be non-empty")
+        object.__setattr__(self, "drop_roles", tuple(sorted(dict.fromkeys(self.drop_roles))))
 
     def to_dict(self) -> dict[str, object]:
         data = BaseArtifact.to_dict(self)
@@ -439,6 +447,12 @@ class FrameworkTruncationConfigArtifact(BaseArtifact):
             data["special_token_overhead"] = self.special_token_overhead
         if self.model is not None:
             data["model"] = self.model
+        if self.preserve_system:
+            data["preserve_system"] = self.preserve_system
+        if self.preserve_tools:
+            data["preserve_tools"] = self.preserve_tools
+        if self.drop_roles:
+            data["drop_roles"] = list(self.drop_roles)
         return data
 
 
@@ -593,6 +607,9 @@ def artifact_from_config(
             generation_prompt_tokens=_int(spec, "generation_prompt_tokens", default=0),
             special_token_overhead=_int(spec, "special_token_overhead", default=0),
             model=_optional_str(spec, "model"),
+            preserve_system=_bool(spec, "preserve_system", default=False),
+            preserve_tools=_bool(spec, "preserve_tools", default=False),
+            drop_roles=_tuple_of_str(spec, "drop_roles"),
         )
     raise AssertionError(f"unhandled artifact kind: {kind}")
 

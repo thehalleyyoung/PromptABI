@@ -99,11 +99,15 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "tool-serialization": (CheckMode.BOUNDED, CheckMode.HEURISTIC),
     "token-budget-abstained": (CheckMode.ABSTAINING, CheckMode.BOUNDED),
     "token-budget-context-conflict": (CheckMode.BOUNDED, CheckMode.HEURISTIC),
+    "token-budget-framework-truncation": (CheckMode.SOUND, CheckMode.BOUNDED),
     "token-budget-invalid": (CheckMode.SOUND, CheckMode.BOUNDED),
     "token-budget-model": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "token-budget-policy-overflow": (CheckMode.SOUND, CheckMode.BOUNDED),
     "token-budget-required-overflow": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "token-budget-required-truncated": (CheckMode.SOUND, CheckMode.BOUNDED),
     "token-budget-segment-overflow": (CheckMode.SOUND, CheckMode.BOUNDED),
     "token-budget-total-overflow": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "token-budget-truncation-abstained": (CheckMode.ABSTAINING, CheckMode.BOUNDED),
     "check-unknown": (CheckMode.SOUND, CheckMode.COMPLETE),
     "check-failed": (CheckMode.HEURISTIC,),
 }
@@ -1101,7 +1105,7 @@ def _token_budget_finding_diagnostic(report: TokenBudgetReport, finding: TokenBu
         check_modes=CHECK_MODE_CATALOG[finding.rule_id],
         suggestions=(finding.suggestion,),
         witness=WitnessTrace(
-            summary="PromptABI modeled the finite context-window arithmetic without applying a truncation policy.",
+            summary="PromptABI modeled finite context-window arithmetic and framework truncation decisions.",
             steps=tuple(steps),
         ),
     )
@@ -1115,6 +1119,9 @@ def _token_budget_summary_diagnostic(report: TokenBudgetReport) -> Diagnostic:
     known = ", ".join(
         f"{segment.name}={segment.total_tokens} ({segment.source})" for segment in report.known_segments
     ) or "<none>"
+    truncation = report.truncation
+    kept = ", ".join(segment.name for segment in truncation.kept_segments) if truncation is not None else "<not modeled>"
+    dropped = ", ".join(segment.name for segment in truncation.dropped_segments) if truncation is not None else "<not modeled>"
     return Diagnostic(
         rule_id="token-budget-model",
         severity=DiagnosticSeverity.INFO,
@@ -1137,6 +1144,9 @@ def _token_budget_summary_diagnostic(report: TokenBudgetReport) -> Diagnostic:
                 WitnessStep(action="sum all segment tokens", output=str(total) if total is not None else "unknown"),
                 WitnessStep(action="record known segment counts", output=known),
                 WitnessStep(action="record unknown segment counts", output=unknown),
+                WitnessStep(action="simulate framework truncation", input=report.framework or "config", output=report.strategy or "none"),
+                WitnessStep(action="record kept segments", output=kept or "<none>"),
+                WitnessStep(action="record dropped segments", output=dropped or "<none>"),
             ),
         ),
     )
