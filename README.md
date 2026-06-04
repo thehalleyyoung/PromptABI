@@ -87,10 +87,14 @@ analysis now checks recorded provider/template/parser contracts for name,
 argument-encoding, escaping, ID, parallel-call, streaming-chunk, and stop-delimiter
 agreement; secret-free provider fixture packs now record and deterministically
 replay request/response shapes, tool-call encodings, stop behavior, streaming
-deltas, errors, limits, and edge cases without API calls; provider migration analysis compares recorded OpenAI, Azure OpenAI,
-Anthropic, Gemini, Bedrock, Together, Groq, Ollama, llama.cpp, vLLM OpenAI, and
-LiteLLM contracts for request/response/tool/stop/streaming/context compatibility;
-a labeled structured-schema corpus turns open-source-agent reductions,
+deltas, errors, limits, and edge cases without API calls; provider migration
+analysis compares recorded OpenAI, Azure OpenAI, Anthropic, Gemini, Bedrock,
+Together, Groq, Ollama, llama.cpp, vLLM OpenAI, and LiteLLM contracts for
+request/response/tool/stop/streaming/context compatibility. Context-window
+modeling now gives named prompt segments must-survive flags, declared or
+tokenizer-derived counts, output/tool/generation/special-token reservations, and
+bounded budget-overflow diagnostics without pretending to prove framework
+truncation yet. A labeled structured-schema corpus turns open-source-agent reductions,
 anonymized patterns, and synthetic tool-call stress cases into manifest-pinned CLI fixtures. The repository
 already has the typed Python package,
 core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,

@@ -6,7 +6,8 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from .artifacts import ArtifactKind
+from .artifacts import ArtifactKind, TokenizerArtifact
+from .budgets import TokenBudgetFinding, TokenBudgetReport, analyze_token_budget
 from .chat_templates import ChatTemplateParseError, parse_hf_tokenizer_config_chat_template
 from .config import VerificationConfig, load_config
 from .diagnostics import CheckMode, Diagnostic, DiagnosticSeverity, SourceSpan, WitnessStep, WitnessTrace, diagnostic_sort_key
@@ -96,6 +97,13 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "provider-migration": (CheckMode.BOUNDED, CheckMode.HEURISTIC),
     "tool-schema-ingestion": (CheckMode.SOUND, CheckMode.COMPLETE),
     "tool-serialization": (CheckMode.BOUNDED, CheckMode.HEURISTIC),
+    "token-budget-abstained": (CheckMode.ABSTAINING, CheckMode.BOUNDED),
+    "token-budget-context-conflict": (CheckMode.BOUNDED, CheckMode.HEURISTIC),
+    "token-budget-invalid": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "token-budget-model": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "token-budget-required-overflow": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "token-budget-segment-overflow": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "token-budget-total-overflow": (CheckMode.SOUND, CheckMode.BOUNDED),
     "check-unknown": (CheckMode.SOUND, CheckMode.COMPLETE),
     "check-failed": (CheckMode.HEURISTIC,),
 }
@@ -161,6 +169,7 @@ class VerificationSession:
             "parser-compatibility": self._parser_compatibility_check,
             "provider-fixture-replay": self._provider_fixture_replay_check,
             "provider-migration": self._provider_migration_check,
+            "token-budget-model": self._token_budget_model_check,
             "tool-schema-ingestion": self._tool_schema_ingestion_check,
             "tool-serialization": self._tool_serialization_check,
         }
@@ -482,6 +491,25 @@ class VerificationSession:
     def _provider_migration_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
         report = analyze_provider_migration(context.loaded_artifacts)
         return tuple(_provider_migration_diagnostic(finding) for finding in report.findings)
+
+    def _token_budget_model_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        tokenizers = []
+        for loaded in context.loaded_artifacts:
+            if loaded.artifact.kind is not ArtifactKind.TOKENIZER or not isinstance(loaded.artifact, TokenizerArtifact):
+                continue
+            try:
+                tokenizers.append((loaded.artifact, load_tokenizer(loaded.artifact)))
+            except TokenizerError:
+                continue
+        report = analyze_token_budget(
+            context.config,
+            context.loaded_artifacts,
+            tokenizers=tuple(tokenizers),
+        )
+        diagnostics = [_token_budget_finding_diagnostic(report, finding) for finding in report.findings]
+        if report.reservation is not None:
+            diagnostics.append(_token_budget_summary_diagnostic(report))
+        return tuple(diagnostics)
 
     def _missing_local_paths(self) -> set[str]:
         return {
@@ -1036,6 +1064,80 @@ def _tool_schema_ingestion_diagnostic(loaded: LoadedArtifact) -> Diagnostic:
                 WitnessStep(action="record ingestion issues", output=str(issue_count)),
             ),
             artifacts=(loaded.artifact.to_ref(),),
+        ),
+    )
+
+
+def _token_budget_finding_diagnostic(report: TokenBudgetReport, finding: TokenBudgetFinding) -> Diagnostic:
+    severity = (
+        DiagnosticSeverity.ERROR
+        if finding.severity == "error"
+        else DiagnosticSeverity.WARNING
+        if finding.severity == "warning"
+        else DiagnosticSeverity.INFO
+    )
+    steps = [
+        WitnessStep(action="select context budget", output=report.budget_source or "missing"),
+    ]
+    if report.reservation is not None:
+        steps.extend(
+            [
+                WitnessStep(
+                    action="compute reserved context tokens",
+                    input=str(report.reservation.max_context_tokens),
+                    output=str(report.reservation.reserved_total),
+                ),
+                WitnessStep(action="compute modeled input budget", output=str(report.reservation.input_budget_tokens)),
+            ]
+        )
+    steps.extend(
+        WitnessStep(action="inspect budget evidence", input=key, output=value)
+        for key, value in finding.evidence
+    )
+    return Diagnostic(
+        rule_id=finding.rule_id,
+        severity=severity,
+        message=finding.message,
+        check_modes=CHECK_MODE_CATALOG[finding.rule_id],
+        suggestions=(finding.suggestion,),
+        witness=WitnessTrace(
+            summary="PromptABI modeled the finite context-window arithmetic without applying a truncation policy.",
+            steps=tuple(steps),
+        ),
+    )
+
+
+def _token_budget_summary_diagnostic(report: TokenBudgetReport) -> Diagnostic:
+    assert report.reservation is not None
+    total = report.total_prompt_tokens
+    required = report.required_prompt_tokens
+    unknown = ", ".join(segment.name for segment in report.unknown_segments) or "<none>"
+    known = ", ".join(
+        f"{segment.name}={segment.total_tokens} ({segment.source})" for segment in report.known_segments
+    ) or "<none>"
+    return Diagnostic(
+        rule_id="token-budget-model",
+        severity=DiagnosticSeverity.INFO,
+        message=(
+            f"context budget '{report.budget_source}' leaves "
+            f"{report.reservation.input_budget_tokens} input token(s) after reservations"
+        ),
+        check_modes=CHECK_MODE_CATALOG["token-budget-model"],
+        witness=WitnessTrace(
+            summary="PromptABI constructed a named prompt-segment budget model from real artifacts.",
+            steps=(
+                WitnessStep(action="select framework", input=report.framework or "config", output=report.strategy or "none"),
+                WitnessStep(
+                    action="reserve output/tool/generation/special tokens",
+                    input=str(report.reservation.max_context_tokens),
+                    output=str(report.reservation.reserved_total),
+                ),
+                WitnessStep(action="compute input budget", output=str(report.reservation.input_budget_tokens)),
+                WitnessStep(action="sum required segment tokens", output=str(required) if required is not None else "unknown"),
+                WitnessStep(action="sum all segment tokens", output=str(total) if total is not None else "unknown"),
+                WitnessStep(action="record known segment counts", output=known),
+                WitnessStep(action="record unknown segment counts", output=unknown),
+            ),
         ),
     )
 

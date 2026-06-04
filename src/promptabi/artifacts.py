@@ -128,6 +128,9 @@ class PromptSegment:
     role: str | None = None
     required: bool = False
     max_tokens: int | None = None
+    token_count: int | None = None
+    content: str | None = None
+    overhead_tokens: int = 0
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -136,6 +139,12 @@ class PromptSegment:
             raise ValueError("prompt segment role must be non-empty")
         if self.max_tokens is not None and self.max_tokens <= 0:
             raise ValueError("prompt segment max_tokens must be positive")
+        if self.token_count is not None and self.token_count < 0:
+            raise ValueError("prompt segment token_count must be non-negative")
+        if self.content is not None and not isinstance(self.content, str):
+            raise ValueError("prompt segment content must be a string")
+        if self.overhead_tokens < 0:
+            raise ValueError("prompt segment overhead_tokens must be non-negative")
 
     def to_dict(self) -> dict[str, object]:
         data: dict[str, object] = {"name": self.name, "required": self.required}
@@ -143,6 +152,12 @@ class PromptSegment:
             data["role"] = self.role
         if self.max_tokens is not None:
             data["max_tokens"] = self.max_tokens
+        if self.token_count is not None:
+            data["token_count"] = self.token_count
+        if self.content is not None:
+            data["content"] = self.content
+        if self.overhead_tokens:
+            data["overhead_tokens"] = self.overhead_tokens
         return data
 
 
@@ -385,6 +400,10 @@ class FrameworkTruncationConfigArtifact(BaseArtifact):
     strategy: TruncationStrategy = TruncationStrategy.NONE
     max_context_tokens: int | None = None
     reserve_output_tokens: int = 0
+    reserved_tool_tokens: int = 0
+    generation_prompt_tokens: int = 0
+    special_token_overhead: int = 0
+    model: str | None = None
 
     def __post_init__(self) -> None:
         BaseArtifact.__post_init__(self)
@@ -395,6 +414,14 @@ class FrameworkTruncationConfigArtifact(BaseArtifact):
             raise ValueError("max_context_tokens must be positive")
         if self.reserve_output_tokens < 0:
             raise ValueError("reserve_output_tokens must be non-negative")
+        if self.reserved_tool_tokens < 0:
+            raise ValueError("reserved_tool_tokens must be non-negative")
+        if self.generation_prompt_tokens < 0:
+            raise ValueError("generation_prompt_tokens must be non-negative")
+        if self.special_token_overhead < 0:
+            raise ValueError("special_token_overhead must be non-negative")
+        if self.model is not None and not self.model:
+            raise ValueError("model must be non-empty")
 
     def to_dict(self) -> dict[str, object]:
         data = BaseArtifact.to_dict(self)
@@ -404,6 +431,14 @@ class FrameworkTruncationConfigArtifact(BaseArtifact):
             data["max_context_tokens"] = self.max_context_tokens
         if self.reserve_output_tokens:
             data["reserve_output_tokens"] = self.reserve_output_tokens
+        if self.reserved_tool_tokens:
+            data["reserved_tool_tokens"] = self.reserved_tool_tokens
+        if self.generation_prompt_tokens:
+            data["generation_prompt_tokens"] = self.generation_prompt_tokens
+        if self.special_token_overhead:
+            data["special_token_overhead"] = self.special_token_overhead
+        if self.model is not None:
+            data["model"] = self.model
         return data
 
 
@@ -554,6 +589,10 @@ def artifact_from_config(
             strategy=TruncationStrategy(_str(spec, "strategy", default=TruncationStrategy.NONE.value)),
             max_context_tokens=_optional_int(spec, "max_context_tokens"),
             reserve_output_tokens=_int(spec, "reserve_output_tokens", default=0),
+            reserved_tool_tokens=_int(spec, "reserved_tool_tokens", default=0),
+            generation_prompt_tokens=_int(spec, "generation_prompt_tokens", default=0),
+            special_token_overhead=_int(spec, "special_token_overhead", default=0),
+            model=_optional_str(spec, "model"),
         )
     raise AssertionError(f"unhandled artifact kind: {kind}")
 
@@ -721,12 +760,30 @@ def _prompt_segments(spec: dict[str, Any]) -> tuple[PromptSegment, ...]:
     for item in raw_segments:
         if not isinstance(item, dict):
             raise ValueError("prompt segment entries must be objects")
+        required = _bool(item, "required", default=False)
+        must_survive = _optional_bool(item, "must_survive")
+        if must_survive is not None:
+            if "required" in item and required != must_survive:
+                raise ValueError("prompt segment fields 'required' and 'must_survive' must agree")
+            required = must_survive
         segments.append(
             PromptSegment(
                 name=_str(item, "name"),
                 role=_optional_str(item, "role"),
-                required=_bool(item, "required", default=False),
+                required=required,
                 max_tokens=_optional_int(item, "max_tokens"),
+                token_count=_optional_int(item, "token_count"),
+                content=_optional_text(item, "content"),
+                overhead_tokens=_int(item, "overhead_tokens", default=0),
             )
         )
     return tuple(segments)
+
+
+def _optional_text(spec: dict[str, Any], key: str) -> str | None:
+    value = spec.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"artifact field '{key}' must be a string")
+    return value

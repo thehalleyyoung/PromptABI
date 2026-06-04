@@ -1,0 +1,10 @@
+{
+  "framework": "vllm",
+  "strategy": "left",
+  "model": "demo-8b-instruct",
+  "max_context_tokens": 96,
+  "reserve_output_tokens": 20,
+  "reserved_tool_tokens": 8,
+  "generation_prompt_tokens": 3,
+  "special_token_overhead": 5
+}

@@ -12,7 +12,16 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from .artifacts import Artifact, ArtifactKind, GrammarArtifact, SchemaArtifact, StopPolicyArtifact, ToolDefinitionArtifact
+from .artifacts import (
+    Artifact,
+    ArtifactKind,
+    GrammarArtifact,
+    PromptSegment,
+    PromptSegmentArtifact,
+    SchemaArtifact,
+    StopPolicyArtifact,
+    ToolDefinitionArtifact,
+)
 from .chat_templates import ChatTemplateParseError, parse_hf_tokenizer_config_chat_template, symbolically_execute_chat_template
 from .diagnostics import SourceSpan
 from .grammar_differential import analyze_grammar_differential_corpus
@@ -150,6 +159,8 @@ class ArtifactLoader:
             return self._load_grammar(artifact, path)
         if artifact.kind is ArtifactKind.TOOL_DEFINITION:
             return self._load_tool_definition(artifact, path)
+        if artifact.kind is ArtifactKind.PROMPT_SEGMENT:
+            return self._load_prompt_segments(artifact, path)
         if artifact.kind is ArtifactKind.PROVIDER_CONFIG:
             return self._load_provider_snapshot(artifact, path)
         return self._load_file(artifact, path, source_type="local-file")
@@ -530,6 +541,70 @@ class ArtifactLoader:
             warnings=loaded.warnings,
         )
 
+    def _load_prompt_segments(self, artifact: Artifact, path: Path) -> LoadedArtifact:
+        if path.suffix.lower() != ".json":
+            return self._load_file(artifact, path, source_type="prompt-segments-file")
+        try:
+            text = path.read_text(encoding="utf-8")
+            raw = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"prompt-segment artifact '{artifact.name}' is not valid JSON",
+                suggestion="Store prompt segments as a JSON object with segments or an OpenAI-style messages array.",
+                steps=(("parse prompt-segment JSON", str(path), exc.msg),),
+                span=SourceSpan(path=str(path), start_line=exc.lineno, start_column=exc.colno),
+            ) from exc
+        try:
+            source_map = build_json_source_map(text, path)
+            parsed_segments = _parse_prompt_segment_payload(raw)
+        except ValueError as exc:
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"prompt-segment artifact '{artifact.name}' could not be parsed",
+                suggestion="Use {\"segments\": [...]} with name/role/content/token_count fields or a messages array.",
+                steps=(("parse prompt segments", str(path), str(exc)),),
+            ) from exc
+        loaded = self._load_file(artifact, path, source_type="prompt-segments")
+        parsed_artifact = artifact
+        if isinstance(artifact, PromptSegmentArtifact):
+            parsed_artifact = replace(artifact, segments=_merge_prompt_segments(artifact.segments, parsed_segments))
+        source_spans = _prompt_segment_source_spans(source_map, parsed_segments) or loaded.source_spans
+        segment_count = len(parsed_artifact.segments) if isinstance(parsed_artifact, PromptSegmentArtifact) else len(parsed_segments)
+        required_count = (
+            len(parsed_artifact.required_segments)
+            if isinstance(parsed_artifact, PromptSegmentArtifact)
+            else sum(1 for segment in parsed_segments if segment.required)
+        )
+        known_count = (
+            sum(
+                1
+                for segment in parsed_artifact.segments
+                if segment.token_count is not None or segment.max_tokens is not None or segment.content is not None
+            )
+            if isinstance(parsed_artifact, PromptSegmentArtifact)
+            else sum(
+                1
+                for segment in parsed_segments
+                if segment.token_count is not None or segment.max_tokens is not None or segment.content is not None
+            )
+        )
+        return LoadedArtifact(
+            artifact=parsed_artifact,
+            source_type="prompt-segments",
+            pinned=loaded.pinned,
+            resolved=loaded.resolved,
+            actual_sha256=loaded.actual_sha256,
+            size_bytes=loaded.size_bytes,
+            metadata=(
+                ("segment_count", segment_count),
+                ("required_segment_count", required_count),
+                ("countable_segment_count", known_count),
+            ),
+            source_spans=source_spans,
+            warnings=loaded.warnings,
+        )
+
     def _load_grammar(self, artifact: Artifact, path: Path) -> LoadedArtifact:
         declared_type = artifact.grammar_type if isinstance(artifact, GrammarArtifact) else "promptabi"
         if declared_type.strip().lower().replace("_", "-") == "grammar-differential":
@@ -709,6 +784,141 @@ def _merge_metadata(
             merged.append((key, value))
             seen.add(key)
     return tuple(merged)
+
+
+def _parse_prompt_segment_payload(raw: object) -> tuple[PromptSegment, ...]:
+    if isinstance(raw, dict):
+        raw_segments = raw.get("segments")
+        if not isinstance(raw_segments, list):
+            raise ValueError("object payload must contain a 'segments' list")
+        return tuple(_prompt_segment_from_mapping(item, fallback_name=f"segment-{index}") for index, item in enumerate(raw_segments, start=1))
+    if isinstance(raw, list):
+        segments: list[PromptSegment] = []
+        role_counts: dict[str, int] = {}
+        for index, item in enumerate(raw, start=1):
+            if not isinstance(item, dict):
+                raise ValueError("message entries must be JSON objects")
+            role_value = item.get("role")
+            role = role_value if isinstance(role_value, str) and role_value else "message"
+            role_counts[role] = role_counts.get(role, 0) + 1
+            content_value = item.get("content")
+            content = content_value if isinstance(content_value, str) else None
+            name = item.get("name")
+            if not isinstance(name, str) or not name:
+                name = f"{role}-{role_counts[role]}"
+            segments.append(
+                PromptSegment(
+                    name=name,
+                    role=role,
+                    required=role in {"system", "developer"},
+                    content=content,
+                )
+            )
+        return tuple(segments)
+    raise ValueError("payload must be a JSON object or messages array")
+
+
+def _prompt_segment_from_mapping(raw: object, *, fallback_name: str) -> PromptSegment:
+    if not isinstance(raw, dict):
+        raise ValueError("segment entries must be JSON objects")
+    name = raw.get("name", fallback_name)
+    if not isinstance(name, str) or not name:
+        raise ValueError("segment name must be a non-empty string")
+    role_value = raw.get("role")
+    if role_value is not None and (not isinstance(role_value, str) or not role_value):
+        raise ValueError("segment role must be a non-empty string")
+    content_value = raw.get("content")
+    if content_value is not None and not isinstance(content_value, str):
+        raise ValueError("segment content must be a string")
+    required_value = raw.get("required", raw.get("must_survive", False))
+    must_survive_value = raw.get("must_survive")
+    if not isinstance(required_value, bool):
+        raise ValueError("segment required must be a boolean")
+    if must_survive_value is not None:
+        if not isinstance(must_survive_value, bool):
+            raise ValueError("segment must_survive must be a boolean")
+        if "required" in raw and must_survive_value != required_value:
+            raise ValueError("segment required and must_survive must agree")
+    return PromptSegment(
+        name=name,
+        role=role_value,
+        required=required_value,
+        max_tokens=_nonnegative_optional(raw, "max_tokens", positive=True),
+        token_count=_nonnegative_optional(raw, "token_count", positive=False),
+        content=content_value,
+        overhead_tokens=_nonnegative_int(raw, "overhead_tokens", default=0),
+    )
+
+
+def _merge_prompt_segments(
+    declared: tuple[PromptSegment, ...],
+    parsed: tuple[PromptSegment, ...],
+) -> tuple[PromptSegment, ...]:
+    parsed_by_name = {segment.name: segment for segment in parsed}
+    parsed_by_role: dict[str, list[PromptSegment]] = {}
+    for segment in parsed:
+        if segment.role is not None:
+            parsed_by_role.setdefault(segment.role, []).append(segment)
+    merged: list[PromptSegment] = []
+    used_names: set[str] = set()
+    for segment in declared:
+        parsed_segment = parsed_by_name.get(segment.name)
+        if parsed_segment is None and segment.role is not None:
+            candidates = parsed_by_role.get(segment.role, [])
+            parsed_segment = candidates.pop(0) if candidates else None
+        if parsed_segment is None:
+            merged.append(segment)
+            continue
+        used_names.add(parsed_segment.name)
+        merged.append(
+            PromptSegment(
+                name=segment.name,
+                role=segment.role or parsed_segment.role,
+                required=segment.required,
+                max_tokens=segment.max_tokens or parsed_segment.max_tokens,
+                token_count=segment.token_count if segment.token_count is not None else parsed_segment.token_count,
+                content=segment.content if segment.content is not None else parsed_segment.content,
+                overhead_tokens=segment.overhead_tokens or parsed_segment.overhead_tokens,
+            )
+        )
+    declared_names = {segment.name for segment in declared}
+    for segment in parsed:
+        if segment.name not in declared_names and segment.name not in used_names:
+            merged.append(segment)
+    return tuple(merged)
+
+
+def _prompt_segment_source_spans(source_map, segments: tuple[PromptSegment, ...]) -> tuple[tuple[str, SourceSpan], ...]:
+    spans: list[tuple[str, SourceSpan]] = []
+    for index, segment in enumerate(segments):
+        span = (
+            source_map.span_for(("segments", str(index)))
+            or source_map.span_for((str(index),))
+            or source_map.key_span_for(("segments", str(index)))
+        )
+        if span is not None:
+            spans.append((segment.name, span))
+    return tuple(spans)
+
+
+def _nonnegative_optional(raw: dict[str, object], key: str, *, positive: bool) -> int | None:
+    value = raw.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError(f"segment {key} must be an integer")
+    if positive and value <= 0:
+        raise ValueError(f"segment {key} must be positive")
+    if not positive and value < 0:
+        raise ValueError(f"segment {key} must be non-negative")
+    return value
+
+
+def _nonnegative_int(raw: dict[str, object], key: str, *, default: int) -> int:
+    value = raw.get(key, default)
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"segment {key} must be a non-negative integer")
+    return value
 
 
 def _has_pin(artifact: Artifact) -> bool:

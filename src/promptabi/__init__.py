@@ -27,6 +27,13 @@ from .artifacts import (
     ToolDefinitionArtifact,
     TruncationStrategy,
 )
+from .budgets import (
+    TokenBudgetFinding,
+    TokenBudgetReport,
+    TokenBudgetReservation,
+    TokenBudgetSegment,
+    analyze_token_budget,
+)
 from .chat_templates import (
     ChatTemplateCondition,
     ChatTemplateDifferentialMismatch,
@@ -446,6 +453,10 @@ __all__ = [
     "TokenizerAdapter",
     "TokenizerBackend",
     "TokenizerError",
+    "TokenBudgetFinding",
+    "TokenBudgetReport",
+    "TokenBudgetReservation",
+    "TokenBudgetSegment",
     "ToolDefinitionArtifact",
     "ToolDefinition",
     "ToolParameterSummary",
@@ -508,6 +519,7 @@ __all__ = [
     "ingest_tool_schema_mapping",
     "analyze_stop_policy_tokenizer",
     "analyze_tool_call_serialization",
+    "analyze_token_budget",
     "analyze_stop_overreachability",
     "load_stop_trace_cases",
     "render_chat_template_supported_fragment",
