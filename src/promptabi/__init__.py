@@ -84,6 +84,14 @@ from .diagnostics import (
 )
 from .diff import ConfigDiffInputs, diff_config_files, diff_configs
 from .explain import DiagnosticExplanation, ExplainError, explain_diagnostic
+from .first_party_plugins import (
+    FIRST_PARTY_PLUGIN_NAME,
+    FIRST_PARTY_PLUGIN_SPECS,
+    FIRST_PARTY_REFERENCE_SCHEMES,
+    FirstPartyPluginSpec,
+    create_first_party_plugin_registry,
+    render_plugin_capabilities,
+)
 from .formal import (
     And,
     AutomatonError,
@@ -400,6 +408,10 @@ __all__ = [
     "ExplainError",
     "FiniteContractProblem",
     "FiniteStateTransducer",
+    "FIRST_PARTY_PLUGIN_NAME",
+    "FIRST_PARTY_PLUGIN_SPECS",
+    "FIRST_PARTY_REFERENCE_SCHEMES",
+    "FirstPartyPluginSpec",
     "FrameworkTruncationConfigArtifact",
     "GrammarArtifact",
     "GrammarDialect",
@@ -561,6 +573,7 @@ __all__ = [
     "apply_normalization",
     "collect_diagnostics",
     "create_session",
+    "create_first_party_plugin_registry",
     "discover_config",
     "diff_config_files",
     "diff_configs",
@@ -599,6 +612,7 @@ __all__ = [
     "load_plugin_modules",
     "render_result",
     "render_explanation",
+    "render_plugin_capabilities",
     "run_verification",
     "parse_hf_chat_template_config",
     "parse_hf_tokenizer_config_chat_template",

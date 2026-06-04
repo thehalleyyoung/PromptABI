@@ -58,9 +58,10 @@ compressed lazy intersection witnesses, incremental DFA minimization, indexed
 transducer composition/projection, solver timeouts, and constraint-sliced finite
 enumeration, while the byte-level tokenizer memoizes normalization results so
 the same proofs scale to tokenizer-sized alphabets without changing the public
-diagnostic contract. A typed plugin registry now extends artifact loaders,
-checks, provider/grammar/template/truncation/solver backends, and diagnostic
-renderers without weakening deterministic sessions or CLI output.
+diagnostic contract. A typed plugin registry and default first-party plugin pack
+now expose Hugging Face, OpenAI-compatible, vLLM, llama.cpp, LangChain,
+LlamaIndex, Outlines, xgrammar, llguidance, Pydantic, MCP, and Z3 adapter
+surfaces without weakening deterministic sessions or CLI output.
 
 PromptABI now ships a bounded, sanitizer-aware role-boundary non-forgeability check:
 unsanitized user/tool/function content and dynamic role fields are checked against

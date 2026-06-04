@@ -13,6 +13,7 @@ from ._version import __version__
 from .config import ConfigError, discover_config, load_config
 from .diff import diff_config_files
 from .explain import ExplainError, explain_diagnostic, render_explanation_json, render_explanation_text
+from .first_party_plugins import create_first_party_plugin_registry, render_plugin_capabilities
 from .init import InitError, available_stacks, scaffold_promptabi_project
 from .lockfiles import (
     LockfileError,
@@ -209,6 +210,21 @@ def build_parser() -> argparse.ArgumentParser:
     provider_fixture_manifest.add_argument(
         "--output",
         help="write manifest JSON to this path instead of stdout",
+    )
+
+    plugins = subparsers.add_parser("plugins", help="inspect PromptABI plugin capabilities")
+    plugins.add_argument(
+        "--plugin",
+        action="append",
+        default=[],
+        metavar="MODULE[:OBJECT]",
+        help="import an additional PromptABI plugin module before listing capabilities; may be repeated",
+    )
+    plugins.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
     )
     return parser
 
@@ -408,6 +424,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         return 0
 
+    if args.command == "plugins":
+        try:
+            registry = _load_cli_plugins(args.plugin)
+            output = render_plugin_capabilities(registry, output_format=args.format)
+        except (PluginError, ValueError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        print(output, end="")
+        return 0
+
     parser.error(f"unknown command: {args.command}")
     return 2
 
@@ -441,7 +467,7 @@ def _resolve_lockfile_path(value: str | None, config_path: Path) -> Path:
 
 
 def _load_cli_plugins(values: Sequence[str]) -> PluginRegistry:
-    registry = PluginRegistry()
+    registry = create_first_party_plugin_registry()
     if values:
         load_plugin_modules(values, registry=registry)
     return registry

@@ -7,12 +7,14 @@ from promptabi import (
     CheckMode,
     Diagnostic,
     DiagnosticSeverity,
+    ProviderConfigArtifact,
     LoadedArtifact,
     PluginCapabilityKind,
     PluginRegistry,
     SchemaArtifact,
     VerificationConfig,
     VerificationSession,
+    create_first_party_plugin_registry,
     render_result,
 )
 from promptabi.cli import main
@@ -152,4 +154,77 @@ def register_promptabi_plugin(registry):
     captured = capsys.readouterr()
     assert exit_code == 0
     assert captured.out == "cli-plugin|cli-plugin-check|heuristic\n"
+    assert captured.err == ""
+
+
+def test_first_party_plugin_pack_registers_required_families() -> None:
+    registry = create_first_party_plugin_registry()
+
+    by_name = {capability.name: capability for capability in registry.capabilities}
+    families = {
+        capability.plugin.removeprefix("promptabi.first_party.")
+        for capability in registry.capabilities
+        if capability.plugin.startswith("promptabi.first_party")
+    }
+
+    assert {
+        "huggingface",
+        "openai-compatible",
+        "vllm",
+        "llama.cpp",
+        "langchain",
+        "llamaindex",
+        "outlines",
+        "xgrammar",
+        "llguidance",
+        "pydantic",
+        "mcp",
+        "z3",
+    }.issubset(families)
+    assert by_name["z3-finite-contract-encoding"].kind is PluginCapabilityKind.SOLVER_ENCODING
+    assert by_name["outlines-grammar-backend"].kind is PluginCapabilityKind.GRAMMAR_BACKEND
+    assert "first-party-plugin-coverage" in registry.checks
+    assert any(loader.name == "first-party-reference-loader" for loader in registry.artifact_loaders)
+
+
+def test_default_session_loads_first_party_reference_and_runs_coverage() -> None:
+    config = VerificationConfig(
+        name="first-party-openai",
+        checks=("first-party-plugin-coverage",),
+        artifact_bundle=ArtifactBundle(
+            (
+                ProviderConfigArtifact(
+                    kind=ArtifactKind.PROVIDER_CONFIG,
+                    name="openai-contract",
+                    location=ArtifactLocation(uri="openai://chat-completions?version=2024-06"),
+                    provider="openai",
+                    api_family="openai-compatible",
+                ),
+            )
+        ),
+    )
+
+    session = VerificationSession(config)
+    loaded = session.load_artifacts()
+    result = session.run()
+
+    assert loaded[0].source_type == "first-party-openai-compatible-reference"
+    assert loaded[0].pinned is True
+    assert ("first_party_plugin", "openai-compatible") in loaded[0].metadata
+    assert result.ok
+    assert result.diagnostics[0].rule_id == "first-party-plugin-coverage"
+    assert "openai-compatible" in dict(result.diagnostics[0].properties)["loaded_reference_families"]
+
+
+def test_cli_lists_first_party_plugin_capabilities(capsys) -> None:
+    exit_code = main(["plugins", "--format", "json"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    names = {capability["name"] for capability in payload["capabilities"]}
+
+    assert exit_code == 0
+    assert "huggingface-artifact-reference" in names
+    assert "mcp-tool-contract" in names
+    assert "z3-finite-contract-encoding" in names
     assert captured.err == ""

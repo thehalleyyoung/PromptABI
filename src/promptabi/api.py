@@ -9,6 +9,7 @@ from .config import VerificationConfig, load_config
 from .diagnostics import Diagnostic
 from .explain import DiagnosticExplanation, explain_diagnostic, render_explanation_json, render_explanation_text
 from .loaders import ArtifactLoader, LoadedArtifact
+from .first_party_plugins import create_first_party_plugin_registry
 from .plugins import PluginRegistry
 from .render import render_json, render_sarif, render_text
 from .session import CheckCallable, VerificationResult, VerificationSession
@@ -29,7 +30,12 @@ def create_session(
     if artifact_overrides:
         base_dir = Path(override_base_dir) if override_base_dir is not None else Path.cwd()
         resolved_config = resolved_config.with_artifact_overrides(dict(artifact_overrides), base_dir=base_dir)
-    return VerificationSession(resolved_config, checks=checks, loader=loader, plugin_registry=plugin_registry)
+    return VerificationSession(
+        resolved_config,
+        checks=checks,
+        loader=loader,
+        plugin_registry=plugin_registry or create_first_party_plugin_registry(),
+    )
 
 
 def load_artifacts(

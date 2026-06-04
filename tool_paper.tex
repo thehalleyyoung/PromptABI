@@ -868,7 +868,15 @@ The same behavior is available through the embedding API, which now covers the
 full first integration loop: loading a config, applying artifact overrides,
 loading artifacts through the deterministic offline loader, selecting built-in or
 custom checks, collecting diagnostics, returning a typed result, and rendering
-that result in the same formats as the CLI.
+that result in the same formats as the CLI. The extension surface is no longer
+only a third-party promise: PromptABI now ships a default first-party plugin pack
+for Hugging Face, OpenAI-compatible APIs, vLLM, llama.cpp, LangChain,
+LlamaIndex, Outlines, xgrammar, llguidance, Pydantic, MCP, and Z3. The pack is
+web-free and import-light: it registers inspectable provider, grammar, template,
+truncation, tool-schema, artifact-loader, diagnostic-renderer, and solver
+capabilities, exposes deterministic first-party URI reference loading, and adds
+a coverage check that proves the bundled adapters are available inside ordinary
+verification sessions.
 
 \begin{verbatim}
 from promptabi import CheckContext, Diagnostic, DiagnosticSeverity, run_verification
@@ -895,10 +903,11 @@ The public helpers \texttt{create\_session}, \texttt{load\_artifacts},
 \texttt{collect\_diagnostics}, \texttt{run\_verification}, and
 \texttt{render\_result} deliberately mirror the CLI rather than bypassing it.
 The point is not that the current checker is deep. The point is that all later
-checkers have an integration path. A LangChain plugin, a pre-commit hook, a
-GitHub Action, a notebook visualization, and a provider-fixture replay harness
+checkers have an integration path. The built-in plugin pack, a pre-commit hook,
+a GitHub Action, a notebook visualization, and a provider-fixture replay harness
 can all depend on the same session, loaded-artifact, diagnostic, and result
-objects. That prevents the common research-tool failure mode where each
+objects. \texttt{promptabi plugins} makes those extension claims visible at the
+CLI before a user trusts them in CI. That prevents the common research-tool failure mode where each
 experiment has its own incompatible input format and output convention. The first
 workflow milestone also establishes practical CI affordances---discovery,
 overrides, caches, verbosity, deterministic rendering, explicit failure

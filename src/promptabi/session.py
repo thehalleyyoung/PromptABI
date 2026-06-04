@@ -36,6 +36,7 @@ from .parser_compatibility import (
     ParserCompatibilityStatus,
     analyze_parser_compatibility,
 )
+from .first_party_plugins import create_first_party_plugin_registry
 from .plugins import PluginRegistry
 from .provider_fixture_replay import ProviderFixtureReplayCase, ProviderFixtureReplayFinding, analyze_provider_fixture_replay
 from .provider_migration import ProviderMigrationFinding, analyze_provider_migration
@@ -464,7 +465,7 @@ class VerificationSession:
         plugin_registry: PluginRegistry | None = None,
     ) -> None:
         self.config = config
-        self.plugin_registry = plugin_registry or PluginRegistry()
+        self.plugin_registry = plugin_registry or create_first_party_plugin_registry()
         self.loader = loader or ArtifactLoader(plugin_registry=self.plugin_registry)
         self.check_dependencies: dict[str, CheckDependency] = dict(CHECK_DEPENDENCIES)
         self.check_modes: dict[str, tuple[CheckMode, ...]] = dict(CHECK_MODE_CATALOG)
