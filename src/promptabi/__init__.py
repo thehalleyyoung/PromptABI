@@ -7,6 +7,7 @@ blocks that later checkers can reuse without changing the embedding API.
 """
 
 from ._version import __version__
+from .api import collect_diagnostics, create_session, load_artifacts, render_result, run_verification
 from .artifacts import (
     ArtifactBundle,
     ArtifactKind,
@@ -66,7 +67,7 @@ from .formal import (
     Var,
 )
 from .loaders import ArtifactLoadError, ArtifactLoader, ArtifactLoadWarning, LoadedArtifact, load_artifact
-from .session import VerificationResult, VerificationSession
+from .session import CheckCallable, CheckContext, VerificationResult, VerificationSession
 from .source import JsonSourceMap, build_json_source_map
 from .tokenizer_diff import (
     TokenizerDifferentialCase,
@@ -108,6 +109,8 @@ __all__ = [
     "BoolDomain",
     "BoundedStringDomain",
     "ChatTemplateArtifact",
+    "CheckCallable",
+    "CheckContext",
     "CheckMode",
     "ConfigError",
     "Contains",
@@ -171,10 +174,15 @@ __all__ = [
     "WitnessStep",
     "WitnessTrace",
     "apply_normalization",
+    "collect_diagnostics",
+    "create_session",
     "discover_config",
     "build_json_source_map",
     "load_artifact",
+    "load_artifacts",
     "load_config",
     "load_tokenizer",
+    "render_result",
+    "run_verification",
     "run_tokenizer_differential",
 ]

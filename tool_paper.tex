@@ -95,9 +95,9 @@ bundles, records source spans for config declarations and parsed JSON artifact
 fields, materializes local and metadata-only remote artifacts, validates sha256
 pins, adapts real tokenizer backends into stable encode/decode metadata,
 extracts automata, transducer, and solver witnesses for finite formal contracts, prepares a cache directory for future expensive products, emits deterministic
-typed diagnostics in text, JSON, and SARIF, returns stable policy-controlled
-process exit codes, and runs a CPU-only smoke benchmark against an example
-bundle.
+typed diagnostics in text, JSON, and SARIF, exposes an embedding API for custom
+checks and typed results, returns stable policy-controlled process exit codes,
+and runs a CPU-only smoke benchmark against an example bundle.
 
 The repository layout is designed to scale:
 
@@ -492,25 +492,46 @@ fail the process while still emitting machine-readable results. Malformed
 invocations and invalid configs return code 2, preserving the distinction
 between a broken workflow and a real artifact-contract finding.
 
-The same behavior is available through the embedding API:
+The same behavior is available through the embedding API, which now covers the
+full first integration loop: loading a config, applying artifact overrides,
+loading artifacts through the deterministic offline loader, selecting built-in or
+custom checks, collecting diagnostics, returning a typed result, and rendering
+that result in the same formats as the CLI.
 
 \begin{verbatim}
-from promptabi import VerificationSession
+from promptabi import CheckContext, Diagnostic, DiagnosticSeverity, run_verification
 
-result = VerificationSession.from_config_file("promptabi.json").run()
+def organization_policy(context: CheckContext):
+    schema = context.artifact("schema")
+    yield Diagnostic(
+        rule_id="organization-schema-present",
+        severity=DiagnosticSeverity.INFO,
+        message=f"loaded {schema.artifact.name}",
+        artifact=schema.artifact.to_ref(),
+    )
+
+result = run_verification(
+    "promptabi.json",
+    checks={"organization-schema-present": organization_policy},
+    selected_checks=["organization-schema-present"],
+)
 if not result.ok:
     raise SystemExit(1)
 \end{verbatim}
 
+The public helpers \texttt{create\_session}, \texttt{load\_artifacts},
+\texttt{collect\_diagnostics}, \texttt{run\_verification}, and
+\texttt{render\_result} deliberately mirror the CLI rather than bypassing it.
 The point is not that the current checker is deep. The point is that all later
 checkers have an integration path. A LangChain plugin, a pre-commit hook, a
 GitHub Action, a notebook visualization, and a provider-fixture replay harness
-can all depend on the same session and result objects. That prevents the common
-research-tool failure mode where each experiment has its own incompatible input
-format and output convention. The first workflow milestone also establishes
-practical CI affordances---discovery, overrides, caches, verbosity, deterministic
-rendering, and explicit failure thresholds---before expensive formal checkers
-arrive.
+can all depend on the same session, loaded-artifact, diagnostic, and result
+objects. That prevents the common research-tool failure mode where each
+experiment has its own incompatible input format and output convention. The first
+workflow milestone also establishes practical CI affordances---discovery,
+overrides, caches, verbosity, deterministic rendering, explicit failure
+thresholds, and plugin-style check registration---before expensive formal
+checkers arrive.
 
 \clearpage
 \section{Role-Boundary Non-Forgeability}

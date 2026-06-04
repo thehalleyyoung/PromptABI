@@ -15,12 +15,13 @@ promptabi verify --artifact schema=schemas/answer.json --fail-on warning
 PromptABI verification: minimal-chat-template
 checks: repository-skeleton
 status: PASS
-INFO repository-skeleton: PromptABI package, CLI, docs, examples, fixtures, and benchmarks are wired.
-  fingerprint: 9344d195f04b768d
+INFO repository-skeleton [heuristic]: PromptABI package, CLI, docs, examples, fixtures, and benchmarks are wired.
+  fingerprint: 966044f6134aa008
   witness: The verification session constructed a typed config and produced deterministic output.
     1. load JSON config | input: minimal-chat-template | output: 3 artifacts
     2. normalize artifact paths
-    3. render stable diagnostics
+    3. load artifacts | output: 3 loaded
+    4. render stable diagnostics
 ```
 
 PromptABI is CPU-only because its claims are structural. It models the exact
@@ -49,9 +50,9 @@ discoverable `promptabi verify` workflow, source-mapped diagnostics that point t
 exact config and artifact lines, offline version-pinned artifact loading, a real
 tokenizer abstraction spanning byte-level, Hugging Face
 `tokenizers`, `tiktoken`, and SentencePiece backends, a differential harness that
-checks those adapters against the actual libraries, plus docs, examples,
-fixtures, benchmarks, and a contribution path for growing checks without
-changing the public surface.
+checks those adapters against the actual libraries, an embedding API for custom
+checks and typed results, plus docs, examples, fixtures, benchmarks, and a
+contribution path for growing checks without changing the public surface.
 
 ## Why this is clearly distinct from TensorGuard
 
