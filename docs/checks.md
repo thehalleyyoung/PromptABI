@@ -30,6 +30,12 @@ for the exact boundary, witness shape, sanitizer model, and runnable examples.
 Can a stop sequence fire inside a valid structured output? Is a requested stop
 sequence unreachable under the tokenizer and grammar?
 
+`fixtures/real_world_bugs/` now includes public GitHub bug patterns reduced to
+synthetic offline fixtures. The corresponding tests prove the current
+role-boundary and stop-overreachability checkers catch Phi-style role delimiter
+forgery, XML-like tool-call delimiter truncation, quote-sentinel truncation, and
+tool-call parser-boundary stop failures.
+
 ## Must-survive budget verification
 
 Do required prompt segments remain present after the actual framework truncation
