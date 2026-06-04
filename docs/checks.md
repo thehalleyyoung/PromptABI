@@ -5,6 +5,9 @@ The roadmap focuses on three initial families.
 Every diagnostic carries an explicit verification mode so users can tell whether
 PromptABI proved a property, searched a bounded fragment, used Z3-backed SMT,
 reported heuristic evidence, or abstained outside the supported model.
+The same diagnostics render to text, JSON, SARIF, GitHub annotations, and the
+bundled GitHub Action summary, so CI and local debugging share one source of
+truth.
 
 | Mode | Meaning |
 | --- | --- |

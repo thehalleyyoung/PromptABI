@@ -1,0 +1,69 @@
+{
+  "artifacts": [
+    {
+      "kind": "prompt-segment",
+      "location": "messages.json",
+      "metadata_fingerprint": "4845c8fe79f186489d00402574e7861469ef7cbb312cc568ab488ad0054d7c41",
+      "name": "messages",
+      "pinned": true,
+      "resolved": true,
+      "sha256": "f093612573390600fcf389a6a33b50fd583570ef5a7409b686d4a1ab708b28c4",
+      "size_bytes": 200,
+      "source_type": "prompt-segments"
+    },
+    {
+      "kind": "schema",
+      "location": "answer.schema.json",
+      "metadata_fingerprint": "e1ce0cf3bccf80a34ad36edafb891103d7b45e55c44391688c135108414fdd86",
+      "name": "schema",
+      "pinned": true,
+      "resolved": true,
+      "sha256": "270333c6545088686053714b69baa24b702fa742e6693b6765c0c873da98a271",
+      "size_bytes": 308,
+      "source_type": "json-schema",
+      "supported_fragments": {
+        "compiled_supported_fragment": true,
+        "supported_fragment": true
+      }
+    },
+    {
+      "kind": "tool-definition",
+      "location": "tools.json",
+      "metadata_fingerprint": "4c137536920af12e79e8e3e9b7f0c60eb406cedae7f33f2b66db9723fcdd7819",
+      "name": "tools",
+      "pinned": true,
+      "resolved": true,
+      "sha256": "7a1f057b57700b758716153d562caaadb5ddf8f44ddc576ce41778ec25c709f8",
+      "size_bytes": 371,
+      "source_type": "tool-definition-schema",
+      "supported_fragments": {
+        "tool_0_provider": "openai"
+      }
+    }
+  ],
+  "checks": [
+    "repository-skeleton"
+  ],
+  "config_hash": "10fc809fdc99863efc59f00ce5aa6d4ea4c420d4553a6e1250f7959f6d79ed0b",
+  "config_name": "minimal-chat-template",
+  "diagnostic_baseline": [
+    {
+      "artifact": null,
+      "fingerprint": "966044f6134aa008",
+      "rule_id": "repository-skeleton",
+      "severity": "info"
+    }
+  ],
+  "library_versions": {
+    "jsonschema": "4.26.0",
+    "promptabi": "0.1.0",
+    "python": "3.14.3",
+    "sentencepiece": "0.2.1",
+    "tiktoken": "0.12.0",
+    "tokenizers": "0.22.1",
+    "z3-solver": "4.15.4.0"
+  },
+  "lockfile_version": 1,
+  "promptabi_version": "0.1.0",
+  "provider_fixture_versions": {}
+}

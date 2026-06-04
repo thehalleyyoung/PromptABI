@@ -51,6 +51,10 @@ hashes, BOS/EOS flags and IDs, and generation stop-policy deltas,
 deterministic PromptABI lockfiles that pin verified artifact hashes, upstream
 revisions, library versions, provider fixture versions, supported-fragment
 metadata, and expected diagnostic fingerprints for CI enforcement,
+a reusable GitHub Action and \texttt{promptabi github-action} runner that restore
+analysis caches, enforce lockfiles, skip pull requests whose diffs do not touch
+configured PromptABI inputs, write markdown job summaries, emit workflow
+annotations, and upload GitHub-code-scanning SARIF,
 a \texttt{promptabi init} workflow that writes verifiable starter contracts and
 local fixture stubs for OpenAI tools, Hugging Face local models, vLLM
 OpenAI-compatible servers, llama.cpp, LangChain RAG, LlamaIndex agents, and
@@ -271,6 +275,9 @@ returns stable policy-controlled process exit codes, writes and enforces
 deterministic verification lockfiles that fail closed on artifact, config,
 provider-fixture, library-version, supported-fragment, or diagnostic-baseline
 drift,
+ships a repository-local GitHub Action that composes cache restoration,
+lockfile enforcement, changed-artifact detection, SARIF upload, workflow
+annotations, and markdown summaries around the same verifier,
 compares baseline and current PromptABI configs with \texttt{promptabi diff},
 emitting text, JSON, or SARIF diagnostics for removed checks, missing artifacts,
 tokenizer/config drift, provider-contract regressions, framework truncation

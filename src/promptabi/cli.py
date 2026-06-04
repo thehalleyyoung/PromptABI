@@ -20,6 +20,7 @@ from .compatibility_matrix import (
 from .diff import diff_config_files
 from .explain import ExplainError, explain_diagnostic, render_explanation_json, render_explanation_text
 from .first_party_plugins import create_first_party_plugin_registry, render_plugin_capabilities
+from .github_action import GitHubActionError, run_github_action
 from .init import InitError, available_stacks, scaffold_promptabi_project
 from .lockfiles import (
     LockfileError,
@@ -249,6 +250,59 @@ def build_parser() -> argparse.ArgumentParser:
         default="text",
         help="output format (default: text)",
     )
+
+    github_action = subparsers.add_parser(
+        "github-action",
+        help="run PromptABI with GitHub Actions caching, SARIF, lockfile, summary, and changed-artifact behavior",
+    )
+    github_action.add_argument(
+        "--config",
+        help="path to a PromptABI JSON config; defaults to discovering promptabi.json in the workspace",
+    )
+    github_action.add_argument(
+        "--lockfile",
+        help="path to a PromptABI lockfile (default: promptabi.lock.json beside the config)",
+    )
+    github_action.add_argument(
+        "--cache-dir",
+        help="directory for reusable PromptABI analysis caches (default: .promptabi/cache in the workspace)",
+    )
+    github_action.add_argument(
+        "--sarif-output",
+        default="promptabi.sarif",
+        help="path for the SARIF log consumed by GitHub code scanning (default: promptabi.sarif)",
+    )
+    github_action.add_argument(
+        "--summary-output",
+        help="path for the markdown job summary (default: GITHUB_STEP_SUMMARY when set)",
+    )
+    github_action.add_argument(
+        "--repo-root",
+        help="repository checkout root (default: GITHUB_WORKSPACE or cwd)",
+    )
+    github_action.add_argument(
+        "--fail-on",
+        choices=("error", "warning", "any", "never"),
+        default="error",
+        help="exit with code 1 at this diagnostic threshold (default: error)",
+    )
+    github_action.add_argument(
+        "--require-lockfile",
+        action="store_true",
+        help="fail if artifacts or diagnostics drift from the PromptABI lockfile",
+    )
+    github_action.add_argument(
+        "--changed-only",
+        action="store_true",
+        help="skip verification when git diff shows no configured PromptABI input changed",
+    )
+    github_action.add_argument("--base-ref", help="base git ref or SHA for changed-artifact detection")
+    github_action.add_argument("--head-ref", help="head git ref or SHA for changed-artifact detection")
+    github_action.add_argument(
+        "--annotations",
+        action="store_true",
+        help="also emit GitHub workflow command annotations to stdout",
+    )
     return parser
 
 
@@ -275,7 +329,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if load_failed:
                     print("promptabi: cannot write lockfile while artifact loading has errors", file=sys.stderr)
                     return 2
-                write_lockfile(lockfile_path, build_lockfile(config, loaded_artifacts, result.diagnostics))
+                write_lockfile(
+                    lockfile_path,
+                    build_lockfile(config, loaded_artifacts, result.diagnostics, base_dir=lockfile_path.parent),
+                )
             if args.require_lockfile:
                 loaded_artifacts, _load_diagnostics = session.load_artifacts_with_diagnostics()
                 try:
@@ -472,6 +529,42 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         print(output, end="")
         return 0
+
+    if args.command == "github-action":
+        try:
+            run = run_github_action(
+                config_path=args.config,
+                lockfile_path=args.lockfile,
+                cache_dir=args.cache_dir,
+                sarif_output=args.sarif_output,
+                summary_output=args.summary_output,
+                repo_root=args.repo_root,
+                fail_on=args.fail_on,
+                require_lockfile=args.require_lockfile,
+                changed_only=args.changed_only,
+                base_ref=args.base_ref,
+                head_ref=args.head_ref,
+                annotations=args.annotations,
+                argv=argv,
+            )
+        except (ConfigError, GitHubActionError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write GitHub Action outputs: {exc}", file=sys.stderr)
+            return 2
+        if run.skipped:
+            print("PromptABI GitHub Action: skipped (no configured PromptABI inputs changed)")
+        else:
+            assert run.result is not None
+            errors = sum(1 for diagnostic in run.result.diagnostics if diagnostic.severity.value == "error")
+            warnings = sum(1 for diagnostic in run.result.diagnostics if diagnostic.severity.value == "warning")
+            print(
+                "PromptABI GitHub Action: "
+                f"{'PASS' if run.result.ok else 'FAIL'} "
+                f"({errors} errors, {warnings} warnings, SARIF: {run.sarif_path})"
+            )
+        return run.exit_code
 
     parser.error(f"unknown command: {args.command}")
     return 2

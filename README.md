@@ -17,6 +17,8 @@ promptabi verify --artifact schema=schemas/answer.json --fail-on warning
 promptabi diff promptabi.baseline.json promptabi.json
 # audit check guarantees and supported surfaces:
 promptabi matrix --format json
+# GitHub code scanning with cache + lockfile gates:
+promptabi github-action --config examples/minimal/promptabi.json --require-lockfile
 ```
 
 ```text
@@ -132,7 +134,9 @@ added tokens, normalizers, chat templates, BOS/EOS behavior, and generation stop
 policy deltas before upgrades reach production; lockfiles now freeze verified
 artifact hashes, upstream revisions, library versions, supported fragments,
 provider fixture versions, and diagnostic baselines so CI can reject unreviewed
-contract drift. A labeled structured-schema corpus turns open-source-agent reductions,
+contract drift. The bundled GitHub Action restores PromptABI caches, enforces
+lockfiles, skips unrelated pull requests by diffing configured artifacts, uploads
+SARIF, emits annotations, and writes markdown job summaries. A labeled structured-schema corpus turns open-source-agent reductions,
 anonymized patterns, and synthetic tool-call stress cases into manifest-pinned CLI fixtures. The repository
 already has the typed Python package,
 core artifact model, stable diagnostic contract, text/JSON/SARIF/GitHub-annotation renderers,

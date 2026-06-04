@@ -46,17 +46,18 @@ class LockfileArtifact:
     metadata_fingerprint: str | None = None
 
     @classmethod
-    def from_loaded(cls, loaded: LoadedArtifact) -> "LockfileArtifact":
+    def from_loaded(cls, loaded: LoadedArtifact, *, base_dir: Path | None = None) -> "LockfileArtifact":
         artifact = loaded.artifact
         metadata = dict(loaded.metadata)
         sha256 = loaded.actual_sha256 or artifact.provenance.sha256
         manifest_sha256 = loaded.manifest_sha256
         revision = artifact.provenance.revision or _string_metadata(metadata, "revision")
         version = artifact.provenance.version or _string_metadata(metadata, "version")
+        location = _portable_path_string(artifact.location.ref_path or "", base_dir=base_dir)
         return cls(
             name=artifact.name,
             kind=artifact.kind.value,
-            location=artifact.location.ref_path or "",
+            location=location,
             source_type=loaded.source_type,
             resolved=loaded.resolved,
             pinned=loaded.pinned,
@@ -199,13 +200,21 @@ def build_lockfile(
     config: VerificationConfig,
     loaded_artifacts: tuple[LoadedArtifact, ...],
     diagnostics: tuple[Diagnostic, ...] = (),
+    *,
+    base_dir: str | Path | None = None,
 ) -> Lockfile:
     """Build a deterministic lockfile from the exact artifacts and diagnostics just verified."""
 
+    resolved_base = Path(base_dir).expanduser().resolve() if base_dir is not None else None
     return Lockfile(
         config_name=config.name,
-        config_hash=_config_hash(config),
-        artifacts=tuple(sorted((LockfileArtifact.from_loaded(loaded) for loaded in loaded_artifacts), key=_artifact_key)),
+        config_hash=_config_hash(config, base_dir=resolved_base),
+        artifacts=tuple(
+            sorted(
+                (LockfileArtifact.from_loaded(loaded, base_dir=resolved_base) for loaded in loaded_artifacts),
+                key=_artifact_key,
+            )
+        ),
         checks=tuple(config.checks),
         diagnostic_baseline=_diagnostic_baseline(diagnostics),
         library_versions=_library_versions(),
@@ -248,7 +257,8 @@ def compare_lockfile(
 ) -> tuple[Diagnostic, ...]:
     """Return diagnostics for lockfile drift against the current verification state."""
 
-    current = build_lockfile(config, loaded_artifacts, diagnostics)
+    base_dir = Path(lockfile_path).expanduser().resolve().parent if lockfile_path is not None else None
+    current = build_lockfile(config, loaded_artifacts, diagnostics, base_dir=base_dir)
     drift: list[Diagnostic] = []
     if lockfile.config_name != current.config_name:
         drift.append(
@@ -452,14 +462,14 @@ def _lock_diagnostic(
     )
 
 
-def _config_hash(config: VerificationConfig) -> str:
+def _config_hash(config: VerificationConfig, *, base_dir: Path | None = None) -> str:
     payload = {
         "artifacts": config.artifact_bundle.to_dict(),
         "checks": list(config.checks),
         "max_context_tokens": config.max_context_tokens,
         "name": config.name,
     }
-    encoded = json.dumps(_jsonable(payload), sort_keys=True, separators=(",", ":")).encode("utf-8")
+    encoded = json.dumps(_jsonable(payload, base_dir=base_dir), sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
 
@@ -525,14 +535,34 @@ def _metadata_fingerprint(metadata: dict[str, object]) -> str | None:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _jsonable(value: object) -> object:
+def _jsonable(value: object, *, base_dir: Path | None = None) -> object:
     if isinstance(value, dict):
-        return {str(key): _jsonable(item) for key, item in sorted(value.items(), key=lambda item: str(item[0]))}
+        return {
+            str(key): _jsonable(item, base_dir=base_dir)
+            for key, item in sorted(value.items(), key=lambda item: str(item[0]))
+        }
     if isinstance(value, (list, tuple)):
-        return [_jsonable(item) for item in value]
-    if isinstance(value, (str, int, float, bool)) or value is None:
+        return [_jsonable(item, base_dir=base_dir) for item in value]
+    if isinstance(value, str):
+        return _portable_path_string(value, base_dir=base_dir)
+    if isinstance(value, (int, float, bool)) or value is None:
         return value
     return str(value)
+
+
+def _portable_path_string(value: str, *, base_dir: Path | None) -> str:
+    if base_dir is None or "://" in value:
+        return value
+    try:
+        path = Path(value)
+    except ValueError:
+        return value
+    if not path.is_absolute():
+        return value
+    try:
+        return path.resolve().relative_to(base_dir).as_posix()
+    except ValueError:
+        return value
 
 
 def _string_metadata(metadata: dict[str, object], key: str) -> str | None:

@@ -8,6 +8,7 @@ promptabi verify --config examples/minimal/promptabi.json
 promptabi verify --config examples/role-boundary/unsafe.promptabi.json
 promptabi verify --config examples/token-budget/promptabi.json --format json
 promptabi verify --config examples/minimal/promptabi.json --format sarif > promptabi.sarif
+promptabi github-action --config examples/minimal/promptabi.json --require-lockfile
 ```
 
 The first workflow intentionally stays small: it proves that the CLI, typed API,
@@ -18,6 +19,11 @@ witness traces, suggestions, check-mode metadata (`sound`, `complete`, `bounded`
 Embedding tools can use `create_session`, `load_artifacts`,
 `collect_diagnostics`, `run_verification`, and custom `VerificationSession`
 checks without shelling out to the CLI.
+
+For GitHub repositories, use `./.github/actions/promptabi` from a workflow. The
+action restores `.promptabi/cache`, enforces a lockfile, skips pull requests that
+do not touch configured PromptABI inputs, uploads SARIF to code scanning, and
+writes a markdown job summary.
 
 For a concrete structural security check, run the role-boundary example. The
 unsafe ChatML-style template fails because raw message fields can render as

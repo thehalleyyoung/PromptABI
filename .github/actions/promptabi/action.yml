@@ -1,0 +1,133 @@
+name: PromptABI verification
+description: Verify PromptABI contracts with cache reuse, lockfile enforcement, SARIF upload, annotations, and job summaries.
+
+inputs:
+  config:
+    description: Path to the PromptABI config to verify.
+    required: true
+  lockfile:
+    description: Path to the PromptABI lockfile. Defaults to promptabi.lock.json beside the config.
+    required: false
+    default: ""
+  cache-dir:
+    description: Directory used for reusable PromptABI analysis caches.
+    required: false
+    default: .promptabi/cache
+  sarif-output:
+    description: Path where the action writes the SARIF log.
+    required: false
+    default: promptabi.sarif
+  fail-on:
+    description: Diagnostic threshold that fails the job: error, warning, any, or never.
+    required: false
+    default: error
+  require-lockfile:
+    description: Enforce PromptABI lockfile drift checks.
+    required: false
+    default: "true"
+  changed-only:
+    description: Skip verification when no configured PromptABI input changed.
+    required: false
+    default: "false"
+  base-ref:
+    description: Base git ref or SHA for changed-artifact detection.
+    required: false
+    default: ""
+  head-ref:
+    description: Head git ref or SHA for changed-artifact detection.
+    required: false
+    default: ""
+  annotations:
+    description: Emit GitHub workflow command annotations.
+    required: false
+    default: "true"
+  upload-sarif:
+    description: Upload SARIF to GitHub code scanning.
+    required: false
+    default: "true"
+  install-command:
+    description: Command that installs PromptABI before verification.
+    required: false
+    default: python -m pip install -e .
+
+outputs:
+  skipped:
+    description: Whether verification was skipped by changed-artifact detection.
+    value: ${{ steps.verify.outputs.skipped }}
+  ok:
+    description: Whether PromptABI reported no error diagnostics.
+    value: ${{ steps.verify.outputs.ok }}
+  diagnostic-count:
+    description: Number of diagnostics emitted.
+    value: ${{ steps.verify.outputs.diagnostic-count }}
+  error-count:
+    description: Number of error diagnostics emitted.
+    value: ${{ steps.verify.outputs.error-count }}
+  warning-count:
+    description: Number of warning diagnostics emitted.
+    value: ${{ steps.verify.outputs.warning-count }}
+  sarif:
+    description: Path to the SARIF log.
+    value: ${{ steps.verify.outputs.sarif }}
+
+runs:
+  using: composite
+  steps:
+    - name: Restore PromptABI cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ inputs.cache-dir }}
+        key: promptabi-${{ runner.os }}-${{ hashFiles(inputs.config, inputs.lockfile, '**/pyproject.toml') }}
+        restore-keys: |
+          promptabi-${{ runner.os }}-
+
+    - name: Install PromptABI
+      shell: bash
+      run: ${{ inputs.install-command }}
+
+    - name: Verify PromptABI contracts
+      id: verify
+      shell: bash
+      env:
+        PROMPTABI_CONFIG: ${{ inputs.config }}
+        PROMPTABI_LOCKFILE: ${{ inputs.lockfile }}
+        PROMPTABI_CACHE_DIR: ${{ inputs.cache-dir }}
+        PROMPTABI_SARIF_OUTPUT: ${{ inputs.sarif-output }}
+        PROMPTABI_FAIL_ON: ${{ inputs.fail-on }}
+        PROMPTABI_REQUIRE_LOCKFILE: ${{ inputs.require-lockfile }}
+        PROMPTABI_CHANGED_ONLY: ${{ inputs.changed-only }}
+        PROMPTABI_BASE_REF_INPUT: ${{ inputs.base-ref }}
+        PROMPTABI_HEAD_REF_INPUT: ${{ inputs.head-ref }}
+        PROMPTABI_ANNOTATIONS: ${{ inputs.annotations }}
+      run: |
+        set -euo pipefail
+        cmd=(promptabi github-action
+          --config "$PROMPTABI_CONFIG"
+          --cache-dir "$PROMPTABI_CACHE_DIR"
+          --sarif-output "$PROMPTABI_SARIF_OUTPUT"
+          --fail-on "$PROMPTABI_FAIL_ON")
+        if [[ -n "$PROMPTABI_LOCKFILE" ]]; then
+          cmd+=(--lockfile "$PROMPTABI_LOCKFILE")
+        fi
+        if [[ "$PROMPTABI_REQUIRE_LOCKFILE" == "true" ]]; then
+          cmd+=(--require-lockfile)
+        fi
+        if [[ "$PROMPTABI_CHANGED_ONLY" == "true" ]]; then
+          cmd+=(--changed-only)
+        fi
+        if [[ -n "$PROMPTABI_BASE_REF_INPUT" ]]; then
+          cmd+=(--base-ref "$PROMPTABI_BASE_REF_INPUT")
+        fi
+        if [[ -n "$PROMPTABI_HEAD_REF_INPUT" ]]; then
+          cmd+=(--head-ref "$PROMPTABI_HEAD_REF_INPUT")
+        fi
+        if [[ "$PROMPTABI_ANNOTATIONS" == "true" ]]; then
+          cmd+=(--annotations)
+        fi
+        "${cmd[@]}"
+
+    - name: Upload PromptABI SARIF
+      if: ${{ always() && inputs.upload-sarif == 'true' }}
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ inputs.sarif-output }}

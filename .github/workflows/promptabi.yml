@@ -1,0 +1,49 @@
+name: PromptABI
+
+on:
+  pull_request:
+    paths:
+      - "**/promptabi.json"
+      - "**/.promptabi.json"
+      - "**/promptabi.lock.json"
+      - "examples/**"
+      - "fixtures/**"
+      - "src/promptabi/**"
+      - ".github/actions/promptabi/action.yml"
+      - ".github/workflows/promptabi.yml"
+  push:
+    branches: [main]
+    paths:
+      - "**/promptabi.json"
+      - "**/.promptabi.json"
+      - "**/promptabi.lock.json"
+      - "examples/**"
+      - "fixtures/**"
+      - "src/promptabi/**"
+      - ".github/actions/promptabi/action.yml"
+      - ".github/workflows/promptabi.yml"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - uses: ./.github/actions/promptabi
+        with:
+          config: examples/minimal/promptabi.json
+          lockfile: examples/minimal/promptabi.lock.json
+          changed-only: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
+          base-ref: ${{ github.event.pull_request.base.sha || github.event.before }}
+          head-ref: ${{ github.sha }}
+          install-command: python -m pip install -e ".[dev]" jsonschema==4.26.0 sentencepiece==0.2.1 tiktoken==0.12.0 tokenizers==0.22.1 z3-solver==4.15.4.0
