@@ -37,6 +37,9 @@ finite-state transducers with composition and projection, a finite-contract
 solver, a minimal verification session, focused tests, examples, a fixture
 corpus layout, a curated ten-family seed corpus, a deterministic corpus manifest
 pipeline, a Hugging Face \texttt{tokenizer\_config.json} chat-template parser,
+a tokenizer/config drift checker that compares real tokenizer revisions for
+special-token ID changes, added-token changes, normalizer changes, chat-template
+hashes, BOS/EOS flags and IDs, and generation stop-policy deltas,
 a stop-policy parser that normalizes OpenAI-compatible request snapshots,
 Hugging Face generation configs, llama.cpp/Ollama options, vLLM sampling params,
 LiteLLM passthrough params, and common framework wrapper kwargs into one typed
@@ -615,9 +618,7 @@ formal checks can consume. The implemented stop-tokenizer checker asks for byte
 spans, token IDs, token surfaces, decoded text, and special/added-token flags
 without knowing whether the source was ByteLevel BPE, SentencePiece, or
 \texttt{tiktoken}. A role-boundary checker can see whether a delimiter is an
-ordinary byte sequence, an added token, or a special token. A drift checker can
-compare normalized text, token IDs, token surfaces, and decode results across
-versions.
+ordinary byte sequence, an added token, or a special token.
 
 The current tests validate this layer against real code rather than mocks. A
 trained local Hugging Face ByteLevel BPE tokenizer is compared against
@@ -650,6 +651,23 @@ added-token status as separate flags, so a role-boundary checker can reason abou
 \texttt{<tool>} token. This is the sort of small tokenizer-library semantic
 difference that later formal checks must get right before their witnesses are
 credible.
+
+\subsection{Tokenizer and Config Drift}
+
+PromptABI now treats tokenizer upgrades as contract changes instead of informal
+release-note review. A tokenizer artifact can point at a local drift baseline via
+\texttt{metadata.drift\_baseline\_path}; the checker reads both baseline and
+current revisions from real \texttt{tokenizer\_config.json},
+\texttt{tokenizer.json}, \texttt{special\_tokens\_map.json}, and
+\texttt{generation\_config.json} files. It compares special-token names, surfaces,
+and IDs; added-token IDs and specialness; normalizer signatures; chat-template
+hashes and lengths; BOS/EOS token text, IDs, and insertion flags; and stop strings
+or EOS stop-token IDs. Breaking changes emit deterministic CLI diagnostics with
+baseline/current values and revision witness steps; exact matches emit an
+informational proof that the baseline still matches the current artifact. The
+focused tests build synthetic but real tokenizer directories and run the checker
+through \texttt{promptabi verify}, so the feature is exercised against the same
+loader, config, diagnostic, and renderer code used by users.
 
 \clearpage
 \section{Diagnostic Contract}
@@ -1129,6 +1147,7 @@ The testing strategy has three tiers:
 \item loader and parser tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, tool-definition schemas spanning OpenAI, Anthropic, LangChain, Pydantic, TypeScript-style, MCP, and provider tool-call envelopes, tool-serialization contracts over names, arguments, escaping, IDs, parallel calls, streaming chunks, template tool rendering, and stop delimiters, stop-policy configs spanning OpenAI-compatible, Hugging Face, llama.cpp/Ollama, vLLM, LiteLLM, wrapper kwargs, fixture archives, and source-mapped JSON fields;
 \item stop-tokenizer, stop-differential, and stop-overreachability tests that exercise byte/string/token alignments, multi-token stops, invalid stop-token IDs, normalization collisions, prefix/suffix collisions, added/special-token interactions, OpenAI-compatible and Hugging Face delimiter-retention semantics, provider fixture replay, CLI mismatch diagnostics, serialized stop offsets, parser-state truncation witnesses, supported schema/tool string witnesses, structural delimiter collisions, real-world Qwen/Gemma/llama.cpp stop bug reductions, and a real Hugging Face \texttt{tokenizers} BPE fixture;
 \item token-budget and RAG chunking tests that exercise context-window reservation arithmetic, required-segment overflow over declared counts, prompt-segment file/message merging, config-versus-framework budget precedence, LangChain/vLLM/custom-RAG truncation simulation, optional retrieval dropping, required segment truncation, order preservation, proven must-survive cases, minimized counterexample extraction, text/JSON/SARIF budget visualizations with token spans and dropped-field properties, real CLI diagnostics for output, tool, generation-prompt, and special-token overhead, plus tokenizer mismatch, chunk-boundary drift, citation loss, overlap accounting, metadata inflation, prompt-template overhead, and retrieval payload truncation over repository fixtures;
+\item tokenizer/config drift tests that build baseline and current tokenizer directories and verify special-token ID drift, added-token changes, normalizer changes, chat-template hash changes, BOS insertion changes, and generation stop-policy deltas through both the analyzer and real CLI diagnostics;
 \item fixture and corpus tests for minimized tokenizer/chat-template bundles, public real-bug provenance, expected behaviors, sentinel consistency, artifact materialization, deterministic manifest generation, labeled structured-schema reductions, anonymized contracts, synthetic parser stress cases, tool-definition bundles, secret-free provider fixture packs with request/response/tool/stop/streaming/error/limit coverage and credential-pattern rejection, and real CLI replay of every included structured-schema config;
 \item future corpus tests for popular model and framework configurations pinned by immutable upstream revisions.
 \end{itemize}
@@ -1475,6 +1494,8 @@ Corpus smoke & \texttt{promptabi corpus manifest} validates ten minimized instru
 Structured-schema corpus & \texttt{promptabi corpus structured-schema-manifest} validates labeled structured-output/tool-calling fixtures from OSS reductions, anonymized contracts, and synthetic stress cases; tests replay parser compatibility, tool-schema ingestion, tool serialization, and CLI configs. \\
 \hline
 Token-budget and RAG modeling & \texttt{promptabi verify --config examples/token-budget/promptabi.json} models named must-survive segments, framework context reservations, config/artifact context-window precedence, required-token overflow, framework truncation decisions, bounded survival proofs, and minimized counterexamples; \texttt{examples/rag-chunking/promptabi.json} adds deterministic chunking diagnostics for tokenizer mismatch, boundary drift, citation loss, overlap errors, metadata inflation, prompt-template overhead, and retrieval payload truncation. \\
+\hline
+Tokenizer/config drift & Focused analyzer and CLI tests compare baseline/current tokenizer directories and flag special-token ID, added-token, normalizer, chat-template, BOS/EOS, and stop-policy deltas with revision witnesses. \\
 \hline
 Benchmark smoke & Repeated config load and verification completes on CPU with JSON output. \\
 \hline

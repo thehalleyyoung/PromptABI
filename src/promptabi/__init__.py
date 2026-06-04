@@ -249,6 +249,15 @@ from .tool_serialization import (
     ToolSerializationReport,
     analyze_tool_call_serialization,
 )
+from .tokenizer_drift import (
+    TokenizerConfigSnapshot,
+    TokenizerDriftAbstention,
+    TokenizerDriftFinding,
+    TokenizerDriftKind,
+    TokenizerDriftReport,
+    analyze_tokenizer_config_drift,
+    load_tokenizer_config_snapshot,
+)
 from .stop_analysis import (
     StopCollision,
     StopPolicyTokenizerAnalysisReport,
@@ -467,6 +476,11 @@ __all__ = [
     "TokenizerArtifact",
     "TokenizerAdapter",
     "TokenizerBackend",
+    "TokenizerConfigSnapshot",
+    "TokenizerDriftAbstention",
+    "TokenizerDriftFinding",
+    "TokenizerDriftKind",
+    "TokenizerDriftReport",
     "TokenizerError",
     "TokenBudgetFinding",
     "TokenBudgetReport",
@@ -526,6 +540,7 @@ __all__ = [
     "load_seed_corpus",
     "load_structured_schema_corpus",
     "load_tokenizer",
+    "load_tokenizer_config_snapshot",
     "render_result",
     "run_verification",
     "parse_hf_chat_template_config",
@@ -534,6 +549,7 @@ __all__ = [
     "ingest_tool_schema_mapping",
     "analyze_stop_policy_tokenizer",
     "analyze_tool_call_serialization",
+    "analyze_tokenizer_config_drift",
     "analyze_token_budget",
     "analyze_stop_overreachability",
     "load_stop_trace_cases",

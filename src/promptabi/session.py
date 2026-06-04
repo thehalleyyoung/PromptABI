@@ -59,6 +59,7 @@ from .stop_overreachability import (
     analyze_stop_overreachability,
 )
 from .tool_serialization import ToolSerializationFinding, analyze_tool_call_serialization
+from .tokenizer_drift import TokenizerDriftAbstention, TokenizerDriftFinding, analyze_tokenizer_config_drift
 from .tokenizers import TokenizerError, load_tokenizer
 
 
@@ -99,6 +100,9 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "provider-migration": (CheckMode.BOUNDED, CheckMode.HEURISTIC),
     "tool-schema-ingestion": (CheckMode.SOUND, CheckMode.COMPLETE),
     "tool-serialization": (CheckMode.BOUNDED, CheckMode.HEURISTIC),
+    "tokenizer-drift": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "tokenizer-drift-abstained": (CheckMode.ABSTAINING, CheckMode.COMPLETE),
+    "tokenizer-drift-clean": (CheckMode.SOUND, CheckMode.COMPLETE),
     "token-budget-abstained": (CheckMode.ABSTAINING, CheckMode.BOUNDED),
     "token-budget-context-conflict": (CheckMode.BOUNDED, CheckMode.HEURISTIC),
     "token-budget-framework-truncation": (CheckMode.SOUND, CheckMode.BOUNDED),
@@ -192,6 +196,8 @@ class VerificationSession:
             "token-budget-model": self._token_budget_model_check,
             "tool-schema-ingestion": self._tool_schema_ingestion_check,
             "tool-serialization": self._tool_serialization_check,
+            "tokenizer-config-drift": self._tokenizer_config_drift_check,
+            "tokenizer-drift": self._tokenizer_config_drift_check,
         }
         if checks:
             self.checks.update(checks)
@@ -500,6 +506,14 @@ class VerificationSession:
     def _tool_serialization_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
         report = analyze_tool_call_serialization(context.loaded_artifacts)
         return tuple(_tool_serialization_diagnostic(finding) for finding in report.findings)
+
+    def _tokenizer_config_drift_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        report = analyze_tokenizer_config_drift(context.loaded_artifacts)
+        diagnostics = [_tokenizer_drift_finding_diagnostic(finding) for finding in report.findings]
+        diagnostics.extend(_tokenizer_drift_abstention_diagnostic(abstention) for abstention in report.abstentions)
+        if report.compared and not report.findings and not report.abstentions:
+            diagnostics.append(_tokenizer_drift_clean_diagnostic(report.compared))
+        return tuple(diagnostics)
 
     def _provider_fixture_replay_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
         report = analyze_provider_fixture_replay(context.loaded_artifacts)
@@ -1322,6 +1336,80 @@ def _tool_serialization_diagnostic(finding: ToolSerializationFinding) -> Diagnos
     )
 
 
+def _tokenizer_drift_finding_diagnostic(finding: TokenizerDriftFinding) -> Diagnostic:
+    severity = DiagnosticSeverity.ERROR if finding.breaking else DiagnosticSeverity.WARNING
+    revision_step = ()
+    if finding.baseline_revision is not None or finding.current_revision is not None:
+        revision_step = (
+            WitnessStep(
+                action="compare artifact revisions",
+                input=finding.baseline_revision or "<unversioned baseline>",
+                output=finding.current_revision or "<unversioned current>",
+            ),
+        )
+    return Diagnostic(
+        rule_id="tokenizer-drift",
+        severity=severity,
+        message=(
+            f"{finding.kind.value} in {finding.field}: "
+            f"{_value_summary(finding.baseline)} -> {_value_summary(finding.current)}"
+        ),
+        span=SourceSpan(path=finding.current_path),
+        check_modes=CHECK_MODE_CATALOG["tokenizer-drift"],
+        suggestions=(
+            "Review the tokenizer/config revision change before accepting the new baseline.",
+            "Update the drift baseline only after downstream templates, stop policies, and parsers are verified.",
+        ),
+        properties=(
+            ("baseline", finding.baseline),
+            ("current", finding.current),
+            ("field", finding.field),
+            ("kind", finding.kind.value),
+        ),
+        witness=WitnessTrace(
+            summary="A real tokenizer/config snapshot changed relative to the pinned drift baseline.",
+            steps=(
+                WitnessStep(action="load baseline tokenizer snapshot", input=finding.baseline_path),
+                WitnessStep(action="load current tokenizer snapshot", input=finding.current_path),
+                *revision_step,
+                WitnessStep(action="compare drift field", input=finding.field, output=finding.kind.value),
+                WitnessStep(action="record baseline value", output=_value_summary(finding.baseline)),
+                WitnessStep(action="record current value", output=_value_summary(finding.current)),
+            ),
+        ),
+    )
+
+
+def _tokenizer_drift_abstention_diagnostic(abstention: TokenizerDriftAbstention) -> Diagnostic:
+    return Diagnostic(
+        rule_id="tokenizer-drift-abstained",
+        severity=DiagnosticSeverity.WARNING,
+        message=f"tokenizer artifact '{abstention.artifact_name}' could not be checked for config drift",
+        span=SourceSpan(path=abstention.path) if abstention.path is not None else None,
+        check_modes=CHECK_MODE_CATALOG["tokenizer-drift-abstained"],
+        suggestions=("Use a local tokenizer file/directory and a readable metadata.drift_baseline_path.",),
+        witness=WitnessTrace(
+            summary="PromptABI abstained instead of guessing drift from an unavailable or malformed baseline.",
+            steps=(WitnessStep(action="load tokenizer drift baseline", input=abstention.path, output=abstention.reason),),
+        ),
+    )
+
+
+def _tokenizer_drift_clean_diagnostic(compared: tuple[tuple[str, str], ...]) -> Diagnostic:
+    pairs = "; ".join(f"{baseline} -> {current}" for baseline, current in compared)
+    return Diagnostic(
+        rule_id="tokenizer-drift-clean",
+        severity=DiagnosticSeverity.INFO,
+        message=f"tokenizer/config drift baseline matches {len(compared)} current artifact(s)",
+        check_modes=CHECK_MODE_CATALOG["tokenizer-drift-clean"],
+        suggestions=(),
+        witness=WitnessTrace(
+            summary="PromptABI compared real tokenizer/config snapshots and found no contract-relevant drift.",
+            steps=(WitnessStep(action="compare tokenizer drift baselines", output=pairs),),
+        ),
+    )
+
+
 def _provider_migration_diagnostic(finding: ProviderMigrationFinding) -> Diagnostic:
     severity = (
         DiagnosticSeverity.ERROR
@@ -1768,6 +1856,13 @@ def _grammar_tokenizer_abstained_diagnostic(
             artifacts=(tokenizer_loaded.artifact.to_ref(), grammar_loaded.artifact.to_ref()),
         ),
     )
+
+
+def _value_summary(value: object) -> str:
+    text = repr(value)
+    if len(text) > 180:
+        return text[:177] + "..."
+    return text
 
 
 def _catalog_modes(rule_id: str) -> tuple[CheckMode, ...]:

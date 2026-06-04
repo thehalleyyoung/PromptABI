@@ -99,7 +99,10 @@ modeling now proves must-survive prompt segments against bounded real framework
 truncation policies, emits token-budget visualizations across text/JSON/SARIF
 with truncation boundaries and dropped fields, and catches RAG tokenizer
 mismatch, boundary drift, citation loss, overlap accounting errors, metadata
-inflation, template overhead, and retrieval payload truncation. A labeled structured-schema corpus turns open-source-agent reductions,
+inflation, template overhead, and retrieval payload truncation. Tokenizer/config
+drift detection now compares real tokenizer revisions for special-token IDs,
+added tokens, normalizers, chat templates, BOS/EOS behavior, and generation stop
+policy deltas before upgrades reach production. A labeled structured-schema corpus turns open-source-agent reductions,
 anonymized patterns, and synthetic tool-call stress cases into manifest-pinned CLI fixtures. The repository
 already has the typed Python package,
 core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,
