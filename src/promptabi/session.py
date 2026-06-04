@@ -6,8 +6,19 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import VerificationConfig, load_config
-from .diagnostics import Diagnostic, DiagnosticSeverity, SourceSpan, WitnessStep, WitnessTrace, diagnostic_sort_key
+from .diagnostics import CheckMode, Diagnostic, DiagnosticSeverity, SourceSpan, WitnessStep, WitnessTrace, diagnostic_sort_key
 from .loaders import ArtifactLoadError, ArtifactLoadWarning, ArtifactLoader
+
+
+CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
+    "repository-skeleton": (CheckMode.HEURISTIC,),
+    "artifact-missing": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "artifact-load-failed": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "artifact-unpinned": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "artifact-weak-pin": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "artifact-pin-invalid": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "artifact-hash-mismatch": (CheckMode.SOUND, CheckMode.COMPLETE),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +64,7 @@ class VerificationSession:
             rule_id="repository-skeleton",
             severity=DiagnosticSeverity.INFO,
             message="PromptABI package, CLI, docs, examples, fixtures, and benchmarks are wired.",
+            check_modes=CHECK_MODE_CATALOG["repository-skeleton"],
             witness=WitnessTrace(
                 summary="The verification session constructed a typed config and produced deterministic output.",
                 steps=(
@@ -88,6 +100,7 @@ class VerificationSession:
                     message=f"artifact '{artifact_model.name}' does not exist",
                     artifact=artifact,
                     span=SourceSpan(path=path),
+                    check_modes=CHECK_MODE_CATALOG["artifact-missing"],
                     suggestions=("Check the path relative to the PromptABI config file.",),
                     witness=WitnessTrace(
                         summary="The configured local artifact path was resolved but was absent on disk.",
@@ -123,6 +136,7 @@ class VerificationSession:
             message=exc.message,
             artifact=artifact,
             span=_artifact_span(artifact_model.location.path),
+            check_modes=_catalog_modes(exc.rule_id),
             suggestions=(exc.suggestion,),
             witness=WitnessTrace(
                 summary="PromptABI could not load the configured artifact deterministically.",
@@ -139,6 +153,7 @@ class VerificationSession:
             message=warning.message,
             artifact=artifact,
             span=_artifact_span(artifact_model.location.path),
+            check_modes=_catalog_modes(warning.rule_id),
             suggestions=(warning.suggestion,),
             witness=WitnessTrace(
                 summary="The artifact loaded, but its provenance is not fully reproducible.",
@@ -157,3 +172,7 @@ def _witness_steps(raw_steps: tuple[tuple[str, str | None, str | None], ...]) ->
         WitnessStep(action=action, input=input_value, output=output_value)
         for action, input_value, output_value in raw_steps
     )
+
+
+def _catalog_modes(rule_id: str) -> tuple[CheckMode, ...]:
+    return CHECK_MODE_CATALOG.get(rule_id, (CheckMode.HEURISTIC,))

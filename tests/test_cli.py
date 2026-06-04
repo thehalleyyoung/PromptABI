@@ -44,6 +44,7 @@ def test_verify_json_output_is_stable(capsys) -> None:
     assert exit_code == 0
     assert payload["ok"] is True
     assert payload["diagnostics"][0]["rule_id"] == "repository-skeleton"
+    assert payload["diagnostics"][0]["check_modes"] == ["heuristic"]
     assert "fingerprint" in payload["diagnostics"][0]
     assert payload["diagnostics"][0]["witness"]["steps"][0]["action"] == "load JSON config"
     assert list(payload) == ["config", "diagnostics", "ok"]
@@ -100,7 +101,7 @@ def test_verify_exit_code_policy_can_fail_on_any_diagnostic(capsys) -> None:
 
     captured = capsys.readouterr()
     assert exit_code == 1
-    assert "INFO repository-skeleton" in captured.out
+    assert "INFO repository-skeleton [heuristic]" in captured.out
     assert captured.err == ""
 
 
@@ -144,4 +145,6 @@ def test_verify_sarif_output_is_code_scanning_compatible(capsys) -> None:
     assert payload["runs"][0]["tool"]["driver"]["name"] == "PromptABI"
     assert result["ruleId"] == "repository-skeleton"
     assert result["level"] == "note"
+    assert result["properties"]["checkModes"] == ["heuristic"]
+    assert payload["runs"][0]["tool"]["driver"]["rules"][0]["properties"]["checkModes"] == ["heuristic"]
     assert "promptabiFingerprint" in result["partialFingerprints"]

@@ -38,9 +38,11 @@ corpus layout, a CPU-only benchmark, documentation, and contribution guidance.
 The remaining checkers fit into that surface rather than requiring a rewrite. We
 describe the transducer-oriented formalism, the artifact model, the diagnostic
 contract, the first benchmark line, and the planned evaluation against real tokenizer, template,
-structured-output, provider, and budget failures. The result is a path toward a
-tool that is useful in CI and credible as a systems paper: it catches failures
-that arise before any model logit is relevant.
+structured-output, provider, and budget failures. The diagnostic layer now records
+whether a finding is sound, complete, bounded, Z3-backed, heuristic, or an
+abstention, making each claim explicit about its proof obligations. The result is
+a path toward a tool that is useful in CI and credible as a systems paper: it
+catches failures that arise before any model logit is relevant.
 \end{abstract}
 
 \clearpage
@@ -155,10 +157,16 @@ Must-survive & Does a required prompt segment remain after the framework truncat
 \end{center}
 
 The abstraction is not used to pretend arbitrary Python, arbitrary Jinja, and
-arbitrary provider behavior are finite-state. Instead, PromptABI should classify
-each check as sound, complete, bounded, heuristic, or abstaining. That taxonomy
-is crucial: it lets the tool be useful where it is precise and honest where it
-is not.
+arbitrary provider behavior are finite-state. Instead, PromptABI classifies each
+check using a small contract taxonomy: \emph{sound} means the diagnostic is not
+reported unless the modeled violation exists; \emph{complete} means every
+violation inside the supported fragment is found; \emph{bounded} means exactness
+is restricted to declared finite limits; \emph{Z3-backed SMT} means the finite
+symbolic contract is lowered to Z3 when the optional solver is present;
+\emph{heuristic} means the result is useful evidence rather than a proof; and
+\emph{abstaining} means the checker deliberately declines unsupported cases.
+That taxonomy is crucial: it lets the tool be useful where it is precise and
+honest where it is not.
 
 \clearpage
 \section{Artifact Model}
@@ -185,7 +193,7 @@ truncation configs. It also provides \texttt{ArtifactRef},
 \item kind-specific fields capture stop strings, schema dialects, grammar types, tool names, prompt segment requirements, provider families, and truncation strategies;
 \item spans are one-based and validated at construction time;
 \item witnesses are explicit traces, not prose hidden in the message string;
-\item diagnostics have rule IDs, severities, artifacts, spans, witnesses, and suggestions;
+\item diagnostics have rule IDs, severities, artifacts, spans, witnesses, suggestions, and explicit verification modes;
 \item results serialize to deterministic dictionaries for JSON and snapshots.
 \end{itemize}
 
@@ -382,9 +390,9 @@ PromptABI's diagnostic contract is designed for CI, code scanning, embeddings,
 and regression snapshots. A useful finding is not merely a line of text. It
 needs a stable rule ID, a severity, a precise artifact reference with
 provenance, a source span when available, a witness that reproduces the failure,
-a deterministic fingerprint, and a suggested remediation. If two releases emit
-different diagnostics for the same artifact bundle, that difference should be
-intentional, reviewable, and testable.
+a deterministic fingerprint, a suggested remediation, and a declared verification
+mode. If two releases emit different diagnostics for the same artifact bundle,
+that difference should be intentional, reviewable, and testable.
 
 The repository now renders the same diagnostic object in human text,
 deterministic JSON, and SARIF 2.1.0. This matters early: once a verifier has many
@@ -414,7 +422,8 @@ introduced. A future role-forgery finding can reuse the same shape:
       {"action": "locate forged boundary"}
     ]
   },
-  "suggestions": ["Escape user content before inserting role delimiters."]
+  "suggestions": ["Escape user content before inserting role delimiters."],
+  "check_modes": ["bounded", "sound", "z3-backed-smt"]
 }
 \end{verbatim}
 
@@ -422,14 +431,18 @@ The first implemented rule, \texttt{repository-skeleton}, is intentionally
 informational. It proves the machinery works without claiming a security or
 compatibility property that has not yet been implemented. That restraint is
 important for trust: checkers should only claim properties that the code has
-actually proved.
+actually proved. The rule is therefore marked \texttt{heuristic}; loader and
+artifact-existence findings are marked \texttt{sound} and \texttt{complete} for
+the local filesystem and bytes they inspect; future automata and solver checkers
+can claim \texttt{bounded}, \texttt{z3-backed-smt}, or \texttt{abstaining} as
+their supported fragments require.
 
 The SARIF renderer maps PromptABI severities to SARIF levels, emits a rule table,
-attaches artifact locations and source regions when available, and stores the
-PromptABI fingerprint in \texttt{partialFingerprints}. This makes the first CLI
-workflow immediately compatible with GitHub code scanning while keeping the
-diagnostic source of truth in Python types rather than renderer-specific
-structures.
+attaches artifact locations and source regions when available, stores the
+PromptABI fingerprint in \texttt{partialFingerprints}, and includes the same
+check-mode metadata as JSON and text output. This makes the first CLI workflow
+immediately compatible with GitHub code scanning while keeping the diagnostic
+source of truth in Python types rather than renderer-specific structures.
 
 \clearpage
 \section{CLI and Embedding API}
@@ -446,7 +459,7 @@ promptabi verify --cache-dir .cache/promptabi --verbose
 \end{verbatim}
 
 In the current milestone the workflow validates repository wiring, local
-existence, reproducible pins, and loader compatibility. It discovers
+existence, reproducible pins, loader compatibility, and check-mode reporting. It discovers
 \texttt{promptabi.json} or \texttt{.promptabi.json} by walking upward from the
 current directory unless \texttt{--config} is explicit. It accepts repeated
 \texttt{--artifact NAME=PATH\_OR\_URI} overrides so CI can verify generated or
@@ -796,7 +809,8 @@ round-trip metadata, Hugging Face ByteLevel BPE behavior, \texttt{tiktoken}
 config discovery from nested directories, artifact-location overrides,
 deterministic JSON output, SARIF output, missing-artifact failures, cache
 directory preparation, quiet/verbose text controls, and configurable exit-code
-thresholds. The formal tests exercise automata intersection, difference,
+thresholds. The public API and CLI tests also prove that check-mode metadata is
+preserved across diagnostic objects, JSON, human text, and SARIF. The formal tests exercise automata intersection, difference,
 emptiness, shortest witnesses, transducer composition, projection,
 over-approximation, finite-domain counterexample extraction, minimal
 unsat cores, and the installed Z3 backend. The CLI was also run against the minimal typed-artifact example
@@ -813,6 +827,8 @@ that the repository can already execute code, not just describe a future tool.
 Focused tests & Artifact model, public API, config loading, and CLI workflow behavior pass in isolation. \\
 \hline
 Formal core tests & Automata reachability and difference, transducer composition/projection/over-approximation, finite-domain solving, unsat-core extraction, and Z3-backed assignment extraction pass against executable code. \\
+\hline
+Check-mode taxonomy tests & Diagnostic objects, JSON output, text output, and SARIF output preserve sound/complete/bounded/Z3-backed/heuristic/abstaining metadata deterministically. \\
 \hline
 Tokenizer differential tests & Byte-level normalization and added-token behavior, Hugging Face ByteLevel BPE, \texttt{tiktoken}, and SentencePiece adapters match real backend behavior. \\
 \hline

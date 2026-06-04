@@ -34,13 +34,12 @@ messages -> chat template -> byte/string prompt -> tokenizer -> token stream
         -> constrained decoder / stop logic / tool parser -> application parser
 ```
 
-PromptABI now includes the first formal core: deterministic finite automata for
-reachability, finite-state transducers for render/tokenize/decode-like
-relations, and a finite contract solver over booleans, enums, integer ranges,
-and bounded strings. The solver uses Z3 when available and falls back to
-exhaustive finite-domain solving, so checks can prove satisfiability or
-incompatibility and emit concrete counterexamples without logits, GPUs,
-inference, or network calls.
+PromptABI now includes the first formal core: deterministic finite automata,
+finite-state transducers, and a finite contract solver over booleans, enums,
+integer ranges, and bounded strings. Each diagnostic declares whether it is
+sound, complete, bounded, Z3-backed, heuristic, or abstaining; the solver uses Z3
+when available and otherwise exhaustively enumerates finite domains, emitting
+concrete counterexamples without logits, GPUs, inference, or network calls.
 
 The roadmap targets three high-value checks first: role-boundary
 non-forgeability, stop/grammar/tokenizer reachability, and must-survive

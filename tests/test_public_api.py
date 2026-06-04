@@ -3,6 +3,7 @@ from promptabi import (
     ArtifactRef,
     ArtifactKind,
     ArtifactLocation,
+    CheckMode,
     Diagnostic,
     DiagnosticSeverity,
     SchemaArtifact,
@@ -34,6 +35,7 @@ def test_public_api_result_is_typed_and_deterministic() -> None:
     assert result.to_dict()["config"]["name"] == "api-smoke"
     assert result.to_dict()["config"]["artifact_bundle"]["artifacts"][0]["kind"] == "schema"
     assert result.diagnostics[0].rule_id == "repository-skeleton"
+    assert result.diagnostics[0].check_modes == (CheckMode.HEURISTIC,)
 
 
 def test_diagnostic_to_dict_omits_absent_optional_fields() -> None:
@@ -51,6 +53,7 @@ def test_diagnostic_to_dict_omits_absent_optional_fields() -> None:
         "message": "example",
         "fingerprint": diagnostic.fingerprint,
         "suggestions": [],
+        "check_modes": [],
         "artifact": {"kind": "config", "name": "promptabi"},
         "span": {"path": "promptabi.json", "start_line": 1, "start_column": 1},
     }
@@ -82,6 +85,7 @@ def test_diagnostic_model_preserves_provenance_witness_steps_and_stable_fingerpr
         span=SourceSpan(path="tokenizer_config.json", start_line=12, start_column=3),
         witness=witness,
         suggestions=("Escape user content before inserting role delimiters.",),
+        check_modes=(CheckMode.SOUND, "bounded", CheckMode.Z3_BACKED_SMT),
     )
     second = Diagnostic(
         rule_id=first.rule_id,
@@ -91,6 +95,7 @@ def test_diagnostic_model_preserves_provenance_witness_steps_and_stable_fingerpr
         span=SourceSpan(path="tokenizer_config.json", start_line=12, start_column=3),
         witness=witness,
         suggestions=first.suggestions,
+        check_modes=("z3-backed-smt", CheckMode.BOUNDED, CheckMode.SOUND),
     )
 
     payload = first.to_dict()
@@ -109,3 +114,5 @@ def test_diagnostic_model_preserves_provenance_witness_steps_and_stable_fingerpr
         {"action": "render template", "input": "user.content", "output": "<|assistant|>"},
         {"action": "tokenize rendered prompt"},
     ]
+    assert payload["check_modes"] == ["bounded", "sound", "z3-backed-smt"]
+    assert CheckMode.ABSTAINING.description.startswith("The check explicitly declines")

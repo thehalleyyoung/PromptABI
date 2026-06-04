@@ -33,6 +33,42 @@ class DiagnosticSeverity(StrEnum):
         }[self]
 
 
+class CheckMode(StrEnum):
+    """Verification-contract modes a PromptABI check may claim."""
+
+    SOUND = "sound"
+    COMPLETE = "complete"
+    BOUNDED = "bounded"
+    Z3_BACKED_SMT = "z3-backed-smt"
+    HEURISTIC = "heuristic"
+    ABSTAINING = "abstaining"
+
+    @property
+    def label(self) -> str:
+        return {
+            CheckMode.SOUND: "sound",
+            CheckMode.COMPLETE: "complete",
+            CheckMode.BOUNDED: "bounded",
+            CheckMode.Z3_BACKED_SMT: "Z3-backed SMT",
+            CheckMode.HEURISTIC: "heuristic",
+            CheckMode.ABSTAINING: "abstaining",
+        }[self]
+
+    @property
+    def description(self) -> str:
+        return CHECK_MODE_DESCRIPTIONS[self]
+
+
+CHECK_MODE_DESCRIPTIONS: dict[CheckMode, str] = {
+    CheckMode.SOUND: "The check does not report a violation unless one exists under the stated abstraction.",
+    CheckMode.COMPLETE: "The check finds every violation inside the stated supported fragment.",
+    CheckMode.BOUNDED: "The check is exact only within declared finite limits such as depth, length, or domains.",
+    CheckMode.Z3_BACKED_SMT: "The check lowers a finite symbolic contract to Z3 when the optional solver is available.",
+    CheckMode.HEURISTIC: "The check is useful evidence but is not a proof over a fully modeled fragment.",
+    CheckMode.ABSTAINING: "The check explicitly declines to decide cases outside its supported fragment.",
+}
+
+
 @dataclass(frozen=True, slots=True)
 class ArtifactRef:
     """A stable reference to an input artifact and its provenance."""
@@ -166,6 +202,7 @@ class Diagnostic:
     span: SourceSpan | None = None
     witness: WitnessTrace | None = None
     suggestions: tuple[str, ...] = field(default_factory=tuple)
+    check_modes: tuple[CheckMode | str, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
         if not self.rule_id:
@@ -175,6 +212,10 @@ class Diagnostic:
         if any(not suggestion for suggestion in self.suggestions):
             raise ValueError("diagnostic suggestions must be non-empty")
         object.__setattr__(self, "suggestions", tuple(self.suggestions))
+        modes = tuple(_coerce_check_mode(mode) for mode in self.check_modes)
+        if len(set(modes)) != len(modes):
+            raise ValueError("diagnostic check_modes must not contain duplicates")
+        object.__setattr__(self, "check_modes", tuple(sorted(modes, key=lambda mode: mode.value)))
 
     @property
     def fingerprint(self) -> str:
@@ -184,6 +225,7 @@ class Diagnostic:
             "rule_id": self.rule_id,
             "severity": self.severity.value,
             "span": self.span.to_dict() if self.span is not None else None,
+            "check_modes": [mode.value for mode in self.check_modes],
         }
         encoded = json.dumps(stable_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
         return hashlib.sha256(encoded).hexdigest()[:16]
@@ -201,6 +243,7 @@ class Diagnostic:
             "message": self.message,
             "fingerprint": self.fingerprint,
             "suggestions": list(self.suggestions),
+            "check_modes": [mode.value for mode in self.check_modes],
         }
         if self.artifact is not None:
             data["artifact"] = self.artifact.to_dict()
@@ -215,3 +258,13 @@ def diagnostic_sort_key(diagnostic: Diagnostic) -> tuple[int, str, str, str, str
     """Return the canonical ordering key for deterministic diagnostic output."""
 
     return diagnostic.sort_key
+
+
+def _coerce_check_mode(mode: CheckMode | str) -> CheckMode:
+    if isinstance(mode, CheckMode):
+        return mode
+    try:
+        return CheckMode(mode)
+    except ValueError as exc:
+        choices = ", ".join(item.value for item in CheckMode)
+        raise ValueError(f"unknown check mode: {mode!r}; expected one of {choices}") from exc

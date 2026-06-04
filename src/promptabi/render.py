@@ -30,8 +30,11 @@ def render_text(
     for diagnostic in result.diagnostics:
         if verbosity < 0 and diagnostic.severity.value == "info":
             continue
+        mode_suffix = ""
+        if diagnostic.check_modes:
+            mode_suffix = " [" + ", ".join(mode.label for mode in diagnostic.check_modes) + "]"
         lines.append(
-            f"{diagnostic.severity.value.upper()} {diagnostic.rule_id}: {diagnostic.message}"
+            f"{diagnostic.severity.value.upper()} {diagnostic.rule_id}{mode_suffix}: {diagnostic.message}"
         )
         lines.append(f"  fingerprint: {diagnostic.fingerprint}")
         if diagnostic.artifact is not None:
@@ -74,7 +77,10 @@ def render_sarif(result: VerificationResult) -> str:
             "name": rule_id,
             "shortDescription": {"text": diagnostic.message},
             "defaultConfiguration": {"level": diagnostic.severity.sarif_level},
-            "properties": {"precision": "high"},
+            "properties": {
+                "checkModes": [mode.value for mode in diagnostic.check_modes],
+                "precision": "high",
+            },
         }
         for rule_id, diagnostic in sorted(rule_ids.items())
     ]
@@ -106,6 +112,7 @@ def _diagnostic_to_sarif_result(diagnostic) -> dict[str, object]:
         "properties": {
             "severity": diagnostic.severity.value,
             "suggestions": list(diagnostic.suggestions),
+            "checkModes": [mode.value for mode in diagnostic.check_modes],
         },
     }
     if diagnostic.witness is not None:

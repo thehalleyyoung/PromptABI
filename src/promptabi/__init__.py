@@ -29,6 +29,7 @@ from .artifacts import (
 from .config import ConfigError, VerificationConfig, discover_config, load_config
 from .diagnostics import (
     ArtifactRef,
+    CheckMode,
     Diagnostic,
     DiagnosticSeverity,
     SourceSpan,
@@ -106,6 +107,7 @@ __all__ = [
     "BoolDomain",
     "BoundedStringDomain",
     "ChatTemplateArtifact",
+    "CheckMode",
     "ConfigError",
     "Contains",
     "ByteLevelTokenizer",
