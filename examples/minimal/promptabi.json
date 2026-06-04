@@ -3,9 +3,24 @@
   "checks": ["repository-skeleton"],
   "max_context_tokens": 4096,
   "artifacts": {
-    "messages": "messages.json",
-    "schema": "answer.schema.json",
-    "tools": "tools.json"
+    "messages": {
+      "kind": "prompt-segment",
+      "path": "messages.json",
+      "segments": [
+        { "name": "system-policy", "role": "system", "required": true },
+        { "name": "user-request", "role": "user", "required": true }
+      ]
+    },
+    "schema": {
+      "kind": "schema",
+      "path": "answer.schema.json",
+      "dialect": "json-schema-2020-12"
+    },
+    "tools": {
+      "kind": "tool-definition",
+      "path": "tools.json",
+      "provider": "openai",
+      "tool_names": ["refund_user"]
+    }
   }
 }
-

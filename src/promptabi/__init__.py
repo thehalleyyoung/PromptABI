@@ -7,6 +7,25 @@ blocks that later checkers can reuse without changing the embedding API.
 """
 
 from ._version import __version__
+from .artifacts import (
+    ArtifactBundle,
+    ArtifactKind,
+    ArtifactLocation,
+    ArtifactProvenance,
+    ChatTemplateArtifact,
+    FrameworkTruncationConfigArtifact,
+    GrammarArtifact,
+    PromptSegment,
+    PromptSegmentArtifact,
+    ProviderConfigArtifact,
+    SchemaArtifact,
+    SpecialToken,
+    SpecialTokenMapArtifact,
+    StopPolicyArtifact,
+    TokenizerArtifact,
+    ToolDefinitionArtifact,
+    TruncationStrategy,
+)
 from .config import ConfigError, VerificationConfig, load_config
 from .diagnostics import (
     ArtifactRef,
@@ -19,15 +38,31 @@ from .session import VerificationResult, VerificationSession
 
 __all__ = [
     "__version__",
+    "ArtifactBundle",
+    "ArtifactKind",
+    "ArtifactLocation",
+    "ArtifactProvenance",
     "ArtifactRef",
+    "ChatTemplateArtifact",
     "ConfigError",
     "Diagnostic",
     "DiagnosticSeverity",
+    "FrameworkTruncationConfigArtifact",
+    "GrammarArtifact",
+    "PromptSegment",
+    "PromptSegmentArtifact",
+    "ProviderConfigArtifact",
+    "SchemaArtifact",
     "SourceSpan",
+    "SpecialToken",
+    "SpecialTokenMapArtifact",
+    "StopPolicyArtifact",
+    "TokenizerArtifact",
+    "ToolDefinitionArtifact",
+    "TruncationStrategy",
     "VerificationConfig",
     "VerificationResult",
     "VerificationSession",
     "WitnessTrace",
     "load_config",
 ]
-

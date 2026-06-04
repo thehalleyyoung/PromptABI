@@ -11,15 +11,17 @@ promptabi verify --config examples/minimal/promptabi.json
 
 ```text
 PromptABI verification: minimal-chat-template
+checks: repository-skeleton
 status: PASS
 INFO repository-skeleton: PromptABI package, CLI, docs, examples, fixtures, and benchmarks are wired.
+  witness: The verification session constructed a typed config and produced deterministic output.
 ```
 
-PromptABI is CPU-only because its claims are structural: it checks whether the
-interface contract makes prompt/protocol states possible, impossible, ambiguous,
-or unsafe. It does not need model weights to prove that a role delimiter is
-forgeable, a stop sequence can truncate valid JSON, or a required tool schema is
-dropped by a truncation policy.
+PromptABI is CPU-only because its claims are structural. It models the exact
+artifacts around an LLM system--tokenizers, chat templates, special tokens, stop
+policies, schemas, grammars, tools, prompt segments, providers, and truncation
+configs--then checks whether their composed contract makes protocol states
+possible, impossible, ambiguous, or unsafe.
 
 ```text
 messages -> chat template -> byte/string prompt -> tokenizer -> token stream
@@ -28,9 +30,10 @@ messages -> chat template -> byte/string prompt -> tokenizer -> token stream
 
 The roadmap targets three high-value checks first: role-boundary
 non-forgeability, stop/grammar/tokenizer reachability, and must-survive
-token-budget verification. The repository now has the typed Python package, CLI
-entrypoint, docs, examples, fixture layout, benchmarks, and contribution path
-needed to grow those checks without changing the public surface.
+token-budget verification. The repository now has the typed Python package, core
+artifact model, CLI entrypoint, docs, examples, fixture layout, benchmarks, and
+contribution path needed to grow those checks without changing the public
+surface.
 
 ## Why this is clearly distinct from TensorGuard
 

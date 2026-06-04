@@ -1,0 +1,173 @@
+from pathlib import Path
+
+import pytest
+
+from promptabi.artifacts import (
+    ArtifactBundle,
+    ArtifactKind,
+    ArtifactLocation,
+    ArtifactProvenance,
+    ChatTemplateArtifact,
+    FrameworkTruncationConfigArtifact,
+    GrammarArtifact,
+    PromptSegment,
+    PromptSegmentArtifact,
+    ProviderConfigArtifact,
+    SchemaArtifact,
+    SpecialToken,
+    SpecialTokenMapArtifact,
+    StopPolicyArtifact,
+    TokenizerArtifact,
+    ToolDefinitionArtifact,
+    TruncationStrategy,
+    artifact_from_config,
+)
+
+
+def test_core_artifact_model_serializes_every_kind_deterministically() -> None:
+    location = ArtifactLocation(path="/tmp/promptabi-artifact.json")
+    provenance = ArtifactProvenance(version="v1", sha256="abc123")
+    artifacts = (
+        TokenizerArtifact(
+            kind=ArtifactKind.TOKENIZER,
+            name="tok",
+            location=location,
+            provenance=provenance,
+            family="byte-bpe",
+            added_tokens=("<eos>", "<bos>", "<eos>"),
+        ),
+        ChatTemplateArtifact(
+            kind=ArtifactKind.CHAT_TEMPLATE,
+            name="template",
+            location=location,
+            roles=("user", "assistant", "user"),
+            add_generation_prompt=True,
+        ),
+        SpecialTokenMapArtifact(
+            kind=ArtifactKind.SPECIAL_TOKEN_MAP,
+            name="specials",
+            location=location,
+            tokens=(SpecialToken("eos", "</s>", 2), SpecialToken("bos", "<s>", 1)),
+        ),
+        StopPolicyArtifact(
+            kind=ArtifactKind.STOP_POLICY,
+            name="stops",
+            location=location,
+            stop_sequences=("</tool_call>", "\n\n", "</tool_call>"),
+            include_eos=False,
+        ),
+        SchemaArtifact(
+            kind=ArtifactKind.SCHEMA,
+            name="schema",
+            location=location,
+            dialect="json-schema-2020-12",
+        ),
+        GrammarArtifact(
+            kind=ArtifactKind.GRAMMAR,
+            name="grammar",
+            location=location,
+            grammar_type="ebnf",
+        ),
+        ToolDefinitionArtifact(
+            kind=ArtifactKind.TOOL_DEFINITION,
+            name="tools",
+            location=location,
+            provider="openai",
+            tool_names=("refund_user", "lookup_order"),
+        ),
+        PromptSegmentArtifact(
+            kind=ArtifactKind.PROMPT_SEGMENT,
+            name="segments",
+            location=location,
+            segments=(
+                PromptSegment("system-policy", role="system", required=True, max_tokens=128),
+                PromptSegment("retrieval", role="user", required=False),
+            ),
+        ),
+        ProviderConfigArtifact(
+            kind=ArtifactKind.PROVIDER_CONFIG,
+            name="provider",
+            location=location,
+            provider="openai-compatible",
+            api_family="chat-completions",
+        ),
+        FrameworkTruncationConfigArtifact(
+            kind=ArtifactKind.FRAMEWORK_TRUNCATION_CONFIG,
+            name="budget",
+            location=location,
+            framework="vllm",
+            strategy=TruncationStrategy.LEFT,
+            max_context_tokens=8192,
+            reserve_output_tokens=512,
+        ),
+    )
+
+    bundle = ArtifactBundle(artifacts)
+
+    payload = bundle.to_dict()
+    assert [item["kind"] for item in payload["artifacts"]] == sorted(kind.value for kind in ArtifactKind)
+    assert bundle.by_name("tok").to_ref().to_dict() == {
+        "kind": "tokenizer",
+        "name": "tok",
+        "path": "/tmp/promptabi-artifact.json",
+        "version": "v1",
+    }
+    assert bundle.by_name("tok").to_dict()["added_tokens"] == ["<bos>", "<eos>"]
+    assert bundle.by_name("segments").required_segments == (
+        PromptSegment("system-policy", role="system", required=True, max_tokens=128),
+    )
+
+
+def test_config_artifact_parser_accepts_the_same_kinds_as_the_model(tmp_path: Path) -> None:
+    artifact_file = tmp_path / "artifact.json"
+    artifact_file.write_text("{}", encoding="utf-8")
+    specs = {
+        ArtifactKind.TOKENIZER: {"family": "byte-bpe", "added_tokens": ["<s>"]},
+        ArtifactKind.CHAT_TEMPLATE: {"roles": ["system", "user"], "add_generation_prompt": True},
+        ArtifactKind.SPECIAL_TOKEN_MAP: {"tokens": {"bos": "<s>", "eos": "</s>"}},
+        ArtifactKind.STOP_POLICY: {"stop_sequences": ["</tool_call>"], "include_eos": False},
+        ArtifactKind.SCHEMA: {"dialect": "json-schema"},
+        ArtifactKind.GRAMMAR: {"grammar_type": "regex"},
+        ArtifactKind.TOOL_DEFINITION: {"provider": "anthropic", "tool_names": ["refund_user"]},
+        ArtifactKind.PROMPT_SEGMENT: {
+            "segments": [{"name": "system-policy", "role": "system", "required": True}]
+        },
+        ArtifactKind.PROVIDER_CONFIG: {"provider": "openai", "api_family": "responses"},
+        ArtifactKind.FRAMEWORK_TRUNCATION_CONFIG: {
+            "framework": "langchain",
+            "strategy": "oldest-message",
+            "max_context_tokens": 4096,
+        },
+    }
+
+    parsed = {
+        kind: artifact_from_config(
+            kind.value,
+            {"kind": kind.value, "path": artifact_file.name, **extra},
+            base_dir=tmp_path,
+        )
+        for kind, extra in specs.items()
+    }
+
+    assert set(parsed) == set(ArtifactKind)
+    assert {artifact.kind for artifact in parsed.values()} == set(ArtifactKind)
+    assert all(artifact.location.path == str(artifact_file.resolve()) for artifact in parsed.values())
+
+
+def test_artifact_model_rejects_invalid_locations_and_segments() -> None:
+    with pytest.raises(ValueError, match="exactly one"):
+        ArtifactLocation(path="/tmp/a", uri="hf://model")
+
+    with pytest.raises(ValueError, match="special token map values"):
+        artifact_from_config(
+            "specials",
+            {"kind": "special-token-map", "path": "specials.json", "tokens": {"eos": 2}},
+            base_dir=Path("."),
+        )
+
+    with pytest.raises(ValueError, match="at least one segment"):
+        PromptSegmentArtifact(
+            kind=ArtifactKind.PROMPT_SEGMENT,
+            name="empty",
+            location=ArtifactLocation(path="/tmp/segments.json"),
+        )

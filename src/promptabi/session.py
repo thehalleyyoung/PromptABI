@@ -22,12 +22,7 @@ class VerificationResult:
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "config": {
-                "name": self.config.name,
-                "checks": list(self.config.checks),
-                "artifacts": dict(sorted(self.config.artifacts.items())),
-                "max_context_tokens": self.config.max_context_tokens,
-            },
+            "config": self.config.to_dict(),
             "ok": self.ok,
             "diagnostics": [diagnostic.to_dict() for diagnostic in self.diagnostics],
         }
@@ -66,18 +61,20 @@ class VerificationSession:
 
     def _artifact_existence_diagnostics(self) -> tuple[Diagnostic, ...]:
         diagnostics: list[Diagnostic] = []
-        for name, path in sorted(self.config.artifacts.items()):
-            artifact = ArtifactRef(kind="local-file", name=name, path=path)
+        for artifact_model in self.config.artifact_bundle:
+            path = artifact_model.location.path
+            if path is None:
+                continue
+            artifact = artifact_model.to_ref()
             if not Path(path).exists():
                 diagnostics.append(
                     Diagnostic(
                         rule_id="artifact-missing",
                         severity=DiagnosticSeverity.ERROR,
-                        message=f"artifact '{name}' does not exist",
+                        message=f"artifact '{artifact_model.name}' does not exist",
                         artifact=artifact,
                         span=SourceSpan(path=path),
                         suggestions=("Check the path relative to the PromptABI config file.",),
                     )
                 )
         return tuple(diagnostics)
-

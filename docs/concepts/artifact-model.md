@@ -1,10 +1,13 @@
 # Artifact model
 
 PromptABI separates artifact identity from artifact content. A diagnostic can
-refer to a tokenizer config, schema, tool definition, or prompt segment without
-requiring the renderer to know how that artifact was loaded.
+refer to a tokenizer, chat template, special-token map, stop policy, schema,
+grammar, tool definition, prompt segment, provider config, or framework
+truncation config without requiring the renderer to know how that artifact was
+loaded.
 
-The initial `ArtifactRef`, `SourceSpan`, `WitnessTrace`, and `Diagnostic` types
-are deliberately small and deterministic. They are the compatibility surface for
-future loaders, checkers, and renderers.
-
+The public artifact model stores kind, name, local path or URI, provenance,
+version/hash metadata, and kind-specific fields such as stop strings, tool names,
+prompt segment survival requirements, and truncation strategy. `ArtifactBundle`
+keeps those inputs sorted and serializable so CLI JSON, tests, future SARIF, and
+embedding APIs share one deterministic contract.
