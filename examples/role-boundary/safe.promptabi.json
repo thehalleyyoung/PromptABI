@@ -1,0 +1,12 @@
+{
+  "name": "role-boundary-sanitized-chatml",
+  "checks": ["role-boundary-nonforgeability"],
+  "artifacts": {
+    "chatml-template": {
+      "kind": "chat-template",
+      "path": "safe-tokenizer_config.json",
+      "sha256": "b6c828efbd6a2abb6c0abe8f9f40e01bda35190a143277881c313bf8cb424254",
+      "roles": ["system", "user", "assistant"]
+    }
+  }
+}

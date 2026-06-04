@@ -20,6 +20,11 @@ reported heuristic evidence, or abstained outside the supported model.
 Can attacker-controlled fields render as system, assistant, tool, or provider
 control structure after chat-template expansion?
 
+This check is intentionally structural: it proves that a rendered prompt can
+contain forged control syntax, not that a model will obey that syntax. See
+[Role-boundary non-forgeability](concepts/role-boundary-nonforgeability.md)
+for the exact boundary, witness shape, sanitizer model, and runnable examples.
+
 ## Stop and grammar reachability
 
 Can a stop sequence fire inside a valid structured output? Is a requested stop

@@ -7,4 +7,4 @@ nav:
   - Check families: checks.md
   - Concepts:
       - Artifact model: concepts/artifact-model.md
-
+      - Role-boundary non-forgeability: concepts/role-boundary-nonforgeability.md

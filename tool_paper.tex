@@ -131,6 +131,8 @@ The repository layout is designed to scale:
 \hline
 \texttt{examples/minimal} & A typed artifact config, messages file, tool schema, and answer schema used by tests and docs. \\
 \hline
+\texttt{examples/role-boundary} & Paired unsafe and sanitized ChatML-style \texttt{tokenizer\_config.json} artifacts that exercise the real role-boundary non-forgeability CLI check. \\
+\hline
 \texttt{fixtures} & Curated seed corpus for tokenizer and chat-template bundles with provenance metadata, expected behaviors, reproducibility notes, and deterministic hashes. \\
 \hline
 \texttt{benchmarks} & CPU-only benchmark entrypoints for repeatable performance baselines. \\
@@ -531,7 +533,7 @@ introduced. A future role-forgery finding can reuse the same shape:
     ]
   },
   "suggestions": ["Escape user content before inserting role delimiters."],
-  "check_modes": ["bounded", "sound", "z3-backed-smt"]
+  "check_modes": ["bounded", "sound"]
 }
 \end{verbatim}
 
@@ -572,6 +574,8 @@ The command line entrypoint is:
 \begin{verbatim}
 promptabi verify
 promptabi verify --config examples/minimal/promptabi.json
+promptabi verify --config examples/role-boundary/unsafe.promptabi.json
+promptabi verify --config examples/role-boundary/safe.promptabi.json
 promptabi verify --artifact schema=schemas/answer.json --fail-on warning
 promptabi verify --config examples/minimal/promptabi.json --format json
 promptabi verify --config examples/minimal/promptabi.json --format sarif
@@ -681,6 +685,17 @@ allows user content to create an apparent assistant turn. It cannot prove that a
 model will obey that turn. That distinction makes the result more useful, not
 less, because the finding remains valid across model weights and sampling
 parameters.
+
+The repository now exposes this distinction as an executable example rather than
+only a warning in prose. \texttt{examples/role-boundary/unsafe.promptabi.json}
+points at a ChatML-style template that directly interpolates
+\texttt{message['role']} and \texttt{message['content']}; the verifier fails with
+witnesses for raw \texttt{assistant}, \texttt{<|im\_start|>}, and
+\texttt{<|im\_end|>} markers. The paired
+\texttt{examples/role-boundary/safe.promptabi.json} uses the same control-token
+shape but JSON-encodes dynamic role and content fields, and the same check passes
+with no role-boundary diagnostics. Both artifacts are sha256-pinned and covered
+by focused CLI tests, so the documentation claim is exercised against real code.
 
 \clearpage
 \section{Stop and Grammar Reachability}
@@ -867,17 +882,20 @@ A 1000-star verification repo needs more than algorithms. It needs a first-run
 experience where a developer immediately understands what failed and how to fix
 it. The README now leads with a concrete CLI command, a CPU-only explanation,
 and the three high-value check families. The docs tree explains architecture,
-quickstart, check families, and the artifact model. The contribution guide
+quickstart, check families, the artifact model, and a focused role-boundary page
+that separates structural non-forgeability from semantic prompt-injection
+resistance while linking to the runnable unsafe/sanitized example. The contribution guide
 states the central norms: deterministic output, CPU-only tests, minimized
 fixtures, typed public APIs, and explicit soundness boundaries.
 
-The examples directory is equally important. PromptABI should accumulate small
-applications that intentionally contain bugs: role-delimiter injection, stop
-overreach in JSON, RAG truncation that drops citations, provider migration that
-changes a tool-call AST, and tokenizer drift that changes special-token
-behavior. Each example should include both the failing artifact bundle and the
-fixed version. That gives users practical recipes and gives maintainers stable
-regression tests.
+The examples directory is equally important. It now contains both the minimal
+typed-artifact workflow and a role-delimiter injection example with failing and
+fixed bundles. PromptABI should continue accumulating small applications that
+intentionally contain bugs: stop overreach in JSON, RAG truncation that drops
+citations, provider migration that changes a tool-call AST, and tokenizer drift
+that changes special-token behavior. Each example should include both the
+failing artifact bundle and the fixed version. That gives users practical
+recipes and gives maintainers stable regression tests.
 
 The CLI should remain terse by default and expandable on demand. A CI run needs
 deterministic diagnostics and exit codes. A local debugging session needs

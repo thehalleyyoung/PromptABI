@@ -188,3 +188,40 @@ def test_verify_role_boundary_nonforgeability_reports_real_fixture(tmp_path, cap
     assert any(step["action"] == "tokenize forged excerpt" for step in witness_steps)
     assert any(step["action"] == "locate forged boundary" for step in witness_steps)
     assert any("byte-level" in step.get("output", "") for step in witness_steps)
+
+
+def test_verify_role_boundary_example_reports_structural_not_semantic_boundary(capsys) -> None:
+    exit_code = main(["verify", "--config", "examples/role-boundary/unsafe.promptabi.json", "--format", "json"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    diagnostics = [
+        diagnostic
+        for diagnostic in payload["diagnostics"]
+        if diagnostic["rule_id"] == "role-boundary-nonforgeability"
+    ]
+
+    assert exit_code == 1
+    assert diagnostics
+    assert any("role-header 'assistant'" in diagnostic["message"] for diagnostic in diagnostics)
+    assert any("assistant-prefix '<|im_start|>'" in diagnostic["message"] for diagnostic in diagnostics)
+    assert all("model will" not in diagnostic["message"] for diagnostic in diagnostics)
+    witness_steps = diagnostics[0]["witness"]["steps"]
+    assert any(step["action"] == "render forged boundary excerpt" for step in witness_steps)
+    assert any(step["action"] == "tokenize forged excerpt" for step in witness_steps)
+    assert any(step["action"] == "locate forged boundary" for step in witness_steps)
+
+
+def test_verify_role_boundary_example_accepts_sanitized_template(capsys) -> None:
+    exit_code = main(["verify", "--config", "examples/role-boundary/safe.promptabi.json", "--format", "json"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["ok"] is True
+    assert [
+        diagnostic
+        for diagnostic in payload["diagnostics"]
+        if diagnostic["rule_id"] == "role-boundary-nonforgeability"
+    ] == []

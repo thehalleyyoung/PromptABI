@@ -48,7 +48,8 @@ provider/model control delimiters, special tokens, assistant prefixes, and
 tool-call sentinels from real chat-template artifacts, while JSON/escape/wrapper
 filters suppress false positives. Findings include minimized malicious inputs,
 rendered excerpts, byte-level token evidence, and exact forged-boundary
-locations. The next high-value checks are stop/grammar/tokenizer
+locations; `examples/role-boundary/` demonstrates the unsafe and sanitized cases
+against the real CLI. The next high-value checks are stop/grammar/tokenizer
 reachability and must-survive token-budget verification. The repository already has the typed Python package,
 core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,
 snapshot-locked output stability, discoverable `promptabi verify` workflow,
