@@ -303,14 +303,15 @@ class HuggingFaceTokenizerAdapter(TokenizerAdapter):
             byte_start = char_to_byte[char_start] if 0 <= char_start < len(char_to_byte) else None
             byte_end = char_to_byte[char_end] if 0 <= char_end < len(char_to_byte) else None
             token_text = encoded.tokens[index]
+            special = bool(special_mask[index]) if index < len(special_mask) else False
             tokens.append(
                 EncodedToken(
                     token_id=token_id,
                     text=token_text,
                     byte_start=byte_start,
                     byte_end=byte_end,
-                    special=bool(special_mask[index]) if index < len(special_mask) else False,
-                    added=token_id in added_token_ids or token_text in self._declared_added_tokens,
+                    special=special,
+                    added=not special and (token_id in added_token_ids or token_text in self._declared_added_tokens),
                 )
             )
         return EncodeResult(

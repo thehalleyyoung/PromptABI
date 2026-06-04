@@ -34,13 +34,26 @@ messages -> chat template -> byte/string prompt -> tokenizer -> token stream
         -> constrained decoder / stop logic / tool parser -> application parser
 ```
 
+For genuinely static verification of these discrete pipeline components,
+PromptABI should use Z3 as the SMT engine for the parts that are naturally
+symbolic rather than sampled: bounded chat-template paths, schema and tool
+preconditions, tokenizer/control-token constraints, stop-policy reachability,
+prompt-segment survival constraints, and training/fine-tuning data-pipeline
+invariants such as "no user-controlled span can become a role header" or "every
+supervised target remains aligned with the intended assistant region." Z3's role
+is to prove satisfiability or unsatisfiability of finite, explicitly modeled
+contracts and to emit counterexample witnesses when a bad state is reachable.
+It is not a model-behavior oracle and does not require logits, GPUs, or
+inference.
+
 The roadmap targets three high-value checks first: role-boundary
 non-forgeability, stop/grammar/tokenizer reachability, and must-survive
 token-budget verification. The repository already has the typed Python package,
 core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,
 discoverable `promptabi verify` workflow, offline version-pinned artifact
 loading, a real tokenizer abstraction spanning byte-level, Hugging Face
-`tokenizers`, `tiktoken`, and SentencePiece backends, plus docs, examples,
+`tokenizers`, `tiktoken`, and SentencePiece backends, a differential harness that
+checks those adapters against the actual libraries, plus docs, examples,
 fixtures, benchmarks, and a contribution path for growing checks without
 changing the public surface.
 
@@ -65,7 +78,14 @@ Most high-value checks become automata-theoretic properties:
 - **Round-trip parseability:** does `render -> tokenize -> detokenize -> parse` preserve the intended message/tool structure?
 - **Must-survive budget constraints:** do system instructions, tool definitions, safety preambles, retrieval citations, or output-format requirements remain present under the framework's real truncation policy?
 
-The implementation can combine finite-state automata, bounded symbolic execution of chat templates, SMT where useful, property-based tests, and differential checks against real libraries.
+The implementation can combine finite-state automata, bounded symbolic execution
+of chat templates, Z3-backed SMT solving for finite symbolic contracts,
+property-based tests, and differential checks against real libraries. The static
+verification boundary should be explicit: automata prove language/reachability
+facts; Z3 proves satisfiability, incompatibility, and counterexample existence
+for bounded integer, Boolean, enum, and string constraints over discrete
+artifacts; differential tests validate that the abstraction matches the
+libraries people actually run.
 
 ## Why no GPU genuinely does not limit applicability
 

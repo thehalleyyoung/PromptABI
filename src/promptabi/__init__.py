@@ -37,6 +37,13 @@ from .diagnostics import (
 )
 from .loaders import ArtifactLoadError, ArtifactLoader, ArtifactLoadWarning, LoadedArtifact, load_artifact
 from .session import VerificationResult, VerificationSession
+from .tokenizer_diff import (
+    TokenizerDifferentialCase,
+    TokenizerDifferentialMismatch,
+    TokenizerDifferentialReport,
+    TokenizerExpectation,
+    run_tokenizer_differential,
+)
 from .tokenizers import (
     ByteLevelTokenizer,
     DecodeResult,
@@ -88,6 +95,10 @@ __all__ = [
     "SpecialTokenMapArtifact",
     "StopPolicyArtifact",
     "TiktokenAdapter",
+    "TokenizerDifferentialCase",
+    "TokenizerDifferentialMismatch",
+    "TokenizerDifferentialReport",
+    "TokenizerExpectation",
     "TokenizerArtifact",
     "TokenizerAdapter",
     "TokenizerBackend",
@@ -104,4 +115,5 @@ __all__ = [
     "load_artifact",
     "load_config",
     "load_tokenizer",
+    "run_tokenizer_differential",
 ]

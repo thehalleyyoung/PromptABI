@@ -29,11 +29,11 @@ This paper presents the repository as it now stands and the research system it
 is designed to become. The implementation already contains a typed Python
 package, a deterministic command line workflow, a public embedding API, a
 typed artifact model, a stable diagnostic contract with text, JSON, and SARIF
-renderers, offline version-pinned artifact loading, a tokenizer abstraction
-validated against real Hugging Face \texttt{tokenizers}, \texttt{tiktoken}, and
-SentencePiece libraries, a minimal verification session, focused tests,
-examples, a fixture corpus layout, a CPU-only benchmark, documentation, and
-contribution guidance.
+renderers, offline version-pinned artifact loading, a tokenizer abstraction and
+differential harness validated against real Hugging Face \texttt{tokenizers},
+\texttt{tiktoken}, and SentencePiece libraries, a minimal verification session,
+focused tests, examples, a fixture corpus layout, a CPU-only benchmark,
+documentation, and contribution guidance.
 The remaining checkers fit into that surface rather than requiring a rewrite. We
 describe the transducer-oriented formalism, the artifact model, the diagnostic
 contract, the first benchmark line, and the planned evaluation against real tokenizer, template,
@@ -285,12 +285,34 @@ versions.
 The current tests validate this layer against real code rather than mocks. A
 trained local Hugging Face ByteLevel BPE tokenizer is compared against
 \texttt{tokenizers.Tokenizer.encode} and \texttt{decode}. The \texttt{tiktoken}
-adapter is compared against \texttt{cl100k\_base}, including special-token
-handling. A temporary SentencePiece model is trained and compared against
-\texttt{SentencePieceProcessor}. The byte-level adapter separately proves
-normalization, added-token, special-token, UTF-8 span, and round-trip behavior.
-These tests form the first differential benchline for the eventual tokenizer
-corpus.
+adapter is compared against \texttt{cl100k\_base}, including special-token and
+byte-fallback behavior. A temporary SentencePiece model is trained and compared
+against \texttt{SentencePieceProcessor}. The byte-level adapter separately
+proves normalization, added-token, special-token, UTF-8 span, and round-trip
+behavior. These tests form the first differential benchline for the eventual
+tokenizer corpus.
+
+\subsection{Tokenizer Differential Harness}
+
+PromptABI now has a reusable differential harness rather than one-off adapter
+assertions. Each case records the input text, whether the backend should inject
+special tokens, whether decoding should skip them, and an oracle expectation
+collected from the real library. The harness then compares PromptABI's stable
+abstraction against that oracle across token IDs, token surfaces, decoded text,
+normalized text, normalization steps, special-token IDs, added-token IDs,
+required byte spans, and normalized round-trip behavior. Failures are returned
+as deterministic mismatch records with stable dictionaries suitable for future
+snapshot tests and corpus reports.
+
+The harness already caught a realistic edge case during development: Hugging
+Face stores special tokens in its added-token decoder, but downstream structural
+checks need to distinguish provider/model control tokens from ordinary added
+tokens such as tool sentinels. The adapter now treats specialness and
+added-token status as separate flags, so a role-boundary checker can reason about
+\texttt{<s>} and \texttt{</s>} differently from an application-defined
+\texttt{<tool>} token. This is the sort of small tokenizer-library semantic
+difference that later formal checks must get right before their witnesses are
+credible.
 
 \clearpage
 \section{Diagnostic Contract}
