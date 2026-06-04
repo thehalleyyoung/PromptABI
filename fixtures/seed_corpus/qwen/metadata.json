@@ -1,0 +1,16 @@
+{
+  "id": "qwen",
+  "family": "qwen",
+  "display_name": "Qwen im-start/im-end template",
+  "source": "synthetic-minimized",
+  "license": "fixture-only",
+  "fixture_revision": "seed-v1",
+  "upstream_reference": "Qwen/Qwen*-Instruct tokenizer_config conventions",
+  "upstream_revision": "minimized-qwen-seed-v1",
+  "download_required": false,
+  "reproducibility_notes": "Representative im-start/im-end fixture distilled to tokenizer_config metadata only.",
+  "roles": ["system", "user", "assistant", "tool"],
+  "sentinels": ["<|im_start|>", "<|im_end|>"],
+  "supports_generation_prompt": true,
+  "expected_behaviors": ["chatml_like_headers", "tool_role_region", "assistant_generation_prompt"]
+}

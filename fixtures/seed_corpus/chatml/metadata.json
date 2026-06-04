@@ -1,8 +1,16 @@
 {
-  "name": "chatml-minimized",
+  "id": "chatml",
+  "family": "chatml",
+  "display_name": "ChatML-style instruct template",
+  "source": "synthetic-minimized",
   "license": "fixture-only",
-  "source": "synthetic",
-  "revision": "local",
-  "expected_fragments": ["roles", "special_tokens", "generation_prompt"]
+  "fixture_revision": "seed-v1",
+  "upstream_reference": "ChatML-style open adapter conventions",
+  "upstream_revision": "minimized-chatml-seed-v1",
+  "download_required": false,
+  "reproducibility_notes": "Minimized local fixture; no model weights or network downloads are required.",
+  "roles": ["system", "user", "assistant"],
+  "sentinels": ["<|im_start|>", "<|im_end|>"],
+  "supports_generation_prompt": true,
+  "expected_behaviors": ["role_headers", "newline_content", "assistant_generation_prompt"]
 }
-

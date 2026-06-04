@@ -1,0 +1,16 @@
+{
+  "id": "llama",
+  "family": "llama",
+  "display_name": "Llama-3-style header template",
+  "source": "synthetic-minimized",
+  "license": "fixture-only",
+  "fixture_revision": "seed-v1",
+  "upstream_reference": "meta-llama/Meta-Llama-3.*-Instruct tokenizer_config conventions",
+  "upstream_revision": "minimized-llama-seed-v1",
+  "download_required": false,
+  "reproducibility_notes": "Representative header-token fixture distilled to tokenizer_config metadata only.",
+  "roles": ["system", "user", "assistant"],
+  "sentinels": ["<|begin_of_text|>", "<|start_header_id|>", "<|end_header_id|>", "<|eot_id|>"],
+  "supports_generation_prompt": true,
+  "expected_behaviors": ["header_role_boundaries", "eot_turn_separator", "assistant_generation_prompt"]
+}

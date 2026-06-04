@@ -67,6 +67,16 @@ from .formal import (
     Var,
 )
 from .loaders import ArtifactLoadError, ArtifactLoader, ArtifactLoadWarning, LoadedArtifact, load_artifact
+from .seed_corpus import (
+    MANIFEST_VERSION,
+    REQUIRED_FAMILIES,
+    SeedCorpus,
+    SeedCorpusEntry,
+    SeedCorpusError,
+    build_seed_corpus_manifest,
+    load_seed_corpus,
+    write_seed_corpus_manifest,
+)
 from .session import CheckCallable, CheckContext, VerificationResult, VerificationSession
 from .source import JsonSourceMap, build_json_source_map
 from .tokenizer_diff import (
@@ -134,6 +144,7 @@ __all__ = [
     "JsonSourceMap",
     "Length",
     "LoadedArtifact",
+    "MANIFEST_VERSION",
     "NamedConstraint",
     "Ne",
     "NormalizationRule",
@@ -143,7 +154,11 @@ __all__ = [
     "PromptSegmentArtifact",
     "ProviderConfigArtifact",
     "RoundTripResult",
+    "REQUIRED_FAMILIES",
     "SchemaArtifact",
+    "SeedCorpus",
+    "SeedCorpusEntry",
+    "SeedCorpusError",
     "SentencePieceAdapter",
     "SolverBackend",
     "SolverResult",
@@ -178,11 +193,14 @@ __all__ = [
     "create_session",
     "discover_config",
     "build_json_source_map",
+    "build_seed_corpus_manifest",
     "load_artifact",
     "load_artifacts",
     "load_config",
+    "load_seed_corpus",
     "load_tokenizer",
     "render_result",
     "run_verification",
     "run_tokenizer_differential",
+    "write_seed_corpus_manifest",
 ]

@@ -1,0 +1,16 @@
+{
+  "id": "mistral",
+  "family": "mistral",
+  "display_name": "Mistral instruction-tag template",
+  "source": "synthetic-minimized",
+  "license": "fixture-only",
+  "fixture_revision": "seed-v1",
+  "upstream_reference": "mistralai/Mistral-* Instruct tokenizer_config conventions",
+  "upstream_revision": "minimized-mistral-seed-v1",
+  "download_required": false,
+  "reproducibility_notes": "Representative instruction-tag fixture distilled to tokenizer_config metadata only.",
+  "roles": ["system", "user", "assistant"],
+  "sentinels": ["<s>", "</s>", "[INST]", "[/INST]"],
+  "supports_generation_prompt": false,
+  "expected_behaviors": ["instruction_tags", "system_in_first_user_block", "assistant_plain_text"]
+}

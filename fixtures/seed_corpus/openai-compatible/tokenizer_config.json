@@ -1,0 +1,6 @@
+{
+  "chat_template": "{% for message in messages %}<|start|>{{ message['role'] }}\n{% if message['role'] == 'tool' %}<|tool_result|>{% endif %}{{ message['content'] }}<|end|>\n{% endfor %}{% if add_generation_prompt %}<|start|>assistant\n{% endif %}",
+  "eos_token": "<|end|>",
+  "pad_token": "<|pad|>",
+  "additional_special_tokens": ["<|start|>", "<|end|>", "<|tool_call|>", "<|tool_result|>"]
+}

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from collections.abc import Sequence
@@ -11,6 +12,7 @@ from pathlib import Path
 from ._version import __version__
 from .config import ConfigError, discover_config, load_config
 from .render import render_json, render_sarif, render_text
+from .seed_corpus import SeedCorpusError, build_seed_corpus_manifest, write_seed_corpus_manifest
 from .session import VerificationSession
 
 
@@ -52,6 +54,18 @@ def build_parser() -> argparse.ArgumentParser:
         default="text",
         help="output format (default: text)",
     )
+
+    corpus = subparsers.add_parser("corpus", help="seed corpus maintenance commands")
+    corpus_subparsers = corpus.add_subparsers(dest="corpus_command", required=True)
+    manifest = corpus_subparsers.add_parser("manifest", help="validate corpus and emit its manifest")
+    manifest.add_argument(
+        "--root",
+        help="seed corpus root (default: repository fixtures/seed_corpus)",
+    )
+    manifest.add_argument(
+        "--output",
+        help="write manifest JSON to this path instead of stdout",
+    )
     return parser
 
 
@@ -88,6 +102,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         print(output, end="")
         return _exit_code(result, fail_on=args.fail_on)
+
+    if args.command == "corpus" and args.corpus_command == "manifest":
+        try:
+            if args.output:
+                manifest = write_seed_corpus_manifest(args.output, root=args.root)
+                print(f"wrote seed corpus manifest: {args.output} ({manifest['entry_count']} entries)")
+            else:
+                manifest = build_seed_corpus_manifest(args.root)
+                print(json.dumps(manifest, indent=2, sort_keys=True))
+        except SeedCorpusError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write corpus manifest: {exc}", file=sys.stderr)
+            return 2
+        return 0
 
     parser.error(f"unknown command: {args.command}")
     return 2

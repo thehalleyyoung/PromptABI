@@ -35,7 +35,8 @@ validated against real Hugging Face \texttt{tokenizers},
 \texttt{tiktoken}, and SentencePiece libraries, deterministic finite automata,
 finite-state transducers with composition and projection, a finite-contract
 solver, a minimal verification session, focused tests, examples, a fixture
-corpus layout, a CPU-only benchmark, documentation, and contribution guidance.
+corpus layout, a curated ten-family seed corpus, a deterministic corpus manifest
+pipeline, a CPU-only benchmark, documentation, and contribution guidance.
 The remaining checkers fit into that surface rather than requiring a rewrite. We
 describe the transducer-oriented formalism, the artifact model, the diagnostic
 contract, the first benchmark line, and the planned evaluation against real tokenizer, template,
@@ -112,7 +113,7 @@ The repository layout is designed to scale:
 \hline
 \texttt{examples/minimal} & A typed artifact config, messages file, tool schema, and answer schema used by tests and docs. \\
 \hline
-\texttt{fixtures} & Seed corpus layout for tokenizer and chat-template bundles with provenance metadata. \\
+\texttt{fixtures} & Curated seed corpus for tokenizer and chat-template bundles with provenance metadata, expected behaviors, reproducibility notes, and deterministic hashes. \\
 \hline
 \texttt{benchmarks} & CPU-only benchmark entrypoints for repeatable performance baselines. \\
 \hline
@@ -533,6 +534,20 @@ overrides, caches, verbosity, deterministic rendering, explicit failure
 thresholds, and plugin-style check registration---before expensive formal
 checkers arrive.
 
+The corpus maintenance workflow now has the same integration discipline:
+
+\begin{verbatim}
+promptabi corpus manifest
+promptabi corpus manifest --output seed-corpus.manifest.json
+\end{verbatim}
+
+This command validates the curated seed corpus without network calls, emits a
+stable manifest with per-entry metadata hashes, tokenizer-config hashes, fixture
+hashes, expected behaviors, license notes, upstream references, pinned fixture
+revisions, and reproducibility notes, and fails deterministically if a required
+family or sentinel contract is missing. That turns the corpus from a collection
+of files into an auditable experimental input.
+
 \clearpage
 \section{Role-Boundary Non-Forgeability}
 
@@ -646,8 +661,8 @@ The testing strategy has three tiers:
 \item unit and structured snapshot tests for public API and deterministic text, JSON, and SARIF rendering;
 \item tokenizer abstraction tests against real Hugging Face \texttt{tokenizers}, \texttt{tiktoken}, SentencePiece, and byte-level adapters;
 \item loader tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, fixture archives, and source-mapped JSON fields;
-\item fixture tests for minimized artifact bundles with expected diagnostics;
-\item corpus tests for popular model and framework configurations pinned by revision.
+\item fixture and corpus tests for minimized tokenizer/chat-template bundles, expected behaviors, sentinel consistency, artifact materialization, and deterministic manifest generation;
+\item future corpus tests for popular model and framework configurations pinned by immutable upstream revisions.
 \end{itemize}
 
 Differential tests are especially valuable for version drift. A tokenizer or
@@ -665,13 +680,28 @@ collision patterns. Each entry should include provenance, license notes, exact
 upstream revisions, hashes, minimized repro inputs, expected diagnostics, and
 unsupported-fragment notes.
 
-The current repository contains the initial layout and a minimized ChatML-like
-tokenizer config. That seed is intentionally small, but it establishes the file
-shape expected by future corpus entries. A mature corpus will include Llama,
-Mistral, Qwen, Gemma, Phi, DeepSeek, Zephyr, OpenAI-style adapters, llama.cpp
-GGUF metadata, common fine-tune templates, real tool schemas from open-source
-agents, anonymized provider traces, and synthetic stress cases with known
-labels.
+The current repository now contains a curated tokenizer/chat-template seed
+corpus spanning Llama-style header tokens, Mistral instruction tags, Qwen and
+ChatML im-start/im-end variants, Gemma user/model turns, Phi role tokens,
+DeepSeek fullwidth control tokens, Zephyr role lines, OpenAI-compatible adapter
+envelopes, and Alpaca-like fine-tune delimiters. The entries are intentionally
+minimized: they retain the structural boundary tokens and template shape needed
+for static analysis while excluding model weights and heavyweight tokenizer
+vocabularies. Each entry records roles, sentinels, expected behaviors, license
+notes, fixture revision, upstream reference, reproducibility notes, and the fact
+that no download is required.
+
+The corpus is executable through the public API. \texttt{load\_seed\_corpus()}
+validates coverage of all required families, checks that declared sentinels
+appear in either the template or special-token metadata, verifies
+\texttt{add\_generation\_prompt} declarations against the template, computes
+sha256 hashes for metadata and tokenizer configs, and materializes entries as
+PromptABI tokenizer and chat-template artifacts. The same path is exposed through
+\texttt{promptabi corpus manifest}, which produces a deterministic manifest for
+CI and paper artifacts. The next corpus layer should add exact immutable
+upstream revisions for vendored tokenizer configs, llama.cpp GGUF metadata, real
+tool schemas from open-source agents, anonymized provider traces, and synthetic
+stress cases with known labels.
 
 The corpus should avoid secrets and network requirements. Provider fixtures
 should be recorded request and response shapes, not live API calls. Model
@@ -708,6 +738,8 @@ Stop analysis & Reachability and overreachability across JSON, markdown, and too
 Budget verification & Segment accounting and truncation simulation for framework policies. \\
 \hline
 Corpus verification & Cold and warm runs across pinned artifact bundles. \\
+\hline
+Corpus manifest & Deterministic validation and manifest generation across required template families, including hash stability and sentinel coverage. \\
 \hline
 \end{tabular}
 \end{center}
@@ -762,6 +794,11 @@ template rendering, schema validators, grammar backends, and provider fixture
 replay. Runtime can be reported for individual checks and corpus-wide runs.
 Witness quality can be evaluated by minimization size, reproducibility, and
 whether the witness includes enough artifact context to file an upstream bug.
+The deployed seed corpus already supplies the first corpus-wide experimental
+unit: a run can validate ten families, materialize twenty PromptABI artifacts,
+and compare the resulting manifest hash across revisions. Future experiments can
+swap minimized fixtures for revision-pinned upstream tokenizer configs while
+keeping the same manifest schema.
 
 The strongest paper result would be upstreamable bugs: minimized reports that
 maintainers of templates, adapters, structured-output libraries, or framework
@@ -822,6 +859,8 @@ checks to ecosystem integration. The skeleton, core artifact model, loader layer
 diagnostic contract, CLI, tokenizer abstraction, finite automata layer,
 finite-state transducer layer, finite-contract solver, source-span tracking, and
 diagnostic snapshots now provide stable surfaces. The next phase should implement
+the curated seed corpus and manifest pipeline have begun the experimental layer.
+The next phase should implement
 the first role-boundary, stop-reachability, grammar-emptiness, and budget-survival checkers. Corpus growth, lockfiles, drift
 detection, SARIF, GitHub Actions, pre-commit hooks, HTML reports, suppression
 policies, and plugin APIs turn the verifier from a library into an everyday CI
@@ -856,7 +895,11 @@ fields, JSON Schema fields, tool definition names, and malformed JSON parse
 errors produce exact line-oriented spans against real files. The formal tests exercise automata intersection, difference,
 emptiness, shortest witnesses, transducer composition, projection,
 over-approximation, finite-domain counterexample extraction, minimal
-unsat cores, and the installed Z3 backend. The CLI was also run against the minimal typed-artifact example
+unsat cores, and the installed Z3 backend. The new corpus tests validate required
+family coverage, sentinel/template consistency, metadata hashes, reproducibility
+metadata, artifact materialization through the real offline loader, manifest
+generation, manifest writing, and the \texttt{promptabi corpus manifest} CLI.
+The CLI was also run against the minimal typed-artifact example
 configuration, producing a passing informational diagnostic. The smoke benchmark
 runs the skeleton verifier repeatedly on the example config and reports a
 deterministic JSON result. These are small but important baselines: they prove
@@ -876,6 +919,8 @@ Check-mode taxonomy tests & Diagnostic objects, JSON output, text output, and SA
 Tokenizer differential tests & Byte-level normalization and added-token behavior, Hugging Face ByteLevel BPE, \texttt{tiktoken}, and SentencePiece adapters match real backend behavior. \\
 \hline
 CLI smoke & \texttt{promptabi verify --config examples/minimal/promptabi.json} returns pass, and \texttt{--fail-on}, \texttt{--artifact}, \texttt{--cache-dir}, \texttt{--quiet}, and \texttt{--verbose} are covered. \\
+\hline
+Corpus smoke & \texttt{promptabi corpus manifest} validates ten minimized instruct-template families and emits stable per-entry hashes without downloads. \\
 \hline
 Benchmark smoke & Repeated config load and verification completes on CPU with JSON output. \\
 \hline
@@ -924,8 +969,8 @@ API, diagnostics, tests, docs, examples, fixtures, benchmarks, and contribution
 guidance. The research foundation is the transducer view of prompts, tokenizers, grammars, stop
 policies, parsers, and budget policies.
 
-The next milestones should add stable diagnostic snapshots and then the first
-formal checkers without changing the public surface. If the project maintains
+The next milestones should add the first formal checkers without changing the
+public surface. If the project maintains
 deterministic outputs, minimized witnesses,
 clear abstention boundaries, and real corpus validation, it can become both a
 practical CI tool and a credible systems research contribution. The core insight

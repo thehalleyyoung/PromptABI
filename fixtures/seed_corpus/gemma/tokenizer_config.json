@@ -1,0 +1,6 @@
+{
+  "chat_template": "{% for message in messages %}<start_of_turn>{% if message['role'] == 'assistant' %}model{% else %}{{ message['role'] }}{% endif %}\n{{ message['content'] }}<end_of_turn>\n{% endfor %}{% if add_generation_prompt %}<start_of_turn>model\n{% endif %}",
+  "bos_token": "<bos>",
+  "eos_token": "<eos>",
+  "additional_special_tokens": ["<start_of_turn>", "<end_of_turn>"]
+}

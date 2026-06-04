@@ -1,0 +1,16 @@
+{
+  "id": "gemma",
+  "family": "gemma",
+  "display_name": "Gemma user/model turn template",
+  "source": "synthetic-minimized",
+  "license": "fixture-only",
+  "fixture_revision": "seed-v1",
+  "upstream_reference": "google/gemma-*-it tokenizer_config conventions",
+  "upstream_revision": "minimized-gemma-seed-v1",
+  "download_required": false,
+  "reproducibility_notes": "Representative user/model turn fixture distilled to tokenizer_config metadata only.",
+  "roles": ["user", "assistant"],
+  "sentinels": ["<start_of_turn>", "<end_of_turn>"],
+  "supports_generation_prompt": true,
+  "expected_behaviors": ["user_model_role_mapping", "turn_sentinel_boundaries", "assistant_generation_prompt"]
+}

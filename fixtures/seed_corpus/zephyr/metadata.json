@@ -1,0 +1,16 @@
+{
+  "id": "zephyr",
+  "family": "zephyr",
+  "display_name": "Zephyr angle-bracket role template",
+  "source": "synthetic-minimized",
+  "license": "fixture-only",
+  "fixture_revision": "seed-v1",
+  "upstream_reference": "HuggingFaceH4/zephyr-* tokenizer_config conventions",
+  "upstream_revision": "minimized-zephyr-seed-v1",
+  "download_required": false,
+  "reproducibility_notes": "Representative role-line fixture distilled to tokenizer_config metadata only.",
+  "roles": ["system", "user", "assistant"],
+  "sentinels": ["<|system|>", "<|user|>", "<|assistant|>", "</s>"],
+  "supports_generation_prompt": true,
+  "expected_behaviors": ["role_token_lines", "eos_after_each_message", "assistant_generation_prompt"]
+}

@@ -1,0 +1,16 @@
+{
+  "id": "deepseek",
+  "family": "deepseek",
+  "display_name": "DeepSeek chat template",
+  "source": "synthetic-minimized",
+  "license": "fixture-only",
+  "fixture_revision": "seed-v1",
+  "upstream_reference": "deepseek-ai/*-chat tokenizer_config conventions",
+  "upstream_revision": "minimized-deepseek-seed-v1",
+  "download_required": false,
+  "reproducibility_notes": "Representative fullwidth-control-token fixture distilled to tokenizer_config metadata only.",
+  "roles": ["system", "user", "assistant"],
+  "sentinels": ["<｜begin▁of▁sentence｜>", "<｜User｜>", "<｜Assistant｜>", "<｜end▁of▁sentence｜>"],
+  "supports_generation_prompt": true,
+  "expected_behaviors": ["fullwidth_control_tokens", "assistant_prefix_generation", "eos_turn_separator"]
+}

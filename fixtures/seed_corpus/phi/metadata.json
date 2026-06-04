@@ -1,0 +1,16 @@
+{
+  "id": "phi",
+  "family": "phi",
+  "display_name": "Phi role-token template",
+  "source": "synthetic-minimized",
+  "license": "fixture-only",
+  "fixture_revision": "seed-v1",
+  "upstream_reference": "microsoft/Phi-* Instruct tokenizer_config conventions",
+  "upstream_revision": "minimized-phi-seed-v1",
+  "download_required": false,
+  "reproducibility_notes": "Representative role-token fixture distilled to tokenizer_config metadata only.",
+  "roles": ["system", "user", "assistant"],
+  "sentinels": ["<|system|>", "<|user|>", "<|assistant|>", "<|end|>"],
+  "supports_generation_prompt": true,
+  "expected_behaviors": ["role_specific_tokens", "end_token_turn_separator", "assistant_generation_prompt"]
+}

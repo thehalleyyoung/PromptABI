@@ -1,0 +1,16 @@
+{
+  "id": "fine-tune",
+  "family": "fine-tune",
+  "display_name": "Common Alpaca-style fine-tune template",
+  "source": "synthetic-minimized",
+  "license": "fixture-only",
+  "fixture_revision": "seed-v1",
+  "upstream_reference": "Alpaca/Vicuna-style custom fine-tune prompt delimiters",
+  "upstream_revision": "minimized-fine-tune-seed-v1",
+  "download_required": false,
+  "reproducibility_notes": "Representative markdown-delimited fine-tune fixture distilled to tokenizer_config metadata only.",
+  "roles": ["system", "user", "assistant"],
+  "sentinels": ["### System:", "### Instruction:", "### Response:", "</s>"],
+  "supports_generation_prompt": true,
+  "expected_behaviors": ["markdown_like_delimiters", "assistant_response_prefix", "eos_response_separator"]
+}

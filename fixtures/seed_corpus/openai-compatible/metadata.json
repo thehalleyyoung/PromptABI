@@ -1,0 +1,16 @@
+{
+  "id": "openai-compatible",
+  "family": "openai-compatible",
+  "display_name": "OpenAI-compatible adapter template",
+  "source": "synthetic-minimized",
+  "license": "fixture-only",
+  "fixture_revision": "seed-v1",
+  "upstream_reference": "OpenAI-compatible serving adapters that serialize ChatML-like prompts",
+  "upstream_revision": "minimized-openai-compatible-seed-v1",
+  "download_required": false,
+  "reproducibility_notes": "Representative adapter fixture for request-shape compatibility checks.",
+  "roles": ["developer", "system", "user", "assistant", "tool"],
+  "sentinels": ["<|start|>", "<|end|>", "<|tool_call|>", "<|tool_result|>"],
+  "supports_generation_prompt": true,
+  "expected_behaviors": ["developer_role", "tool_call_sentinel", "tool_result_sentinel", "assistant_generation_prompt"]
+}

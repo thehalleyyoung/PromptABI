@@ -1,0 +1,6 @@
+{
+  "chat_template": "{% for message in messages %}{% if message['role'] == 'user' %}{{ bos_token }}[INST] {{ message['content'] }} [/INST]{% elif message['role'] == 'assistant' %} {{ message['content'] }}{{ eos_token }}{% elif message['role'] == 'system' %}{{ bos_token }}[INST] <<SYS>>\n{{ message['content'] }}\n<</SYS>>\n{% endif %}{% endfor %}",
+  "bos_token": "<s>",
+  "eos_token": "</s>",
+  "additional_special_tokens": ["[INST]", "[/INST]"]
+}
