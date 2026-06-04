@@ -1,0 +1,9 @@
+{
+  "name": "policy-accepted-risk-demo",
+  "artifacts": {
+    "schema": "missing.schema.json"
+  },
+  "policy_files": [
+    "promptabi.policy.json"
+  ]
+}

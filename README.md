@@ -73,11 +73,11 @@ surfaces without weakening deterministic sessions or CLI output; `promptabi
 matrix` reports the exact sound/bounded/Z3/heuristic/abstaining guarantees for
 each check across tokenizer, template, grammar, provider, framework, and
 training-manifest surfaces. `--format html` emits a web-free report with
-diagnostic details, witnesses, budget charts, diff tables, and corpus summaries.
-`promptabi pre-commit` installs a PATH-independent local hook and fail-closed
-changed-artifact gate for schemas, templates,
-tokenizers, tools, budgets, training manifests, configs, and lockfiles before
-they reach CI.
+diagnostic details, witnesses, budget charts, diff tables, and corpus summaries,
+while policy/suppression files keep CI strict with unexpired, justified
+accepted-risk records. `promptabi pre-commit` installs a PATH-independent local
+hook and fail-closed changed-artifact gate for schemas, templates, tokenizers,
+tools, budgets, training manifests, configs, and lockfiles before they reach CI.
 
 PromptABI now ships a bounded, sanitizer-aware role-boundary non-forgeability check:
 unsanitized user/tool/function content and dynamic role fields are checked against

@@ -221,6 +221,7 @@ from .plugins import (
     load_entry_point_plugins,
     load_plugin_modules,
 )
+from .policies import Suppression, VerificationPolicy, apply_policy_diagnostics, load_policy_file
 from .provider_migration import (
     ProviderMigrationFinding,
     ProviderMigrationFindingKind,

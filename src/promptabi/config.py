@@ -15,6 +15,7 @@ from .artifacts import (
     local_artifact_paths,
 )
 from .diagnostics import SourceSpan
+from .policies import PolicyError, VerificationPolicy, empty_policy, policy_from_config_mapping
 from .source import JsonSourceMap, build_json_source_map
 
 
@@ -31,6 +32,7 @@ class VerificationConfig:
     artifact_bundle: ArtifactBundle = field(default_factory=ArtifactBundle)
     checks: tuple[str, ...] = ("repository-skeleton",)
     max_context_tokens: int | None = None
+    policy: VerificationPolicy = field(default_factory=empty_policy)
 
     @classmethod
     def from_mapping(
@@ -76,22 +78,31 @@ class VerificationConfig:
         ):
             raise ConfigError("config field 'max_context_tokens' must be a positive integer")
 
+        try:
+            policy = policy_from_config_mapping(data, base_dir=base_dir, source_map=source_map)
+        except PolicyError as exc:
+            raise ConfigError(str(exc)) from exc
+
         return cls(
             name=name.strip(),
             artifacts=artifacts,
             artifact_bundle=artifact_bundle,
             checks=checks,
             max_context_tokens=raw_max_context,
+            policy=policy,
         )
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        data: dict[str, object] = {
             "name": self.name,
             "checks": list(self.checks),
             "artifacts": dict(sorted(self.artifacts.items())),
             "artifact_bundle": self.artifact_bundle.to_dict(),
             "max_context_tokens": self.max_context_tokens,
         }
+        if self.policy.active:
+            data["policy"] = self.policy.to_dict()
+        return data
 
     def with_artifact_overrides(self, overrides: dict[str, str], *, base_dir: Path) -> "VerificationConfig":
         """Return a config with CLI-provided artifact paths or URIs applied."""
@@ -113,6 +124,7 @@ class VerificationConfig:
             artifact_bundle=artifact_bundle,
             checks=self.checks,
             max_context_tokens=self.max_context_tokens,
+            policy=self.policy,
         )
 
 

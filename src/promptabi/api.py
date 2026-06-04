@@ -17,6 +17,7 @@ from .explain import DiagnosticExplanation, explain_diagnostic, render_explanati
 from .loaders import ArtifactLoader, LoadedArtifact
 from .first_party_plugins import create_first_party_plugin_registry
 from .plugins import PluginRegistry
+from .policies import Suppression, VerificationPolicy, apply_policy_diagnostics, load_policy_file
 from .render import SarifRenderOptions, render_github_annotations, render_html, render_json, render_sarif, render_text
 from .session import CheckCallable, VerificationResult, VerificationSession
 

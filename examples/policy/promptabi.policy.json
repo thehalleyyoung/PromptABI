@@ -1,0 +1,16 @@
+{
+  "require_justification": true,
+  "require_expiration": true,
+  "require_owner": true,
+  "severity_threshold": "warning",
+  "suppressions": [
+    {
+      "rule_id": "artifact-missing",
+      "artifact": "schema",
+      "owner": "platform-verification",
+      "justification": "Example-only fixture intentionally omits the schema to demonstrate audited accepted-risk handling.",
+      "accepted_risk": "The missing file belongs to documentation/demo scaffolding and is not a deployable contract.",
+      "expires_on": "2999-01-01"
+    }
+  ]
+}

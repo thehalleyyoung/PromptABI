@@ -38,6 +38,7 @@ from .parser_compatibility import (
 )
 from .first_party_plugins import create_first_party_plugin_registry
 from .plugins import PluginRegistry
+from .policies import apply_policy_diagnostics
 from .provider_fixture_replay import ProviderFixtureReplayCase, ProviderFixtureReplayFinding, analyze_provider_fixture_replay
 from .provider_migration import ProviderMigrationFinding, analyze_provider_migration
 from .loaders import ArtifactLoadError, ArtifactLoadWarning, ArtifactLoader, LoadedArtifact
@@ -140,6 +141,9 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "static-contract-proved": (CheckMode.SOUND, CheckMode.BOUNDED, CheckMode.Z3_BACKED_SMT),
     "static-contract-unknown": (CheckMode.ABSTAINING, CheckMode.BOUNDED, CheckMode.Z3_BACKED_SMT),
     "static-contract-violation": (CheckMode.SOUND, CheckMode.BOUNDED, CheckMode.Z3_BACKED_SMT),
+    "diagnostic-suppressed": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "policy-suppression-invalid": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "policy-threshold-violation": (CheckMode.SOUND, CheckMode.COMPLETE),
     "check-unknown": (CheckMode.SOUND, CheckMode.COMPLETE),
     "check-failed": (CheckMode.HEURISTIC,),
 }
@@ -546,6 +550,7 @@ class VerificationSession:
 
     def run(self, *, checks: Sequence[str | CheckCallable] | None = None) -> VerificationResult:
         diagnostics = self.collect_diagnostics(checks=checks)
+        diagnostics = apply_policy_diagnostics(diagnostics, self.config.policy)
         return VerificationResult(config=self.config, diagnostics=tuple(diagnostics))
 
     def _repository_skeleton_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:

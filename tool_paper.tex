@@ -58,6 +58,11 @@ annotations, and upload GitHub-code-scanning SARIF, plus
 \texttt{promptabi pre-commit} local workflows that install PATH-independent git
 hooks and fail closed on staged schemas, templates, tokenizer configs, tool
 definitions, training manifests, PromptABI configs, and lockfiles before merge,
+policy and suppression files that match diagnostics by stable fingerprints,
+artifacts, or paths; require reviewed justifications, owners, accepted-risk
+statements, and expiration dates; enforce repository severity thresholds; and
+render audited suppression diagnostics without letting stale or unjustified
+exceptions weaken CI,
 a \texttt{promptabi init} workflow that writes verifiable starter contracts and
 local fixture stubs for OpenAI tools, Hugging Face local models, vLLM
 OpenAI-compatible servers, llama.cpp, LangChain RAG, LlamaIndex agents, and
@@ -302,6 +307,9 @@ that aggregates every check's emitted rule IDs into explicit
 sound/complete/bounded/Z3/heuristic/abstaining modes across tokenizer families,
 template dialects, grammar backends, providers, frameworks, and the currently
 modeled training-manifest surface,
+applies repository policy files after real diagnostics are produced so accepted
+risks are auditable, expiring, and fingerprint-stable rather than blanket
+ignores,
 and runs CPU-only performance benchmarks over tokenizer, template, grammar,
 stop, SMT, budget, corpus, and cache paths.
 
