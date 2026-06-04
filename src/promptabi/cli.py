@@ -12,6 +12,7 @@ from pathlib import Path
 from ._version import __version__
 from .config import ConfigError, discover_config, load_config
 from .diff import diff_config_files
+from .explain import ExplainError, explain_diagnostic, render_explanation_json, render_explanation_text
 from .init import InitError, available_stacks, scaffold_promptabi_project
 from .lockfiles import (
     LockfileError,
@@ -87,6 +88,33 @@ def build_parser() -> argparse.ArgumentParser:
         "--require-lockfile",
         action="store_true",
         help="fail verification if the current artifacts or diagnostic baseline drift from the lockfile",
+    )
+
+    explain = subparsers.add_parser("explain", help="expand one diagnostic into a tutorial-style explanation")
+    explain.add_argument(
+        "--config",
+        help="path to a PromptABI JSON config; defaults to discovering promptabi.json upward from cwd",
+    )
+    explain.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        metavar="NAME=PATH_OR_URI",
+        help="override or add an artifact location for this run; may be repeated",
+    )
+    explain.add_argument(
+        "--cache-dir",
+        help="directory for reusable PromptABI analysis caches (default: PROMPTABI_CACHE_DIR or user cache)",
+    )
+    explain_selector = explain.add_mutually_exclusive_group()
+    explain_selector.add_argument("--fingerprint", help="explain the diagnostic with this stable fingerprint")
+    explain_selector.add_argument("--rule-id", help="explain the only diagnostic with this rule id")
+    explain_selector.add_argument("--index", type=int, help="explain the one-based diagnostic index after de-duplication")
+    explain.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
     )
 
     diff = subparsers.add_parser("diff", help="compare two PromptABI configs for contract-breaking changes")
@@ -232,6 +260,34 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         print(output, end="")
         return _exit_code(result, fail_on=args.fail_on)
+
+    if args.command == "explain":
+        try:
+            config_path = Path(args.config).resolve() if args.config else discover_config()
+            cache_dir = _resolve_cache_dir(args.cache_dir)
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            overrides = _parse_artifact_overrides(args.artifact, parser)
+            config = load_config(config_path).with_artifact_overrides(overrides, base_dir=Path.cwd())
+            result = VerificationSession(config).run()
+            explanation = explain_diagnostic(
+                result,
+                fingerprint=args.fingerprint,
+                rule_id=args.rule_id,
+                index=args.index,
+                base_dir=config_path.parent,
+            )
+        except (ConfigError, ExplainError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot prepare cache directory: {exc}", file=sys.stderr)
+            return 2
+        if args.format == "json":
+            output = render_explanation_json(explanation)
+        else:
+            output = render_explanation_text(explanation)
+        print(output, end="")
+        return 0
 
     if args.command == "diff":
         try:

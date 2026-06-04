@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .config import VerificationConfig, load_config
 from .diagnostics import Diagnostic
+from .explain import DiagnosticExplanation, explain_diagnostic, render_explanation_json, render_explanation_text
 from .loaders import ArtifactLoader, LoadedArtifact
 from .render import render_json, render_sarif, render_text
 from .session import CheckCallable, VerificationResult, VerificationSession
@@ -110,6 +111,39 @@ def render_result(
     if output_format == "sarif":
         return render_sarif(result)
     raise ValueError("output_format must be one of: text, json, sarif")
+
+
+def explain_result(
+    result: VerificationResult,
+    *,
+    fingerprint: str | None = None,
+    rule_id: str | None = None,
+    index: int | None = None,
+    base_dir: str | Path | None = None,
+) -> DiagnosticExplanation:
+    """Select and explain one diagnostic from an existing verification result."""
+
+    return explain_diagnostic(
+        result,
+        fingerprint=fingerprint,
+        rule_id=rule_id,
+        index=index,
+        base_dir=base_dir,
+    )
+
+
+def render_explanation(
+    explanation: DiagnosticExplanation,
+    *,
+    output_format: str = "text",
+) -> str:
+    """Render a diagnostic explanation as text or JSON."""
+
+    if output_format == "text":
+        return render_explanation_text(explanation)
+    if output_format == "json":
+        return render_explanation_json(explanation)
+    raise ValueError("output_format must be one of: text, json")
 
 
 def _resolve_config(config: str | Path | VerificationConfig) -> VerificationConfig:

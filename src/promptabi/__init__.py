@@ -7,7 +7,15 @@ blocks that later checkers can reuse without changing the embedding API.
 """
 
 from ._version import __version__
-from .api import collect_diagnostics, create_session, load_artifacts, render_result, run_verification
+from .api import (
+    collect_diagnostics,
+    create_session,
+    explain_result,
+    load_artifacts,
+    render_explanation,
+    render_result,
+    run_verification,
+)
 from .artifacts import (
     ArtifactBundle,
     ArtifactKind,
@@ -75,6 +83,7 @@ from .diagnostics import (
     WitnessTrace,
 )
 from .diff import ConfigDiffInputs, diff_config_files, diff_configs
+from .explain import DiagnosticExplanation, ExplainError, explain_diagnostic
 from .formal import (
     And,
     AutomatonError,
@@ -365,11 +374,13 @@ __all__ = [
     "DEFAULT_STRUCTURED_SCHEMA_CORPUS_ROOT",
     "DeterministicFiniteAutomaton",
     "Diagnostic",
+    "DiagnosticExplanation",
     "DiagnosticSeverity",
     "EncodedToken",
     "EncodeResult",
     "EnumDomain",
     "Eq",
+    "ExplainError",
     "FiniteContractProblem",
     "FiniteStateTransducer",
     "FrameworkTruncationConfigArtifact",
@@ -527,6 +538,8 @@ __all__ = [
     "discover_config",
     "diff_config_files",
     "diff_configs",
+    "explain_diagnostic",
+    "explain_result",
     "build_json_source_map",
     "build_provider_fixture_pack_manifest",
     "compile_json_schema_mapping",
@@ -557,6 +570,7 @@ __all__ = [
     "load_tokenizer",
     "load_tokenizer_config_snapshot",
     "render_result",
+    "render_explanation",
     "run_verification",
     "parse_hf_chat_template_config",
     "parse_hf_tokenizer_config_chat_template",

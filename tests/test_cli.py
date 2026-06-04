@@ -228,6 +228,74 @@ def test_verify_role_boundary_example_accepts_sanitized_template(capsys) -> None
     ] == []
 
 
+def test_explain_expands_role_boundary_diagnostic_from_real_fixture(capsys) -> None:
+    exit_code = main(
+        [
+            "explain",
+            "--config",
+            "examples/role-boundary/unsafe.promptabi.json",
+            "--index",
+            "1",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "PromptABI explanation: role-boundary-nonforgeability" in captured.out
+    assert "Formal property" in captured.out
+    assert "Attacker-controlled content must not render as structural role delimiters" in captured.out
+    assert "Artifact snippet" in captured.out
+    assert "<|im_start|>" in captured.out
+    assert "Witness" in captured.out
+    assert "Likely production symptom" in captured.out
+    assert "role delimiters" in captured.out
+    assert "Avoid raw dynamic role headers" in captured.out
+    assert captured.err == ""
+
+
+def test_explain_json_output_is_structured_for_single_diagnostic(capsys) -> None:
+    exit_code = main(
+        [
+            "explain",
+            "--config",
+            "examples/minimal/promptabi.json",
+            "--rule-id",
+            "repository-skeleton",
+            "--format",
+            "json",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["diagnostic"]["rule_id"] == "repository-skeleton"
+    assert payload["property_checked"].startswith("The configured PromptABI project should load")
+    assert payload["proof_modes"] == [
+        "The check is useful evidence but is not a proof over a fully modeled fragment."
+    ]
+    assert payload["fix_suggestions"] == []
+    assert "source_snippet" not in payload
+    assert captured.err == ""
+
+
+def test_explain_rule_id_requires_disambiguation_for_repeated_findings(capsys) -> None:
+    exit_code = main(
+        [
+            "explain",
+            "--config",
+            "examples/role-boundary/unsafe.promptabi.json",
+            "--rule-id",
+            "role-boundary-nonforgeability",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "matched" in captured.err
+    assert "rerun with --fingerprint or --index" in captured.err
+
+
 def test_init_scaffolds_each_supported_stack_with_verifiable_config(tmp_path, capsys) -> None:
     for stack in available_stacks():
         output_dir = tmp_path / stack

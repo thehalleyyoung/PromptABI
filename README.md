@@ -9,6 +9,8 @@ structured-output grammars, provider contracts, and token budgets.
 promptabi verify --config examples/minimal/promptabi.json
 # scaffold a real stack contract:
 promptabi init --stack openai-tools --output-dir .promptabi-demo
+# explain one failing structural witness:
+promptabi explain --config examples/role-boundary/unsafe.promptabi.json --index 1
 # or, inside a repo with promptabi.json:
 promptabi verify --artifact schema=schemas/answer.json --fail-on warning
 # gate upgrades:
@@ -33,6 +35,9 @@ artifacts around an LLM system--tokenizers, chat templates, special tokens, stop
 policies, schemas, grammars, tools, prompt segments, providers, and truncation
 configs--then checks whether their composed contract makes protocol states
 possible, impossible, ambiguous, or unsafe.
+`promptabi explain` turns any single diagnostic fingerprint/index into the
+source snippet, formal property, witness trace, likely production symptom, and
+concrete fix guidance needed to debug it locally.
 
 ```text
 messages -> chat template -> byte/string prompt -> tokenizer -> token stream

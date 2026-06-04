@@ -141,6 +141,11 @@ role-region non-forgeability, tool-schema required-parameter satisfiability,
 tool/provider compatibility, and supervised target-role alignment with concrete
 models, explicit proof classifications, or minimized unsat cores,
 a CPU-only benchmark, documentation, and contribution guidance.
+The CLI now also includes \texttt{promptabi explain}, which replays verification,
+deduplicates repeated logical diagnostics, selects one finding by fingerprint,
+rule, or index, and renders a tutorial explanation with source snippets, the
+checked formal property, proof-mode descriptions, witness steps, likely
+production symptoms, and concrete fixes in text or JSON.
 The remaining checkers fit into that surface rather than requiring a rewrite. We
 describe the transducer-oriented formalism, the artifact model, the diagnostic
 contract, the first benchmark line, and the planned evaluation against real tokenizer, template,
@@ -257,6 +262,10 @@ regressions, and top-level context-budget reductions,
 scaffolds common stacks with \texttt{promptabi init} and verifies every generated
 config through the same loader, provider replay, tool-schema, parser, budget,
 RAG, stop, and role-boundary checks used elsewhere in the test suite,
+expands a selected diagnostic with \texttt{promptabi explain} into a local
+debugging narrative that includes artifact snippets, the formal property, witness
+trace, likely production symptom, and fix suggestions while handling repeated
+logical findings deterministically,
 and runs a CPU-only smoke benchmark against an example bundle.
 
 The repository layout is designed to scale:
@@ -763,6 +772,16 @@ the same property future formal witnesses need: a developer can jump directly to
 the config entry, \texttt{chat\_template}, schema field, or tool declaration that
 made the finding possible.
 
+The explanation renderer consumes the same diagnostic object rather than a
+parallel ad hoc format. It first collapses duplicate logical diagnostics by their
+stable structured payload, then lets users select by fingerprint, rule ID, or
+one-based index. A successful explanation includes the diagnostic message,
+fingerprint, artifact and source span, a bounded local source excerpt when the
+artifact is available, the formal property associated with the rule, human
+descriptions of the proof modes, the witness trace, the likely production
+symptom, and the attached fix suggestions. This makes a code-scanning finding
+actionable without weakening CI determinism or sending prompts to a service.
+
 \clearpage
 \section{CLI and Embedding API}
 
@@ -773,6 +792,8 @@ promptabi verify
 promptabi verify --config examples/minimal/promptabi.json
 promptabi verify --config examples/role-boundary/unsafe.promptabi.json
 promptabi verify --config examples/role-boundary/safe.promptabi.json
+promptabi explain --config examples/role-boundary/unsafe.promptabi.json --index 1
+promptabi explain --config examples/minimal/promptabi.json --rule-id repository-skeleton --format json
 promptabi init --stack openai-tools --output-dir .promptabi-demo
 promptabi verify --artifact schema=schemas/answer.json --fail-on warning
 promptabi verify --config examples/minimal/promptabi.json --format json
