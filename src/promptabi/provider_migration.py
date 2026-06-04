@@ -182,6 +182,22 @@ def analyze_provider_migration(
     )
 
 
+def compare_provider_config_artifacts(
+    baseline: LoadedArtifact,
+    current: LoadedArtifact,
+) -> tuple[ProviderMigrationFinding, ...]:
+    """Compare two loaded provider-config snapshots as a baseline->current diff."""
+
+    if not _is_provider_snapshot(baseline) or not _is_provider_snapshot(current):
+        return ()
+    findings = _compare_provider_pair(_provider_snapshot(baseline), _provider_snapshot(current))
+    return tuple(
+        finding
+        for finding in findings
+        if finding.kind is not ProviderMigrationFindingKind.ROUTING_TARGET_MISSING
+    )
+
+
 def _compare_provider_pair(
     source: _ProviderSnapshot,
     target: _ProviderSnapshot,

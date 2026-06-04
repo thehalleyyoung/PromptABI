@@ -11,6 +11,7 @@ from pathlib import Path
 
 from ._version import __version__
 from .config import ConfigError, discover_config, load_config
+from .diff import diff_config_files
 from .lockfiles import (
     LockfileError,
     build_lockfile,
@@ -85,6 +86,24 @@ def build_parser() -> argparse.ArgumentParser:
         "--require-lockfile",
         action="store_true",
         help="fail verification if the current artifacts or diagnostic baseline drift from the lockfile",
+    )
+
+    diff = subparsers.add_parser("diff", help="compare two PromptABI configs for contract-breaking changes")
+    diff.add_argument("baseline", help="baseline PromptABI JSON config")
+    diff.add_argument("current", help="current PromptABI JSON config")
+    diff.add_argument(
+        "--fail-on",
+        choices=("error", "warning", "any", "never"),
+        default="error",
+        help="exit with code 1 at this diagnostic threshold (default: error)",
+    )
+    diff.add_argument("-q", "--quiet", action="count", default=0, help="suppress informational text output")
+    diff.add_argument("-v", "--verbose", action="count", default=0, help="include compared config paths")
+    diff.add_argument(
+        "--format",
+        choices=("text", "json", "sarif"),
+        default="text",
+        help="output format (default: text)",
     )
 
     corpus = subparsers.add_parser("corpus", help="seed corpus maintenance commands")
@@ -183,6 +202,32 @@ def main(argv: Sequence[str] | None = None) -> int:
                 config_path=config_path,
                 cache_dir=cache_dir,
             )
+        print(output, end="")
+        return _exit_code(result, fail_on=args.fail_on)
+
+    if args.command == "diff":
+        try:
+            if args.quiet and args.verbose:
+                parser.error("--quiet and --verbose cannot be used together")
+            baseline_path = Path(args.baseline).resolve()
+            current_path = Path(args.current).resolve()
+            result = diff_config_files(baseline_path, current_path)
+        except ConfigError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        if args.format == "json":
+            output = render_json(result)
+        elif args.format == "sarif":
+            output = render_sarif(result)
+        else:
+            output = render_text(
+                result,
+                verbosity=args.verbose - args.quiet,
+                config_path=current_path if args.verbose else None,
+                heading="PromptABI diff",
+            )
+            if args.verbose:
+                output = output.replace(f"config: {current_path}\n", f"baseline: {baseline_path}\ncurrent: {current_path}\n")
         print(output, end="")
         return _exit_code(result, fail_on=args.fail_on)
 

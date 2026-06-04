@@ -74,6 +74,7 @@ from .diagnostics import (
     WitnessStep,
     WitnessTrace,
 )
+from .diff import ConfigDiffInputs, diff_config_files, diff_configs
 from .formal import (
     And,
     AutomatonError,
@@ -355,6 +356,7 @@ __all__ = [
     "CheckContext",
     "CheckMode",
     "ConfigError",
+    "ConfigDiffInputs",
     "Contains",
     "ByteLevelTokenizer",
     "DecodeResult",
@@ -523,6 +525,8 @@ __all__ = [
     "collect_diagnostics",
     "create_session",
     "discover_config",
+    "diff_config_files",
+    "diff_configs",
     "build_json_source_map",
     "build_provider_fixture_pack_manifest",
     "compile_json_schema_mapping",

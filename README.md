@@ -9,6 +9,8 @@ structured-output grammars, provider contracts, and token budgets.
 promptabi verify --config examples/minimal/promptabi.json
 # or, inside a repo with promptabi.json:
 promptabi verify --artifact schema=schemas/answer.json --fail-on warning
+# gate upgrades:
+promptabi diff promptabi.baseline.json promptabi.json
 ```
 
 ```text
@@ -99,8 +101,10 @@ modeling now proves must-survive prompt segments against bounded real framework
 truncation policies, emits token-budget visualizations across text/JSON/SARIF
 with truncation boundaries and dropped fields, and catches RAG tokenizer
 mismatch, boundary drift, citation loss, overlap accounting errors, metadata
-inflation, template overhead, and retrieval payload truncation. Tokenizer/config
-drift detection now compares real tokenizer revisions for special-token IDs,
+inflation, template overhead, and retrieval payload truncation. `promptabi diff` now compares two complete PromptABI configurations before an
+upgrade, reporting contract-breaking tokenizer, provider, framework, artifact,
+check-surface, and context-budget changes with concrete witnesses and migration
+guidance. Tokenizer/config drift detection now compares real tokenizer revisions for special-token IDs,
 added tokens, normalizers, chat templates, BOS/EOS behavior, and generation stop
 policy deltas before upgrades reach production; lockfiles now freeze verified
 artifact hashes, upstream revisions, library versions, supported fragments,

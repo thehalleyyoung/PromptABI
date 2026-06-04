@@ -43,6 +43,10 @@ hashes, BOS/EOS flags and IDs, and generation stop-policy deltas,
 deterministic PromptABI lockfiles that pin verified artifact hashes, upstream
 revisions, library versions, provider fixture versions, supported-fragment
 metadata, and expected diagnostic fingerprints for CI enforcement,
+a \texttt{promptabi diff} workflow that compares two full model/provider/framework
+configurations and emits contract-breaking tokenizer, provider, framework,
+artifact-set, check-surface, and context-budget changes with structured
+witnesses and migration guidance,
 a stop-policy parser that normalizes OpenAI-compatible request snapshots,
 Hugging Face generation configs, llama.cpp/Ollama options, vLLM sampling params,
 LiteLLM passthrough params, and common framework wrapper kwargs into one typed
@@ -242,6 +246,10 @@ returns stable policy-controlled process exit codes, writes and enforces
 deterministic verification lockfiles that fail closed on artifact, config,
 provider-fixture, library-version, supported-fragment, or diagnostic-baseline
 drift,
+compares baseline and current PromptABI configs with \texttt{promptabi diff},
+emitting text, JSON, or SARIF diagnostics for removed checks, missing artifacts,
+tokenizer/config drift, provider-contract regressions, framework truncation
+regressions, and top-level context-budget reductions,
 and runs a CPU-only smoke benchmark against an example bundle.
 
 The repository layout is designed to scale:
@@ -1153,7 +1161,7 @@ The testing strategy has three tiers:
 \item loader and parser tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, tool-definition schemas spanning OpenAI, Anthropic, LangChain, Pydantic, TypeScript-style, MCP, and provider tool-call envelopes, tool-serialization contracts over names, arguments, escaping, IDs, parallel calls, streaming chunks, template tool rendering, and stop delimiters, stop-policy configs spanning OpenAI-compatible, Hugging Face, llama.cpp/Ollama, vLLM, LiteLLM, wrapper kwargs, fixture archives, and source-mapped JSON fields;
 \item stop-tokenizer, stop-differential, and stop-overreachability tests that exercise byte/string/token alignments, multi-token stops, invalid stop-token IDs, normalization collisions, prefix/suffix collisions, added/special-token interactions, OpenAI-compatible and Hugging Face delimiter-retention semantics, provider fixture replay, CLI mismatch diagnostics, serialized stop offsets, parser-state truncation witnesses, supported schema/tool string witnesses, structural delimiter collisions, real-world Qwen/Gemma/llama.cpp stop bug reductions, and a real Hugging Face \texttt{tokenizers} BPE fixture;
 \item token-budget and RAG chunking tests that exercise context-window reservation arithmetic, required-segment overflow over declared counts, prompt-segment file/message merging, config-versus-framework budget precedence, LangChain/vLLM/custom-RAG truncation simulation, optional retrieval dropping, required segment truncation, order preservation, proven must-survive cases, minimized counterexample extraction, text/JSON/SARIF budget visualizations with token spans and dropped-field properties, real CLI diagnostics for output, tool, generation-prompt, and special-token overhead, plus tokenizer mismatch, chunk-boundary drift, citation loss, overlap accounting, metadata inflation, prompt-template overhead, and retrieval payload truncation over repository fixtures;
-\item tokenizer/config drift tests that build baseline and current tokenizer directories and verify special-token ID drift, added-token changes, normalizer changes, chat-template hash changes, BOS insertion changes, and generation stop-policy deltas through both the analyzer and real CLI diagnostics;
+\item tokenizer/config drift and configuration-diff tests that build baseline and current tokenizer directories, provider snapshots, and framework truncation artifacts, then verify special-token ID drift, added-token changes, normalizer changes, chat-template hash changes, BOS insertion changes, generation stop-policy deltas, provider-contract regressions, removed checks, context-budget regressions, and loader-abstention behavior through real CLI diagnostics;
 \item fixture and corpus tests for minimized tokenizer/chat-template bundles, public real-bug provenance, expected behaviors, sentinel consistency, artifact materialization, deterministic manifest generation, labeled structured-schema reductions, anonymized contracts, synthetic parser stress cases, tool-definition bundles, secret-free provider fixture packs with request/response/tool/stop/streaming/error/limit coverage and credential-pattern rejection, and real CLI replay of every included structured-schema config;
 \item future corpus tests for popular model and framework configurations pinned by immutable upstream revisions.
 \end{itemize}

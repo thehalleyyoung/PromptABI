@@ -15,9 +15,10 @@ def render_text(
     verbosity: int = 0,
     config_path: Path | None = None,
     cache_dir: Path | None = None,
+    heading: str = "PromptABI verification",
 ) -> str:
     lines = [
-        f"PromptABI verification: {result.config.name}",
+        f"{heading}: {result.config.name}",
         f"checks: {', '.join(result.config.checks) if result.config.checks else '(none)'}",
         f"status: {'PASS' if result.ok else 'FAIL'}",
     ]

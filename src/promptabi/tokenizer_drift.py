@@ -237,6 +237,15 @@ def load_tokenizer_config_snapshot(path: str | Path, *, revision: str | None = N
     )
 
 
+def compare_tokenizer_config_snapshots(
+    baseline: TokenizerConfigSnapshot,
+    current: TokenizerConfigSnapshot,
+) -> tuple[TokenizerDriftFinding, ...]:
+    """Compare two already-loaded tokenizer/config snapshots."""
+
+    return _compare_snapshots(baseline, current)
+
+
 def _compare_snapshots(
     baseline: TokenizerConfigSnapshot,
     current: TokenizerConfigSnapshot,
