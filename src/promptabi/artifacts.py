@@ -202,7 +202,7 @@ class TokenizerArtifact(BaseArtifact):
         object.__setattr__(self, "added_tokens", tuple(sorted(dict.fromkeys(self.added_tokens))))
 
     def to_dict(self) -> dict[str, object]:
-        data = super().to_dict()
+        data = BaseArtifact.to_dict(self)
         if self.family is not None:
             data["family"] = self.family
         if self.added_tokens:
@@ -224,7 +224,7 @@ class ChatTemplateArtifact(BaseArtifact):
         object.__setattr__(self, "roles", tuple(sorted(dict.fromkeys(self.roles))))
 
     def to_dict(self) -> dict[str, object]:
-        data = super().to_dict()
+        data = BaseArtifact.to_dict(self)
         data["template_format"] = self.template_format
         if self.roles:
             data["roles"] = list(self.roles)
@@ -243,7 +243,7 @@ class SpecialTokenMapArtifact(BaseArtifact):
         object.__setattr__(self, "tokens", tuple(sorted(self.tokens, key=lambda token: token.name)))
 
     def to_dict(self) -> dict[str, object]:
-        data = super().to_dict()
+        data = BaseArtifact.to_dict(self)
         data["tokens"] = [token.to_dict() for token in self.tokens]
         return data
 
@@ -266,7 +266,7 @@ class StopPolicyArtifact(BaseArtifact):
         object.__setattr__(self, "stop_token_ids", tuple(sorted(dict.fromkeys(self.stop_token_ids))))
 
     def to_dict(self) -> dict[str, object]:
-        data = super().to_dict()
+        data = BaseArtifact.to_dict(self)
         data["stop_sequences"] = list(self.stop_sequences)
         if self.stop_token_ids:
             data["stop_token_ids"] = list(self.stop_token_ids)
@@ -287,7 +287,7 @@ class SchemaArtifact(BaseArtifact):
             raise ValueError("schema dialect must be non-empty")
 
     def to_dict(self) -> dict[str, object]:
-        data = super().to_dict()
+        data = BaseArtifact.to_dict(self)
         data["dialect"] = self.dialect
         return data
 
@@ -309,7 +309,7 @@ class GrammarArtifact(BaseArtifact):
         object.__setattr__(self, "rule_names", tuple(sorted(dict.fromkeys(self.rule_names))))
 
     def to_dict(self) -> dict[str, object]:
-        data = super().to_dict()
+        data = BaseArtifact.to_dict(self)
         data["grammar_type"] = self.grammar_type
         if self.start_symbol is not None:
             data["start_symbol"] = self.start_symbol
@@ -331,7 +331,7 @@ class ToolDefinitionArtifact(BaseArtifact):
         object.__setattr__(self, "tool_names", tuple(sorted(dict.fromkeys(self.tool_names))))
 
     def to_dict(self) -> dict[str, object]:
-        data = super().to_dict()
+        data = BaseArtifact.to_dict(self)
         if self.provider is not None:
             data["provider"] = self.provider
         if self.tool_names:
@@ -355,7 +355,7 @@ class PromptSegmentArtifact(BaseArtifact):
         return tuple(segment for segment in self.segments if segment.required)
 
     def to_dict(self) -> dict[str, object]:
-        data = super().to_dict()
+        data = BaseArtifact.to_dict(self)
         data["segments"] = [segment.to_dict() for segment in self.segments]
         return data
 
@@ -372,7 +372,7 @@ class ProviderConfigArtifact(BaseArtifact):
             raise ValueError("provider name must be non-empty")
 
     def to_dict(self) -> dict[str, object]:
-        data = super().to_dict()
+        data = BaseArtifact.to_dict(self)
         data["provider"] = self.provider
         if self.api_family is not None:
             data["api_family"] = self.api_family
@@ -397,7 +397,7 @@ class FrameworkTruncationConfigArtifact(BaseArtifact):
             raise ValueError("reserve_output_tokens must be non-negative")
 
     def to_dict(self) -> dict[str, object]:
-        data = super().to_dict()
+        data = BaseArtifact.to_dict(self)
         data["framework"] = self.framework
         data["strategy"] = self.strategy.value
         if self.max_context_tokens is not None:

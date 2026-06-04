@@ -108,6 +108,12 @@ from .grammar_emptiness import (
     GrammarTokenizerWitness,
     analyze_tokenizer_grammar_emptiness,
 )
+from .grammar_ambiguity import (
+    GrammarTokenizerAmbiguityFinding,
+    GrammarTokenizerAmbiguityKind,
+    GrammarTokenizerAmbiguityReport,
+    analyze_tokenizer_grammar_ambiguity,
+)
 from .json_schema import (
     JsonSchemaCompilationResult,
     JsonSchemaGrammarIR,
@@ -259,6 +265,9 @@ __all__ = [
     "GrammarIngestionResult",
     "GrammarRule",
     "GrammarTerminal",
+    "GrammarTokenizerAmbiguityFinding",
+    "GrammarTokenizerAmbiguityKind",
+    "GrammarTokenizerAmbiguityReport",
     "GrammarTokenizerAttempt",
     "GrammarTokenizerEmptinessReport",
     "GrammarTokenizerEmptinessStatus",
@@ -360,6 +369,7 @@ __all__ = [
     "ingest_json_schema_mapping",
     "normalize_json_schema_mapping",
     "analyze_role_boundary_nonforgeability",
+    "analyze_tokenizer_grammar_ambiguity",
     "analyze_tokenizer_grammar_emptiness",
     "build_role_boundary_model",
     "build_seed_corpus_manifest",

@@ -69,9 +69,10 @@ typed rules, terminals, source spans, and explicit abstentions; the JSON Schema
 path compiles the supported subset into a bounded grammar IR and DFA witness with
 parser states, source maps, and real `jsonschema` validator round-trips for
 objects, arrays, required fields, unions, constraints, bounded local references,
-and additional-property semantics, then checks tokenizer x grammar emptiness by
-proving whether compiled witnesses survive real tokenizer encode/decode
-assumptions. The repository
+and additional-property semantics, then checks tokenizer x grammar emptiness and
+ambiguity by proving whether compiled witnesses and JSON lexical variants
+survive real tokenizer encode/decode assumptions without collapsing distinct
+values or hiding multiple token paths. The repository
 already has the typed Python package,
 core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,
 snapshot-locked output stability, discoverable `promptabi verify` workflow,

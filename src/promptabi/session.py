@@ -15,6 +15,12 @@ from .grammar_emptiness import (
     GrammarTokenizerEmptinessStatus,
     analyze_tokenizer_grammar_emptiness,
 )
+from .grammar_ambiguity import (
+    GrammarTokenizerAmbiguityFinding,
+    GrammarTokenizerAmbiguityKind,
+    GrammarTokenizerAmbiguityReport,
+    analyze_tokenizer_grammar_ambiguity,
+)
 from .loaders import ArtifactLoadError, ArtifactLoadWarning, ArtifactLoader, LoadedArtifact
 from .role_boundaries import RoleBoundaryForgeryFinding, analyze_role_boundary_nonforgeability
 from .stop_analysis import (
@@ -62,6 +68,8 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "stop-overreach-content": (CheckMode.SOUND, CheckMode.BOUNDED),
     "stop-overreach-structural": (CheckMode.SOUND, CheckMode.BOUNDED),
     "grammar-tokenizer-abstained": (CheckMode.ABSTAINING, CheckMode.BOUNDED),
+    "grammar-tokenizer-ambiguity": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "grammar-tokenizer-ambiguity-abstained": (CheckMode.ABSTAINING, CheckMode.BOUNDED),
     "grammar-tokenizer-empty": (CheckMode.SOUND, CheckMode.BOUNDED),
     "grammar-tokenizer-satisfiable": (CheckMode.SOUND, CheckMode.BOUNDED),
     "check-unknown": (CheckMode.SOUND, CheckMode.COMPLETE),
@@ -123,6 +131,7 @@ class VerificationSession:
             "stop-differential": self._stop_differential_check,
             "stop-overreachability": self._stop_overreachability_check,
             "stop-tokenizer-analysis": self._stop_tokenizer_analysis_check,
+            "grammar-tokenizer-ambiguity": self._grammar_tokenizer_ambiguity_check,
             "grammar-tokenizer-emptiness": self._grammar_tokenizer_emptiness_check,
         }
         if checks:
@@ -345,6 +354,35 @@ class VerificationSession:
                     tokenizer,
                 )
                 diagnostics.append(_grammar_tokenizer_report_diagnostic(tokenizer_loaded, grammar_loaded, report))
+        return tuple(diagnostics)
+
+    def _grammar_tokenizer_ambiguity_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        diagnostics: list[Diagnostic] = []
+        tokenizers = [loaded for loaded in context.loaded_artifacts if loaded.artifact.kind is ArtifactKind.TOKENIZER]
+        grammars = [
+            loaded
+            for loaded in context.loaded_artifacts
+            if loaded.artifact.kind in {ArtifactKind.SCHEMA, ArtifactKind.GRAMMAR}
+        ]
+        for tokenizer_loaded in tokenizers:
+            tokenizer_artifact = tokenizer_loaded.artifact
+            try:
+                tokenizer = load_tokenizer(tokenizer_artifact)
+            except TokenizerError as exc:
+                diagnostics.extend(
+                    _grammar_tokenizer_ambiguity_abstained_diagnostic(tokenizer_loaded, grammar_loaded, str(exc))
+                    for grammar_loaded in grammars
+                )
+                continue
+            for grammar_loaded in grammars:
+                report = analyze_tokenizer_grammar_ambiguity(
+                    tokenizer_artifact,
+                    grammar_loaded.artifact,
+                    tokenizer,
+                )
+                diagnostics.extend(
+                    _grammar_tokenizer_ambiguity_report_diagnostics(tokenizer_loaded, grammar_loaded, report)
+                )
         return tuple(diagnostics)
 
     def _missing_local_paths(self) -> set[str]:
@@ -945,6 +983,97 @@ def _grammar_tokenizer_report_diagnostic(
             ),
         )
     return _grammar_tokenizer_abstained_diagnostic(tokenizer_loaded, grammar_loaded, report.reason or "unsupported grammar product")
+
+
+def _grammar_tokenizer_ambiguity_report_diagnostics(
+    tokenizer_loaded: LoadedArtifact,
+    grammar_loaded: LoadedArtifact,
+    report: GrammarTokenizerAmbiguityReport,
+) -> tuple[Diagnostic, ...]:
+    if report.abstained:
+        return (
+            _grammar_tokenizer_ambiguity_abstained_diagnostic(
+                tokenizer_loaded,
+                grammar_loaded,
+                report.reason or "unsupported grammar ambiguity product",
+            ),
+        )
+    return tuple(
+        _grammar_tokenizer_ambiguity_diagnostic(tokenizer_loaded, grammar_loaded, report, finding)
+        for finding in report.findings
+    )
+
+
+def _grammar_tokenizer_ambiguity_diagnostic(
+    tokenizer_loaded: LoadedArtifact,
+    grammar_loaded: LoadedArtifact,
+    report: GrammarTokenizerAmbiguityReport,
+    finding: GrammarTokenizerAmbiguityFinding,
+) -> Diagnostic:
+    severity = (
+        DiagnosticSeverity.ERROR
+        if finding.kind
+        in {
+            GrammarTokenizerAmbiguityKind.TOKEN_PATH_CONFLICT,
+            GrammarTokenizerAmbiguityKind.DECODED_TEXT_CONFLICT,
+        }
+        else DiagnosticSeverity.WARNING
+    )
+    return Diagnostic(
+        rule_id="grammar-tokenizer-ambiguity",
+        severity=severity,
+        message=(
+            f"grammar '{grammar_loaded.artifact.name}' has {finding.kind.value} under "
+            f"tokenizer '{tokenizer_loaded.artifact.name}'"
+        ),
+        artifact=grammar_loaded.artifact.to_ref(),
+        span=_artifact_span(grammar_loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG["grammar-tokenizer-ambiguity"],
+        suggestions=(
+            "Canonicalize structured outputs before parsing or make the grammar/tokenizer backend reject ambiguous spellings.",
+            "Avoid tokenizer normalization or added tokens that collapse distinct schema values or parser states.",
+        ),
+        witness=WitnessTrace(
+            summary=finding.reason,
+            steps=(
+                WitnessStep(action="select tokenizer", input=tokenizer_loaded.artifact.name, output=report.tokenizer_backend),
+                WitnessStep(action="compile bounded grammar", input=grammar_loaded.artifact.name, output=report.grammar_kind),
+                WitnessStep(action="enumerate JSON grammar variants", output=f"{report.checked_candidates} checked"),
+                WitnessStep(action="encode first grammar text", input=finding.grammar_text, output=str(finding.token_ids)),
+                WitnessStep(action="encode second grammar text", input=finding.other_grammar_text, output=str(finding.other_token_ids)),
+                WitnessStep(action="compare structured values", input=finding.structured_value, output=finding.other_structured_value),
+                WitnessStep(action="compare decoded text", input=finding.decoded_text, output=finding.other_decoded_text),
+            ),
+            artifacts=(tokenizer_loaded.artifact.to_ref(), grammar_loaded.artifact.to_ref()),
+        ),
+    )
+
+
+def _grammar_tokenizer_ambiguity_abstained_diagnostic(
+    tokenizer_loaded: LoadedArtifact,
+    grammar_loaded: LoadedArtifact,
+    reason: str,
+) -> Diagnostic:
+    return Diagnostic(
+        rule_id="grammar-tokenizer-ambiguity-abstained",
+        severity=DiagnosticSeverity.WARNING,
+        message=(
+            f"grammar '{grammar_loaded.artifact.name}' could not be checked for tokenizer ambiguity "
+            f"against tokenizer '{tokenizer_loaded.artifact.name}'"
+        ),
+        artifact=grammar_loaded.artifact.to_ref(),
+        span=_artifact_span(grammar_loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG["grammar-tokenizer-ambiguity-abstained"],
+        suggestions=("Use a local JSON Schema artifact in PromptABI's bounded ambiguity fragment.",),
+        witness=WitnessTrace(
+            summary="PromptABI abstained instead of guessing tokenizer x grammar ambiguity outside the supported product.",
+            steps=(
+                WitnessStep(action="select tokenizer", input=tokenizer_loaded.artifact.name),
+                WitnessStep(action="compile bounded grammar", input=grammar_loaded.artifact.name, output=reason),
+            ),
+            artifacts=(tokenizer_loaded.artifact.to_ref(), grammar_loaded.artifact.to_ref()),
+        ),
+    )
 
 
 def _grammar_tokenizer_abstained_diagnostic(

@@ -76,7 +76,10 @@ local references, recursion-limit abstentions, and additional-property semantics
 then compiles the supported subset into grammar IR, parser states, DFA witnesses,
 source maps, and real \texttt{jsonschema} validator round-trips, and now takes
 the bounded tokenizer x grammar product to prove whether compiled witnesses
-survive real tokenizer encode-normalize-decode assumptions,
+survive real tokenizer encode-normalize-decode assumptions, plus a bounded
+tokenizer x grammar ambiguity check that validates JSON lexical variants and
+detects tokenizer-path conflicts, decoded-text conflicts, whitespace and Unicode
+byte aliases, and added-token aliases,
 a CPU-only benchmark, documentation, and contribution guidance.
 The remaining checkers fit into that surface rather than requiring a rewrite. We
 describe the transducer-oriented formalism, the artifact model, the diagnostic
@@ -149,6 +152,10 @@ JSON Schema objects, arrays, unions, references, constraints, and
 additional-property policies into a typed tree, compiles that tree into bounded
 grammar IR with parser states and DFA witnesses, and round-trips generated
 witnesses through the real \texttt{jsonschema} validator,
+checks tokenizer x grammar ambiguity by pairing schema-valid JSON lexical
+variants with real tokenizer encode/decode behavior to find conflicting token
+paths, decoded-text collapses, Unicode or whitespace byte aliases, and added-token
+aliases,
 returns stable policy-controlled process exit codes,
 and runs a CPU-only smoke benchmark against an example bundle.
 
@@ -357,7 +364,7 @@ Provider snapshots & Deterministic JSON validation for provider name, captured r
 \hline
 Stop-policy configs & Deterministic extraction of stop strings, stop token IDs, EOS behavior, source family, ignored empty stops, and source paths from OpenAI-compatible, Hugging Face, llama.cpp/Ollama, vLLM, LiteLLM, and wrapper shapes. \\
 \hline
-Schema and grammar files & JSON Schema normalization and bounded compilation for objects, arrays, required fields, enums, consts, constraints, unions, bounded local references, recursion-limit abstentions, and additional properties; compiled metadata records grammar rules, parser states, DFA witness size, source spans, and real \texttt{jsonschema} round-trip acceptance, while tokenizer x grammar emptiness diagnostics prove whether bounded witnesses survive tokenizer encode/decode assumptions. Ingestion for regex, EBNF, Outlines, xgrammar, llguidance, and PromptABI grammars records rules, terminals, references, source spans, and unsupported-fragment abstentions. \\
+Schema and grammar files & JSON Schema normalization and bounded compilation for objects, arrays, required fields, enums, consts, constraints, unions, bounded local references, recursion-limit abstentions, and additional properties; compiled metadata records grammar rules, parser states, DFA witness size, source spans, and real \texttt{jsonschema} round-trip acceptance, while tokenizer x grammar emptiness diagnostics prove whether bounded witnesses survive tokenizer encode/decode assumptions and tokenizer x grammar ambiguity diagnostics expose JSON lexical variants, Unicode escapes, whitespace, tokenizer normalization, and added-token paths that collapse or alias structured outputs. Ingestion for regex, EBNF, Outlines, xgrammar, llguidance, and PromptABI grammars records rules, terminals, references, source spans, and unsupported-fragment abstentions. \\
 \hline
 Fixture archives & Zip/tar member lists and archive-byte hashes without extraction or timestamp-dependent manifests. \\
 \hline
@@ -842,6 +849,21 @@ as a required \texttt{"OK"} literal rewritten by a lowercase-normalizing tokeniz
 into \texttt{"ok"}. Under the stated bounded assumptions, if that product is empty,
 then the constrained-decoding backend cannot produce a valid object through that
 tokenizer path.
+
+The implemented \texttt{grammar-tokenizer-ambiguity} check adds the adjacent
+question: even when a schema is non-empty, can the interface represent it in more
+than one structurally relevant way? PromptABI generates bounded schema-valid JSON
+values, expands them into lexical variants such as compact and spaced encodings,
+Unicode spellings, escaped strings, and added-token-friendly text, validates the
+variants against the real \texttt{jsonschema} backend when available, and then
+compares equivalence classes over token IDs, decoded text, and parsed structured
+values. It reports token-path conflicts when distinct schema values collapse to
+the same token sequence, decoded-text conflicts when normalization erases a
+distinction, byte aliases when multiple JSON byte spellings parse to the same
+value under different token paths, and added-token aliases when a single added
+token and its byte spelling decode to the same grammar text. Each finding carries
+both grammar texts, both token paths, both structured values, decoded text, and
+the bounded assumptions under which the ambiguity was proven.
 
 Equally important is abstention. Arbitrary schemas with recursive references,
 custom validators, remote references, or backend-specific extensions should not
