@@ -31,9 +31,10 @@ package, a deterministic command line workflow, a public embedding API, a
 typed artifact model, a stable diagnostic contract with text, JSON, and SARIF
 renderers, offline version-pinned artifact loading, a tokenizer abstraction and
 differential harness validated against real Hugging Face \texttt{tokenizers},
-\texttt{tiktoken}, and SentencePiece libraries, a minimal verification session,
-focused tests, examples, a fixture corpus layout, a CPU-only benchmark,
-documentation, and contribution guidance.
+\texttt{tiktoken}, and SentencePiece libraries, deterministic finite automata,
+finite-state transducers with composition and projection, a finite-contract
+solver, a minimal verification session, focused tests, examples, a fixture
+corpus layout, a CPU-only benchmark, documentation, and contribution guidance.
 The remaining checkers fit into that surface rather than requiring a rewrite. We
 describe the transducer-oriented formalism, the artifact model, the diagnostic
 contract, the first benchmark line, and the planned evaluation against real tokenizer, template,
@@ -89,7 +90,7 @@ loads real JSON configuration, discovers configs from subdirectories, accepts
 explicit artifact overrides, normalizes artifact paths, builds typed artifact
 bundles, materializes local and metadata-only remote artifacts, validates sha256
 pins, adapts real tokenizer backends into stable encode/decode metadata,
-extracts automata and solver witnesses for finite formal contracts, prepares a cache directory for future expensive products, emits deterministic
+extracts automata, transducer, and solver witnesses for finite formal contracts, prepares a cache directory for future expensive products, emits deterministic
 typed diagnostics in text, JSON, and SARIF, returns stable policy-controlled
 process exit codes, and runs a CPU-only smoke benchmark against an example
 bundle.
@@ -101,7 +102,7 @@ The repository layout is designed to scale:
 \hline
 \textbf{Path} & \textbf{Purpose} \\
 \hline
-\texttt{src/promptabi} & Typed package, artifact model, formal automata and finite-contract core, offline loaders, CLI, configuration loading, diagnostic model, renderers, and verification session. \\
+\texttt{src/promptabi} & Typed package, artifact model, formal automata, finite-state transducers, finite-contract core, offline loaders, CLI, configuration loading, diagnostic model, renderers, and verification session. \\
 \hline
 \texttt{tests} & Focused tests for package API and CLI determinism. \\
 \hline
@@ -221,22 +222,39 @@ finite-domain enumeration. Both backends return a stable result object with
 counterexample assignments for satisfiable bad states, checked-assignment counts,
 and minimal enumerated unsat cores when no assignment exists.
 
+The core now adds the missing relational layer: finite-state transducers over
+explicit input and output alphabets. A transducer transition carries an input
+label, an output label, or epsilon on either side. This directly models
+render-like insertions, tokenizer-like recodings, decode-like normalization, and
+provider-envelope rewrites. The implementation accepts finite relations, literal
+string mappings, identity relations, exact composition over a shared middle
+alphabet, input and output projection back to deterministic automata,
+shortest input/output witnesses with path labels, and a conservative
+over-approximation that pairs the independent input and output projections when
+only a relation envelope is justified. Composition preserves the exact/over-
+approximate provenance flag so later diagnostics can distinguish proof from
+bounded approximation.
+
 This split is important for the research claims. Automata should prove language
-and reachability properties; SMT should prove finite symbolic compatibility over
-discrete pipeline facts such as roles, escaping flags, bounded content, token
-budgets, schema preconditions, and stop-policy states. The fallback enumerator is
-not a replacement for richer solving, but it makes the supported fragment
-executable, testable, and privacy-preserving even in minimal CI environments.
+and reachability properties; transducers should model interface mappings and
+their compositions; SMT should prove finite symbolic compatibility over discrete
+pipeline facts such as roles, escaping flags, bounded content, token budgets,
+schema preconditions, and stop-policy states. The fallback enumerator is not a
+replacement for richer solving, but it makes the supported fragment executable,
+testable, and privacy-preserving even in minimal CI environments.
 
 The current tests exercise the core against real code rather than sketches. They
 prove that automata products extract a shortest stop-string witness, that
-difference excludes a role delimiter while preserving safe user strings, that a
-finite contract emits a concrete role-forgery counterexample, that contradictory
-role constraints produce a minimal unsat core, that Boolean compositions are
-recognized as unsatisfiable, and that the installed Z3 backend returns the same
-kind of concrete assignment for a satisfiable finite contract. This is the first
-formal benchline on which role-boundary, stop-reachability, grammar-emptiness,
-and must-survive budget checkers can be built.
+difference excludes a role delimiter while preserving safe user strings, that
+transducer composition reconstructs a render-then-tokenize witness, that
+projections recover accepted input and output languages through epsilon labels,
+that projection-based over-approximation intentionally admits independent pairs,
+that a finite contract emits a concrete role-forgery counterexample, that
+contradictory role constraints produce a minimal unsat core, that Boolean
+compositions are recognized as unsatisfiable, and that the installed Z3 backend
+returns the same kind of concrete assignment for a satisfiable finite contract.
+This is the first formal benchline on which role-boundary, stop-reachability,
+grammar-emptiness, and must-survive budget checkers can be built.
 
 \clearpage
 \section{Version-Pinned Artifact Loading}
@@ -630,7 +648,7 @@ Tokenizer abstraction & Encode/decode metadata extraction, special-token handlin
 \hline
 Template execution & Supported Jinja fragment rendering, symbolic execution, and abstention detection. \\
 \hline
-Automata products & Completion, union, intersection, difference, emptiness, and shortest witness extraction. \\
+Automata and transducers & Completion, union, intersection, difference, emptiness, transducer composition, projection, over-approximation, and shortest witness extraction. \\
 \hline
 Finite-contract solving & Z3 and exhaustive finite-domain solving over booleans, enums, integer ranges, bounded strings, length, membership, and containment constraints. \\
 \hline
@@ -750,9 +768,9 @@ whether their composed contract remains valid as artifacts evolve.
 
 The roadmap is best understood as a progression from stable surfaces to formal
 checks to ecosystem integration. The skeleton, core artifact model, loader layer,
-diagnostic contract, CLI, tokenizer abstraction, finite automata layer, and
-finite-contract solver now provide stable surfaces. The next phase should
-implement transducer support, source-span tracking, deterministic diagnostic
+diagnostic contract, CLI, tokenizer abstraction, finite automata layer,
+finite-state transducer layer, and finite-contract solver now provide stable
+surfaces. The next phase should implement source-span tracking, deterministic diagnostic
 snapshots, and the first role-boundary, stop-reachability, grammar-emptiness, and
 budget-survival checkers. Corpus growth, lockfiles, drift
 detection, SARIF, GitHub Actions, pre-commit hooks, HTML reports, suppression
@@ -779,7 +797,8 @@ config discovery from nested directories, artifact-location overrides,
 deterministic JSON output, SARIF output, missing-artifact failures, cache
 directory preparation, quiet/verbose text controls, and configurable exit-code
 thresholds. The formal tests exercise automata intersection, difference,
-emptiness, shortest witnesses, finite-domain counterexample extraction, minimal
+emptiness, shortest witnesses, transducer composition, projection,
+over-approximation, finite-domain counterexample extraction, minimal
 unsat cores, and the installed Z3 backend. The CLI was also run against the minimal typed-artifact example
 configuration, producing a passing informational diagnostic. The smoke benchmark
 runs the skeleton verifier repeatedly on the example config and reports a
@@ -793,7 +812,7 @@ that the repository can already execute code, not just describe a future tool.
 \hline
 Focused tests & Artifact model, public API, config loading, and CLI workflow behavior pass in isolation. \\
 \hline
-Formal core tests & Automata reachability and difference, finite-domain solving, unsat-core extraction, and Z3-backed assignment extraction pass against executable code. \\
+Formal core tests & Automata reachability and difference, transducer composition/projection/over-approximation, finite-domain solving, unsat-core extraction, and Z3-backed assignment extraction pass against executable code. \\
 \hline
 Tokenizer differential tests & Byte-level normalization and added-token behavior, Hugging Face ByteLevel BPE, \texttt{tiktoken}, and SentencePiece adapters match real backend behavior. \\
 \hline
@@ -817,7 +836,7 @@ across revisions.
 Many LLM quality questions are inherently behavioral and require model access.
 PromptABI intentionally avoids those claims. Tokenization runs on CPU.
 Chat-template rendering runs on CPU. JSON Schema normalization, grammar
-compilation, automata operations, parser checks, source-span tracking, fixture
+compilation, automata and transducer operations, parser checks, source-span tracking, fixture
 replay, and truncation simulation run on CPU. Provider compatibility can be
 tested from recorded fixtures. Context-window analysis depends on token counts
 and framework policies, not logits.
@@ -846,9 +865,9 @@ API, diagnostics, tests, docs, examples, fixtures, benchmarks, and contribution
 guidance. The research foundation is the transducer view of prompts, tokenizers, grammars, stop
 policies, parsers, and budget policies.
 
-The next milestones should add transducer operations, source spans, stable
-diagnostic snapshots, and then the first formal checkers without changing the
-public surface. If the project maintains deterministic outputs, minimized witnesses,
+The next milestones should add source spans, stable diagnostic snapshots, and
+then the first formal checkers without changing the public surface. If the
+project maintains deterministic outputs, minimized witnesses,
 clear abstention boundaries, and real corpus validation, it can become both a
 practical CI tool and a credible systems research contribution. The core insight
 is simple but powerful: many production LLM failures happen before the neural

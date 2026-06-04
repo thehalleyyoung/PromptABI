@@ -9,6 +9,7 @@ from promptabi.formal import (
     EnumDomain,
     Eq,
     FiniteContractProblem,
+    FiniteStateTransducer,
     Implies,
     IntRangeDomain,
     Length,
@@ -48,6 +49,46 @@ def test_dfa_difference_proves_literal_excluded_from_safe_language() -> None:
     assert forged.is_empty() is True
     assert safe_without_delimiter.accepts_text("hello") is True
     assert safe_without_delimiter.accepts_text("<|assistant|>") is False
+
+
+def test_transducer_composition_reconstructs_render_then_tokenize_witness() -> None:
+    render = FiniteStateTransducer.literal_mapping("U", "<user>", name="render-role")
+    tokenize = FiniteStateTransducer.finite_relation((("<user>", "T"), ("<assistant>", "A")), name="tokenize-control")
+
+    composed = render.compose(tokenize, name="render-tokenize")
+    witness = composed.shortest_witness()
+
+    assert composed.accepts_pair("U", "T") is True
+    assert composed.accepts_pair("U", "A") is False
+    assert witness is not None
+    assert witness.input_text == "U"
+    assert witness.output_text == "T"
+    assert witness.labels[0].to_dict() == {"input": "U", "output": "T"}
+    assert any(label.input_symbol is None and label.output_symbol is None for label in witness.labels)
+    assert composed.to_dict()["approximation"] == "exact"
+
+
+def test_transducer_projections_track_input_and_output_languages_with_epsilons() -> None:
+    relation = FiniteStateTransducer.finite_relation((("ab", "X"), ("c", "YZ")), name="toy-codec")
+
+    input_language = relation.project_input(name="codec-inputs")
+    output_language = relation.project_output(name="codec-outputs")
+
+    assert input_language.accepts_text("ab") is True
+    assert input_language.accepts_text("c") is True
+    assert input_language.accepts_text("a") is False
+    assert output_language.accepts_text("X") is True
+    assert output_language.accepts_text("YZ") is True
+    assert output_language.accepts_text("Y") is False
+
+
+def test_transducer_overapproximation_pairs_independent_projections() -> None:
+    exact = FiniteStateTransducer.finite_relation((("safe", "OK"), ("unsafe", "BAD")), name="classified")
+    overapprox = exact.overapproximate_by_projections(name="classified-approx")
+
+    assert exact.accepts_pair("safe", "BAD") is False
+    assert overapprox.accepts_pair("safe", "BAD") is True
+    assert overapprox.to_dict()["approximation"] == "overapproximation"
 
 
 def test_finite_contract_solver_finds_counterexample_for_role_forgery() -> None:

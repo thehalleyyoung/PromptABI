@@ -35,11 +35,12 @@ messages -> chat template -> byte/string prompt -> tokenizer -> token stream
 ```
 
 PromptABI now includes the first formal core: deterministic finite automata for
-reachability, emptiness, set operations, and shortest witnesses, plus a finite
-contract solver over booleans, enums, integer ranges, and bounded strings. The
-solver uses Z3 when available and falls back to exhaustive finite-domain solving,
-so checks can prove satisfiability or incompatibility and emit concrete
-counterexample assignments without logits, GPUs, inference, or network calls.
+reachability, finite-state transducers for render/tokenize/decode-like
+relations, and a finite contract solver over booleans, enums, integer ranges,
+and bounded strings. The solver uses Z3 when available and falls back to
+exhaustive finite-domain solving, so checks can prove satisfiability or
+incompatibility and emit concrete counterexamples without logits, GPUs,
+inference, or network calls.
 
 The roadmap targets three high-value checks first: role-boundary
 non-forgeability, stop/grammar/tokenizer reachability, and must-survive
@@ -73,11 +74,12 @@ Most high-value checks become automata-theoretic properties:
 - **Round-trip parseability:** does `render -> tokenize -> detokenize -> parse` preserve the intended message/tool structure?
 - **Must-survive budget constraints:** do system instructions, tool definitions, safety preambles, retrieval citations, or output-format requirements remain present under the framework's real truncation policy?
 
-The implementation combines finite-state automata, a Z3-backed finite-contract
-solver, differential checks against real tokenizer libraries, and an explicit
-static boundary: automata prove language/reachability facts, SMT proves bounded
-symbolic compatibility, and differential tests validate that abstractions match
-libraries people actually run.
+The implementation combines finite-state automata and transducers, a Z3-backed
+finite-contract solver, differential checks against real tokenizer libraries,
+and an explicit static boundary: automata prove language/reachability facts,
+transducers model interface relations, SMT proves bounded symbolic
+compatibility, and differential tests validate abstractions against libraries
+people actually run.
 
 ## Why no GPU genuinely does not limit applicability
 

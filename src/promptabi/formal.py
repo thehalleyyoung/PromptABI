@@ -40,6 +40,63 @@ class AutomatonWitness:
 
 
 @dataclass(frozen=True, slots=True)
+class TransducerLabel:
+    """One input/output edge label in a finite-state transducer path."""
+
+    input_symbol: Symbol | None
+    output_symbol: Symbol | None
+
+    def __post_init__(self) -> None:
+        if self.input_symbol == "":
+            raise AutomatonError("transducer input labels must be non-empty or epsilon")
+        if self.output_symbol == "":
+            raise AutomatonError("transducer output labels must be non-empty or epsilon")
+
+    def to_dict(self) -> dict[str, object]:
+        return {"input": self.input_symbol, "output": self.output_symbol}
+
+
+@dataclass(frozen=True, slots=True)
+class TransducerTransition:
+    """A directed finite-state transducer transition."""
+
+    source: State
+    label: TransducerLabel
+    target: State
+
+    def to_dict(self) -> dict[str, object]:
+        return {"from": self.source, "label": self.label.to_dict(), "to": self.target}
+
+
+@dataclass(frozen=True, slots=True)
+class TransducerWitness:
+    """A shortest accepted input/output pair with the path that produced it."""
+
+    input_symbols: tuple[Symbol, ...]
+    output_symbols: tuple[Symbol, ...]
+    states: tuple[State, ...]
+    labels: tuple[TransducerLabel, ...]
+
+    @property
+    def input_text(self) -> str:
+        return "".join(self.input_symbols)
+
+    @property
+    def output_text(self) -> str:
+        return "".join(self.output_symbols)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "input_symbols": list(self.input_symbols),
+            "input_text": self.input_text,
+            "output_symbols": list(self.output_symbols),
+            "output_text": self.output_text,
+            "states": list(self.states),
+            "labels": [label.to_dict() for label in self.labels],
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class DeterministicFiniteAutomaton:
     """A partial deterministic finite automaton over a finite symbol alphabet."""
 
@@ -266,6 +323,358 @@ class DeterministicFiniteAutomaton:
         return None
 
 
+@dataclass(frozen=True, slots=True)
+class FiniteStateTransducer:
+    """A finite relation between input and output symbol streams.
+
+    Epsilon is represented as ``None`` on either side of a transition. That is
+    enough for render-like insertion/deletion, tokenize-like segmentation, and
+    decode-like normalization products while keeping witnesses finite and stable.
+    """
+
+    states: frozenset[State]
+    input_alphabet: tuple[Symbol, ...]
+    output_alphabet: tuple[Symbol, ...]
+    start: State
+    accepts: frozenset[State]
+    transitions: tuple[TransducerTransition, ...] = ()
+    name: str = "fst"
+    approximation: str = "exact"
+
+    def __post_init__(self) -> None:
+        if not self.states:
+            raise AutomatonError("transducers must define at least one state")
+        if self.start not in self.states:
+            raise AutomatonError("transducer start state must be declared")
+        if not self.accepts <= self.states:
+            raise AutomatonError("transducer accepting states must be declared states")
+        if len(set(self.input_alphabet)) != len(self.input_alphabet):
+            raise AutomatonError("transducer input alphabet must not contain duplicates")
+        if len(set(self.output_alphabet)) != len(self.output_alphabet):
+            raise AutomatonError("transducer output alphabet must not contain duplicates")
+        if any(symbol == "" for symbol in self.input_alphabet + self.output_alphabet):
+            raise AutomatonError("transducer symbols must be non-empty")
+        input_alphabet = tuple(sorted(self.input_alphabet))
+        output_alphabet = tuple(sorted(self.output_alphabet))
+        normalized: list[TransducerTransition] = []
+        seen: set[tuple[State, Symbol | None, Symbol | None, State]] = set()
+        for transition in self.transitions:
+            if transition.source not in self.states:
+                raise AutomatonError(f"transducer transition source is not declared: {transition.source}")
+            if transition.target not in self.states:
+                raise AutomatonError(f"transducer transition target is not declared: {transition.target}")
+            if transition.label.input_symbol is not None and transition.label.input_symbol not in input_alphabet:
+                raise AutomatonError(f"transducer input symbol is not in alphabet: {transition.label.input_symbol}")
+            if transition.label.output_symbol is not None and transition.label.output_symbol not in output_alphabet:
+                raise AutomatonError(f"transducer output symbol is not in alphabet: {transition.label.output_symbol}")
+            key = (transition.source, transition.label.input_symbol, transition.label.output_symbol, transition.target)
+            if key not in seen:
+                normalized.append(transition)
+                seen.add(key)
+        normalized.sort(key=lambda item: (item.source, item.label.input_symbol or "", item.label.output_symbol or "", item.target))
+        object.__setattr__(self, "input_alphabet", input_alphabet)
+        object.__setattr__(self, "output_alphabet", output_alphabet)
+        object.__setattr__(self, "transitions", tuple(normalized))
+
+    @classmethod
+    def literal_mapping(cls, input_text: str, output_text: str, *, name: str | None = None) -> "FiniteStateTransducer":
+        """Accept exactly one string-to-string mapping."""
+
+        return cls.finite_relation(((input_text, output_text),), name=name or f"mapping({input_text!r}->{output_text!r})")
+
+    @classmethod
+    def identity(cls, alphabet: Iterable[Symbol], *, name: str = "identity") -> "FiniteStateTransducer":
+        symbols = tuple(sorted(set(alphabet)))
+        transitions = tuple(
+            TransducerTransition("q0", TransducerLabel(symbol, symbol), "q0")
+            for symbol in symbols
+        )
+        return cls(
+            states=frozenset({"q0"}),
+            input_alphabet=symbols,
+            output_alphabet=symbols,
+            start="q0",
+            accepts=frozenset({"q0"}),
+            transitions=transitions,
+            name=name,
+        )
+
+    @classmethod
+    def finite_relation(
+        cls,
+        pairs: Iterable[tuple[Sequence[Symbol] | str, Sequence[Symbol] | str]],
+        *,
+        name: str = "finite-relation",
+    ) -> "FiniteStateTransducer":
+        """Build a transducer that accepts exactly the provided finite pairs."""
+
+        root = "q0"
+        states = {root}
+        accepts: set[State] = set()
+        transitions: list[TransducerTransition] = []
+        input_alphabet: set[Symbol] = set()
+        output_alphabet: set[Symbol] = set()
+        next_id = 1
+        for input_word, output_word in pairs:
+            current = root
+            input_symbols = tuple(input_word)
+            output_symbols = tuple(output_word)
+            length = max(len(input_symbols), len(output_symbols))
+            for index in range(length):
+                input_symbol = input_symbols[index] if index < len(input_symbols) else None
+                output_symbol = output_symbols[index] if index < len(output_symbols) else None
+                if input_symbol is not None:
+                    input_alphabet.add(input_symbol)
+                if output_symbol is not None:
+                    output_alphabet.add(output_symbol)
+                target = f"q{next_id}"
+                next_id += 1
+                transitions.append(TransducerTransition(current, TransducerLabel(input_symbol, output_symbol), target))
+                states.add(target)
+                current = target
+            accepts.add(current)
+        return cls(
+            states=frozenset(states),
+            input_alphabet=tuple(input_alphabet),
+            output_alphabet=tuple(output_alphabet),
+            start=root,
+            accepts=frozenset(accepts),
+            transitions=tuple(transitions),
+            name=name,
+        )
+
+    @classmethod
+    def from_independent_languages(
+        cls,
+        input_language: DeterministicFiniteAutomaton,
+        output_language: DeterministicFiniteAutomaton,
+        *,
+        name: str = "projection-overapproximation",
+    ) -> "FiniteStateTransducer":
+        """Over-approximate a relation as every accepted input paired with every accepted output."""
+
+        states = {_pair(input_state, output_state) for input_state in input_language.states for output_state in output_language.states}
+        transitions: list[TransducerTransition] = []
+        for input_state in input_language.states:
+            for output_state in output_language.states:
+                source = _pair(input_state, output_state)
+                for symbol in input_language.alphabet:
+                    target_input = input_language.step(input_state, symbol)
+                    if target_input is not None:
+                        transitions.append(TransducerTransition(source, TransducerLabel(symbol, None), _pair(target_input, output_state)))
+                for symbol in output_language.alphabet:
+                    target_output = output_language.step(output_state, symbol)
+                    if target_output is not None:
+                        transitions.append(TransducerTransition(source, TransducerLabel(None, symbol), _pair(input_state, target_output)))
+        accepts = {
+            _pair(input_state, output_state)
+            for input_state in input_language.accepts
+            for output_state in output_language.accepts
+        }
+        return cls(
+            states=frozenset(states),
+            input_alphabet=input_language.alphabet,
+            output_alphabet=output_language.alphabet,
+            start=_pair(input_language.start, output_language.start),
+            accepts=frozenset(accepts),
+            transitions=tuple(transitions),
+            name=name,
+            approximation="overapproximation",
+        )
+
+    def accepts_pair(self, input_symbols: Iterable[Symbol] | str, output_symbols: Iterable[Symbol] | str) -> bool:
+        input_tuple = tuple(input_symbols)
+        output_tuple = tuple(output_symbols)
+        queue = deque([(self.start, 0, 0)])
+        seen = {(self.start, 0, 0)}
+        by_source = self._transitions_by_source()
+        while queue:
+            state, input_index, output_index = queue.popleft()
+            if state in self.accepts and input_index == len(input_tuple) and output_index == len(output_tuple):
+                return True
+            for transition in by_source.get(state, ()):
+                next_input = input_index
+                next_output = output_index
+                if transition.label.input_symbol is not None:
+                    if input_index >= len(input_tuple) or input_tuple[input_index] != transition.label.input_symbol:
+                        continue
+                    next_input += 1
+                if transition.label.output_symbol is not None:
+                    if output_index >= len(output_tuple) or output_tuple[output_index] != transition.label.output_symbol:
+                        continue
+                    next_output += 1
+                item = (transition.target, next_input, next_output)
+                if item not in seen:
+                    seen.add(item)
+                    queue.append(item)
+        return False
+
+    def shortest_witness(self, *, max_depth: int | None = None) -> TransducerWitness | None:
+        queue = deque([(self.start, (), (), (self.start,), ())])
+        seen = {self.start}
+        by_source = self._transitions_by_source()
+        while queue:
+            state, input_symbols, output_symbols, states, labels = queue.popleft()
+            if state in self.accepts:
+                return TransducerWitness(
+                    input_symbols=input_symbols,
+                    output_symbols=output_symbols,
+                    states=states,
+                    labels=labels,
+                )
+            if max_depth is not None and len(labels) >= max_depth:
+                continue
+            for transition in by_source.get(state, ()):
+                if transition.target in seen:
+                    continue
+                seen.add(transition.target)
+                queue.append(
+                    (
+                        transition.target,
+                        input_symbols + (() if transition.label.input_symbol is None else (transition.label.input_symbol,)),
+                        output_symbols + (() if transition.label.output_symbol is None else (transition.label.output_symbol,)),
+                        states + (transition.target,),
+                        labels + (transition.label,),
+                    )
+                )
+        return None
+
+    def project_input(self, *, name: str | None = None) -> DeterministicFiniteAutomaton:
+        return self._project(side="input", name=name or f"input({self.name})")
+
+    def project_output(self, *, name: str | None = None) -> DeterministicFiniteAutomaton:
+        return self._project(side="output", name=name or f"output({self.name})")
+
+    def overapproximate_by_projections(self, *, name: str | None = None) -> "FiniteStateTransducer":
+        return self.from_independent_languages(
+            self.project_input(),
+            self.project_output(),
+            name=name or f"overapprox({self.name})",
+        )
+
+    def compose(self, other: "FiniteStateTransducer", *, name: str | None = None) -> "FiniteStateTransducer":
+        """Compose this relation with another relation over the shared middle alphabet."""
+
+        start = _pair(self.start, other.start)
+        states = {start}
+        accepts: set[State] = set()
+        transitions: list[TransducerTransition] = []
+        queue = deque([(self.start, other.start)])
+        left_by_source = self._transitions_by_source()
+        right_by_source = other._transitions_by_source()
+        while queue:
+            left_state, right_state = queue.popleft()
+            product_state = _pair(left_state, right_state)
+            if left_state in self.accepts and right_state in other.accepts:
+                accepts.add(product_state)
+
+            candidates: list[tuple[TransducerLabel, State, State]] = []
+            for left_transition in left_by_source.get(left_state, ()):
+                if left_transition.label.output_symbol is None:
+                    candidates.append((TransducerLabel(left_transition.label.input_symbol, None), left_transition.target, right_state))
+                for right_transition in right_by_source.get(right_state, ()):
+                    if (
+                        left_transition.label.output_symbol is not None
+                        and right_transition.label.input_symbol == left_transition.label.output_symbol
+                    ):
+                        candidates.append(
+                            (
+                                TransducerLabel(left_transition.label.input_symbol, right_transition.label.output_symbol),
+                                left_transition.target,
+                                right_transition.target,
+                            )
+                        )
+            for right_transition in right_by_source.get(right_state, ()):
+                if right_transition.label.input_symbol is None:
+                    candidates.append((TransducerLabel(None, right_transition.label.output_symbol), left_state, right_transition.target))
+
+            for label, next_left, next_right in candidates:
+                target = _pair(next_left, next_right)
+                transitions.append(TransducerTransition(product_state, label, target))
+                if target not in states:
+                    states.add(target)
+                    queue.append((next_left, next_right))
+
+        approximation = "exact" if self.approximation == other.approximation == "exact" else "overapproximation"
+        return FiniteStateTransducer(
+            states=frozenset(states),
+            input_alphabet=self.input_alphabet,
+            output_alphabet=other.output_alphabet,
+            start=start,
+            accepts=frozenset(accepts),
+            transitions=tuple(transitions),
+            name=name or f"({self.name};{other.name})",
+            approximation=approximation,
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "name": self.name,
+            "approximation": self.approximation,
+            "states": sorted(self.states),
+            "input_alphabet": list(self.input_alphabet),
+            "output_alphabet": list(self.output_alphabet),
+            "start": self.start,
+            "accepts": sorted(self.accepts),
+            "transitions": [transition.to_dict() for transition in self.transitions],
+        }
+
+    def _project(self, *, side: str, name: str) -> DeterministicFiniteAutomaton:
+        alphabet = self.input_alphabet if side == "input" else self.output_alphabet
+        start_set = frozenset(self._epsilon_closure({self.start}, side=side))
+        state_names = {start_set: _set_state_name(start_set)}
+        queue = deque([start_set])
+        transitions: dict[tuple[State, Symbol], State] = {}
+        accepts: set[State] = set()
+        by_source = self._transitions_by_source()
+        while queue:
+            subset = queue.popleft()
+            subset_name = state_names[subset]
+            if self.accepts.intersection(subset):
+                accepts.add(subset_name)
+            for symbol in alphabet:
+                targets: set[State] = set()
+                for state in subset:
+                    for transition in by_source.get(state, ()):
+                        label_symbol = transition.label.input_symbol if side == "input" else transition.label.output_symbol
+                        if label_symbol == symbol:
+                            targets.add(transition.target)
+                if not targets:
+                    continue
+                closed = frozenset(self._epsilon_closure(targets, side=side))
+                if closed not in state_names:
+                    state_names[closed] = _set_state_name(closed)
+                    queue.append(closed)
+                transitions[(subset_name, symbol)] = state_names[closed]
+        return DeterministicFiniteAutomaton(
+            states=frozenset(state_names.values()),
+            alphabet=alphabet,
+            start=state_names[start_set],
+            accepts=frozenset(accepts),
+            transitions=transitions,
+            name=name,
+        )
+
+    def _epsilon_closure(self, states: Iterable[State], *, side: str) -> set[State]:
+        seen = set(states)
+        queue = deque(seen)
+        by_source = self._transitions_by_source()
+        while queue:
+            state = queue.popleft()
+            for transition in by_source.get(state, ()):
+                label_symbol = transition.label.input_symbol if side == "input" else transition.label.output_symbol
+                if label_symbol is None and transition.target not in seen:
+                    seen.add(transition.target)
+                    queue.append(transition.target)
+        return seen
+
+    def _transitions_by_source(self) -> dict[State, tuple[TransducerTransition, ...]]:
+        grouped: dict[State, list[TransducerTransition]] = {}
+        for transition in self.transitions:
+            grouped.setdefault(transition.source, []).append(transition)
+        return {state: tuple(items) for state, items in grouped.items()}
+
+
 def _product(
     left: DeterministicFiniteAutomaton,
     right: DeterministicFiniteAutomaton,
@@ -308,6 +717,10 @@ def _product(
 
 def _pair(left: State, right: State) -> State:
     return f"{left}\u241f{right}"
+
+
+def _set_state_name(states: Iterable[State]) -> State:
+    return "{" + ",".join(sorted(states)) + "}"
 
 
 class SolverStatus(StrEnum):
