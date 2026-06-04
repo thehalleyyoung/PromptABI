@@ -34,7 +34,10 @@ version-pinned artifact loading, a tokenizer abstraction and differential harnes
 validated against real Hugging Face \texttt{tokenizers},
 \texttt{tiktoken}, and SentencePiece libraries, deterministic finite automata,
 finite-state transducers with composition and projection, a finite-contract
-solver, a dependency-aware verification-session scheduler with deterministic
+solver with compressed lazy product witnesses, incremental DFA minimization,
+indexed transducer composition/projection, solver timeouts, and constraint-sliced
+finite enumeration, byte-level tokenizer memoization for repeated normalization,
+a dependency-aware verification-session scheduler with deterministic
 parallel check execution and a per-session analysis cache, focused tests, examples, a fixture
 corpus layout, a curated ten-family seed corpus, a deterministic corpus manifest
 pipeline, a Hugging Face \texttt{tokenizer\_config.json} chat-template parser,
@@ -406,9 +409,11 @@ Boolean, enum, integer-range, and bounded-string domains, then composes named
 constraints with equality, disequality, integer comparisons, conjunction,
 disjunction, negation, implication, membership, string length, and substring containment. When
 \texttt{z3-solver} is available the adapter lowers those finite domains and
-constraints to Z3, including explicit domain restrictions for bounded strings.
-When Z3 is absent, the same contract runs through deterministic exhaustive
-finite-domain enumeration. Both backends return a stable result object with
+constraints to Z3, including explicit domain restrictions for bounded strings and
+per-query timeout policies. When Z3 is absent, the same contract runs through
+deterministic finite-domain enumeration with constraint-variable slicing, partial
+assignment pruning, explicit assignment limits, and abstention rather than false
+proofs when a bound is reached. Both backends return a stable result object with
 \texttt{sat}, \texttt{unsat}, or \texttt{unknown} status, backend provenance,
 counterexample assignments for satisfiable bad states, explicit
 counterexample/proof/abstention conclusions, checked-assignment counts, and
@@ -416,6 +421,21 @@ minimal unsat cores when no assignment exists. Z3 cores are deletion-minimized
 against the tracked named constraints while finite-domain restrictions remain
 background assumptions, so the proof object shown to a developer is not merely
 the first raw solver core.
+
+The automata layer now optimizes the exact same properties rather than adding a
+separate approximate engine. It can find intersection witnesses lazily without
+materializing full products, compressing tokenizer-sized alphabets by equivalent
+left/right transition signatures at each product state. Eager union and
+difference remain on completed products so implicit sink-state semantics are
+preserved. Product construction minimizes completed operands incrementally before
+forming reachable products, and witnesses are reconstructed from predecessor maps
+instead of storing full paths in every queue entry. The transducer layer indexes
+right-hand transitions by input label during composition and reuses source
+transition indexes during projection closures, removing the nested scans that
+would otherwise dominate realistic render/tokenize/decode relations. The
+byte-level tokenizer also memoizes portable normalization results with a bounded
+cache, which removes repeated Unicode normalization work in corpus-wide stop,
+grammar, and budget checks without affecting encode/decode metadata.
 
 The repository now uses that core as a real static-verification layer, not just
 as a toy solver. The \texttt{static-contracts} check derives independent

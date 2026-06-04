@@ -179,6 +179,7 @@ class ByteLevelTokenizer(TokenizerAdapter):
         normalization: Iterable[NormalizationRule | str] = (),
     ) -> None:
         self._normalization = tuple(NormalizationRule(rule) for rule in normalization)
+        self._normalization_cache: dict[str, tuple[str, tuple[str, ...]]] = {}
         self._special_token_to_id = dict(special_tokens or {})
         next_id = 256
         added: dict[str, int] = {}
@@ -202,7 +203,7 @@ class ByteLevelTokenizer(TokenizerAdapter):
 
     def encode(self, text: str, *, add_special_tokens: bool = False) -> EncodeResult:
         del add_special_tokens
-        normalized, steps = apply_normalization(text, self._normalization)
+        normalized, steps = self._normalize(text)
         char_to_byte = _char_to_byte_offsets(normalized)
         encoded: list[EncodedToken] = []
         index = 0
@@ -275,6 +276,16 @@ class ByteLevelTokenizer(TokenizerAdapter):
             if text.startswith(token, index):
                 return token, token_id
         return None
+
+    def _normalize(self, text: str) -> tuple[str, tuple[str, ...]]:
+        cached = self._normalization_cache.get(text)
+        if cached is not None:
+            return cached
+        normalized = apply_normalization(text, self._normalization)
+        if len(self._normalization_cache) >= 256:
+            self._normalization_cache.pop(next(iter(self._normalization_cache)))
+        self._normalization_cache[text] = normalized
+        return normalized
 
 
 class HuggingFaceTokenizerAdapter(TokenizerAdapter):

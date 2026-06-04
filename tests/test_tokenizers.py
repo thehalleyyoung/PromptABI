@@ -48,6 +48,16 @@ def test_apply_normalization_is_deterministic_and_ordered() -> None:
     assert steps == ("strip", "nfkc", "lowercase")
 
 
+def test_byte_level_tokenizer_memoizes_normalization_results() -> None:
+    tokenizer = ByteLevelTokenizer(normalization=(NormalizationRule.NFKC, NormalizationRule.LOWERCASE))
+
+    first = tokenizer.encode("ℌELLO")
+    second = tokenizer.encode("ℌELLO")
+
+    assert first.normalized_text == second.normalized_text == "hello"
+    assert tokenizer._normalization_cache == {"ℌELLO": ("hello", ("nfkc", "lowercase"))}
+
+
 def test_huggingface_tokenizers_adapter_matches_real_byte_level_bpe(tmp_path: Path) -> None:
     tokenizers = pytest.importorskip("tokenizers")
     from tokenizers import decoders, models, normalizers, pre_tokenizers, trainers

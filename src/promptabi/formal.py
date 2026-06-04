@@ -7,6 +7,7 @@ grammar, and tokenizer products exist.
 
 from __future__ import annotations
 
+import time
 from collections import deque
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -37,6 +38,31 @@ class AutomatonWitness:
 
     def to_dict(self) -> dict[str, object]:
         return {"symbols": list(self.symbols), "text": self.text, "states": list(self.states)}
+
+
+@dataclass(frozen=True, slots=True)
+class AutomatonSearchResult:
+    """Result and cost counters for a lazy automata-product search."""
+
+    witness: AutomatonWitness | None
+    explored_states: int
+    explored_transitions: int
+    alphabet_symbols: int
+    representative_symbols: int
+
+    @property
+    def found(self) -> bool:
+        return self.witness is not None
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "found": self.found,
+            "witness": self.witness.to_dict() if self.witness is not None else None,
+            "explored_states": self.explored_states,
+            "explored_transitions": self.explored_transitions,
+            "alphabet_symbols": self.alphabet_symbols,
+            "representative_symbols": self.representative_symbols,
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,6 +246,60 @@ class DeterministicFiniteAutomaton:
 
         return self._shortest_path(lambda state: state in self.accepts, max_depth=max_depth)
 
+    def intersection_witness(
+        self,
+        other: "DeterministicFiniteAutomaton",
+        *,
+        max_depth: int | None = None,
+        compress_alphabet: bool = True,
+    ) -> AutomatonSearchResult:
+        """Search the intersection lazily without materializing the product DFA.
+
+        This method is intentionally scoped to intersection: a missing transition
+        on either side rejects that symbol, so no implicit sink is needed. Union
+        and difference still use the eager completed product to preserve sink
+        semantics.
+        """
+
+        alphabet = tuple(sorted(set(self.alphabet).union(other.alphabet)))
+        start = (self.start, other.start)
+        queue = deque([(start, 0)])
+        seen = {start}
+        predecessors: dict[tuple[State, State], tuple[tuple[State, State], Symbol]] = {}
+        explored_states = 0
+        explored_transitions = 0
+        representative_symbols = 0
+        while queue:
+            (left_state, right_state), depth = queue.popleft()
+            explored_states += 1
+            if left_state in self.accepts and right_state in other.accepts:
+                return AutomatonSearchResult(
+                    witness=_reconstruct_product_witness(start, (left_state, right_state), predecessors),
+                    explored_states=explored_states,
+                    explored_transitions=explored_transitions,
+                    alphabet_symbols=len(alphabet),
+                    representative_symbols=representative_symbols,
+                )
+            if max_depth is not None and depth >= max_depth:
+                continue
+            moves = _intersection_moves(self, other, left_state, right_state, alphabet, compress_alphabet=compress_alphabet)
+            representative_symbols += len(moves)
+            for symbol, next_left, next_right in moves:
+                explored_transitions += 1
+                target = (next_left, next_right)
+                if target in seen:
+                    continue
+                seen.add(target)
+                predecessors[target] = ((left_state, right_state), symbol)
+                queue.append((target, depth + 1))
+        return AutomatonSearchResult(
+            witness=None,
+            explored_states=explored_states,
+            explored_transitions=explored_transitions,
+            alphabet_symbols=len(alphabet),
+            representative_symbols=representative_symbols,
+        )
+
     def reachable_states(self) -> frozenset[State]:
         seen = {self.start}
         queue = deque([self.start])
@@ -260,6 +340,70 @@ class DeterministicFiniteAutomaton:
             accepts=self.accepts,
             transitions=transitions,
             name=f"{self.name}-complete",
+        )
+
+    def minimize(self, *, complete: bool = True, name: str | None = None) -> "DeterministicFiniteAutomaton":
+        """Return an equivalent DFA with reachable partition-equivalent states merged."""
+
+        if complete:
+            return self.complete().minimize(complete=False, name=name or f"{self.name}-min")
+
+        reachable = self.reachable_states()
+        accepting = frozenset(self.accepts.intersection(reachable))
+        rejecting = frozenset(reachable - accepting)
+        partitions = tuple(part for part in (accepting, rejecting) if part)
+        if not partitions:
+            partitions = (frozenset({self.start}),)
+
+        changed = True
+        while changed:
+            changed = False
+            state_to_part = {
+                state: index
+                for index, partition in enumerate(partitions)
+                for state in partition
+            }
+            refined: list[frozenset[State]] = []
+            for partition in partitions:
+                buckets: dict[tuple[int | None, ...], set[State]] = {}
+                for state in partition:
+                    signature = tuple(
+                        state_to_part.get(self.step(state, symbol))
+                        for symbol in self.alphabet
+                    )
+                    buckets.setdefault(signature, set()).add(state)
+                refined.extend(frozenset(bucket) for _, bucket in sorted(buckets.items(), key=lambda item: (item[0], sorted(item[1]))))
+                changed = changed or len(buckets) > 1
+            partitions = tuple(refined)
+
+        state_names = {
+            partition: f"m{index}"
+            for index, partition in enumerate(sorted(partitions, key=lambda part: sorted(part)[0]))
+        }
+        representative_to_partition = {
+            state: partition
+            for partition in partitions
+            for state in partition
+        }
+        transitions: dict[tuple[State, Symbol], State] = {}
+        for partition, source_name in state_names.items():
+            representative = sorted(partition)[0]
+            for symbol in self.alphabet:
+                target = self.step(representative, symbol)
+                if target is None or target not in representative_to_partition:
+                    continue
+                transitions[(source_name, symbol)] = state_names[representative_to_partition[target]]
+        return DeterministicFiniteAutomaton(
+            states=frozenset(state_names.values()),
+            alphabet=self.alphabet,
+            start=state_names[representative_to_partition[self.start]],
+            accepts=frozenset(
+                state_names[partition]
+                for partition in partitions
+                if partition.intersection(self.accepts)
+            ),
+            transitions=transitions,
+            name=name or f"{self.name}-min",
         )
 
     def complement(self) -> "DeterministicFiniteAutomaton":
@@ -562,6 +706,14 @@ class FiniteStateTransducer:
         queue = deque([(self.start, other.start)])
         left_by_source = self._transitions_by_source()
         right_by_source = other._transitions_by_source()
+        right_by_state_and_input = {
+            state: _transducer_transitions_by_input(items)
+            for state, items in right_by_source.items()
+        }
+        right_epsilons = {
+            state: tuple(transition for transition in items if transition.label.input_symbol is None)
+            for state, items in right_by_source.items()
+        }
         while queue:
             left_state, right_state = queue.popleft()
             product_state = _pair(left_state, right_state)
@@ -569,14 +721,12 @@ class FiniteStateTransducer:
                 accepts.add(product_state)
 
             candidates: list[tuple[TransducerLabel, State, State]] = []
+            right_index = right_by_state_and_input.get(right_state, {})
             for left_transition in left_by_source.get(left_state, ()):
                 if left_transition.label.output_symbol is None:
                     candidates.append((TransducerLabel(left_transition.label.input_symbol, None), left_transition.target, right_state))
-                for right_transition in right_by_source.get(right_state, ()):
-                    if (
-                        left_transition.label.output_symbol is not None
-                        and right_transition.label.input_symbol == left_transition.label.output_symbol
-                    ):
+                if left_transition.label.output_symbol is not None:
+                    for right_transition in right_index.get(left_transition.label.output_symbol, ()):
                         candidates.append(
                             (
                                 TransducerLabel(left_transition.label.input_symbol, right_transition.label.output_symbol),
@@ -584,9 +734,8 @@ class FiniteStateTransducer:
                                 right_transition.target,
                             )
                         )
-            for right_transition in right_by_source.get(right_state, ()):
-                if right_transition.label.input_symbol is None:
-                    candidates.append((TransducerLabel(None, right_transition.label.output_symbol), left_state, right_transition.target))
+            for right_transition in right_epsilons.get(right_state, ()):
+                candidates.append((TransducerLabel(None, right_transition.label.output_symbol), left_state, right_transition.target))
 
             for label, next_left, next_right in candidates:
                 target = _pair(next_left, next_right)
@@ -621,12 +770,12 @@ class FiniteStateTransducer:
 
     def _project(self, *, side: str, name: str) -> DeterministicFiniteAutomaton:
         alphabet = self.input_alphabet if side == "input" else self.output_alphabet
-        start_set = frozenset(self._epsilon_closure({self.start}, side=side))
+        by_source = self._transitions_by_source()
+        start_set = frozenset(self._epsilon_closure({self.start}, side=side, by_source=by_source))
         state_names = {start_set: _set_state_name(start_set)}
         queue = deque([start_set])
         transitions: dict[tuple[State, Symbol], State] = {}
         accepts: set[State] = set()
-        by_source = self._transitions_by_source()
         while queue:
             subset = queue.popleft()
             subset_name = state_names[subset]
@@ -641,7 +790,7 @@ class FiniteStateTransducer:
                             targets.add(transition.target)
                 if not targets:
                     continue
-                closed = frozenset(self._epsilon_closure(targets, side=side))
+                closed = frozenset(self._epsilon_closure(targets, side=side, by_source=by_source))
                 if closed not in state_names:
                     state_names[closed] = _set_state_name(closed)
                     queue.append(closed)
@@ -655,10 +804,15 @@ class FiniteStateTransducer:
             name=name,
         )
 
-    def _epsilon_closure(self, states: Iterable[State], *, side: str) -> set[State]:
+    def _epsilon_closure(
+        self,
+        states: Iterable[State],
+        *,
+        side: str,
+        by_source: Mapping[State, tuple[TransducerTransition, ...]],
+    ) -> set[State]:
         seen = set(states)
         queue = deque(seen)
-        by_source = self._transitions_by_source()
         while queue:
             state = queue.popleft()
             for transition in by_source.get(state, ()):
@@ -683,8 +837,8 @@ def _product(
     name: str,
 ) -> DeterministicFiniteAutomaton:
     alphabet = tuple(sorted(set(left.alphabet).union(right.alphabet)))
-    left_complete = left.complete(alphabet=alphabet)
-    right_complete = right.complete(alphabet=alphabet)
+    left_complete = left.complete(alphabet=alphabet).minimize(complete=False)
+    right_complete = right.complete(alphabet=alphabet).minimize(complete=False)
     start = _pair(left_complete.start, right_complete.start)
     states = {start}
     accepts: set[State] = set()
@@ -719,8 +873,64 @@ def _pair(left: State, right: State) -> State:
     return f"{left}\u241f{right}"
 
 
+def _intersection_moves(
+    left: DeterministicFiniteAutomaton,
+    right: DeterministicFiniteAutomaton,
+    left_state: State,
+    right_state: State,
+    alphabet: Sequence[Symbol],
+    *,
+    compress_alphabet: bool,
+) -> tuple[tuple[Symbol, State, State], ...]:
+    moves: dict[tuple[State, State], Symbol] = {}
+    uncompressed: list[tuple[Symbol, State, State]] = []
+    for symbol in alphabet:
+        next_left = left.step(left_state, symbol)
+        next_right = right.step(right_state, symbol)
+        if next_left is None or next_right is None:
+            continue
+        if not compress_alphabet:
+            uncompressed.append((symbol, next_left, next_right))
+            continue
+        moves.setdefault((next_left, next_right), symbol)
+    if not compress_alphabet:
+        return tuple(uncompressed)
+    return tuple((symbol, next_left, next_right) for (next_left, next_right), symbol in sorted(moves.items(), key=lambda item: item[1]))
+
+
+def _reconstruct_product_witness(
+    start: tuple[State, State],
+    accept: tuple[State, State],
+    predecessors: Mapping[tuple[State, State], tuple[tuple[State, State], Symbol]],
+) -> AutomatonWitness:
+    symbols: list[Symbol] = []
+    state_pairs: list[tuple[State, State]] = [accept]
+    current = accept
+    while current != start:
+        previous, symbol = predecessors[current]
+        symbols.append(symbol)
+        current = previous
+        state_pairs.append(current)
+    symbols.reverse()
+    state_pairs.reverse()
+    return AutomatonWitness(
+        symbols=tuple(symbols),
+        states=tuple(_pair(left, right) for left, right in state_pairs),
+    )
+
+
 def _set_state_name(states: Iterable[State]) -> State:
     return "{" + ",".join(sorted(states)) + "}"
+
+
+def _transducer_transitions_by_input(
+    transitions: Sequence[TransducerTransition],
+) -> dict[Symbol, tuple[TransducerTransition, ...]]:
+    grouped: dict[Symbol, list[TransducerTransition]] = {}
+    for transition in transitions:
+        if transition.label.input_symbol is not None:
+            grouped.setdefault(transition.label.input_symbol, []).append(transition)
+    return {symbol: tuple(items) for symbol, items in grouped.items()}
 
 
 class SolverStatus(StrEnum):
@@ -1159,14 +1369,24 @@ class FiniteContractProblem:
         object.__setattr__(self, "variables", tuple(sorted(self.variables, key=lambda variable: variable.name)))
         object.__setattr__(self, "constraints", tuple(self.constraints))
 
-    def solve(self, *, prefer_z3: bool = True) -> "SolverResult":
+    def solve(
+        self,
+        *,
+        prefer_z3: bool = True,
+        max_assignments: int | None = None,
+        timeout_seconds: float | None = None,
+    ) -> "SolverResult":
+        if max_assignments is not None and max_assignments <= 0:
+            raise ValueError("max_assignments must be positive when provided")
+        if timeout_seconds is not None and timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive when provided")
         if prefer_z3:
-            z3_result = self._solve_with_z3()
+            z3_result = self._solve_with_z3(timeout_seconds=timeout_seconds)
             if z3_result is not None:
                 return z3_result
-        return self._solve_by_enumeration()
+        return self._solve_by_enumeration(max_assignments=max_assignments, timeout_seconds=timeout_seconds)
 
-    def _solve_with_z3(self) -> "SolverResult | None":
+    def _solve_with_z3(self, *, timeout_seconds: float | None = None) -> "SolverResult | None":
         try:
             import z3  # type: ignore[import-not-found]
         except ImportError:
@@ -1174,6 +1394,8 @@ class FiniteContractProblem:
 
         context = _Z3Context(z3=z3, variables={})
         solver = z3.Solver()
+        if timeout_seconds is not None:
+            solver.set(timeout=max(1, int(timeout_seconds * 1000)))
         domain_constraints: list[Any] = []
         for variable in self.variables:
             z3_variable = variable.z3_variable(context)
@@ -1216,17 +1438,56 @@ class FiniteContractProblem:
             )
         return SolverResult(status=SolverStatus.UNKNOWN, backend=SolverBackend.Z3, checked_assignments=0)
 
-    def _solve_by_enumeration(self) -> "SolverResult":
+    def _solve_by_enumeration(
+        self,
+        *,
+        max_assignments: int | None = None,
+        timeout_seconds: float | None = None,
+    ) -> "SolverResult":
+        deadline = time.monotonic() + timeout_seconds if timeout_seconds is not None else None
+        constraint_variables = tuple((constraint, _expression_variables(constraint.expression)) for constraint in self.constraints)
         checked = 0
-        for assignment in _assignments(self.variables):
-            checked += 1
-            if all(bool(constraint.expression.evaluate(assignment)) for constraint in self.constraints):
-                return SolverResult(
-                    status=SolverStatus.SAT,
-                    backend=SolverBackend.FINITE_ENUMERATION,
-                    assignment=dict(assignment),
-                    checked_assignments=checked,
-                )
+
+        def timed_out() -> bool:
+            return deadline is not None and time.monotonic() >= deadline
+
+        def search(index: int, assignment: dict[str, object], assigned: frozenset[str]) -> tuple[str, dict[str, object] | None]:
+            nonlocal checked
+            if timed_out():
+                return "unknown", None
+            if index == len(self.variables):
+                checked += 1
+                if max_assignments is not None and checked > max_assignments:
+                    return "unknown", None
+                if all(bool(constraint.expression.evaluate(assignment)) for constraint in self.constraints):
+                    return "sat", dict(assignment)
+                return "unsat", None
+            for constraint, variables in constraint_variables:
+                if variables <= assigned and not bool(constraint.expression.evaluate(assignment)):
+                    return "pruned", None
+            variable = self.variables[index]
+            for value in variable.values():
+                assignment[variable.name] = value
+                status, model = search(index + 1, assignment, assigned | {variable.name})
+                assignment.pop(variable.name, None)
+                if status in {"sat", "unknown"}:
+                    return status, model
+            return "unsat", None
+
+        status, assignment = search(0, {}, frozenset())
+        if status == "sat" and assignment is not None:
+            return SolverResult(
+                status=SolverStatus.SAT,
+                backend=SolverBackend.FINITE_ENUMERATION,
+                assignment=assignment,
+                checked_assignments=checked,
+            )
+        if status == "unknown":
+            return SolverResult(
+                status=SolverStatus.UNKNOWN,
+                backend=SolverBackend.FINITE_ENUMERATION,
+                checked_assignments=checked,
+            )
         return SolverResult(
             status=SolverStatus.UNSAT,
             backend=SolverBackend.FINITE_ENUMERATION,
@@ -1305,10 +1566,49 @@ def _assignments(variables: Sequence[VariableDomain]) -> Iterator[dict[str, obje
 
 
 def _is_satisfiable(variables: Sequence[VariableDomain], constraints: Sequence[NamedConstraint]) -> bool:
-    return any(
-        all(bool(constraint.expression.evaluate(assignment)) for constraint in constraints)
-        for assignment in _assignments(variables)
-    )
+    constraint_variables = tuple((constraint, _expression_variables(constraint.expression)) for constraint in constraints)
+
+    def search(index: int, assignment: dict[str, object], assigned: frozenset[str]) -> bool:
+        for constraint, required_variables in constraint_variables:
+            if required_variables <= assigned and not bool(constraint.expression.evaluate(assignment)):
+                return False
+        if index == len(variables):
+            return True
+        domain = variables[index]
+        for value in domain.values():
+            assignment[domain.name] = value
+            if search(index + 1, assignment, assigned | {domain.name}):
+                assignment.pop(domain.name, None)
+                return True
+            assignment.pop(domain.name, None)
+        return False
+
+    return search(0, {}, frozenset())
+
+
+def _expression_variables(expression: Expression) -> frozenset[str]:
+    if isinstance(expression, Var):
+        return frozenset({expression.name})
+    if isinstance(expression, Value):
+        return frozenset()
+    if isinstance(expression, (Eq, Ne, Le, Lt, Ge, Gt)):
+        return _expression_variables(expression.left) | _expression_variables(expression.right)
+    if isinstance(expression, (And, Or)):
+        variables: set[str] = set()
+        for term in expression.terms:
+            variables.update(_expression_variables(term))
+        return frozenset(variables)
+    if isinstance(expression, Not):
+        return _expression_variables(expression.term)
+    if isinstance(expression, Implies):
+        return _expression_variables(expression.condition) | _expression_variables(expression.consequence)
+    if isinstance(expression, InSet):
+        return _expression_variables(expression.term)
+    if isinstance(expression, Length):
+        return _expression_variables(expression.term)
+    if isinstance(expression, Contains):
+        return _expression_variables(expression.haystack) | _expression_variables(expression.needle)
+    return frozenset()
 
 
 def _minimize_z3_unsat_core(

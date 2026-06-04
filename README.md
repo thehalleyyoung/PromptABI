@@ -53,7 +53,12 @@ satisfiability, provider/tool compatibility, and training target role alignment;
 diagnostics now classify safety proofs, incompatibilities, abstentions, and
 concrete counterexamples with extracted models or minimized unsat cores. When Z3
 is absent, tightly bounded contracts fall back to exhaustive finite enumeration
-without logits, GPUs, inference, or network calls.
+without logits, GPUs, inference, or network calls. The formal core now uses
+compressed lazy intersection witnesses, incremental DFA minimization, indexed
+transducer composition/projection, solver timeouts, and constraint-sliced finite
+enumeration, while the byte-level tokenizer memoizes normalization results so
+the same proofs scale to tokenizer-sized alphabets without changing the public
+diagnostic contract.
 
 PromptABI now ships a bounded, sanitizer-aware role-boundary non-forgeability check:
 unsanitized user/tool/function content and dynamic role fields are checked against

@@ -53,6 +53,63 @@ def test_dfa_difference_proves_literal_excluded_from_safe_language() -> None:
     assert safe_without_delimiter.accepts_text("<|assistant|>") is False
 
 
+def test_dfa_lazy_intersection_uses_compressed_alphabet_without_building_product() -> None:
+    alphabet = {chr(codepoint) for codepoint in range(32, 127)}
+    transitions = {("start", symbol): "accept" for symbol in alphabet}
+    left = DeterministicFiniteAutomaton(
+        states=frozenset({"start", "accept"}),
+        alphabet=tuple(alphabet),
+        start="start",
+        accepts=frozenset({"accept"}),
+        transitions=transitions,
+        name="left",
+    )
+    right = DeterministicFiniteAutomaton(
+        states=frozenset({"start", "accept"}),
+        alphabet=tuple(alphabet),
+        start="start",
+        accepts=frozenset({"accept"}),
+        transitions=transitions,
+        name="right",
+    )
+
+    compressed = left.intersection_witness(right, compress_alphabet=True)
+    uncompressed = left.intersection_witness(right, compress_alphabet=False)
+    eager = left.intersect(right)
+
+    assert compressed.witness is not None
+    assert len(compressed.witness.text) == 1
+    assert eager.accepts_text(compressed.witness.text) is True
+    assert compressed.explored_transitions < uncompressed.explored_transitions
+    assert compressed.representative_symbols < uncompressed.representative_symbols
+
+
+def test_dfa_minimization_preserves_language_and_removes_equivalent_sink_states() -> None:
+    dfa = DeterministicFiniteAutomaton(
+        states=frozenset({"start", "accept", "dead1", "dead2"}),
+        alphabet=("a", "b"),
+        start="start",
+        accepts=frozenset({"accept"}),
+        transitions={
+            ("start", "a"): "accept",
+            ("start", "b"): "dead1",
+            ("accept", "a"): "dead1",
+            ("accept", "b"): "dead2",
+            ("dead1", "a"): "dead1",
+            ("dead1", "b"): "dead2",
+            ("dead2", "a"): "dead1",
+            ("dead2", "b"): "dead2",
+        },
+        name="redundant",
+    )
+
+    minimized = dfa.minimize()
+
+    assert len(minimized.states) < len(dfa.states)
+    for text in ("", "a", "b", "aa", "ab", "ba"):
+        assert minimized.accepts_text(text) is dfa.accepts_text(text)
+
+
 def test_transducer_composition_reconstructs_render_then_tokenize_witness() -> None:
     render = FiniteStateTransducer.literal_mapping("U", "<user>", name="render-role")
     tokenize = FiniteStateTransducer.finite_relation((("<user>", "T"), ("<assistant>", "A")), name="tokenize-control")
@@ -137,6 +194,46 @@ def test_finite_contract_solver_reports_minimal_unsat_core() -> None:
 
     assert result.unsat is True
     assert result.unsat_core == ("must-be-user", "must-be-assistant")
+    assert result.checked_assignments == 2
+
+
+def test_finite_contract_solver_prunes_partial_assignments_by_constraint_slice() -> None:
+    problem = FiniteContractProblem(
+        variables=(
+            BoolDomain("gate"),
+            EnumDomain("payload", tuple(f"value-{index}" for index in range(100))),
+        ),
+        constraints=(
+            NamedConstraint("gate-must-be-true", Eq(Var("gate"), Value(True))),
+            NamedConstraint("gate-must-be-false", Eq(Var("gate"), Value(False))),
+        ),
+    )
+
+    result = problem.solve(prefer_z3=False)
+
+    assert result.unsat is True
+    assert result.checked_assignments == 0
+    assert result.unsat_core == ("gate-must-be-true", "gate-must-be-false")
+
+
+def test_finite_contract_solver_abstains_when_assignment_limit_is_reached() -> None:
+    problem = FiniteContractProblem(
+        variables=(
+            BoolDomain("left"),
+            BoolDomain("right"),
+        ),
+        constraints=(
+            NamedConstraint(
+                "both-true",
+                And(Eq(Var("left"), Value(True)), Eq(Var("right"), Value(True))),
+            ),
+        ),
+    )
+
+    result = problem.solve(prefer_z3=False, max_assignments=1)
+
+    assert result.status is SolverStatus.UNKNOWN
+    assert result.conclusion is SolverConclusion.ABSTENTION
     assert result.checked_assignments == 2
 
 
