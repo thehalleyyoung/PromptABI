@@ -141,7 +141,7 @@ proving or refuting prompt-budget survival, stop/control-token exclusion,
 role-region non-forgeability, tool-schema required-parameter satisfiability,
 tool/provider compatibility, and supervised target-role alignment with concrete
 models, explicit proof classifications, or minimized unsat cores,
-a CPU-only benchmark, documentation, and contribution guidance.
+a CPU-only benchmark suite, documentation, and contribution guidance.
 The CLI now also includes \texttt{promptabi explain}, which replays verification,
 deduplicates repeated logical diagnostics, selects one finding by fingerprint,
 rule, or index, and renders a tutorial explanation with source snippets, the
@@ -149,7 +149,7 @@ checked formal property, proof-mode descriptions, witness steps, likely
 production symptoms, and concrete fixes in text or JSON.
 The remaining checkers fit into that surface rather than requiring a rewrite. We
 describe the transducer-oriented formalism, the artifact model, the diagnostic
-contract, the first benchmark line, and the planned evaluation against real tokenizer, template,
+contract, the deployed benchmark lines, and the planned evaluation against real tokenizer, template,
 structured-output, provider, and budget failures. The diagnostic layer now records
 whether a finding is sound, complete, bounded, Z3-backed, heuristic, or an
 abstention, making each claim explicit about its proof obligations. The result is
@@ -271,7 +271,8 @@ expands a selected diagnostic with \texttt{promptabi explain} into a local
 debugging narrative that includes artifact snippets, the formal property, witness
 trace, likely production symptom, and fix suggestions while handling repeated
 logical findings deterministically,
-and runs a CPU-only smoke benchmark against an example bundle.
+and runs CPU-only performance benchmarks over tokenizer, template, grammar,
+stop, SMT, budget, corpus, and cache paths.
 
 The repository layout is designed to scale:
 
@@ -292,7 +293,7 @@ The repository layout is designed to scale:
 \hline
 \texttt{fixtures} & Curated seed corpus, real-world bug reductions, grammar differential cases, labeled structured-schema/tool-calling fixtures, and secret-free provider fixture packs with provenance metadata, expected behaviors, reproducibility notes, runnable configs, and deterministic hashes. \\
 \hline
-\texttt{benchmarks} & CPU-only benchmark entrypoints for repeatable performance baselines. \\
+\texttt{benchmarks} & CPU-only benchmark entrypoints for tokenizer analysis, symbolic template execution, grammar products, stop checks, SMT contracts, budget modeling, corpus verification, and cache reuse. \\
 \hline
 \texttt{docs} & MkDocs-ready documentation for architecture, concepts, and check families. \\
 \hline
@@ -1286,43 +1287,48 @@ fast, reproducible, and privacy-preserving.
 \clearpage
 \section{Benchmark Lines}
 
-The first benchmark lines are deliberately modest: repeatedly load the minimal
-configuration, validate its pinned artifacts, run the skeleton verifier, and
-exercise the formal core through automata witness extraction and finite-contract
-solver tests. Their value is not in absolute runtime; they prove that benchmarks
-and focused tests are CPU-only, deterministic, executable from the repository,
-and able to fail if verification unexpectedly emits an error.
-
-Future benchmark lines should measure:
+PromptABI now ships an executable CPU-only benchmark suite rather than a single
+smoke loop. The entrypoint \texttt{benchmarks/benchmark\_smoke.py} delegates to a
+package-level harness that returns stable JSON records with benchmark name,
+iteration count, runtime, throughput, and case-specific metrics. Every case runs
+against real PromptABI code and checked-in examples or fixtures; no network,
+model weights, or provider credentials are required.
 
 \begin{center}
 \begin{tabular}{|p{0.30\linewidth}|p{0.55\linewidth}|}
 \hline
 \textbf{Benchmark} & \textbf{Measurement} \\
 \hline
-Tokenizer abstraction & Encode/decode metadata extraction, special-token handling, and normalization cost. \\
+Tokenizer analysis & Byte-level encode/decode metadata extraction across JSON-like payloads, Unicode normalization, added tokens, special tokens, and exact round-trip counts. \\
 \hline
-Template execution & Supported Jinja fragment lexing, bounded symbolic path generation, Hugging Face whitespace handling, filter preservation, and abstention detection. \\
+Template symbolic execution & Ten seed-corpus Hugging Face \texttt{tokenizer\_config.json} templates parsed and boundedly symbolically executed with path and abstention counts. \\
 \hline
-Automata and transducers & Completion, union, intersection, difference, emptiness, transducer composition, projection, over-approximation, and shortest witness extraction. \\
+Grammar emptiness & A real structured-schema fixture compiled to the bounded JSON Schema DFA product and checked against the byte-level tokenizer with state, accept, and candidate counts. \\
 \hline
-Finite-contract solving & Z3 and exhaustive finite-domain solving over booleans, enums, integer ranges, bounded strings, length, membership, and containment constraints. \\
+Stop checks & Stop-tokenizer alignment plus bounded stop-overreachability over structural JSON, markdown, XML-like tool-call, and provider-envelope regions. \\
 \hline
-Stop analysis & Stop-policy parsing, tokenizer alignment, invalid token-ID detection, prefix/suffix collisions, special-token interactions, fixture-backed differential replay, and bounded overreachability across JSON, markdown, XML-like tool-call, provider-envelope, and supported schema/tool string regions. \\
+Z3 static contracts & Cross-artifact finite obligations over prompt budgets, stop/control-token exclusion, and related constraints solved through the existing SMT layer or finite fallback. \\
 \hline
-Budget verification & Segment accounting and truncation simulation for framework policies. \\
+Budget checks & Segment accounting, tokenizer-derived content counts, vLLM-style reservations, truncation simulation, required-token overflow, and finding counts. \\
 \hline
-Corpus verification & Cold and warm runs across pinned artifact bundles. \\
+Corpus verification & Six runnable example/fixture configs verified through the public session path with diagnostic and failing-config counts. \\
 \hline
-Corpus manifest & Deterministic validation and manifest generation across required template families, including hash stability and sentinel coverage. \\
+Cold/warm cache & Direct measurement of token-budget analysis before and after per-session cache reuse, including an explicit cache-reused metric. \\
 \hline
 \end{tabular}
 \end{center}
 
-Benchmarks should report runtime, memory where practical, abstention rate,
-diagnostic count, and witness size. The paper evaluation can then separate
-precision, recall, agreement, and performance rather than mixing them into a
-single anecdotal demo.
+The focused benchmark tests execute selected cases against repository fixtures,
+assert that the registry covers every deployed surface, validate the JSON schema
+of the benchmark output, reject unknown benchmark names, and run the CLI wrapper.
+A one-iteration full sweep currently reports, among other values, ten templates
+and 163 symbolic paths for the template case, 58 grammar states for the
+structured-schema grammar product, five stop-overreachability findings for the
+stop case, two SMT findings for the static-contract case, 32 diagnostics across
+six corpus configs, and a true cache-reuse observation for the warm path. These
+numbers are not final performance claims; they are reproducible benchlines that
+will make future optimization, regression detection, and paper artifact
+evaluation concrete.
 
 \clearpage
 \section{Documentation and Developer Experience}
@@ -1554,7 +1560,7 @@ Token-budget and RAG modeling & \texttt{promptabi verify --config examples/token
 \hline
 Tokenizer/config drift & Focused analyzer and CLI tests compare baseline/current tokenizer directories and flag special-token ID, added-token, normalizer, chat-template, BOS/EOS, and stop-policy deltas with revision witnesses. \\
 \hline
-Benchmark smoke & Repeated config load and verification completes on CPU with JSON output. \\
+Performance benchmarks & \texttt{benchmarks/benchmark\_smoke.py} emits JSON for tokenizer analysis, symbolic template execution, grammar emptiness, stop checks, SMT static contracts, budget checks, corpus-wide verification, and cold/warm cache behavior, with focused tests asserting real fixture-backed metrics and wrapper behavior. \\
 \hline
 Docs smoke & MkDocs-ready navigation and pages exist for the initial structure. \\
 \hline

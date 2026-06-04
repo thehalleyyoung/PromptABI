@@ -131,8 +131,9 @@ XML tool tags, markdown fences, and fine-tune headers. It also has a real tokeni
 `tokenizers`, `tiktoken`, and SentencePiece backends, differential harnesses
 checked against actual libraries, an embedding API for custom checks and typed
 results, a curated CPU-only seed corpus with a reproducible manifest pipeline,
-plus docs, examples, fixtures, benchmarks, and a contribution path for growing
-checks without changing the public surface.
+fixture-backed performance benchmarks across tokenizer/template/grammar/stop/SMT/budget/corpus/cache paths,
+plus docs, examples, and a contribution path for growing checks without changing
+the public surface.
 
 ## Why this is clearly distinct from TensorGuard
 
