@@ -13,6 +13,7 @@ from .compatibility_matrix import (
     render_compatibility_matrix_text,
 )
 from .diagnostics import Diagnostic
+from .bug_reports import BugReport, generate_bug_report, render_bug_report
 from .explain import DiagnosticExplanation, explain_diagnostic, render_explanation_json, render_explanation_text
 from .loaders import ArtifactLoader, LoadedArtifact
 from .first_party_plugins import create_first_party_plugin_registry
@@ -183,6 +184,33 @@ def render_explanation(
     if output_format == "json":
         return render_explanation_json(explanation)
     raise ValueError("output_format must be one of: text, json")
+
+
+def create_bug_report(
+    result: VerificationResult,
+    *,
+    config_path: str | Path | None = None,
+    fingerprint: str | None = None,
+    rule_id: str | None = None,
+    index: int | None = None,
+    expected_behavior: str | None = None,
+    actual_behavior: str | None = None,
+    command: str | None = None,
+    base_dir: str | Path | None = None,
+) -> BugReport:
+    """Create a sanitized upstream markdown issue report from a verification result."""
+
+    return generate_bug_report(
+        result,
+        config_path=config_path,
+        fingerprint=fingerprint,
+        rule_id=rule_id,
+        index=index,
+        expected_behavior=expected_behavior,
+        actual_behavior=actual_behavior,
+        command=command,
+        base_dir=base_dir,
+    )
 
 
 def minimize_failure_repro(

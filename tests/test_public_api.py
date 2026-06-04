@@ -14,9 +14,11 @@ from promptabi import (
     WitnessStep,
     WitnessTrace,
     collect_diagnostics,
+    create_bug_report,
     create_session,
     load_artifacts,
     render_result,
+    render_bug_report,
     run_verification,
 )
 
@@ -78,6 +80,22 @@ def test_embedding_api_supports_custom_checks() -> None:
     assert [diagnostic.rule_id for diagnostic in result.diagnostics] == ["embedded-schema-present"]
     assert result.diagnostics[0].artifact is not None
     assert result.diagnostics[0].artifact.name == "schema"
+
+
+def test_embedding_api_creates_upstream_bug_report() -> None:
+    result = run_verification("examples/minimal/promptabi.json")
+
+    report = create_bug_report(
+        result,
+        config_path="examples/minimal/promptabi.json",
+        rule_id="repository-skeleton",
+    )
+    rendered = render_bug_report(report)
+
+    assert report.diagnostic.rule_id == "repository-skeleton"
+    assert "## Reproduction" in rendered
+    assert "promptabi verify --config examples/minimal/promptabi.json" in rendered
+    assert "Privacy note" in rendered
 
 
 def test_collect_diagnostics_reports_unknown_embedded_check() -> None:

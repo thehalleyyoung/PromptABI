@@ -69,6 +69,11 @@ lists, and provider fixtures under a failure-preserving predicate into compact
 upstreamable repros, including a safe substring oracle for local triage and a
 diagnostic oracle that rewrites a candidate artifact and proves a selected
 PromptABI rule still fires,
+an upstream bug-report generator that turns a selected real diagnostic into a
+sanitized markdown issue containing artifact versions and hashes, reproduction
+commands, expected and actual behavior, redacted length-limited witness traces,
+minimized input summaries when supplied, and privacy guarantees suitable for
+filing with tokenizer, template, framework, or provider maintainers,
 a \texttt{promptabi init} workflow that writes verifiable starter contracts and
 local fixture stubs for OpenAI tools, Hugging Face local models, vLLM
 OpenAI-compatible servers, llama.cpp, LangChain RAG, LlamaIndex agents, and
@@ -173,6 +178,10 @@ deduplicates repeated logical diagnostics, selects one finding by fingerprint,
 rule, or index, and renders a tutorial explanation with source snippets, the
 checked formal property, proof-mode descriptions, witness steps, likely
 production symptoms, and concrete fixes in text or JSON.
+The adjacent \texttt{promptabi bug-report} command uses the same selector and
+verification path but emits an upstream-ready markdown issue rather than a local
+tutorial, so the strongest evaluation unit---a maintainer-actionable bug
+report---is generated from the exact diagnostic object exercised in CI.
 The remaining checkers fit into that surface rather than requiring a rewrite. We
 describe the transducer-oriented formalism, the artifact model, the diagnostic
 contract, the deployed benchmark lines, and the planned evaluation against real tokenizer, template,
@@ -963,6 +972,9 @@ if not result.ok:
 The public helpers \texttt{create\_session}, \texttt{load\_artifacts},
 \texttt{collect\_diagnostics}, \texttt{run\_verification}, and
 \texttt{render\_result} deliberately mirror the CLI rather than bypassing it.
+The same embedding surface now exposes \texttt{create\_bug\_report} and
+\texttt{render\_bug\_report}, allowing downstream CI systems to attach
+sanitized upstream issues or maintainer tickets without scraping text output.
 The point is not that the current checker is deep. The point is that all later
 checkers have an integration path. The built-in plugin pack, a pre-commit hook,
 a GitHub Action, a notebook visualization, and a provider-fixture replay harness
@@ -1514,6 +1526,13 @@ The strongest paper result would be upstreamable bugs: minimized reports that
 maintainers of templates, adapters, structured-output libraries, or framework
 integrations accept as real. That evidence is more compelling than a large
 synthetic benchmark alone.
+PromptABI now has the local machinery for that evidence: a selected diagnostic
+can be rendered as a markdown issue with the affected artifact table, pinned
+hashes or revisions, reproduction commands, expected and actual behavior,
+redacted witness steps, minimized repro metadata, fix suggestions, and an
+explicit no-network privacy note. The current tests generate such an issue from
+the real unsafe ChatML role-boundary fixture, so upstream reporting is an
+exercised workflow rather than a paper-only plan.
 
 \clearpage
 \section{Threat Model and Non-Goals}

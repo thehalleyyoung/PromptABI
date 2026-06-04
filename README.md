@@ -15,6 +15,8 @@ promptabi init --stack openai-tools --output-dir .promptabi-demo
 promptabi explain --config examples/role-boundary/unsafe.promptabi.json --index 1
 # shrink a failing artifact into an upstreamable repro:
 promptabi minimize repro.json --keep-substring "<|im_start|>" --format json
+# file a sanitized upstream issue from a real diagnostic:
+promptabi bug-report --config examples/role-boundary/unsafe.promptabi.json --index 1 > upstream-issue.md
 # or, inside a repo with promptabi.json:
 promptabi verify --artifact schema=schemas/answer.json --fail-on warning
 # gate upgrades:

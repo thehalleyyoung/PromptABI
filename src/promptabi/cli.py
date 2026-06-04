@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ._version import __version__
+from .bug_reports import BugReportError, generate_bug_report, render_bug_report
 from .config import ConfigError, discover_config, load_config
 from .compatibility_matrix import (
     build_compatibility_matrix,
@@ -147,6 +148,38 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("text", "json"),
         default="text",
         help="output format (default: text)",
+    )
+
+    bug_report = subparsers.add_parser(
+        "bug-report",
+        help="generate a sanitized upstream markdown issue from one diagnostic",
+    )
+    bug_report.add_argument(
+        "--config",
+        help="path to a PromptABI JSON config; defaults to discovering promptabi.json upward from cwd",
+    )
+    bug_report.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        metavar="NAME=PATH_OR_URI",
+        help="override or add an artifact location for this run; may be repeated",
+    )
+    bug_selector = bug_report.add_mutually_exclusive_group()
+    bug_selector.add_argument("--fingerprint", help="report the diagnostic with this stable fingerprint")
+    bug_selector.add_argument("--rule-id", help="report the only diagnostic with this rule id")
+    bug_selector.add_argument("--index", type=int, help="report the one-based diagnostic index after de-duplication")
+    bug_report.add_argument(
+        "--expected",
+        help="expected behavior to include in the issue (default: structural contract should be impossible)",
+    )
+    bug_report.add_argument(
+        "--actual",
+        help="actual behavior to include in the issue (default: PromptABI likely symptom)",
+    )
+    bug_report.add_argument(
+        "--output",
+        help="write markdown to this path instead of stdout",
     )
 
     diff = subparsers.add_parser("diff", help="compare two PromptABI configs for contract-breaking changes")
@@ -499,6 +532,35 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             output = render_explanation_text(explanation)
         print(output, end="")
+        return 0
+
+    if args.command == "bug-report":
+        try:
+            config_path = Path(args.config).resolve() if args.config else discover_config()
+            overrides = _parse_artifact_overrides(args.artifact, parser)
+            config = load_config(config_path).with_artifact_overrides(overrides, base_dir=Path.cwd())
+            result = VerificationSession(config).run()
+            report = generate_bug_report(
+                result,
+                config_path=config_path,
+                fingerprint=args.fingerprint,
+                rule_id=args.rule_id,
+                index=args.index,
+                expected_behavior=args.expected,
+                actual_behavior=args.actual,
+                base_dir=config_path.parent,
+            )
+            output = render_bug_report(report)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+            else:
+                print(output, end="")
+        except (ConfigError, BugReportError, ValueError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write bug report: {exc}", file=sys.stderr)
+            return 2
         return 0
 
     if args.command == "diff":

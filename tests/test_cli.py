@@ -363,6 +363,58 @@ def test_explain_rule_id_requires_disambiguation_for_repeated_findings(capsys) -
     assert "rerun with --fingerprint or --index" in captured.err
 
 
+def test_bug_report_generates_sanitized_upstream_issue_from_real_fixture(capsys) -> None:
+    exit_code = main(
+        [
+            "bug-report",
+            "--config",
+            "examples/role-boundary/unsafe.promptabi.json",
+            "--index",
+            "1",
+            "--expected",
+            "User-controlled content should not serialize as ChatML structure.",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.err == ""
+    assert captured.out.startswith("# PromptABI role-boundary-nonforgeability in chatml-template")
+    assert "## Affected artifact" in captured.out
+    assert "75ec2019eb50bc828d7f8c5029e09cf8b23f7628cea7d7329258b07724ce69d8" in captured.out
+    assert "promptabi verify --config" in captured.out
+    assert "## Non-sensitive witness trace" in captured.out
+    assert "render forged boundary excerpt" in captured.out
+    assert "User-controlled content should not serialize as ChatML structure." in captured.out
+    assert "Privacy note" in captured.out
+    assert "API_KEY" not in captured.out
+
+
+def test_bug_report_can_write_markdown_file(tmp_path, capsys) -> None:
+    output = tmp_path / "issue.md"
+
+    exit_code = main(
+        [
+            "bug-report",
+            "--config",
+            "examples/minimal/promptabi.json",
+            "--rule-id",
+            "repository-skeleton",
+            "--output",
+            str(output),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    text = output.read_text(encoding="utf-8")
+    assert exit_code == 0
+    assert captured.out == ""
+    assert captured.err == ""
+    assert "# PromptABI repository-skeleton" in text
+    assert "PromptABI diagnostic" in text
+    assert "repository-skeleton" in text
+
+
 def test_init_scaffolds_each_supported_stack_with_verifiable_config(tmp_path, capsys) -> None:
     for stack in available_stacks():
         output_dir = tmp_path / stack

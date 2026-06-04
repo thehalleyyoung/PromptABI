@@ -8,6 +8,7 @@ blocks that later checkers can reuse without changing the embedding API.
 
 from ._version import __version__
 from .api import (
+    create_bug_report,
     compatibility_matrix,
     collect_diagnostics,
     create_session,
@@ -15,11 +16,13 @@ from .api import (
     load_artifacts,
     minimize_failure_repro,
     render_compatibility_matrix,
+    render_bug_report,
     render_explanation,
     render_minimization,
     render_result,
     run_verification,
 )
+from .bug_reports import BugReport, BugReportError, generate_bug_report
 from .artifacts import (
     ArtifactBundle,
     ArtifactKind,
