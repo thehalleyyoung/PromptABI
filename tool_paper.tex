@@ -102,10 +102,10 @@ witnesses survive real tokenizer encode-normalize-decode assumptions, plus a
 bounded tokenizer x grammar ambiguity check that validates JSON lexical variants
 and detects tokenizer-path conflicts, decoded-text conflicts, whitespace and
 Unicode byte aliases, and added-token aliases, a secret-free provider fixture pack
-corpus that records request and response shapes, tool-call encodings, stop
-behavior, streaming deltas, error envelopes, and context/output limits for
-OpenAI, Anthropic, Gemini, Bedrock, vLLM OpenAI-compatible servers, and LiteLLM,
-with deterministic manifests and validation that rejects credential-like fields,
+corpus that records and replays request and response shapes, tool-call encodings,
+stop behavior, streaming deltas, error envelopes, context/output limits, and
+labeled edge cases for OpenAI, Anthropic, Gemini, Bedrock, vLLM OpenAI-compatible servers, and LiteLLM,
+with deterministic manifests, replay hashes, source-mapped diagnostics, and validation that rejects credential-like fields,
 a CPU-only benchmark, documentation, and contribution guidance.
 The remaining checkers fit into that surface rather than requiring a rewrite. We
 describe the transducer-oriented formalism, the artifact model, the diagnostic

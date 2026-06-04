@@ -19,4 +19,5 @@ The provider fixture pack corpus records secret-free request/response shapes,
 tool-call encodings, stop behavior, streaming deltas, error shapes, and edge-case
 limits for representative provider families. `promptabi corpus
 provider-fixture-manifest` validates the packs, rejects secret-like fields, and
-emits deterministic hashes for offline replay and migration checks.
+emits deterministic hashes; `fixtures/provider_fixture_packs/promptabi.json`
+replays the packs as an offline provider-contract oracle for CI checks.

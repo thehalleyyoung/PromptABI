@@ -1,0 +1,48 @@
+{
+  "name": "provider-fixture-replay-corpus",
+  "checks": ["provider-fixture-replay"],
+  "artifacts": {
+    "anthropic-messages": {
+      "kind": "provider-config",
+      "path": "anthropic-messages/pack.json",
+      "provider": "anthropic",
+      "api_family": "anthropic",
+      "version": "provider-fixtures-v1"
+    },
+    "bedrock-converse": {
+      "kind": "provider-config",
+      "path": "bedrock-converse/pack.json",
+      "provider": "bedrock",
+      "api_family": "bedrock",
+      "version": "provider-fixtures-v1"
+    },
+    "gemini-generate-content": {
+      "kind": "provider-config",
+      "path": "gemini-generate-content/pack.json",
+      "provider": "gemini",
+      "api_family": "gemini",
+      "version": "provider-fixtures-v1"
+    },
+    "litellm-router": {
+      "kind": "provider-config",
+      "path": "litellm-router/pack.json",
+      "provider": "litellm",
+      "api_family": "litellm",
+      "version": "provider-fixtures-v1"
+    },
+    "openai-chat-completions": {
+      "kind": "provider-config",
+      "path": "openai-chat-completions/pack.json",
+      "provider": "openai",
+      "api_family": "openai",
+      "version": "provider-fixtures-v1"
+    },
+    "vllm-openai-server": {
+      "kind": "provider-config",
+      "path": "vllm-openai-server/pack.json",
+      "provider": "vllm",
+      "api_family": "vllm-openai-server",
+      "version": "provider-fixtures-v1"
+    }
+  }
+}

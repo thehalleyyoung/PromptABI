@@ -154,6 +154,13 @@ from .provider_migration import (
     analyze_provider_migration,
     canonical_provider_family,
 )
+from .provider_fixture_replay import (
+    ProviderFixtureReplayCase,
+    ProviderFixtureReplayFinding,
+    ProviderFixtureReplayFindingKind,
+    ProviderFixtureReplayReport,
+    analyze_provider_fixture_replay,
+)
 from .provider_fixture_packs import (
     DEFAULT_PROVIDER_FIXTURE_PACK_ROOT,
     PROVIDER_FIXTURE_PACK_MANIFEST_VERSION,
@@ -378,6 +385,10 @@ __all__ = [
     "ProviderFixturePackCorpus",
     "ProviderFixturePackEntry",
     "ProviderFixturePackError",
+    "ProviderFixtureReplayCase",
+    "ProviderFixtureReplayFinding",
+    "ProviderFixtureReplayFindingKind",
+    "ProviderFixtureReplayReport",
     "ProviderMigrationFinding",
     "ProviderMigrationFindingKind",
     "ProviderMigrationReport",
@@ -472,6 +483,7 @@ __all__ = [
     "analyze_role_boundary_nonforgeability",
     "analyze_grammar_differential_corpus",
     "analyze_grammar_differential_mapping",
+    "analyze_provider_fixture_replay",
     "analyze_provider_migration",
     "analyze_parser_compatibility",
     "analyze_tokenizer_grammar_ambiguity",

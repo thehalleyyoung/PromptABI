@@ -85,9 +85,9 @@ OpenAI, Anthropic, LangChain, Pydantic, TypeScript-style, MCP, and provider
 tool-call envelopes into source-mapped typed schemas; tool-call serialization
 analysis now checks recorded provider/template/parser contracts for name,
 argument-encoding, escaping, ID, parallel-call, streaming-chunk, and stop-delimiter
-agreement; secret-free provider fixture packs now record request/response shapes,
-tool-call encodings, stop behavior, streaming deltas, errors, and limits for
-offline replay; provider migration analysis compares recorded OpenAI, Azure OpenAI,
+agreement; secret-free provider fixture packs now record and deterministically
+replay request/response shapes, tool-call encodings, stop behavior, streaming
+deltas, errors, limits, and edge cases without API calls; provider migration analysis compares recorded OpenAI, Azure OpenAI,
 Anthropic, Gemini, Bedrock, Together, Groq, Ollama, llama.cpp, vLLM OpenAI, and
 LiteLLM contracts for request/response/tool/stop/streaming/context compatibility;
 a labeled structured-schema corpus turns open-source-agent reductions,

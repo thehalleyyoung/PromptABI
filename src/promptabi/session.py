@@ -32,6 +32,7 @@ from .parser_compatibility import (
     ParserCompatibilityStatus,
     analyze_parser_compatibility,
 )
+from .provider_fixture_replay import ProviderFixtureReplayCase, ProviderFixtureReplayFinding, analyze_provider_fixture_replay
 from .provider_migration import ProviderMigrationFinding, analyze_provider_migration
 from .loaders import ArtifactLoadError, ArtifactLoadWarning, ArtifactLoader, LoadedArtifact
 from .role_boundaries import RoleBoundaryForgeryFinding, analyze_role_boundary_nonforgeability
@@ -91,6 +92,7 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "parser-compatibility-abstained": (CheckMode.ABSTAINING, CheckMode.HEURISTIC),
     "parser-compatibility-agreement": (CheckMode.HEURISTIC,),
     "parser-compatibility-mismatch": (CheckMode.HEURISTIC,),
+    "provider-fixture-replay": (CheckMode.BOUNDED, CheckMode.HEURISTIC),
     "provider-migration": (CheckMode.BOUNDED, CheckMode.HEURISTIC),
     "tool-schema-ingestion": (CheckMode.SOUND, CheckMode.COMPLETE),
     "tool-serialization": (CheckMode.BOUNDED, CheckMode.HEURISTIC),
@@ -157,6 +159,7 @@ class VerificationSession:
             "grammar-tokenizer-ambiguity": self._grammar_tokenizer_ambiguity_check,
             "grammar-tokenizer-emptiness": self._grammar_tokenizer_emptiness_check,
             "parser-compatibility": self._parser_compatibility_check,
+            "provider-fixture-replay": self._provider_fixture_replay_check,
             "provider-migration": self._provider_migration_check,
             "tool-schema-ingestion": self._tool_schema_ingestion_check,
             "tool-serialization": self._tool_serialization_check,
@@ -468,6 +471,13 @@ class VerificationSession:
     def _tool_serialization_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
         report = analyze_tool_call_serialization(context.loaded_artifacts)
         return tuple(_tool_serialization_diagnostic(finding) for finding in report.findings)
+
+    def _provider_fixture_replay_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        report = analyze_provider_fixture_replay(context.loaded_artifacts)
+        diagnostics = [_provider_fixture_replay_finding_diagnostic(finding) for finding in report.findings]
+        if report.cases:
+            diagnostics.extend(_provider_fixture_replay_case_diagnostic(case, report.replay_hash) for case in report.cases)
+        return tuple(diagnostics)
 
     def _provider_migration_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
         report = analyze_provider_migration(context.loaded_artifacts)
@@ -1096,6 +1106,59 @@ def _provider_migration_diagnostic(finding: ProviderMigrationFinding) -> Diagnos
         witness=WitnessTrace(
             summary="A bounded recorded provider migration contract disagreed across source and target fixtures.",
             steps=tuple(context_steps) + evidence_steps,
+        ),
+    )
+
+
+def _provider_fixture_replay_finding_diagnostic(finding: ProviderFixtureReplayFinding) -> Diagnostic:
+    severity = (
+        DiagnosticSeverity.ERROR
+        if finding.severity == "error"
+        else DiagnosticSeverity.WARNING
+        if finding.severity == "warning"
+        else DiagnosticSeverity.INFO
+    )
+    evidence_steps = tuple(
+        WitnessStep(action="replay provider fixture field", input=key, output=value)
+        for key, value in finding.evidence
+    )
+    return Diagnostic(
+        rule_id="provider-fixture-replay",
+        severity=severity,
+        message=f"{finding.kind.value}: {finding.message}",
+        span=finding.span,
+        check_modes=CHECK_MODE_CATALOG["provider-fixture-replay"],
+        suggestions=(finding.suggestion,),
+        witness=WitnessTrace(
+            summary="A recorded provider fixture pack failed deterministic offline replay.",
+            steps=(
+                WitnessStep(action="select provider fixture", input=finding.artifact_name, output=finding.provider),
+                *evidence_steps,
+            ),
+        ),
+    )
+
+
+def _provider_fixture_replay_case_diagnostic(case: ProviderFixtureReplayCase, corpus_hash: str) -> Diagnostic:
+    return Diagnostic(
+        rule_id="provider-fixture-replay",
+        severity=DiagnosticSeverity.INFO,
+        message=(
+            f"provider fixture '{case.artifact_name}' replayed {len(case.surfaces)} offline "
+            f"surface(s) for {case.provider_family}"
+        ),
+        check_modes=CHECK_MODE_CATALOG["provider-fixture-replay"],
+        witness=WitnessTrace(
+            summary="PromptABI replayed the recorded provider API contract without contacting a third-party API.",
+            steps=(
+                WitnessStep(action="select provider fixture", input=case.artifact_name, output=case.provider),
+                WitnessStep(action="replay provider fixture pack", input=", ".join(case.surfaces), output=case.replay_hash),
+                WitnessStep(action="replay request fields", output=", ".join(case.request_fields)),
+                WitnessStep(action="replay response fields", output=", ".join(case.response_fields)),
+                WitnessStep(action="replay stop behavior", output=", ".join(case.stop_sequences)),
+                WitnessStep(action="replay labeled edge cases", output=", ".join(case.edge_cases)),
+                WitnessStep(action="record corpus replay hash", output=corpus_hash),
+            ),
         ),
     )
 
