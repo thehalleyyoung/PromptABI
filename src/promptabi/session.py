@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
 from pathlib import Path
+from threading import RLock
 
 from .artifacts import ArtifactKind, TokenizerArtifact
 from .budgets import TokenBudgetFinding, TokenBudgetReport, analyze_token_budget
@@ -61,7 +63,7 @@ from .stop_overreachability import (
 )
 from .tool_serialization import ToolSerializationFinding, analyze_tool_call_serialization
 from .tokenizer_drift import TokenizerDriftAbstention, TokenizerDriftFinding, analyze_tokenizer_config_drift
-from .tokenizers import TokenizerError, load_tokenizer
+from .tokenizers import TokenizerAdapter, TokenizerError, load_tokenizer
 
 
 CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
@@ -141,12 +143,73 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
 }
 
 
+def _artifact_cache_key(loaded_artifacts: Sequence[LoadedArtifact]) -> tuple[tuple[str, str, str | None, str | None, str | None], ...]:
+    return tuple(
+        (
+            loaded.artifact.kind.value,
+            loaded.artifact.name,
+            loaded.artifact.location.ref_path,
+            loaded.actual_sha256 or loaded.manifest_sha256,
+            loaded.artifact.provenance.ref_version,
+        )
+        for loaded in loaded_artifacts
+    )
+
+
+class AnalysisCache:
+    """Thread-safe per-session cache for expensive reusable analysis products."""
+
+    def __init__(self) -> None:
+        self._lock = RLock()
+        self._values: dict[tuple[str, object], object] = {}
+
+    def memoize(self, namespace: str, key: object, factory: Callable[[], object]) -> object:
+        cache_key = (namespace, key)
+        with self._lock:
+            if cache_key in self._values:
+                return self._values[cache_key]
+            value = factory()
+            return self._values.setdefault(cache_key, value)
+
+    def tokenizer(self, artifact: TokenizerArtifact) -> TokenizerAdapter:
+        key = (
+            artifact.name,
+            artifact.location.ref_path,
+            artifact.provenance.ref_version,
+            artifact.backend,
+            artifact.vocabulary_size,
+            artifact.special_tokens,
+            artifact.added_tokens,
+            artifact.normalization,
+        )
+        return self.memoize("tokenizer-adapter", key, lambda: load_tokenizer(artifact))  # type: ignore[return-value]
+
+    def token_budget_report(
+        self,
+        config: VerificationConfig,
+        loaded_artifacts: tuple[LoadedArtifact, ...],
+        tokenizers: tuple[tuple[TokenizerArtifact, TokenizerAdapter], ...],
+    ) -> TokenBudgetReport:
+        key = (
+            config.name,
+            config.max_context_tokens,
+            _artifact_cache_key(loaded_artifacts),
+            tuple((artifact.name, tokenizer.backend.value) for artifact, tokenizer in tokenizers),
+        )
+        return self.memoize(
+            "token-budget-report",
+            key,
+            lambda: analyze_token_budget(config, loaded_artifacts, tokenizers=tokenizers),
+        )  # type: ignore[return-value]
+
+
 @dataclass(frozen=True, slots=True)
 class CheckContext:
     """Inputs available to public and built-in verification checks."""
 
     config: VerificationConfig
     loaded_artifacts: tuple[LoadedArtifact, ...]
+    cache: AnalysisCache = field(default_factory=AnalysisCache, compare=False)
 
     def artifact(self, name: str) -> LoadedArtifact:
         for loaded in self.loaded_artifacts:
@@ -156,6 +219,204 @@ class CheckContext:
 
 
 CheckCallable = Callable[[CheckContext], Iterable[Diagnostic]]
+
+
+@dataclass(frozen=True, slots=True)
+class ScheduledDiagnostic:
+    check_ordinal: int
+    emission_index: int
+    diagnostic: Diagnostic
+
+
+@dataclass(frozen=True, slots=True)
+class CheckDependency:
+    artifact_kinds: tuple[ArtifactKind, ...] = ()
+    after: tuple[str, ...] = ()
+    resources: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ScheduledCheck:
+    name: str
+    callable: CheckCallable
+    dependency: CheckDependency
+    ordinal: int
+
+
+CHECK_DEPENDENCIES: dict[str, CheckDependency] = {
+    "repository-skeleton": CheckDependency(artifact_kinds=tuple(ArtifactKind), resources=("repository-summary",)),
+    "role-boundary-nonforgeability": CheckDependency(artifact_kinds=(ArtifactKind.CHAT_TEMPLATE,)),
+    "stop-differential": CheckDependency(
+        artifact_kinds=(ArtifactKind.STOP_POLICY, ArtifactKind.PROVIDER_CONFIG),
+    ),
+    "stop-overreachability": CheckDependency(
+        artifact_kinds=(
+            ArtifactKind.STOP_POLICY,
+            ArtifactKind.SCHEMA,
+            ArtifactKind.TOOL_DEFINITION,
+            ArtifactKind.PROVIDER_CONFIG,
+            ArtifactKind.GRAMMAR,
+        ),
+    ),
+    "stop-tokenizer-analysis": CheckDependency(
+        artifact_kinds=(ArtifactKind.STOP_POLICY, ArtifactKind.TOKENIZER),
+        resources=("tokenizer-adapter",),
+    ),
+    "grammar-differential": CheckDependency(artifact_kinds=(ArtifactKind.GRAMMAR,)),
+    "grammar-tokenizer-ambiguity": CheckDependency(
+        artifact_kinds=(ArtifactKind.TOKENIZER, ArtifactKind.SCHEMA, ArtifactKind.GRAMMAR),
+        resources=("tokenizer-adapter", "automata-product"),
+    ),
+    "grammar-tokenizer-emptiness": CheckDependency(
+        artifact_kinds=(ArtifactKind.TOKENIZER, ArtifactKind.SCHEMA, ArtifactKind.GRAMMAR),
+        resources=("tokenizer-adapter", "automata-product"),
+    ),
+    "parser-compatibility": CheckDependency(artifact_kinds=(ArtifactKind.SCHEMA, ArtifactKind.GRAMMAR)),
+    "provider-fixture-replay": CheckDependency(artifact_kinds=(ArtifactKind.PROVIDER_CONFIG, ArtifactKind.TOOL_DEFINITION)),
+    "provider-migration": CheckDependency(artifact_kinds=(ArtifactKind.PROVIDER_CONFIG, ArtifactKind.TOOL_DEFINITION)),
+    "rag-chunking-compatibility": CheckDependency(
+        artifact_kinds=(
+            ArtifactKind.PROMPT_SEGMENT,
+            ArtifactKind.FRAMEWORK_TRUNCATION_CONFIG,
+            ArtifactKind.TOKENIZER,
+        ),
+        after=("token-budget-model",),
+        resources=("token-budget-report", "tokenizer-adapter"),
+    ),
+    "static-contracts": CheckDependency(artifact_kinds=tuple(ArtifactKind), resources=("z3-query",)),
+    "token-budget-model": CheckDependency(
+        artifact_kinds=(
+            ArtifactKind.PROMPT_SEGMENT,
+            ArtifactKind.FRAMEWORK_TRUNCATION_CONFIG,
+            ArtifactKind.TOKENIZER,
+        ),
+        resources=("token-budget-report", "tokenizer-adapter"),
+    ),
+    "tool-schema-ingestion": CheckDependency(artifact_kinds=(ArtifactKind.TOOL_DEFINITION,)),
+    "tool-serialization": CheckDependency(
+        artifact_kinds=(
+            ArtifactKind.TOOL_DEFINITION,
+            ArtifactKind.PROVIDER_CONFIG,
+            ArtifactKind.CHAT_TEMPLATE,
+            ArtifactKind.STOP_POLICY,
+        ),
+    ),
+    "tokenizer-config-drift": CheckDependency(artifact_kinds=(ArtifactKind.TOKENIZER,)),
+    "tokenizer-drift": CheckDependency(artifact_kinds=(ArtifactKind.TOKENIZER,)),
+}
+
+
+class CheckScheduler:
+    """Dependency-aware internal scheduler that keeps output deterministic."""
+
+    def __init__(self, checks: Mapping[str, CheckCallable]) -> None:
+        self._checks = checks
+
+    def run(
+        self,
+        context: CheckContext,
+        requested_checks: Sequence[str | CheckCallable],
+    ) -> tuple[ScheduledDiagnostic, ...]:
+        scheduled = self._resolve(requested_checks)
+        selected_names = {check.name for check in scheduled}
+        completed: set[str] = set()
+        pending = list(scheduled)
+        results: list[ScheduledDiagnostic] = []
+        while pending:
+            ready = [
+                check
+                for check in pending
+                if all(dependency in completed or dependency not in selected_names for dependency in check.dependency.after)
+            ]
+            if not ready:
+                ready = [min(pending, key=lambda check: check.ordinal)]
+            ready.sort(key=lambda check: check.ordinal)
+            batches = _resource_safe_batches(ready)
+            for batch in batches:
+                results.extend(_run_batch(context, batch))
+                completed.update(check.name for check in batch)
+                batch_ordinals = {check.ordinal for check in batch}
+                pending = [check for check in pending if check.ordinal not in batch_ordinals]
+        return tuple(results)
+
+    def _resolve(self, requested_checks: Sequence[str | CheckCallable]) -> tuple[ScheduledCheck, ...]:
+        scheduled: list[ScheduledCheck] = []
+        for ordinal, check in enumerate(requested_checks):
+            if isinstance(check, str):
+                check_name = check
+                check_callable = self._checks.get(check)
+                if check_callable is None:
+                    check_callable = _unknown_check_callable(check_name)
+            else:
+                check_name = getattr(check, "__name__", "embedded-check")
+                check_callable = check
+            scheduled.append(
+                ScheduledCheck(
+                    name=check_name,
+                    callable=check_callable,
+                    dependency=CHECK_DEPENDENCIES.get(check_name, CheckDependency()),
+                    ordinal=ordinal,
+                )
+            )
+        return tuple(scheduled)
+
+
+def _resource_safe_batches(checks: Sequence[ScheduledCheck]) -> tuple[tuple[ScheduledCheck, ...], ...]:
+    batches: list[list[ScheduledCheck]] = []
+    batch_resources: list[set[str]] = []
+    for check in checks:
+        resources = set(check.dependency.resources)
+        for index, used in enumerate(batch_resources):
+            if resources.isdisjoint(used):
+                batches[index].append(check)
+                used.update(resources)
+                break
+        else:
+            batches.append([check])
+            batch_resources.append(set(resources))
+    return tuple(tuple(batch) for batch in batches)
+
+
+def _run_batch(context: CheckContext, batch: Sequence[ScheduledCheck]) -> tuple[ScheduledDiagnostic, ...]:
+    if len(batch) == 1:
+        return _run_scheduled_check(context, batch[0])
+    max_workers = min(len(batch), 32)
+    by_ordinal: dict[int, tuple[ScheduledDiagnostic, ...]] = {}
+    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="promptabi-check") as executor:
+        futures = {
+            executor.submit(_run_scheduled_check, context, check): check.ordinal
+            for check in batch
+        }
+        for future, ordinal in futures.items():
+            by_ordinal[ordinal] = future.result()
+    return tuple(
+        diagnostic
+        for ordinal in sorted(by_ordinal)
+        for diagnostic in by_ordinal[ordinal]
+    )
+
+
+def _run_scheduled_check(context: CheckContext, check: ScheduledCheck) -> tuple[ScheduledDiagnostic, ...]:
+    try:
+        diagnostics = tuple(check.callable(context))
+    except Exception as exc:
+        diagnostics = (_failed_check_diagnostic(check.name, exc),)
+    return tuple(
+        ScheduledDiagnostic(
+            check_ordinal=check.ordinal,
+            emission_index=index,
+            diagnostic=diagnostic,
+        )
+        for index, diagnostic in enumerate(diagnostics)
+    )
+
+
+def _unknown_check_callable(check_name: str) -> CheckCallable:
+    def run_unknown_check(context: CheckContext) -> tuple[Diagnostic, ...]:
+        del context
+        return (_unknown_check_diagnostic(check_name),)
+
+    return run_unknown_check
 
 
 @dataclass(frozen=True, slots=True)
@@ -245,11 +506,14 @@ class VerificationSession:
         """Run preflight loading plus selected checks and return sorted diagnostics."""
 
         loaded_artifacts, diagnostics_tuple = self.load_artifacts_with_diagnostics()
-        diagnostics = list(diagnostics_tuple)
         context = CheckContext(config=self.config, loaded_artifacts=loaded_artifacts)
-        diagnostics.extend(self._check_diagnostics(context, checks or self.config.checks))
-        diagnostics.sort(key=diagnostic_sort_key)
-        return tuple(diagnostics)
+        scheduled_diagnostics = [
+            ScheduledDiagnostic(-1, index, diagnostic)
+            for index, diagnostic in enumerate(diagnostics_tuple)
+        ]
+        scheduled_diagnostics.extend(self._check_diagnostics(context, checks or self.config.checks))
+        scheduled_diagnostics.sort(key=_scheduled_diagnostic_sort_key)
+        return tuple(item.diagnostic for item in scheduled_diagnostics)
 
     def run(self, *, checks: Sequence[str | CheckCallable] | None = None) -> VerificationResult:
         diagnostics = self.collect_diagnostics(checks=checks)
@@ -348,7 +612,7 @@ class VerificationSession:
             for tokenizer_loaded in tokenizers:
                 tokenizer_artifact = tokenizer_loaded.artifact
                 try:
-                    tokenizer = load_tokenizer(tokenizer_artifact)
+                    tokenizer = context.cache.tokenizer(tokenizer_artifact)
                     report = analyze_stop_policy_tokenizer(stop_artifact, tokenizer)
                 except TokenizerError as exc:
                     diagnostics.append(_stop_tokenizer_abstained_diagnostic(stop_loaded, tokenizer_loaded, exc))
@@ -422,7 +686,7 @@ class VerificationSession:
         for tokenizer_loaded in tokenizers:
             tokenizer_artifact = tokenizer_loaded.artifact
             try:
-                tokenizer = load_tokenizer(tokenizer_artifact)
+                tokenizer = context.cache.tokenizer(tokenizer_artifact)
             except TokenizerError as exc:
                 diagnostics.extend(
                     _grammar_tokenizer_abstained_diagnostic(tokenizer_loaded, grammar_loaded, str(exc))
@@ -430,10 +694,14 @@ class VerificationSession:
                 )
                 continue
             for grammar_loaded in grammars:
-                report = analyze_tokenizer_grammar_emptiness(
-                    tokenizer_artifact,
-                    grammar_loaded.artifact,
-                    tokenizer,
+                report = context.cache.memoize(
+                    "grammar-tokenizer-emptiness",
+                    (tokenizer_loaded.artifact.name, grammar_loaded.artifact.name, _artifact_cache_key((tokenizer_loaded, grammar_loaded))),
+                    lambda tokenizer_artifact=tokenizer_artifact, grammar_loaded=grammar_loaded, tokenizer=tokenizer: analyze_tokenizer_grammar_emptiness(
+                        tokenizer_artifact,
+                        grammar_loaded.artifact,
+                        tokenizer,
+                    ),
                 )
                 diagnostics.append(_grammar_tokenizer_report_diagnostic(tokenizer_loaded, grammar_loaded, report))
         return tuple(diagnostics)
@@ -449,7 +717,7 @@ class VerificationSession:
         for tokenizer_loaded in tokenizers:
             tokenizer_artifact = tokenizer_loaded.artifact
             try:
-                tokenizer = load_tokenizer(tokenizer_artifact)
+                tokenizer = context.cache.tokenizer(tokenizer_artifact)
             except TokenizerError as exc:
                 diagnostics.extend(
                     _grammar_tokenizer_ambiguity_abstained_diagnostic(tokenizer_loaded, grammar_loaded, str(exc))
@@ -457,10 +725,14 @@ class VerificationSession:
                 )
                 continue
             for grammar_loaded in grammars:
-                report = analyze_tokenizer_grammar_ambiguity(
-                    tokenizer_artifact,
-                    grammar_loaded.artifact,
-                    tokenizer,
+                report = context.cache.memoize(
+                    "grammar-tokenizer-ambiguity",
+                    (tokenizer_loaded.artifact.name, grammar_loaded.artifact.name, _artifact_cache_key((tokenizer_loaded, grammar_loaded))),
+                    lambda tokenizer_artifact=tokenizer_artifact, grammar_loaded=grammar_loaded, tokenizer=tokenizer: analyze_tokenizer_grammar_ambiguity(
+                        tokenizer_artifact,
+                        grammar_loaded.artifact,
+                        tokenizer,
+                    ),
                 )
                 diagnostics.extend(
                     _grammar_tokenizer_ambiguity_report_diagnostics(tokenizer_loaded, grammar_loaded, report)
@@ -568,17 +840,17 @@ class VerificationSession:
             if loaded.artifact.kind is not ArtifactKind.TOKENIZER or not isinstance(loaded.artifact, TokenizerArtifact):
                 continue
             try:
-                tokenizers.append((loaded.artifact, load_tokenizer(loaded.artifact)))
+                tokenizers.append((loaded.artifact, context.cache.tokenizer(loaded.artifact)))
             except TokenizerError:
                 continue
-        return analyze_token_budget(
-            context.config,
-            context.loaded_artifacts,
-            tokenizers=tuple(tokenizers),
-        )
+        return context.cache.token_budget_report(context.config, context.loaded_artifacts, tuple(tokenizers))
 
     def _static_contracts_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
-        report = analyze_static_contracts(context.config, context.loaded_artifacts)
+        report = context.cache.memoize(
+            "static-contract-z3-queries",
+            (context.config.name, context.config.max_context_tokens, _artifact_cache_key(context.loaded_artifacts)),
+            lambda: analyze_static_contracts(context.config, context.loaded_artifacts),
+        )
         return tuple(_static_contract_finding_diagnostic(report, finding) for finding in report.findings)
 
     def _missing_local_paths(self) -> set[str]:
@@ -637,23 +909,8 @@ class VerificationSession:
         self,
         context: CheckContext,
         checks: Sequence[str | CheckCallable],
-    ) -> tuple[Diagnostic, ...]:
-        diagnostics: list[Diagnostic] = []
-        for check in checks:
-            if isinstance(check, str):
-                check_name = check
-                check_callable = self.checks.get(check)
-                if check_callable is None:
-                    diagnostics.append(_unknown_check_diagnostic(check_name))
-                    continue
-            else:
-                check_name = getattr(check, "__name__", "embedded-check")
-                check_callable = check
-            try:
-                diagnostics.extend(tuple(check_callable(context)))
-            except Exception as exc:
-                diagnostics.append(_failed_check_diagnostic(check_name, exc))
-        return tuple(diagnostics)
+    ) -> tuple[ScheduledDiagnostic, ...]:
+        return CheckScheduler(self.checks).run(context, checks)
 
     def _load_error_diagnostic(self, artifact_model, exc: ArtifactLoadError) -> Diagnostic:
         artifact = artifact_model.to_ref()
@@ -695,6 +952,15 @@ def _artifact_span(artifact_model) -> SourceSpan | None:
         return artifact_model.source_span
     path = artifact_model.location.path
     return SourceSpan(path=path) if path is not None else None
+
+
+def _scheduled_diagnostic_sort_key(item: ScheduledDiagnostic) -> tuple[object, ...]:
+    return (
+        diagnostic_sort_key(item.diagnostic),
+        item.check_ordinal,
+        item.emission_index,
+        item.diagnostic.fingerprint,
+    )
 
 
 def _witness_steps(raw_steps: tuple[tuple[str, str | None, str | None], ...]) -> tuple[WitnessStep, ...]:
