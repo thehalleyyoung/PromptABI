@@ -29,7 +29,7 @@ This paper presents the repository as it now stands and the research system it
 is designed to become. The implementation already contains a typed Python
 package, a deterministic command line workflow, a public embedding API, a
 typed artifact model, a stable diagnostic contract with text, JSON, and SARIF
-renderers, position-aware source spans for configs and JSON artifacts, offline
+renderers locked by structured snapshots, position-aware source spans for configs and JSON artifacts, offline
 version-pinned artifact loading, a tokenizer abstraction and differential harness
 validated against real Hugging Face \texttt{tokenizers},
 \texttt{tiktoken}, and SentencePiece libraries, deterministic finite automata,
@@ -95,7 +95,7 @@ bundles, records source spans for config declarations and parsed JSON artifact
 fields, materializes local and metadata-only remote artifacts, validates sha256
 pins, adapts real tokenizer backends into stable encode/decode metadata,
 extracts automata, transducer, and solver witnesses for finite formal contracts, prepares a cache directory for future expensive products, emits deterministic
-typed diagnostics in text, JSON, and SARIF, exposes an embedding API for custom
+typed diagnostics in text, JSON, and SARIF with structured snapshot coverage, exposes an embedding API for custom
 checks and typed results, returns stable policy-controlled process exit codes,
 and runs a CPU-only smoke benchmark against an example bundle.
 
@@ -643,7 +643,7 @@ Outlines, xgrammar, llguidance, lm-format-enforcer, Guidance, and Instructor.
 The testing strategy has three tiers:
 
 \begin{itemize}
-\item unit tests for public API and deterministic rendering;
+\item unit and structured snapshot tests for public API and deterministic text, JSON, and SARIF rendering;
 \item tokenizer abstraction tests against real Hugging Face \texttt{tokenizers}, \texttt{tiktoken}, SentencePiece, and byte-level adapters;
 \item loader tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, fixture archives, and source-mapped JSON fields;
 \item fixture tests for minimized artifact bundles with expected diagnostics;
@@ -820,10 +820,9 @@ whether their composed contract remains valid as artifacts evolve.
 The roadmap is best understood as a progression from stable surfaces to formal
 checks to ecosystem integration. The skeleton, core artifact model, loader layer,
 diagnostic contract, CLI, tokenizer abstraction, finite automata layer,
-finite-state transducer layer, finite-contract solver, and source-span tracking
-now provide stable surfaces. The next phase should implement deterministic
-diagnostic snapshots and the first role-boundary, stop-reachability,
-grammar-emptiness, and budget-survival checkers. Corpus growth, lockfiles, drift
+finite-state transducer layer, finite-contract solver, source-span tracking, and
+diagnostic snapshots now provide stable surfaces. The next phase should implement
+the first role-boundary, stop-reachability, grammar-emptiness, and budget-survival checkers. Corpus growth, lockfiles, drift
 detection, SARIF, GitHub Actions, pre-commit hooks, HTML reports, suppression
 policies, and plugin APIs turn the verifier from a library into an everyday CI
 tool.
@@ -847,7 +846,10 @@ round-trip metadata, Hugging Face ByteLevel BPE behavior, \texttt{tiktoken}
 config discovery from nested directories, artifact-location overrides,
 deterministic JSON output, SARIF output, missing-artifact failures, cache
 directory preparation, quiet/verbose text controls, and configurable exit-code
-thresholds. The public API and CLI tests also prove that check-mode metadata is
+thresholds. Structured snapshot tests now lock representative error, warning, and
+info diagnostics across text, JSON, and SARIF, including artifacts, spans,
+witnesses, suggestions, fingerprints, and check modes. The public API and CLI
+tests also prove that check-mode metadata is
 preserved across diagnostic objects, JSON, human text, and SARIF. New source-span
 tests prove that PromptABI config declarations, tokenizer \texttt{chat\_template}
 fields, JSON Schema fields, tool definition names, and malformed JSON parse
