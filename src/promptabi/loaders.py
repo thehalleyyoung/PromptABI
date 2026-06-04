@@ -847,6 +847,24 @@ def _prompt_segment_from_mapping(raw: object, *, fallback_name: str) -> PromptSe
         token_count=_nonnegative_optional(raw, "token_count", positive=False),
         content=content_value,
         overhead_tokens=_nonnegative_int(raw, "overhead_tokens", default=0),
+        chunk_id=_optional_segment_str(raw, "chunk_id"),
+        document_id=_optional_segment_str(raw, "document_id"),
+        chunk_tokenizer=_optional_segment_str(raw, "chunk_tokenizer") or _optional_segment_str(raw, "tokenizer"),
+        source_start=_nonnegative_optional(raw, "source_start", positive=False),
+        source_end=_nonnegative_optional(raw, "source_end", positive=False),
+        chunk_start=_nonnegative_optional(raw, "chunk_start", positive=False),
+        chunk_end=_nonnegative_optional(raw, "chunk_end", positive=False),
+        expected_overlap_tokens=_nonnegative_optional(raw, "expected_overlap_tokens", positive=False),
+        actual_overlap_tokens=(
+            _nonnegative_optional(raw, "actual_overlap_tokens", positive=False)
+            if "actual_overlap_tokens" in raw
+            else _nonnegative_optional(raw, "overlap_tokens", positive=False)
+        ),
+        citation=_optional_segment_str(raw, "citation"),
+        citation_required=_bool(raw, "citation_required", default=False),
+        metadata_tokens=_nonnegative_int(raw, "metadata_tokens", default=0),
+        template_overhead_tokens=_nonnegative_int(raw, "template_overhead_tokens", default=0),
+        retrieval_payload_limit_tokens=_nonnegative_optional(raw, "retrieval_payload_limit_tokens", positive=True),
     )
 
 
@@ -879,6 +897,32 @@ def _merge_prompt_segments(
                 token_count=segment.token_count if segment.token_count is not None else parsed_segment.token_count,
                 content=segment.content if segment.content is not None else parsed_segment.content,
                 overhead_tokens=segment.overhead_tokens or parsed_segment.overhead_tokens,
+                chunk_id=segment.chunk_id or parsed_segment.chunk_id,
+                document_id=segment.document_id or parsed_segment.document_id,
+                chunk_tokenizer=segment.chunk_tokenizer or parsed_segment.chunk_tokenizer,
+                source_start=segment.source_start if segment.source_start is not None else parsed_segment.source_start,
+                source_end=segment.source_end if segment.source_end is not None else parsed_segment.source_end,
+                chunk_start=segment.chunk_start if segment.chunk_start is not None else parsed_segment.chunk_start,
+                chunk_end=segment.chunk_end if segment.chunk_end is not None else parsed_segment.chunk_end,
+                expected_overlap_tokens=(
+                    segment.expected_overlap_tokens
+                    if segment.expected_overlap_tokens is not None
+                    else parsed_segment.expected_overlap_tokens
+                ),
+                actual_overlap_tokens=(
+                    segment.actual_overlap_tokens
+                    if segment.actual_overlap_tokens is not None
+                    else parsed_segment.actual_overlap_tokens
+                ),
+                citation=segment.citation or parsed_segment.citation,
+                citation_required=segment.citation_required or parsed_segment.citation_required,
+                metadata_tokens=segment.metadata_tokens or parsed_segment.metadata_tokens,
+                template_overhead_tokens=segment.template_overhead_tokens or parsed_segment.template_overhead_tokens,
+                retrieval_payload_limit_tokens=(
+                    segment.retrieval_payload_limit_tokens
+                    if segment.retrieval_payload_limit_tokens is not None
+                    else parsed_segment.retrieval_payload_limit_tokens
+                ),
             )
         )
     declared_names = {segment.name for segment in declared}
@@ -918,6 +962,22 @@ def _nonnegative_int(raw: dict[str, object], key: str, *, default: int) -> int:
     value = raw.get(key, default)
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         raise ValueError(f"segment {key} must be a non-negative integer")
+    return value
+
+
+def _optional_segment_str(raw: dict[str, object], key: str) -> str | None:
+    value = raw.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"segment {key} must be a non-empty string")
+    return value
+
+
+def _bool(raw: dict[str, object], key: str, *, default: bool) -> bool:
+    value = raw.get(key, default)
+    if not isinstance(value, bool):
+        raise ValueError(f"segment {key} must be a boolean")
     return value
 
 

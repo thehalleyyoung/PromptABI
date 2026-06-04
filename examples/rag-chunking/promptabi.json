@@ -1,0 +1,73 @@
+{
+  "name": "rag-chunking-demo",
+  "checks": ["rag-chunking-compatibility"],
+  "artifacts": {
+    "rag-segments": {
+      "kind": "prompt-segment",
+      "path": "segments.json",
+      "segments": [
+        {
+          "name": "system-policy",
+          "role": "system",
+          "required": true,
+          "token_count": 12
+        },
+        {
+          "name": "chunk-a",
+          "role": "retrieval",
+          "token_count": 30,
+          "max_tokens": 40,
+          "chunk_id": "a",
+          "document_id": "refund-policy",
+          "chunk_tokenizer": "embedder-v1",
+          "source_start": 0,
+          "source_end": 30,
+          "chunk_start": 1,
+          "chunk_end": 30,
+          "citation": "refund-policy#0",
+          "citation_required": true,
+          "metadata_tokens": 20,
+          "template_overhead_tokens": 8,
+          "retrieval_payload_limit_tokens": 45
+        },
+        {
+          "name": "chunk-b",
+          "role": "retrieval",
+          "token_count": 25,
+          "max_tokens": 35,
+          "chunk_id": "b",
+          "document_id": "refund-policy",
+          "chunk_tokenizer": "serving-byte-tokenizer",
+          "source_start": 25,
+          "source_end": 50,
+          "expected_overlap_tokens": 8,
+          "actual_overlap_tokens": 5,
+          "citation_required": true,
+          "metadata_tokens": 2,
+          "template_overhead_tokens": 4,
+          "retrieval_payload_limit_tokens": 80
+        },
+        {
+          "name": "user-question",
+          "role": "user",
+          "required": true,
+          "token_count": 10
+        }
+      ]
+    },
+    "rag-budget": {
+      "kind": "framework-truncation-config",
+      "path": "runtime-budget.json",
+      "framework": "custom-rag",
+      "strategy": "priority",
+      "drop_roles": ["retrieval"],
+      "preserve_system": true,
+      "max_context_tokens": 80
+    },
+    "serving-byte-tokenizer": {
+      "kind": "tokenizer",
+      "uri": "memory://serving-byte-tokenizer",
+      "family": "byte-level"
+    }
+  }
+}

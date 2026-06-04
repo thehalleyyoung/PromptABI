@@ -4,10 +4,12 @@ from pathlib import Path
 from promptabi import (
     ArtifactKind,
     ArtifactLocation,
+    ByteLevelTokenizer,
     FrameworkTruncationConfigArtifact,
     PromptSegment,
     PromptSegmentArtifact,
     TokenBudgetReservation,
+    TokenizerArtifact,
     VerificationConfig,
     analyze_token_budget,
 )
@@ -276,3 +278,106 @@ def test_must_survive_counterexample_is_minimized_for_real_truncation_policy() -
     evidence = dict(truncated.evidence)
     assert evidence["minimal_counterexample"] == "must-survive-system=30, latest-question=25"
     assert evidence["minimal_counterexample_tokens"] == "55"
+
+
+def test_rag_chunking_compatibility_reports_real_chunk_contract_failures() -> None:
+    segments = PromptSegmentArtifact(
+        kind=ArtifactKind.PROMPT_SEGMENT,
+        name="rag",
+        location=ArtifactLocation(uri="memory://rag"),
+        segments=(
+            PromptSegment(
+                "system",
+                role="system",
+                required=True,
+                token_count=10,
+            ),
+            PromptSegment(
+                "chunk-a",
+                role="retrieval",
+                token_count=30,
+                max_tokens=40,
+                chunk_id="a",
+                document_id="doc-1",
+                chunk_tokenizer="embedder-v1",
+                source_start=0,
+                source_end=30,
+                chunk_start=1,
+                chunk_end=30,
+                citation="doc-1#0",
+                citation_required=True,
+                metadata_tokens=20,
+                template_overhead_tokens=8,
+                retrieval_payload_limit_tokens=45,
+            ),
+            PromptSegment(
+                "chunk-b",
+                role="retrieval",
+                token_count=25,
+                max_tokens=35,
+                chunk_id="b",
+                document_id="doc-1",
+                chunk_tokenizer="serving-tokenizer",
+                source_start=25,
+                source_end=50,
+                expected_overlap_tokens=8,
+                actual_overlap_tokens=5,
+                citation_required=True,
+                metadata_tokens=2,
+                template_overhead_tokens=4,
+                retrieval_payload_limit_tokens=80,
+            ),
+            PromptSegment("question", role="user", required=True, token_count=10),
+        ),
+    )
+    budget = FrameworkTruncationConfigArtifact(
+        kind=ArtifactKind.FRAMEWORK_TRUNCATION_CONFIG,
+        name="rag-budget",
+        location=ArtifactLocation(uri="memory://rag-budget"),
+        framework="custom-rag",
+        strategy="priority",
+        drop_roles=("retrieval",),
+        max_context_tokens=80,
+        preserve_system=True,
+    )
+    tokenizer_artifact = TokenizerArtifact(
+        kind=ArtifactKind.TOKENIZER,
+        name="serving-tokenizer",
+        family="byte-level",
+        location=ArtifactLocation(uri="memory://tokenizer"),
+    )
+
+    report = analyze_token_budget(
+        VerificationConfig(name="rag", artifact_bundle=()),
+        (ArtifactLoader().load(segments), ArtifactLoader().load(budget)),
+        tokenizers=((tokenizer_artifact, ByteLevelTokenizer()),),
+    )
+
+    rag_rule_ids = [finding.rule_id for finding in report.findings if finding.rule_id.startswith("rag-")]
+    assert rag_rule_ids == [
+        "rag-tokenizer-mismatch",
+        "rag-chunk-boundary-drift",
+        "rag-citation-loss",
+        "rag-payload-truncation",
+        "rag-payload-truncation",
+        "rag-metadata-inflation",
+        "rag-template-overhead",
+        "rag-citation-loss",
+        "rag-overlap-accounting",
+    ]
+    assert report.truncation is not None
+    assert [segment.name for segment in report.truncation.dropped_segments] == ["chunk-a"]
+
+
+def test_verify_rag_chunking_example_uses_dedicated_check(capsys) -> None:
+    exit_code = main(["verify", "--config", "examples/rag-chunking/promptabi.json", "--format", "json"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    rule_ids = [diagnostic["rule_id"] for diagnostic in payload["diagnostics"]]
+
+    assert exit_code == 1
+    assert "rag-citation-loss" in rule_ids
+    assert "rag-overlap-accounting" in rule_ids
+    assert "rag-template-overhead" in rule_ids
+    assert "token-budget-model" not in rule_ids

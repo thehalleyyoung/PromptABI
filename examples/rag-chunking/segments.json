@@ -1,0 +1,24 @@
+{
+  "segments": [
+    {
+      "name": "system-policy",
+      "role": "system",
+      "content": "Always answer with citations from retrieved chunks."
+    },
+    {
+      "name": "chunk-a",
+      "role": "retrieval",
+      "content": "Refund requests must include the order id and a policy citation."
+    },
+    {
+      "name": "chunk-b",
+      "role": "retrieval",
+      "content": "The answer should cite the relevant refund policy chunk."
+    },
+    {
+      "name": "user-question",
+      "role": "user",
+      "content": "Can I refund my order?"
+    }
+  ]
+}

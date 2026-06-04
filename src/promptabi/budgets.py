@@ -61,13 +61,47 @@ class TokenBudgetSegment:
     required: bool
     token_count: int | None
     source: str
+    max_tokens: int | None = None
     overhead_tokens: int = 0
+    chunk_id: str | None = None
+    document_id: str | None = None
+    chunk_tokenizer: str | None = None
+    source_start: int | None = None
+    source_end: int | None = None
+    chunk_start: int | None = None
+    chunk_end: int | None = None
+    expected_overlap_tokens: int | None = None
+    actual_overlap_tokens: int | None = None
+    citation: str | None = None
+    citation_required: bool = False
+    metadata_tokens: int = 0
+    template_overhead_tokens: int = 0
+    retrieval_payload_limit_tokens: int | None = None
 
     @property
     def total_tokens(self) -> int | None:
         if self.token_count is None:
             return None
-        return self.token_count + self.overhead_tokens
+        return self.token_count + self.overhead_tokens + self.metadata_tokens + self.template_overhead_tokens
+
+    @property
+    def is_retrieval_chunk(self) -> bool:
+        return (
+            self.chunk_id is not None
+            or self.document_id is not None
+            or self.chunk_tokenizer is not None
+            or self.source_start is not None
+            or self.source_end is not None
+            or self.chunk_start is not None
+            or self.chunk_end is not None
+            or self.expected_overlap_tokens is not None
+            or self.actual_overlap_tokens is not None
+            or self.citation is not None
+            or self.citation_required
+            or self.metadata_tokens > 0
+            or self.template_overhead_tokens > 0
+            or self.retrieval_payload_limit_tokens is not None
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -436,6 +470,8 @@ def analyze_token_budget(
                 )
             )
 
+    findings.extend(_rag_chunking_findings(segments, truncation, tokenizers))
+
     return TokenBudgetReport(
         budget_source=budget_source,
         framework=budget_artifact.framework if budget_artifact is not None else "config",
@@ -515,8 +551,10 @@ def _segment_with_count(
             role=segment.role,
             required=segment.required,
             token_count=segment.token_count,
+            max_tokens=segment.max_tokens,
             overhead_tokens=segment.overhead_tokens,
             source="declared token_count",
+            **_segment_chunk_fields(segment),
         )
     if segment.max_tokens is not None:
         return TokenBudgetSegment(
@@ -525,8 +563,10 @@ def _segment_with_count(
             role=segment.role,
             required=segment.required,
             token_count=segment.max_tokens,
+            max_tokens=segment.max_tokens,
             overhead_tokens=segment.overhead_tokens,
             source="declared max_tokens",
+            **_segment_chunk_fields(segment),
         )
     if segment.content is not None and tokenizers:
         tokenizer_artifact, tokenizer = tokenizers[0]
@@ -541,8 +581,10 @@ def _segment_with_count(
                 role=segment.role,
                 required=segment.required,
                 token_count=count,
+                max_tokens=segment.max_tokens,
                 overhead_tokens=segment.overhead_tokens,
                 source=f"tokenizer:{tokenizer_artifact.name}",
+                **_segment_chunk_fields(segment),
             )
     return TokenBudgetSegment(
         index=index,
@@ -550,9 +592,247 @@ def _segment_with_count(
         role=segment.role,
         required=segment.required,
         token_count=None,
+        max_tokens=segment.max_tokens,
         overhead_tokens=segment.overhead_tokens,
         source="missing token count",
+        **_segment_chunk_fields(segment),
     )
+
+
+def _segment_chunk_fields(segment: PromptSegment) -> dict[str, object]:
+    return {
+        "chunk_id": segment.chunk_id,
+        "document_id": segment.document_id,
+        "chunk_tokenizer": segment.chunk_tokenizer,
+        "source_start": segment.source_start,
+        "source_end": segment.source_end,
+        "chunk_start": segment.chunk_start,
+        "chunk_end": segment.chunk_end,
+        "expected_overlap_tokens": segment.expected_overlap_tokens,
+        "actual_overlap_tokens": segment.actual_overlap_tokens,
+        "citation": segment.citation,
+        "citation_required": segment.citation_required,
+        "metadata_tokens": segment.metadata_tokens,
+        "template_overhead_tokens": segment.template_overhead_tokens,
+        "retrieval_payload_limit_tokens": segment.retrieval_payload_limit_tokens,
+    }
+
+
+def _rag_chunking_findings(
+    segments: tuple[TokenBudgetSegment, ...],
+    truncation: TruncationDecision,
+    tokenizers: tuple[tuple[TokenizerArtifact, TokenizerAdapter], ...],
+) -> tuple[TokenBudgetFinding, ...]:
+    chunks = tuple(segment for segment in segments if segment.is_retrieval_chunk)
+    if not chunks:
+        return ()
+    findings: list[TokenBudgetFinding] = []
+    tokenizer_names = {
+        value
+        for artifact, _tokenizer in tokenizers
+        for value in (artifact.name, artifact.family)
+        if value is not None
+    }
+    dropped_names = {segment.name for segment in truncation.dropped_segments}
+    for chunk in chunks:
+        if chunk.chunk_tokenizer is not None and tokenizer_names and chunk.chunk_tokenizer not in tokenizer_names:
+            selected = ", ".join(sorted(tokenizer_names))
+            findings.append(
+                TokenBudgetFinding(
+                    rule_id="rag-tokenizer-mismatch",
+                    severity="warning",
+                    message=(
+                        f"retrieval chunk '{chunk.name}' was budgeted with tokenizer "
+                        f"'{chunk.chunk_tokenizer}', but verification loaded {selected}"
+                    ),
+                    suggestion="Recompute retrieval chunk token counts with the serving tokenizer revision.",
+                    evidence=(
+                        ("chunk", chunk.name),
+                        ("chunk_tokenizer", chunk.chunk_tokenizer),
+                        ("selected_tokenizers", selected),
+                    ),
+                )
+            )
+        if _has_boundary_drift(chunk):
+            assert chunk.source_start is not None and chunk.source_end is not None
+            assert chunk.chunk_start is not None and chunk.chunk_end is not None
+            findings.append(
+                TokenBudgetFinding(
+                    rule_id="rag-chunk-boundary-drift",
+                    severity="warning",
+                    message=(
+                        f"retrieval chunk '{chunk.name}' declares source boundary "
+                        f"{chunk.source_start}:{chunk.source_end} but packed boundary "
+                        f"{chunk.chunk_start}:{chunk.chunk_end}"
+                    ),
+                    suggestion="Regenerate chunks after tokenizer, splitter, or document-normalization changes.",
+                    evidence=(
+                        ("chunk", chunk.name),
+                        ("source_boundary", f"{chunk.source_start}:{chunk.source_end}"),
+                        ("packed_boundary", f"{chunk.chunk_start}:{chunk.chunk_end}"),
+                    ),
+                )
+            )
+        if chunk.citation_required and not chunk.citation:
+            findings.append(
+                TokenBudgetFinding(
+                    rule_id="rag-citation-loss",
+                    severity="error",
+                    message=f"retrieval chunk '{chunk.name}' is citation-required but has no citation label",
+                    suggestion="Attach stable citation metadata before rendering retrieved context.",
+                    evidence=(("chunk", chunk.name), ("citation", "<missing>")),
+                )
+            )
+        if chunk.citation_required and chunk.name in dropped_names:
+            findings.append(
+                TokenBudgetFinding(
+                    rule_id="rag-citation-loss",
+                    severity="error",
+                    message=f"framework truncation can drop citation-required retrieval chunk '{chunk.name}'",
+                    suggestion="Reserve retrieval payload budget or make citation-bearing chunks must-survive.",
+                    evidence=(
+                        ("chunk", chunk.name),
+                        ("citation", chunk.citation or "<missing>"),
+                        ("dropped_segments", ", ".join(segment.name for segment in truncation.dropped_segments)),
+                    ),
+                )
+            )
+        if chunk.retrieval_payload_limit_tokens is not None and chunk.total_tokens is not None:
+            if chunk.total_tokens > chunk.retrieval_payload_limit_tokens:
+                findings.append(
+                    TokenBudgetFinding(
+                        rule_id="rag-payload-truncation",
+                        severity="error" if chunk.citation_required else "warning",
+                        message=(
+                            f"retrieval chunk '{chunk.name}' needs {chunk.total_tokens} token(s), "
+                            f"exceeding its payload limit of {chunk.retrieval_payload_limit_tokens}"
+                        ),
+                        suggestion="Lower chunk size, metadata, or template overhead, or raise the retrieval payload limit.",
+                        evidence=(
+                            ("chunk", chunk.name),
+                            ("total_tokens", str(chunk.total_tokens)),
+                            ("retrieval_payload_limit_tokens", str(chunk.retrieval_payload_limit_tokens)),
+                        ),
+                    )
+                )
+        if chunk.name in dropped_names:
+            findings.append(
+                TokenBudgetFinding(
+                    rule_id="rag-payload-truncation",
+                    severity="warning",
+                    message=f"framework truncation can remove retrieval chunk '{chunk.name}' from the prompt payload",
+                    suggestion="Reduce retrieval tokens or configure the framework to preserve required retrieval payloads.",
+                    evidence=(
+                        ("chunk", chunk.name),
+                        ("policy", f"{truncation.policy.framework}:{truncation.policy.strategy}"),
+                    ),
+                )
+            )
+        if chunk.metadata_tokens and chunk.token_count is not None and chunk.metadata_tokens > max(8, chunk.token_count // 2):
+            findings.append(
+                TokenBudgetFinding(
+                    rule_id="rag-metadata-inflation",
+                    severity="warning",
+                    message=(
+                        f"retrieval chunk '{chunk.name}' spends {chunk.metadata_tokens} metadata token(s) "
+                        f"for {chunk.token_count} content token(s)"
+                    ),
+                    suggestion="Compress metadata keys, omit unused fields, or account for metadata outside retrieved content.",
+                    evidence=(
+                        ("chunk", chunk.name),
+                        ("content_tokens", str(chunk.token_count)),
+                        ("metadata_tokens", str(chunk.metadata_tokens)),
+                    ),
+                )
+            )
+        if _template_overhead_exceeds_chunk_budget(chunk):
+            assert chunk.max_tokens is not None
+            findings.append(
+                TokenBudgetFinding(
+                    rule_id="rag-template-overhead",
+                    severity="warning",
+                    message=(
+                        f"retrieval chunk '{chunk.name}' exceeds max_tokens={chunk.max_tokens} after "
+                        f"metadata and prompt-template overhead are included"
+                    ),
+                    suggestion="Include retrieval wrapper text in chunk sizing or reduce per-chunk template overhead.",
+                    evidence=(
+                        ("chunk", chunk.name),
+                        ("max_tokens", str(chunk.max_tokens)),
+                        ("content_tokens", str(chunk.token_count) if chunk.token_count is not None else "unknown"),
+                        ("metadata_tokens", str(chunk.metadata_tokens)),
+                        ("template_overhead_tokens", str(chunk.template_overhead_tokens)),
+                    ),
+                )
+            )
+    findings.extend(_rag_overlap_findings(chunks))
+    return tuple(findings)
+
+
+def _has_boundary_drift(chunk: TokenBudgetSegment) -> bool:
+    return (
+        chunk.source_start is not None
+        and chunk.source_end is not None
+        and chunk.chunk_start is not None
+        and chunk.chunk_end is not None
+        and (chunk.source_start != chunk.chunk_start or chunk.source_end != chunk.chunk_end)
+    )
+
+
+def _template_overhead_exceeds_chunk_budget(chunk: TokenBudgetSegment) -> bool:
+    if chunk.max_tokens is None or chunk.token_count is None:
+        return False
+    return chunk.token_count + chunk.metadata_tokens + chunk.template_overhead_tokens > chunk.max_tokens
+
+
+def _rag_overlap_findings(chunks: tuple[TokenBudgetSegment, ...]) -> tuple[TokenBudgetFinding, ...]:
+    findings: list[TokenBudgetFinding] = []
+    by_document: dict[str, list[TokenBudgetSegment]] = {}
+    for chunk in chunks:
+        if chunk.document_id is not None:
+            by_document.setdefault(chunk.document_id, []).append(chunk)
+    for document_id, document_chunks in sorted(by_document.items()):
+        ordered = sorted(
+            document_chunks,
+            key=lambda chunk: (
+                chunk.source_start if chunk.source_start is not None else chunk.index,
+                chunk.index,
+            ),
+        )
+        for previous, current in zip(ordered, ordered[1:]):
+            expected = current.expected_overlap_tokens
+            if expected is None:
+                continue
+            actual = _actual_overlap(previous, current)
+            if actual is None or actual == expected:
+                continue
+            findings.append(
+                TokenBudgetFinding(
+                    rule_id="rag-overlap-accounting",
+                    severity="warning",
+                    message=(
+                        f"retrieval chunks '{previous.name}' and '{current.name}' for document "
+                        f"'{document_id}' have overlap {actual}, expected {expected}"
+                    ),
+                    suggestion="Recompute chunk overlaps with the same splitter and tokenizer used at serving time.",
+                    evidence=(
+                        ("document_id", document_id),
+                        ("previous_chunk", previous.name),
+                        ("current_chunk", current.name),
+                        ("expected_overlap_tokens", str(expected)),
+                        ("actual_overlap_tokens", str(actual)),
+                    ),
+                )
+            )
+    return tuple(findings)
+
+
+def _actual_overlap(previous: TokenBudgetSegment, current: TokenBudgetSegment) -> int | None:
+    if current.actual_overlap_tokens is not None:
+        return current.actual_overlap_tokens
+    if previous.source_end is None or current.source_start is None:
+        return None
+    return max(0, previous.source_end - current.source_start)
 
 
 def _reservation_evidence(reservation: TokenBudgetReservation) -> tuple[tuple[str, str], ...]:

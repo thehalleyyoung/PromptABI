@@ -111,6 +111,13 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "token-budget-segment-overflow": (CheckMode.SOUND, CheckMode.BOUNDED),
     "token-budget-total-overflow": (CheckMode.SOUND, CheckMode.BOUNDED),
     "token-budget-truncation-abstained": (CheckMode.ABSTAINING, CheckMode.BOUNDED),
+    "rag-chunk-boundary-drift": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "rag-citation-loss": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "rag-metadata-inflation": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "rag-overlap-accounting": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "rag-payload-truncation": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "rag-template-overhead": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "rag-tokenizer-mismatch": (CheckMode.BOUNDED, CheckMode.HEURISTIC),
     "static-contract-abstained": (CheckMode.ABSTAINING, CheckMode.BOUNDED, CheckMode.Z3_BACKED_SMT),
     "static-contract-proved": (CheckMode.SOUND, CheckMode.BOUNDED, CheckMode.Z3_BACKED_SMT),
     "static-contract-unknown": (CheckMode.ABSTAINING, CheckMode.BOUNDED, CheckMode.Z3_BACKED_SMT),
@@ -180,6 +187,7 @@ class VerificationSession:
             "parser-compatibility": self._parser_compatibility_check,
             "provider-fixture-replay": self._provider_fixture_replay_check,
             "provider-migration": self._provider_migration_check,
+            "rag-chunking-compatibility": self._rag_chunking_compatibility_check,
             "static-contracts": self._static_contracts_check,
             "token-budget-model": self._token_budget_model_check,
             "tool-schema-ingestion": self._tool_schema_ingestion_check,
@@ -505,6 +513,25 @@ class VerificationSession:
         return tuple(_provider_migration_diagnostic(finding) for finding in report.findings)
 
     def _token_budget_model_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        report = self._analyze_token_budget_context(context)
+        diagnostics = [
+            _token_budget_finding_diagnostic(report, finding)
+            for finding in report.findings
+            if not finding.rule_id.startswith("rag-")
+        ]
+        if report.reservation is not None:
+            diagnostics.append(_token_budget_summary_diagnostic(report))
+        return tuple(diagnostics)
+
+    def _rag_chunking_compatibility_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        report = self._analyze_token_budget_context(context)
+        return tuple(
+            _token_budget_finding_diagnostic(report, finding)
+            for finding in report.findings
+            if finding.rule_id.startswith("rag-")
+        )
+
+    def _analyze_token_budget_context(self, context: CheckContext) -> TokenBudgetReport:
         tokenizers = []
         for loaded in context.loaded_artifacts:
             if loaded.artifact.kind is not ArtifactKind.TOKENIZER or not isinstance(loaded.artifact, TokenizerArtifact):
@@ -513,15 +540,11 @@ class VerificationSession:
                 tokenizers.append((loaded.artifact, load_tokenizer(loaded.artifact)))
             except TokenizerError:
                 continue
-        report = analyze_token_budget(
+        return analyze_token_budget(
             context.config,
             context.loaded_artifacts,
             tokenizers=tuple(tokenizers),
         )
-        diagnostics = [_token_budget_finding_diagnostic(report, finding) for finding in report.findings]
-        if report.reservation is not None:
-            diagnostics.append(_token_budget_summary_diagnostic(report))
-        return tuple(diagnostics)
 
     def _static_contracts_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
         report = analyze_static_contracts(context.config, context.loaded_artifacts)

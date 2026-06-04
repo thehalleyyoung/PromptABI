@@ -110,7 +110,11 @@ a context-window budget model that combines named prompt segments, must-survive
 flags, declared or tokenizer-derived token counts, output reserves, tool-token
 reserves, generation-prompt tokens, and model-specific special-token overhead into
 bounded survival proofs against real framework truncation policies, including
-minimized counterexamples when required regions can be dropped, and a
+minimized counterexamples when required regions can be dropped, a dedicated RAG
+chunking compatibility check that verifies tokenizer identity, chunk-boundary
+stability, citation survival, overlap accounting, metadata inflation,
+prompt-template overhead, and retrieval payload limits against the same packed
+prompt model, and a
 Z3-backed static-contract layer that derives finite SMT obligations from real
 templates, tokenizers, special-token maps, stop policies, tools, provider
 configs, truncation configs, prompt segments, and training/fine-tuning manifests,
@@ -462,7 +466,7 @@ Tool definitions & Source-mapped ingestion for OpenAI function tools, Anthropic 
 \hline
 Stop-policy configs & Deterministic extraction of stop strings, stop token IDs, EOS behavior, source family, ignored empty stops, and source paths from OpenAI-compatible, Hugging Face, llama.cpp/Ollama, vLLM, LiteLLM, and wrapper shapes. \\
 \hline
-Prompt segments and budgets & Source-mapped prompt segment files from explicit \texttt{segments} objects or OpenAI-style message arrays, merge behavior for config-declared must-survive regions, plus framework context-window artifacts with output, tool, generation-prompt, and special-token reservations. \\
+Prompt segments, RAG chunks, and budgets & Source-mapped prompt segment files from explicit \texttt{segments} objects or OpenAI-style message arrays, merge behavior for config-declared must-survive regions, retrieval chunk metadata for document IDs, tokenizer names, source and packed boundaries, citations, overlaps, metadata costs, template wrapper overhead, payload limits, plus framework context-window artifacts with output, tool, generation-prompt, and special-token reservations. \\
 \hline
 Schema and grammar files & JSON Schema normalization and bounded compilation for objects, arrays, required fields, enums, consts, constraints, unions, bounded local references, recursion-limit abstentions, and additional properties; compiled metadata records grammar rules, parser states, DFA witness size, source spans, and real \texttt{jsonschema} round-trip acceptance, while tokenizer x grammar emptiness diagnostics prove whether bounded witnesses survive tokenizer encode/decode assumptions and tokenizer x grammar ambiguity diagnostics expose JSON lexical variants, Unicode escapes, whitespace, tokenizer normalization, and added-token paths that collapse or alias structured outputs. Ingestion for regex, EBNF, Outlines, xgrammar, llguidance, and PromptABI grammars records rules, terminals, references, source spans, and unsupported-fragment abstentions. \\
 \hline
@@ -1076,6 +1080,22 @@ generation-prompt, and special-token overhead, then fails because required syste
 and user segments exceed the modeled input budget and the selected truncation
 policy can remove required content.
 
+The same prompt-segment path now carries RAG-specific chunk contracts rather than
+treating retrieved context as anonymous optional text. A retrieval chunk can
+declare its embedding or splitter tokenizer, document and chunk IDs, source
+character boundaries, packed prompt boundaries, expected and observed overlap,
+citation labels, citation-required flags, metadata token cost, prompt-template
+wrapper overhead, and a per-chunk retrieval payload limit. The
+\texttt{rag-chunking-compatibility} check reuses the budget simulator and emits
+bounded diagnostics when serving tokenizers disagree with chunking tokenizers,
+normalization or splitter drift changes chunk boundaries, citation-required
+chunks lose labels or are dropped by truncation, overlaps differ from the splitter
+contract, metadata dominates useful content, wrapper text pushes chunks beyond
+their configured size, or the retrieved payload cannot fit its declared limit.
+The \texttt{examples/rag-chunking} workflow drives those cases through the real
+CLI and records deterministic JSON witnesses, making RAG failures concrete rather
+than a vague "context quality" concern.
+
 \clearpage
 \section{Differential Validation}
 
@@ -1095,7 +1115,7 @@ The testing strategy has three tiers:
 \item chat-template parser, symbolic-executor, concrete-renderer, role-region, and role-boundary non-forgeability tests across real \texttt{tokenizer\_config.json} fixtures and known delimiter-collision regressions, including ChatML, Llama header tokens, Mistral instruction tags, XML-ish tool tags, markdown fences, fine-tune hash headers, generation-prompt extraction, dynamic role headers, content-control delimiter collisions, role assumptions, field references, special tokens, bounded message/tool loops, filters, whitespace controls, path budgets, empty tool lists, tool-role messages, and unsupported constructs, with concrete outputs differentially checked against Hugging Face's renderer;
 \item loader and parser tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, tool-definition schemas spanning OpenAI, Anthropic, LangChain, Pydantic, TypeScript-style, MCP, and provider tool-call envelopes, tool-serialization contracts over names, arguments, escaping, IDs, parallel calls, streaming chunks, template tool rendering, and stop delimiters, stop-policy configs spanning OpenAI-compatible, Hugging Face, llama.cpp/Ollama, vLLM, LiteLLM, wrapper kwargs, fixture archives, and source-mapped JSON fields;
 \item stop-tokenizer, stop-differential, and stop-overreachability tests that exercise byte/string/token alignments, multi-token stops, invalid stop-token IDs, normalization collisions, prefix/suffix collisions, added/special-token interactions, OpenAI-compatible and Hugging Face delimiter-retention semantics, provider fixture replay, CLI mismatch diagnostics, serialized stop offsets, parser-state truncation witnesses, supported schema/tool string witnesses, structural delimiter collisions, real-world Qwen/Gemma/llama.cpp stop bug reductions, and a real Hugging Face \texttt{tokenizers} BPE fixture;
-\item token-budget tests that exercise context-window reservation arithmetic, required-segment overflow over declared counts, prompt-segment file/message merging, config-versus-framework budget precedence, LangChain/vLLM/custom-RAG truncation simulation, optional retrieval dropping, required segment truncation, order preservation, proven must-survive cases, minimized counterexample extraction, and real CLI diagnostics for output, tool, generation-prompt, and special-token overhead;
+\item token-budget and RAG chunking tests that exercise context-window reservation arithmetic, required-segment overflow over declared counts, prompt-segment file/message merging, config-versus-framework budget precedence, LangChain/vLLM/custom-RAG truncation simulation, optional retrieval dropping, required segment truncation, order preservation, proven must-survive cases, minimized counterexample extraction, real CLI diagnostics for output, tool, generation-prompt, and special-token overhead, plus tokenizer mismatch, chunk-boundary drift, citation loss, overlap accounting, metadata inflation, prompt-template overhead, and retrieval payload truncation over repository fixtures;
 \item fixture and corpus tests for minimized tokenizer/chat-template bundles, public real-bug provenance, expected behaviors, sentinel consistency, artifact materialization, deterministic manifest generation, labeled structured-schema reductions, anonymized contracts, synthetic parser stress cases, tool-definition bundles, secret-free provider fixture packs with request/response/tool/stop/streaming/error/limit coverage and credential-pattern rejection, and real CLI replay of every included structured-schema config;
 \item future corpus tests for popular model and framework configurations pinned by immutable upstream revisions.
 \end{itemize}
@@ -1224,14 +1244,16 @@ resistance while linking to the runnable unsafe/sanitized example. The contribut
 states the central norms: deterministic output, CPU-only tests, minimized
 fixtures, typed public APIs, and explicit soundness boundaries.
 
-The examples directory is equally important. It now contains both the minimal
-typed-artifact workflow and a role-delimiter injection example with failing and
-fixed bundles. PromptABI should continue accumulating small applications that
-intentionally contain bugs: stop overreach in JSON, RAG truncation that drops
-citations, provider migration that changes a tool-call AST, and tokenizer drift
+The examples directory is equally important. It now contains the minimal
+typed-artifact workflow, a role-delimiter injection example with failing and
+fixed bundles, token-budget overflow fixtures, and a RAG chunking example that
+exposes citation loss, boundary drift, overlap accounting, metadata inflation,
+template overhead, and retrieval payload truncation. PromptABI should continue
+accumulating small applications that intentionally contain bugs: stop overreach
+in JSON, provider migration that changes a tool-call AST, and tokenizer drift
 that changes special-token behavior. Each example should include both the
-failing artifact bundle and the fixed version. That gives users practical
-recipes and gives maintainers stable regression tests.
+failing artifact bundle and the fixed version. That gives users practical recipes
+and gives maintainers stable regression tests.
 
 The CLI should remain terse by default and expandable on demand. A CI run needs
 deterministic diagnostics and exit codes. A local debugging session needs
@@ -1431,7 +1453,7 @@ Corpus smoke & \texttt{promptabi corpus manifest} validates ten minimized instru
 \hline
 Structured-schema corpus & \texttt{promptabi corpus structured-schema-manifest} validates labeled structured-output/tool-calling fixtures from OSS reductions, anonymized contracts, and synthetic stress cases; tests replay parser compatibility, tool-schema ingestion, tool serialization, and CLI configs. \\
 \hline
-Token-budget modeling & \texttt{promptabi verify --config examples/token-budget/promptabi.json} models named must-survive segments, framework context reservations, config/artifact context-window precedence, required-token overflow, framework truncation decisions, bounded survival proofs, and minimized counterexamples with deterministic diagnostics. \\
+Token-budget and RAG modeling & \texttt{promptabi verify --config examples/token-budget/promptabi.json} models named must-survive segments, framework context reservations, config/artifact context-window precedence, required-token overflow, framework truncation decisions, bounded survival proofs, and minimized counterexamples; \texttt{examples/rag-chunking/promptabi.json} adds deterministic chunking diagnostics for tokenizer mismatch, boundary drift, citation loss, overlap errors, metadata inflation, prompt-template overhead, and retrieval payload truncation. \\
 \hline
 Benchmark smoke & Repeated config load and verification completes on CPU with JSON output. \\
 \hline

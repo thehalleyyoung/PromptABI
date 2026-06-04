@@ -134,6 +134,20 @@ class PromptSegment:
     token_count: int | None = None
     content: str | None = None
     overhead_tokens: int = 0
+    chunk_id: str | None = None
+    document_id: str | None = None
+    chunk_tokenizer: str | None = None
+    source_start: int | None = None
+    source_end: int | None = None
+    chunk_start: int | None = None
+    chunk_end: int | None = None
+    expected_overlap_tokens: int | None = None
+    actual_overlap_tokens: int | None = None
+    citation: str | None = None
+    citation_required: bool = False
+    metadata_tokens: int = 0
+    template_overhead_tokens: int = 0
+    retrieval_payload_limit_tokens: int | None = None
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -148,6 +162,32 @@ class PromptSegment:
             raise ValueError("prompt segment content must be a string")
         if self.overhead_tokens < 0:
             raise ValueError("prompt segment overhead_tokens must be non-negative")
+        for field_name in ("chunk_id", "document_id", "chunk_tokenizer", "citation"):
+            value = getattr(self, field_name)
+            if value is not None and not value:
+                raise ValueError(f"prompt segment {field_name} must be non-empty")
+        for field_name in (
+            "source_start",
+            "source_end",
+            "chunk_start",
+            "chunk_end",
+            "expected_overlap_tokens",
+            "actual_overlap_tokens",
+            "metadata_tokens",
+            "template_overhead_tokens",
+            "retrieval_payload_limit_tokens",
+        ):
+            value = getattr(self, field_name)
+            if value is not None and value < 0:
+                raise ValueError(f"prompt segment {field_name} must be non-negative")
+        if self.source_start is not None and self.source_end is not None and self.source_end < self.source_start:
+            raise ValueError("prompt segment source_end must be greater than or equal to source_start")
+        if self.chunk_start is not None and self.chunk_end is not None and self.chunk_end < self.chunk_start:
+            raise ValueError("prompt segment chunk_end must be greater than or equal to chunk_start")
+        if self.metadata_tokens < 0:
+            raise ValueError("prompt segment metadata_tokens must be non-negative")
+        if self.template_overhead_tokens < 0:
+            raise ValueError("prompt segment template_overhead_tokens must be non-negative")
 
     def to_dict(self) -> dict[str, object]:
         data: dict[str, object] = {"name": self.name, "required": self.required}
@@ -161,6 +201,28 @@ class PromptSegment:
             data["content"] = self.content
         if self.overhead_tokens:
             data["overhead_tokens"] = self.overhead_tokens
+        for key in (
+            "chunk_id",
+            "document_id",
+            "chunk_tokenizer",
+            "source_start",
+            "source_end",
+            "chunk_start",
+            "chunk_end",
+            "expected_overlap_tokens",
+            "actual_overlap_tokens",
+            "citation",
+            "retrieval_payload_limit_tokens",
+        ):
+            value = getattr(self, key)
+            if value is not None:
+                data[key] = value
+        if self.citation_required:
+            data["citation_required"] = self.citation_required
+        if self.metadata_tokens:
+            data["metadata_tokens"] = self.metadata_tokens
+        if self.template_overhead_tokens:
+            data["template_overhead_tokens"] = self.template_overhead_tokens
         return data
 
 
@@ -837,6 +899,22 @@ def _prompt_segments(spec: dict[str, Any]) -> tuple[PromptSegment, ...]:
                 token_count=_optional_int(item, "token_count"),
                 content=_optional_text(item, "content"),
                 overhead_tokens=_int(item, "overhead_tokens", default=0),
+                chunk_id=_optional_str(item, "chunk_id"),
+                document_id=_optional_str(item, "document_id"),
+                chunk_tokenizer=_optional_str(item, "chunk_tokenizer") or _optional_str(item, "tokenizer"),
+                source_start=_optional_int(item, "source_start"),
+                source_end=_optional_int(item, "source_end"),
+                chunk_start=_optional_int(item, "chunk_start"),
+                chunk_end=_optional_int(item, "chunk_end"),
+                expected_overlap_tokens=_optional_int(item, "expected_overlap_tokens"),
+                actual_overlap_tokens=_optional_int(item, "actual_overlap_tokens")
+                if "actual_overlap_tokens" in item
+                else _optional_int(item, "overlap_tokens"),
+                citation=_optional_str(item, "citation"),
+                citation_required=_bool(item, "citation_required", default=False),
+                metadata_tokens=_int(item, "metadata_tokens", default=0),
+                template_overhead_tokens=_int(item, "template_overhead_tokens", default=0),
+                retrieval_payload_limit_tokens=_optional_int(item, "retrieval_payload_limit_tokens"),
             )
         )
     return tuple(segments)
