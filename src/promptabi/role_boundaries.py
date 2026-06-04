@@ -11,6 +11,7 @@ from .chat_templates import (
     ChatTemplateSymbolicPath,
     symbolically_execute_chat_template,
 )
+from .tokenizers import ByteLevelTokenizer
 
 
 DEFAULT_STRUCTURAL_ROLES = (
@@ -157,7 +158,12 @@ class RoleBoundaryForgeryFinding:
     input_role: str
     marker: str
     marker_kind: str
+    malicious_input: str
     rendered_excerpt: str
+    tokenized_representation: str
+    forged_boundary: str
+    marker_start_offset: int
+    marker_end_offset: int
     boundary_description: str
 
     def __post_init__(self) -> None:
@@ -165,12 +171,17 @@ class RoleBoundaryForgeryFinding:
             raise ValueError("path_index must be non-negative")
         if self.region_index < 0:
             raise ValueError("region_index must be non-negative")
+        if self.marker_start_offset < 0 or self.marker_end_offset <= self.marker_start_offset:
+            raise ValueError("marker offsets must identify a non-empty boundary")
         for field_name in (
             "input_expression",
             "input_role",
             "marker",
             "marker_kind",
+            "malicious_input",
             "rendered_excerpt",
+            "tokenized_representation",
+            "forged_boundary",
             "boundary_description",
         ):
             if not getattr(self, field_name):
@@ -184,7 +195,12 @@ class RoleBoundaryForgeryFinding:
             "input_role": self.input_role,
             "marker": self.marker,
             "marker_kind": self.marker_kind,
+            "malicious_input": self.malicious_input,
             "rendered_excerpt": self.rendered_excerpt,
+            "tokenized_representation": self.tokenized_representation,
+            "forged_boundary": self.forged_boundary,
+            "marker_start_offset": self.marker_start_offset,
+            "marker_end_offset": self.marker_end_offset,
             "boundary_description": self.boundary_description,
         }
 
@@ -280,14 +296,12 @@ def analyze_role_boundary_nonforgeability(
                 for marker, marker_kind in markers:
                     if marker in expression:
                         continue
-                    finding = RoleBoundaryForgeryFinding(
-                        path_index=path.path_index,
-                        region_index=region.region_index,
+                    finding = _forgery_finding(
+                        path=path,
+                        region=region,
                         input_expression=expression,
-                        input_role=region.role,
                         marker=marker,
                         marker_kind=marker_kind,
-                        rendered_excerpt=_rendered_excerpt(path.rendered_pattern, expression, marker),
                         boundary_description=(
                             f"{expression} can render {marker_kind} marker {marker!r} "
                             f"inside a {region.role} region"
@@ -559,14 +573,12 @@ def _role_header_findings(
     findings: list[RoleBoundaryForgeryFinding] = []
     for role in forgeable_roles:
         findings.append(
-            RoleBoundaryForgeryFinding(
-                path_index=path.path_index,
-                region_index=region.region_index,
+            _forgery_finding(
+                path=path,
+                region=region,
                 input_expression=expression,
-                input_role=region.role,
                 marker=role,
                 marker_kind="role-header",
-                rendered_excerpt=_rendered_excerpt(path.rendered_pattern, expression, role),
                 boundary_description=(
                     f"{expression} is rendered directly into a role header and can become {role!r}"
                 ),
@@ -662,13 +674,77 @@ def _marker_kind_rank(kind: str) -> int:
     }.get(kind, 5)
 
 
+def _forgery_finding(
+    *,
+    path: RoleBoundaryPath,
+    region: RoleBoundaryRegion,
+    input_expression: str,
+    marker: str,
+    marker_kind: str,
+    boundary_description: str,
+) -> RoleBoundaryForgeryFinding:
+    malicious_input = _minimized_malicious_input(marker, marker_kind)
+    expression_start = path.rendered_pattern.find(input_expression)
+    rendered = path.rendered_pattern.replace(input_expression, malicious_input, 1)
+    marker_start = expression_start + malicious_input.find(marker) if expression_start >= 0 else -1
+    marker_end = marker_start + len(marker) if marker_start >= 0 else len(marker)
+    excerpt = _rendered_excerpt_from_offsets(rendered, marker_start, marker_end)
+    return RoleBoundaryForgeryFinding(
+        path_index=path.path_index,
+        region_index=region.region_index,
+        input_expression=input_expression,
+        input_role=region.role,
+        marker=marker,
+        marker_kind=marker_kind,
+        malicious_input=malicious_input,
+        rendered_excerpt=excerpt,
+        tokenized_representation=_tokenized_representation(excerpt, marker),
+        forged_boundary=(
+            f"{marker_kind} {marker!r} at rendered chars {marker_start}:{marker_end} "
+            f"inside path {path.path_index} region {region.region_index}"
+        ),
+        marker_start_offset=marker_start,
+        marker_end_offset=marker_end,
+        boundary_description=boundary_description,
+    )
+
+
+def _minimized_malicious_input(marker: str, marker_kind: str) -> str:
+    del marker_kind
+    return marker
+
+
 def _rendered_excerpt(rendered_pattern: str, expression: str, replacement: str) -> str:
     rendered = rendered_pattern.replace(expression, replacement, 1)
     index = rendered.find(replacement)
     if index < 0:
         return rendered[:160]
-    start = max(0, index - 60)
-    end = min(len(rendered), index + len(replacement) + 60)
+    return _rendered_excerpt_from_offsets(rendered, index, index + len(replacement))
+
+
+def _rendered_excerpt_from_offsets(rendered: str, marker_start: int, marker_end: int) -> str:
+    if marker_start < 0:
+        return rendered[:160]
+    start = max(0, marker_start - 60)
+    end = min(len(rendered), marker_end + 60)
     prefix = "..." if start > 0 else ""
     suffix = "..." if end < len(rendered) else ""
     return prefix + rendered[start:end] + suffix
+
+
+def _tokenized_representation(excerpt: str, marker: str) -> str:
+    tokenizer = ByteLevelTokenizer(added_tokens=(marker,), special_tokens={marker: 256})
+    encoded = tokenizer.encode(excerpt)
+    token_pieces = []
+    for token in encoded.tokens[:48]:
+        text = token.text if token.text is not None else ""
+        flags = []
+        if token.special:
+            flags.append("special")
+        if token.added:
+            flags.append("added")
+        flag_suffix = f"/{','.join(flags)}" if flags else ""
+        token_pieces.append(f"{token.token_id}:{text!r}{flag_suffix}")
+    if len(encoded.tokens) > 48:
+        token_pieces.append(f"...+{len(encoded.tokens) - 48} tokens")
+    return "byte-level " + " ".join(token_pieces)

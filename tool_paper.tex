@@ -40,9 +40,11 @@ pipeline, a Hugging Face \texttt{tokenizer\_config.json} chat-template parser,
 a bounded symbolic executor for the supported Jinja chat-template fragment, a
 bounded role-boundary non-forgeability checker that detects raw content and role
 fields capable of rendering control delimiters, special tokens, assistant
-prefixes, or tool-call sentinels, a role-boundary model that decomposes symbolic
-renders into system, user, assistant, tool, developer, function, and
-provider-specific structural regions, a
+prefixes, or tool-call sentinels, minimized role-forgery witnesses that include
+the malicious input field, rendered prompt excerpt, byte-level tokenization, and
+the exact forged boundary, a role-boundary model that decomposes symbolic renders
+into system, user, assistant, tool, developer, function, and provider-specific
+structural regions, a
 concrete renderer differentially checked against Hugging Face
 \texttt{apply\_chat\_template} behavior across the seed corpus, a CPU-only
 benchmark, documentation, and contribution guidance.
@@ -106,6 +108,8 @@ fields, materializes local and metadata-only remote artifacts, validates sha256
 pins, adapts real tokenizer backends into stable encode/decode metadata,
 extracts Hugging Face chat-template structure from \texttt{tokenizer\_config.json},
 derives role-boundary regions over bounded rendered prompt patterns,
+emits minimized role-forgery witnesses with attacker input, rendered excerpt,
+token evidence, and exact boundary offsets,
 extracts automata, transducer, and solver witnesses for finite formal contracts, prepares a cache directory for future expensive products, emits deterministic
 typed diagnostics in text, JSON, and SARIF with structured snapshot coverage, exposes an embedding API for custom
 checks and typed results, returns stable policy-controlled process exit codes,
@@ -858,7 +862,7 @@ regression tests.
 
 The CLI should remain terse by default and expandable on demand. A CI run needs
 deterministic diagnostics and exit codes. A local debugging session needs
-witnesses, rendered excerpts, token tables, and fix suggestions. A future
+witnesses, rendered excerpts, token tables, exact boundary locations, and fix suggestions. A future
 \texttt{promptabi explain} command can bridge those modes.
 
 \clearpage

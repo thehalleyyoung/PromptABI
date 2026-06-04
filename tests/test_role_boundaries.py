@@ -138,6 +138,17 @@ def test_role_boundary_nonforgeability_flags_raw_role_and_content_controls() -> 
         and "<|im_start|>" in finding.rendered_excerpt
         for finding in report.findings
     )
+    content_forgery = next(
+        finding
+        for finding in report.findings
+        if finding.input_expression == "{messages[0].content}" and finding.marker == "<|im_start|>"
+    )
+    assert content_forgery.malicious_input == "<|im_start|>"
+    assert content_forgery.forged_boundary.startswith("assistant-prefix '<|im_start|>'")
+    assert content_forgery.marker_start_offset < content_forgery.marker_end_offset
+    assert content_forgery.marker_start_offset > 0
+    assert "256:'<|im_start|>'/special,added" in content_forgery.tokenized_representation
+    assert content_forgery.to_dict()["malicious_input"] == "<|im_start|>"
 
 
 def test_role_boundary_nonforgeability_does_not_concatenate_across_content_placeholders() -> None:

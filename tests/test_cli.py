@@ -184,3 +184,7 @@ def test_verify_role_boundary_nonforgeability_reports_real_fixture(tmp_path, cap
     assert any("role-header 'assistant'" in diagnostic["message"] for diagnostic in role_diagnostics)
     assert any("<|start_header_id|>" in diagnostic["message"] for diagnostic in role_diagnostics)
     assert role_diagnostics[0]["check_modes"] == ["bounded", "sound"]
+    witness_steps = role_diagnostics[0]["witness"]["steps"]
+    assert any(step["action"] == "tokenize forged excerpt" for step in witness_steps)
+    assert any(step["action"] == "locate forged boundary" for step in witness_steps)
+    assert any("byte-level" in step.get("output", "") for step in witness_steps)

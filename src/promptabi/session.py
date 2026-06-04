@@ -350,9 +350,11 @@ def _role_boundary_forgery_diagnostic(artifact, span, finding: RoleBoundaryForge
                 WitnessStep(
                     action="substitute attacker-controlled field",
                     input=finding.input_expression,
-                    output=finding.marker,
+                    output=finding.malicious_input,
                 ),
                 WitnessStep(action="render forged boundary excerpt", output=finding.rendered_excerpt),
+                WitnessStep(action="tokenize forged excerpt", output=finding.tokenized_representation),
+                WitnessStep(action="locate forged boundary", output=finding.forged_boundary),
             ),
             artifacts=(artifact,),
         ),
