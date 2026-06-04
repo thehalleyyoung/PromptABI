@@ -21,6 +21,10 @@ from .grammar_ambiguity import (
     GrammarTokenizerAmbiguityReport,
     analyze_tokenizer_grammar_ambiguity,
 )
+from .grammar_differential import (
+    GrammarDifferentialCaseReport,
+    analyze_grammar_differential_corpus,
+)
 from .loaders import ArtifactLoadError, ArtifactLoadWarning, ArtifactLoader, LoadedArtifact
 from .role_boundaries import RoleBoundaryForgeryFinding, analyze_role_boundary_nonforgeability
 from .stop_analysis import (
@@ -72,6 +76,9 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "grammar-tokenizer-ambiguity-abstained": (CheckMode.ABSTAINING, CheckMode.BOUNDED),
     "grammar-tokenizer-empty": (CheckMode.SOUND, CheckMode.BOUNDED),
     "grammar-tokenizer-satisfiable": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "grammar-differential-abstained": (CheckMode.ABSTAINING, CheckMode.HEURISTIC),
+    "grammar-differential-agreement": (CheckMode.HEURISTIC,),
+    "grammar-differential-mismatch": (CheckMode.HEURISTIC,),
     "check-unknown": (CheckMode.SOUND, CheckMode.COMPLETE),
     "check-failed": (CheckMode.HEURISTIC,),
 }
@@ -131,6 +138,7 @@ class VerificationSession:
             "stop-differential": self._stop_differential_check,
             "stop-overreachability": self._stop_overreachability_check,
             "stop-tokenizer-analysis": self._stop_tokenizer_analysis_check,
+            "grammar-differential": self._grammar_differential_check,
             "grammar-tokenizer-ambiguity": self._grammar_tokenizer_ambiguity_check,
             "grammar-tokenizer-emptiness": self._grammar_tokenizer_emptiness_check,
         }
@@ -383,6 +391,30 @@ class VerificationSession:
                 diagnostics.extend(
                     _grammar_tokenizer_ambiguity_report_diagnostics(tokenizer_loaded, grammar_loaded, report)
                 )
+        return tuple(diagnostics)
+
+    def _grammar_differential_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        diagnostics: list[Diagnostic] = []
+        fixture_artifacts = [
+            loaded
+            for loaded in context.loaded_artifacts
+            if loaded.artifact.kind is ArtifactKind.GRAMMAR and loaded.source_type == "grammar-differential"
+        ]
+        for loaded in fixture_artifacts:
+            path = loaded.artifact.location.path
+            if path is None:
+                continue
+            report = analyze_grammar_differential_corpus(path)
+            diagnostics.extend(
+                _grammar_differential_mismatch_diagnostic(loaded, case)
+                for case in report.mismatches
+            )
+            diagnostics.extend(
+                _grammar_differential_abstained_diagnostic(loaded, case)
+                for case in report.abstentions
+            )
+            if report.agreements and not report.mismatches and not report.abstentions:
+                diagnostics.append(_grammar_differential_agreement_diagnostic(loaded, report.agreements))
         return tuple(diagnostics)
 
     def _missing_local_paths(self) -> set[str]:
@@ -739,6 +771,84 @@ def _stop_alignment_diagnostic(
                 WitnessStep(action="encode stop strings", output=alignment),
             ),
             artifacts=(stop_loaded.artifact.to_ref(), tokenizer_loaded.artifact.to_ref()),
+        ),
+    )
+
+
+def _grammar_differential_mismatch_diagnostic(
+    loaded: LoadedArtifact,
+    case: GrammarDifferentialCaseReport,
+) -> Diagnostic:
+    mismatches = case.mismatches
+    sample_summary = "; ".join(
+        f"{item.sample.text!r}: expected={item.sample.expected_accepts}, promptabi={item.promptabi_accepts}"
+        for item in mismatches
+    )
+    return Diagnostic(
+        rule_id="grammar-differential-mismatch",
+        severity=DiagnosticSeverity.ERROR,
+        message=(
+            f"grammar differential case '{case.case_id}' disagrees with recorded "
+            f"{case.backend_family} semantics"
+        ),
+        artifact=loaded.artifact.to_ref(),
+        span=_artifact_span(loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG["grammar-differential-mismatch"],
+        suggestions=("Inspect the reduced backend fixture and either fix the grammar model or mark unsupported semantics as an abstention.",),
+        witness=WitnessTrace(
+            summary="PromptABI replayed hand-labeled backend membership samples and found a disagreement.",
+            steps=(
+                WitnessStep(action="select backend fixture", input=case.backend_family, output=case.case_id),
+                WitnessStep(action="ingest grammar", input=case.declared_type, output=", ".join(case.features)),
+                WitnessStep(action="compare membership labels", output=sample_summary),
+            ),
+            artifacts=(loaded.artifact.to_ref(),),
+        ),
+    )
+
+
+def _grammar_differential_abstained_diagnostic(
+    loaded: LoadedArtifact,
+    case: GrammarDifferentialCaseReport,
+) -> Diagnostic:
+    return Diagnostic(
+        rule_id="grammar-differential-abstained",
+        severity=DiagnosticSeverity.WARNING,
+        message=f"grammar differential case '{case.case_id}' is outside local replay semantics",
+        artifact=loaded.artifact.to_ref(),
+        span=_artifact_span(loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG["grammar-differential-abstained"],
+        suggestions=("Reduce the fixture to JSON Schema, regex, choices, or finite literal grammar semantics.",),
+        witness=WitnessTrace(
+            summary="PromptABI abstained rather than overclaim backend equivalence.",
+            steps=(
+                WitnessStep(action="select backend fixture", input=case.backend_family, output=case.case_id),
+                WitnessStep(action="evaluate supported fragment", input=case.declared_type, output=case.reason),
+            ),
+            artifacts=(loaded.artifact.to_ref(),),
+        ),
+    )
+
+
+def _grammar_differential_agreement_diagnostic(
+    loaded: LoadedArtifact,
+    agreements: tuple[GrammarDifferentialCaseReport, ...],
+) -> Diagnostic:
+    families = ", ".join(sorted({case.backend_family for case in agreements}))
+    return Diagnostic(
+        rule_id="grammar-differential-agreement",
+        severity=DiagnosticSeverity.INFO,
+        message=f"grammar differential corpus agrees on {len(agreements)} recorded backend cases",
+        artifact=loaded.artifact.to_ref(),
+        span=_artifact_span(loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG["grammar-differential-agreement"],
+        witness=WitnessTrace(
+            summary="PromptABI replayed recorded backend grammar-semantics labels without disagreement.",
+            steps=(
+                WitnessStep(action="load fixture families", output=families),
+                WitnessStep(action="compare accepted and rejected samples", output=f"{len(agreements)} cases"),
+            ),
+            artifacts=(loaded.artifact.to_ref(),),
         ),
     )
 

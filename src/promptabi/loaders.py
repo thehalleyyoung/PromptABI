@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, urlparse
 from .artifacts import Artifact, ArtifactKind, GrammarArtifact, SchemaArtifact, StopPolicyArtifact
 from .chat_templates import ChatTemplateParseError, parse_hf_tokenizer_config_chat_template, symbolically_execute_chat_template
 from .diagnostics import SourceSpan
+from .grammar_differential import analyze_grammar_differential_corpus
 from .grammars import GrammarIngestionError, ingest_grammar_file, ingest_json_schema_mapping
 from .json_schema import compile_json_schema_mapping, normalize_json_schema_mapping
 from .role_boundaries import build_role_boundary_model
@@ -479,6 +480,37 @@ class ArtifactLoader:
 
     def _load_grammar(self, artifact: Artifact, path: Path) -> LoadedArtifact:
         declared_type = artifact.grammar_type if isinstance(artifact, GrammarArtifact) else "promptabi"
+        if declared_type.strip().lower().replace("_", "-") == "grammar-differential":
+            try:
+                report = analyze_grammar_differential_corpus(path)
+            except (OSError, json.JSONDecodeError, GrammarIngestionError) as exc:
+                raise ArtifactLoadError(
+                    rule_id="artifact-load-failed",
+                    message=f"grammar differential artifact '{artifact.name}' could not be replayed",
+                    suggestion="Use a corpus with version, cases, backend_family, declared_type, artifact, accepts, and rejects fields.",
+                    steps=(("replay grammar differential corpus", str(path), str(exc)),),
+                ) from exc
+            loaded = self._load_file(artifact, path, source_type="grammar-differential")
+            parsed_artifact = artifact
+            if isinstance(artifact, GrammarArtifact):
+                parsed_artifact = replace(artifact, grammar_type="grammar-differential")
+            return LoadedArtifact(
+                artifact=parsed_artifact,
+                source_type="grammar-differential",
+                pinned=loaded.pinned,
+                resolved=loaded.resolved,
+                actual_sha256=loaded.actual_sha256,
+                size_bytes=loaded.size_bytes,
+                metadata=(
+                    ("agreement_count", len(report.agreements)),
+                    ("abstention_count", len(report.abstentions)),
+                    ("case_count", len(report.cases)),
+                    ("mismatch_count", len(report.mismatches)),
+                    ("version", report.version),
+                ),
+                source_spans=loaded.source_spans,
+                warnings=loaded.warnings,
+            )
         try:
             parsed = ingest_grammar_file(path, declared_type=declared_type)
         except GrammarIngestionError as exc:

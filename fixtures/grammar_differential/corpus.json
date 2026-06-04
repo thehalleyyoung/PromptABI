@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "outlines-choice-literals",
+      "backend_family": "outlines",
+      "declared_type": "outlines",
+      "artifact": {
+        "choices": ["approve", "reject", "escalate"]
+      },
+      "accepts": ["approve", "reject"],
+      "rejects": ["APPROVE", "approve "]
+    },
+    {
+      "id": "outlines-json-schema-object",
+      "backend_family": "outlines",
+      "declared_type": "outlines",
+      "artifact": {
+        "json_schema": {
+          "type": "object",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": {"enum": ["ok", "error"]}
+          }
+        }
+      },
+      "accepts": ["{\"status\":\"ok\"}", "{\"status\":\"error\"}"],
+      "rejects": ["{\"status\":\"pending\"}", "{\"status\":\"ok\",\"extra\":true}"]
+    },
+    {
+      "id": "xgrammar-finite-tool-call",
+      "backend_family": "xgrammar",
+      "declared_type": "xgrammar",
+      "artifact": {
+        "root_rule": "root",
+        "grammar": "root ::= \"call\" space tool ;\nspace ::= \" \" ;\ntool ::= \"refund\" | \"search\" ;"
+      },
+      "accepts": ["call refund", "call search"],
+      "rejects": ["call delete", "call  refund"]
+    },
+    {
+      "id": "llguidance-regex-ticket",
+      "backend_family": "llguidance",
+      "declared_type": "llguidance",
+      "artifact": {
+        "regex": "TICKET-[0-9]{3}"
+      },
+      "accepts": ["TICKET-123"],
+      "rejects": ["ticket-123", "TICKET-1234"]
+    },
+    {
+      "id": "lm-format-enforcer-json-schema-enum",
+      "backend_family": "lm-format-enforcer",
+      "declared_type": "json-schema",
+      "artifact": {
+        "type": "object",
+        "required": ["action", "urgent"],
+        "additionalProperties": false,
+        "properties": {
+          "action": {"enum": ["route", "close"]},
+          "urgent": {"type": "boolean"}
+        }
+      },
+      "accepts": ["{\"action\":\"route\",\"urgent\":true}", "{\"action\":\"close\",\"urgent\":false}"],
+      "rejects": ["{\"action\":\"delete\",\"urgent\":true}", "{\"action\":\"route\"}"]
+    },
+    {
+      "id": "guidance-finite-ebnf",
+      "backend_family": "guidance",
+      "declared_type": "ebnf",
+      "artifact": "root ::= prefix value ;\nprefix ::= \"answer:\" ;\nvalue ::= \"yes\" | \"no\" ;",
+      "accepts": ["answer:yes", "answer:no"],
+      "rejects": ["answer:maybe", " answer:yes"]
+    },
+    {
+      "id": "instructor-schema-required-field",
+      "backend_family": "instructor",
+      "declared_type": "json-schema",
+      "artifact": {
+        "type": "object",
+        "required": ["label", "score"],
+        "additionalProperties": false,
+        "properties": {
+          "label": {"type": "string", "minLength": 1},
+          "score": {"type": "integer", "minimum": 0}
+        }
+      },
+      "accepts": ["{\"label\":\"safe\",\"score\":0}", "{\"label\":\"needs_review\",\"score\":2}"],
+      "rejects": ["{\"label\":\"\",\"score\":0}", "{\"label\":\"safe\",\"score\":-1}"]
+    },
+    {
+      "id": "pydantic-derived-schema-union",
+      "backend_family": "pydantic",
+      "declared_type": "json-schema",
+      "artifact": {
+        "type": "object",
+        "required": ["kind", "payload"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {"const": "tool_result"},
+          "payload": {
+            "oneOf": [
+              {"type": "string"},
+              {"type": "null"}
+            ]
+          }
+        }
+      },
+      "accepts": ["{\"kind\":\"tool_result\",\"payload\":\"done\"}", "{\"kind\":\"tool_result\",\"payload\":null}"],
+      "rejects": ["{\"kind\":\"message\",\"payload\":\"done\"}", "{\"kind\":\"tool_result\",\"payload\":3}"]
+    }
+  ]
+}

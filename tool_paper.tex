@@ -74,12 +74,15 @@ plus a JSON Schema path that normalizes objects, arrays, enums, consts, required
 fields, numeric and string constraints, type and composition unions, bounded
 local references, recursion-limit abstentions, and additional-property semantics,
 then compiles the supported subset into grammar IR, parser states, DFA witnesses,
-source maps, and real \texttt{jsonschema} validator round-trips, and now takes
-the bounded tokenizer x grammar product to prove whether compiled witnesses
-survive real tokenizer encode-normalize-decode assumptions, plus a bounded
-tokenizer x grammar ambiguity check that validates JSON lexical variants and
-detects tokenizer-path conflicts, decoded-text conflicts, whitespace and Unicode
-byte aliases, and added-token aliases,
+source maps, and real \texttt{jsonschema} validator round-trips, replays a
+CPU-only grammar differential corpus with hand-labeled Outlines, xgrammar,
+llguidance, lm-format-enforcer, Guidance, Instructor, and Pydantic-derived
+semantics through the CLI as agreement, mismatch, or abstention diagnostics, and
+now takes the bounded tokenizer x grammar product to prove whether compiled
+witnesses survive real tokenizer encode-normalize-decode assumptions, plus a
+bounded tokenizer x grammar ambiguity check that validates JSON lexical variants
+and detects tokenizer-path conflicts, decoded-text conflicts, whitespace and
+Unicode byte aliases, and added-token aliases,
 a CPU-only benchmark, documentation, and contribution guidance.
 The remaining checkers fit into that surface rather than requiring a rewrite. We
 describe the transducer-oriented formalism, the artifact model, the diagnostic
@@ -152,6 +155,10 @@ JSON Schema objects, arrays, unions, references, constraints, and
 additional-property policies into a typed tree, compiles that tree into bounded
 grammar IR with parser states and DFA witnesses, and round-trips generated
 witnesses through the real \texttt{jsonschema} validator,
+checks grammar-backend differential fixtures against hand-authored accepted and
+rejected strings for Outlines, xgrammar, llguidance, lm-format-enforcer,
+Guidance, Instructor-style, and Pydantic-derived schemas, abstaining rather than
+overclaiming for fragments outside local replay semantics,
 checks tokenizer x grammar ambiguity by pairing schema-valid JSON lexical
 variants with real tokenizer encode/decode behavior to find conflicting token
 paths, decoded-text collapses, Unicode or whitespace byte aliases, and added-token

@@ -114,6 +114,15 @@ from .grammar_ambiguity import (
     GrammarTokenizerAmbiguityReport,
     analyze_tokenizer_grammar_ambiguity,
 )
+from .grammar_differential import (
+    GrammarDifferentialCaseReport,
+    GrammarDifferentialObservation,
+    GrammarDifferentialReport,
+    GrammarDifferentialSample,
+    GrammarDifferentialStatus,
+    analyze_grammar_differential_corpus,
+    analyze_grammar_differential_mapping,
+)
 from .json_schema import (
     JsonSchemaCompilationResult,
     JsonSchemaGrammarIR,
@@ -260,6 +269,11 @@ __all__ = [
     "FrameworkTruncationConfigArtifact",
     "GrammarArtifact",
     "GrammarDialect",
+    "GrammarDifferentialCaseReport",
+    "GrammarDifferentialObservation",
+    "GrammarDifferentialReport",
+    "GrammarDifferentialSample",
+    "GrammarDifferentialStatus",
     "GrammarIngestionError",
     "GrammarIngestionIssue",
     "GrammarIngestionResult",
@@ -369,6 +383,8 @@ __all__ = [
     "ingest_json_schema_mapping",
     "normalize_json_schema_mapping",
     "analyze_role_boundary_nonforgeability",
+    "analyze_grammar_differential_corpus",
+    "analyze_grammar_differential_mapping",
     "analyze_tokenizer_grammar_ambiguity",
     "analyze_tokenizer_grammar_emptiness",
     "build_role_boundary_model",

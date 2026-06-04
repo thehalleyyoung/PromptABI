@@ -72,7 +72,11 @@ objects, arrays, required fields, unions, constraints, bounded local references,
 and additional-property semantics, then checks tokenizer x grammar emptiness and
 ambiguity by proving whether compiled witnesses and JSON lexical variants
 survive real tokenizer encode/decode assumptions without collapsing distinct
-values or hiding multiple token paths. The repository
+values or hiding multiple token paths. A fixture-backed grammar differential
+corpus now replays hand-labeled Outlines, xgrammar, llguidance,
+lm-format-enforcer, Guidance, Instructor, and Pydantic-derived semantics through
+the real CLI, reporting agreement, mismatch, or abstention without heavyweight
+backend installs. The repository
 already has the typed Python package,
 core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,
 snapshot-locked output stability, discoverable `promptabi verify` workflow,
