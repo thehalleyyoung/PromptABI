@@ -97,6 +97,7 @@ from .role_boundaries import (
     RoleBoundaryNonforgeabilityReport,
     RoleBoundaryPath,
     RoleBoundaryRegion,
+    RoleBoundarySanitizer,
     analyze_role_boundary_nonforgeability,
     build_role_boundary_model,
 )
@@ -208,6 +209,7 @@ __all__ = [
     "RoleBoundaryNonforgeabilityReport",
     "RoleBoundaryPath",
     "RoleBoundaryRegion",
+    "RoleBoundarySanitizer",
     "RoundTripResult",
     "REQUIRED_FAMILIES",
     "SchemaArtifact",

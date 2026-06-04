@@ -172,3 +172,90 @@ def test_role_boundary_nonforgeability_does_not_concatenate_across_content_place
     assert "<safe>" in markers
     assert "</safe>" in markers
     assert "<safe></safe>" not in markers
+
+
+def test_role_boundary_nonforgeability_recognizes_content_sanitizer_filters() -> None:
+    parsed = parse_hf_chat_template_config(
+        {
+            "chat_template": (
+                "{% for message in messages %}"
+                "<|im_start|>{{ message['role'] }}\n"
+                "{{ message['content']|tojson }}<|im_end|>\n"
+                "{% endfor %}"
+            ),
+            "additional_special_tokens": ["<|im_start|>", "<|im_end|>"],
+        }
+    )
+
+    report = analyze_role_boundary_nonforgeability(
+        parsed,
+        bounds=ChatTemplateSymbolicBounds(max_messages=1, max_tools=0, max_loop_iterations=1, max_paths=16),
+    )
+
+    assert any(
+        finding.input_expression == "{messages[0].role}" and finding.marker_kind == "role-header"
+        for finding in report.findings
+    )
+    assert not any(finding.input_expression == "{messages[0].content}" for finding in report.findings)
+
+    region = next(region for path in report.model.paths for region in path.regions if region.message_index == 0)
+    sanitizer = next(
+        item for item in region.input_sanitizers if item.input_expression == "{messages[0].content}"
+    )
+    assert sanitizer.field == "content"
+    assert sanitizer.filters == ("tojson",)
+    assert "JSON-encodes" in sanitizer.reason
+
+
+def test_role_boundary_nonforgeability_recognizes_sanitized_role_and_set_bindings() -> None:
+    parsed = parse_hf_chat_template_config(
+        {
+            "chat_template": (
+                "{% for message in messages %}"
+                "{% set safe_content = message['content']|escape %}"
+                "<|im_start|>{{ message['role']|tojson }}\n"
+                "{{ safe_content }}<|im_end|>\n"
+                "{% endfor %}"
+            ),
+            "additional_special_tokens": ["<|im_start|>", "<|im_end|>"],
+        }
+    )
+
+    report = analyze_role_boundary_nonforgeability(
+        parsed,
+        bounds=ChatTemplateSymbolicBounds(max_messages=1, max_tools=0, max_loop_iterations=1, max_paths=16),
+    )
+
+    assert report.ok
+    region = next(region for path in report.model.paths for region in path.regions if region.message_index == 0)
+    sanitizers = {item.input_expression: item for item in region.input_sanitizers}
+    assert sanitizers["{messages[0].role}"].filters == ("tojson",)
+    assert sanitizers["{messages[0].content}"].filters == ("escape",)
+    assert region.to_dict()["input_sanitizers"]
+
+
+def test_role_boundary_nonforgeability_recognizes_delimiter_safe_wrapper_filters() -> None:
+    parsed = parse_hf_chat_template_config(
+        {
+            "chat_template": (
+                "{% for message in messages %}"
+                "<|im_start|>user\n"
+                "{{ message['content']|base64 }}<|im_end|>\n"
+                "{% endfor %}"
+            ),
+            "additional_special_tokens": ["<|im_start|>", "<|im_end|>"],
+        }
+    )
+
+    report = analyze_role_boundary_nonforgeability(
+        parsed,
+        bounds=ChatTemplateSymbolicBounds(max_messages=1, max_tools=0, max_loop_iterations=1, max_paths=16),
+    )
+
+    assert report.ok
+    region = next(region for path in report.model.paths for region in path.regions if region.message_index == 0)
+    sanitizer = next(
+        item for item in region.input_sanitizers if item.input_expression == "{messages[0].content}"
+    )
+    assert sanitizer.filters == ("base64",)
+    assert "excludes role and tool delimiter punctuation" in sanitizer.reason

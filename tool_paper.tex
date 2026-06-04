@@ -38,13 +38,14 @@ solver, a minimal verification session, focused tests, examples, a fixture
 corpus layout, a curated ten-family seed corpus, a deterministic corpus manifest
 pipeline, a Hugging Face \texttt{tokenizer\_config.json} chat-template parser,
 a bounded symbolic executor for the supported Jinja chat-template fragment, a
-bounded role-boundary non-forgeability checker that detects raw content and role
-fields capable of rendering control delimiters, special tokens, assistant
-prefixes, or tool-call sentinels, minimized role-forgery witnesses that include
-the malicious input field, rendered prompt excerpt, byte-level tokenization, and
-the exact forged boundary, a role-boundary model that decomposes symbolic renders
-into system, user, assistant, tool, developer, function, and provider-specific
-structural regions, a
+bounded role-boundary non-forgeability checker that detects unsanitized content
+and role fields capable of rendering control delimiters, special tokens,
+assistant prefixes, or tool-call sentinels, while recognizing explicit JSON,
+escape, and delimiter-safe wrapper filters, minimized role-forgery witnesses that
+include the malicious input field, rendered prompt excerpt, byte-level
+tokenization, and the exact forged boundary, a role-boundary model that
+decomposes symbolic renders into system, user, assistant, tool, developer,
+function, and provider-specific structural regions, a
 concrete renderer differentially checked against Hugging Face
 \texttt{apply\_chat\_template} behavior across the seed corpus, a CPU-only
 benchmark, documentation, and contribution guidance.
@@ -107,9 +108,9 @@ bundles, records source spans for config declarations and parsed JSON artifact
 fields, materializes local and metadata-only remote artifacts, validates sha256
 pins, adapts real tokenizer backends into stable encode/decode metadata,
 extracts Hugging Face chat-template structure from \texttt{tokenizer\_config.json},
-derives role-boundary regions over bounded rendered prompt patterns,
+derives sanitizer-aware role-boundary regions over bounded rendered prompt patterns,
 emits minimized role-forgery witnesses with attacker input, rendered excerpt,
-token evidence, and exact boundary offsets,
+token evidence, exact boundary offsets, and explicit sanitizer metadata,
 extracts automata, transducer, and solver witnesses for finite formal contracts, prepares a cache directory for future expensive products, emits deterministic
 typed diagnostics in text, JSON, and SARIF with structured snapshot coverage, exposes an embedding API for custom
 checks and typed results, returns stable policy-controlled process exit codes,
@@ -387,9 +388,12 @@ sentinels, then proves for each bounded symbolic path whether a raw
 user-controlled content field or dynamic role field can render one of those
 markers as structure. It explicitly flags direct \texttt{message['role']}
 interpolation as role-header forgeability and reports bounded, sound diagnostics
-with rendered excerpts. Sanitizer recognition is intentionally left to the next
-milestone, so the first checker is conservative about raw interpolation rather
-than silently treating escaping as proven.
+with rendered excerpts. The checker is now sanitizer-aware at the exact
+expression level: JSON encoders such as \texttt{tojson}, HTML/XML escape filters,
+URL or base64 wrapper filters, and sanitizer-preserving \texttt{set} bindings are
+recorded in the role-boundary model and suppress only the findings for the
+protected expression. Raw interpolation remains forgeable, and Jinja's
+\texttt{safe} marker is deliberately not treated as escaping.
 
 PromptABI also now has a concrete evaluator for that same supported fragment. It
 renders real message and tool inputs through the position-preserving lexer and
@@ -653,9 +657,11 @@ chat template, split around placeholders so it never fabricates impossible
 concatenated markers. It then pairs every user-controlled content expression with
 every structural marker and separately checks raw dynamic role fields. Diagnostics
 identify the exact symbolic path and region, the controlled expression, the
-forged marker kind, and a rendered excerpt showing where the forged boundary
-appears. Tokenized and minimized witnesses are deliberately left for the next
-witness-generation milestone.
+forged marker kind, a rendered excerpt showing where the forged boundary appears,
+and byte-level token evidence. The current implementation also records recognized
+sanitizers on role regions so JSON-encoded, escaped, URL/base64-wrapped, or
+sanitizer-preserving bound fields do not produce false-positive role-forgery
+reports.
 
 This property is structural, not semantic. PromptABI can prove that a template
 allows user content to create an apparent assistant turn. It cannot prove that a
@@ -950,10 +956,10 @@ The roadmap is best understood as a progression from stable surfaces to formal
 checks to ecosystem integration. The skeleton, core artifact model, loader layer,
 diagnostic contract, CLI, tokenizer abstraction, finite automata layer,
 finite-state transducer layer, finite-contract solver, source-span tracking, and
-diagnostic snapshots now provide stable surfaces. The next phase should implement
-the curated seed corpus and manifest pipeline have begun the experimental layer.
-The next phase should implement
-the first role-boundary, stop-reachability, grammar-emptiness, and budget-survival checkers. Corpus growth, lockfiles, drift
+differential tokenizer harnesses, the curated seed corpus, the manifest pipeline,
+and the first sanitizer-aware role-boundary checker have begun the experimental
+layer. The next phase should deepen stop-reachability, grammar-emptiness, and
+budget-survival checkers. Corpus growth, lockfiles, drift
 detection, SARIF, GitHub Actions, pre-commit hooks, HTML reports, suppression
 policies, and plugin APIs turn the verifier from a library into an everyday CI
 tool.
@@ -1012,7 +1018,7 @@ Tokenizer differential tests & Byte-level normalization and added-token behavior
 \hline
 Chat-template symbolic tests & Hugging Face \texttt{tokenizer\_config.json} templates across ten seed families expose template source, special tokens, generation prompts, roles, fields, tools, filters, whitespace controls, bounded symbolic paths, and unsupported constructs. \\
 \hline
-Role-boundary checker tests & Bounded non-forgeability diagnostics catch dynamic role-header forgery and user-content control delimiter forgery against real Llama-style fixture templates while preserving deterministic JSON output. \\
+Role-boundary checker tests & Bounded non-forgeability diagnostics catch dynamic role-header forgery and user-content control delimiter forgery, preserve deterministic JSON output, and prove that JSON/escape filters plus sanitizer-preserving bindings suppress only protected-expression false positives. \\
 \hline
 CLI smoke & \texttt{promptabi verify --config examples/minimal/promptabi.json} returns pass, and \texttt{--fail-on}, \texttt{--artifact}, \texttt{--cache-dir}, \texttt{--quiet}, and \texttt{--verbose} are covered. \\
 \hline

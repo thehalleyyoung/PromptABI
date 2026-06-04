@@ -42,12 +42,13 @@ sound, complete, bounded, Z3-backed, heuristic, or abstaining; the solver uses Z
 when available and otherwise exhaustively enumerates finite domains, emitting
 concrete counterexamples without logits, GPUs, inference, or network calls.
 
-PromptABI now ships the first bounded role-boundary non-forgeability check:
-raw user/tool/function content and dynamic role fields are checked against
+PromptABI now ships a bounded, sanitizer-aware role-boundary non-forgeability check:
+unsanitized user/tool/function content and dynamic role fields are checked against
 provider/model control delimiters, special tokens, assistant prefixes, and
-tool-call sentinels from real chat-template artifacts, with minimized malicious
-inputs, rendered excerpts, byte-level token evidence, and exact forged-boundary
-locations in diagnostics. The next high-value checks are stop/grammar/tokenizer
+tool-call sentinels from real chat-template artifacts, while JSON/escape/wrapper
+filters suppress false positives. Findings include minimized malicious inputs,
+rendered excerpts, byte-level token evidence, and exact forged-boundary
+locations. The next high-value checks are stop/grammar/tokenizer
 reachability and must-survive token-budget verification. The repository already has the typed Python package,
 core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,
 snapshot-locked output stability, discoverable `promptabi verify` workflow,

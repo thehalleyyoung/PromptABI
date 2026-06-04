@@ -33,6 +33,41 @@ _NEGATIVE_ROLE_RE = re.compile(
 
 
 @dataclass(frozen=True, slots=True)
+class RoleBoundarySanitizer:
+    """A recognized transformation that prevents raw structural marker injection."""
+
+    input_expression: str
+    field: str
+    sanitizer_kind: str
+    filters: tuple[str, ...] = ()
+    wrapper: str = ""
+    reason: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.input_expression:
+            raise ValueError("input_expression must be non-empty")
+        if not self.field:
+            raise ValueError("field must be non-empty")
+        if not self.sanitizer_kind:
+            raise ValueError("sanitizer_kind must be non-empty")
+        object.__setattr__(self, "filters", tuple(dict.fromkeys(self.filters)))
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {
+            "input_expression": self.input_expression,
+            "field": self.field,
+            "sanitizer_kind": self.sanitizer_kind,
+        }
+        if self.filters:
+            data["filters"] = list(self.filters)
+        if self.wrapper:
+            data["wrapper"] = self.wrapper
+        if self.reason:
+            data["reason"] = self.reason
+        return data
+
+
+@dataclass(frozen=True, slots=True)
 class RoleBoundaryRegion:
     """One structural role region in a symbolic rendered prompt pattern.
 
@@ -50,6 +85,7 @@ class RoleBoundaryRegion:
     segment_indexes: tuple[int, ...]
     message_index: int | None = None
     content_expressions: tuple[str, ...] = ()
+    input_sanitizers: tuple[RoleBoundarySanitizer, ...] = ()
     control_text: str = ""
     excluded_roles: tuple[str, ...] = ()
 
@@ -68,6 +104,15 @@ class RoleBoundaryRegion:
             raise ValueError("message_index must be non-negative")
         object.__setattr__(self, "segment_indexes", tuple(self.segment_indexes))
         object.__setattr__(self, "content_expressions", tuple(dict.fromkeys(self.content_expressions)))
+        sanitizer_keys = {
+            (item.input_expression, item.field, item.sanitizer_kind, item.filters, item.wrapper): item
+            for item in self.input_sanitizers
+        }
+        object.__setattr__(
+            self,
+            "input_sanitizers",
+            tuple(sanitizer_keys[key] for key in sorted(sanitizer_keys)),
+        )
         object.__setattr__(self, "excluded_roles", tuple(sorted(dict.fromkeys(self.excluded_roles))))
 
     def to_dict(self) -> dict[str, object]:
@@ -84,6 +129,8 @@ class RoleBoundaryRegion:
             data["message_index"] = self.message_index
         if self.content_expressions:
             data["content_expressions"] = list(self.content_expressions)
+        if self.input_sanitizers:
+            data["input_sanitizers"] = [sanitizer.to_dict() for sanitizer in self.input_sanitizers]
         if self.control_text:
             data["control_text"] = self.control_text
         if self.excluded_roles:
@@ -266,10 +313,11 @@ def analyze_role_boundary_nonforgeability(
 ) -> RoleBoundaryNonforgeabilityReport:
     """Check whether user-controlled fields can render structural controls.
 
-    The first check is exact for the bounded symbolic template paths it models:
-    raw message content and raw dynamic role fields are treated as arbitrary
-    attacker-controlled strings, while sanitizer recognition is intentionally
-    deferred to the later sanitizer-awareness milestone.
+    The check is exact for the bounded symbolic template paths it models. Raw
+    message content and raw dynamic role fields are treated as arbitrary
+    attacker-controlled strings; recognized escaping, JSON encoding, and
+    delimiter-safe wrapper filters are treated as sanitizers for the exact
+    expression they protect.
     """
 
     model = build_role_boundary_model(parsed, bounds=bounds)
@@ -293,6 +341,8 @@ def analyze_role_boundary_nonforgeability(
             if not _is_user_controlled_region(region):
                 continue
             for expression in region.content_expressions:
+                if _expression_has_sanitizer(region, expression):
+                    continue
                 for marker, marker_kind in markers:
                     if marker in expression:
                         continue
@@ -373,6 +423,7 @@ def _build_path(
                 end_offset=end_offset,
                 segment_indexes=segment_range,
                 content_expressions=content_expressions,
+                input_sanitizers=_input_sanitizers(path, message_index),
                 control_text=_control_text(path, segment_range, message_index),
                 excluded_roles=excluded_roles.get(message_index, ()),
             )
@@ -498,6 +549,51 @@ def _content_expressions(path: ChatTemplateSymbolicPath, message_index: int) -> 
     return tuple(dict.fromkeys(expressions))
 
 
+_FILTER_SANITIZERS: dict[str, str] = {
+    "tojson": "JSON-encodes the field as a quoted data literal instead of raw template control text.",
+    "json": "JSON-encodes the field as data instead of raw template control text.",
+    "to_json": "JSON-encodes the field as data instead of raw template control text.",
+    "json_dumps": "JSON-encodes the field as data instead of raw template control text.",
+    "escape": "Escapes HTML/XML control characters so angle-bracket delimiters cannot render literally.",
+    "e": "Escapes HTML/XML control characters so angle-bracket delimiters cannot render literally.",
+    "forceescape": "Escapes HTML/XML control characters even when the input was marked safe.",
+    "html_escape": "Escapes HTML control characters so angle-bracket delimiters cannot render literally.",
+    "xml_escape": "Escapes XML control characters so angle-bracket delimiters cannot render literally.",
+    "urlencode": "Percent-encodes delimiter characters before rendering user data.",
+    "urlquote": "Percent-encodes delimiter characters before rendering user data.",
+    "base64": "Wraps user data in an alphabet that excludes role and tool delimiter punctuation.",
+    "b64encode": "Wraps user data in an alphabet that excludes role and tool delimiter punctuation.",
+}
+
+
+def _input_sanitizers(path: ChatTemplateSymbolicPath, message_index: int) -> tuple[RoleBoundarySanitizer, ...]:
+    sanitizers: list[RoleBoundarySanitizer] = []
+    for segment in path.segments:
+        if not segment.filters:
+            continue
+        recognized_filters = tuple(filter_name for filter_name in segment.filters if filter_name in _FILTER_SANITIZERS)
+        if not recognized_filters:
+            continue
+        for match in _MESSAGE_PLACEHOLDER_RE.finditer(segment.value):
+            if int(match.group("index")) != message_index:
+                continue
+            filters = tuple(dict.fromkeys(recognized_filters))
+            sanitizers.append(
+                RoleBoundarySanitizer(
+                    input_expression=match.group(0),
+                    field=match.group("field"),
+                    sanitizer_kind="filter",
+                    filters=filters,
+                    reason="; ".join(_FILTER_SANITIZERS[filter_name] for filter_name in filters),
+                )
+            )
+    return tuple(sanitizers)
+
+
+def _expression_has_sanitizer(region: RoleBoundaryRegion, expression: str) -> bool:
+    return any(sanitizer.input_expression == expression for sanitizer in region.input_sanitizers)
+
+
 def _control_text(
     path: ChatTemplateSymbolicPath,
     segment_range: tuple[int, ...],
@@ -565,6 +661,8 @@ def _role_header_findings(
     if region.role_source != "variable" or region.message_index is None:
         return ()
     expression = f"{{messages[{region.message_index}].role}}"
+    if _expression_has_sanitizer(region, expression):
+        return ()
     forgeable_roles = tuple(
         role
         for role in DEFAULT_STRUCTURAL_ROLES
