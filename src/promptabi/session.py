@@ -176,11 +176,9 @@ class AnalysisCache:
             artifact.name,
             artifact.location.ref_path,
             artifact.provenance.ref_version,
-            artifact.backend,
-            artifact.vocabulary_size,
-            artifact.special_tokens,
+            artifact.family,
             artifact.added_tokens,
-            artifact.normalization,
+            artifact.metadata,
         )
         return self.memoize("tokenizer-adapter", key, lambda: load_tokenizer(artifact))  # type: ignore[return-value]
 
@@ -1451,6 +1449,8 @@ def _static_contract_finding_diagnostic(report: StaticContractReport, finding: S
         if finding.result.unsat_core:
             core_action = "extract minimized Z3 unsat core" if finding.result.backend.value == "z3" else "extract minimal unsat core"
             steps.append(WitnessStep(action=core_action, output=", ".join(finding.result.unsat_core)))
+        if finding.result.reason is not None:
+            steps.append(WitnessStep(action="record solver abstention reason", output=finding.result.reason))
     steps.extend(
         WitnessStep(action="record contract evidence", input=key, output=value)
         for key, value in finding.evidence

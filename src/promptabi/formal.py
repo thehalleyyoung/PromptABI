@@ -1392,51 +1392,59 @@ class FiniteContractProblem:
         except ImportError:
             return None
 
-        context = _Z3Context(z3=z3, variables={})
-        solver = z3.Solver()
-        if timeout_seconds is not None:
-            solver.set(timeout=max(1, int(timeout_seconds * 1000)))
-        domain_constraints: list[Any] = []
-        for variable in self.variables:
-            z3_variable = variable.z3_variable(context)
-            context.variables[variable.name] = z3_variable
-            domain_constraint = variable.z3_domain_constraint(z3_variable, context)
-            domain_constraints.append(domain_constraint)
-            solver.add(domain_constraint)
-        tracked_constraints: list[tuple[str, str, Any]] = []
-        for index, constraint in enumerate(self.constraints):
-            tracker = f"constraint_{index}_{constraint.name}"
-            expression = constraint.expression.to_z3(context)
-            tracked_constraints.append((tracker, constraint.name, expression))
-            solver.assert_and_track(expression, tracker)
-        status = solver.check()
-        if status == z3.sat:
-            model = solver.model()
-            assignment = {
-                variable.name: variable.z3_value_to_python(model.eval(context.variables[variable.name], model_completion=True))
-                for variable in self.variables
-            }
+        try:
+            context = _Z3Context(z3=z3, variables={})
+            solver = z3.Solver()
+            if timeout_seconds is not None:
+                solver.set(timeout=max(1, int(timeout_seconds * 1000)))
+            domain_constraints: list[Any] = []
+            for variable in self.variables:
+                z3_variable = variable.z3_variable(context)
+                context.variables[variable.name] = z3_variable
+                domain_constraint = variable.z3_domain_constraint(z3_variable, context)
+                domain_constraints.append(domain_constraint)
+                solver.add(domain_constraint)
+            tracked_constraints: list[tuple[str, str, Any]] = []
+            for index, constraint in enumerate(self.constraints):
+                tracker = f"constraint_{index}_{constraint.name}"
+                expression = constraint.expression.to_z3(context)
+                tracked_constraints.append((tracker, constraint.name, expression))
+                solver.assert_and_track(expression, tracker)
+            status = solver.check()
+            if status == z3.sat:
+                model = solver.model()
+                assignment = {
+                    variable.name: variable.z3_value_to_python(model.eval(context.variables[variable.name], model_completion=True))
+                    for variable in self.variables
+                }
+                return SolverResult(
+                    status=SolverStatus.SAT,
+                    backend=SolverBackend.Z3,
+                    assignment=assignment,
+                    checked_assignments=1,
+                )
+            if status == z3.unsat:
+                core_trackers = tuple(str(item) for item in solver.unsat_core())
+                core = _minimize_z3_unsat_core(
+                    z3,
+                    domain_constraints,
+                    tracked_constraints,
+                    core_trackers,
+                )
+                return SolverResult(
+                    status=SolverStatus.UNSAT,
+                    backend=SolverBackend.Z3,
+                    unsat_core=core,
+                    checked_assignments=0,
+                )
+            return SolverResult(status=SolverStatus.UNKNOWN, backend=SolverBackend.Z3, checked_assignments=0)
+        except (TypeError, ValueError, AttributeError, z3.Z3Exception) as exc:
             return SolverResult(
-                status=SolverStatus.SAT,
+                status=SolverStatus.UNKNOWN,
                 backend=SolverBackend.Z3,
-                assignment=assignment,
-                checked_assignments=1,
-            )
-        if status == z3.unsat:
-            core_trackers = tuple(str(item) for item in solver.unsat_core())
-            core = _minimize_z3_unsat_core(
-                z3,
-                domain_constraints,
-                tracked_constraints,
-                core_trackers,
-            )
-            return SolverResult(
-                status=SolverStatus.UNSAT,
-                backend=SolverBackend.Z3,
-                unsat_core=core,
                 checked_assignments=0,
+                reason=f"unsupported solver fragment: {exc}",
             )
-        return SolverResult(status=SolverStatus.UNKNOWN, backend=SolverBackend.Z3, checked_assignments=0)
 
     def _solve_by_enumeration(
         self,
@@ -1523,6 +1531,7 @@ class SolverResult:
     assignment: Mapping[str, object] | None = None
     unsat_core: tuple[str, ...] = ()
     checked_assignments: int = 0
+    reason: str | None = None
 
     @property
     def sat(self) -> bool:
@@ -1551,6 +1560,8 @@ class SolverResult:
             data["assignment"] = dict(sorted(self.assignment.items()))
         if self.unsat_core:
             data["unsat_core"] = list(self.unsat_core)
+        if self.reason is not None:
+            data["reason"] = self.reason
         return data
 
 

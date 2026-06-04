@@ -126,6 +126,33 @@ class ArtifactLoader:
     """Load PromptABI artifacts without network access or heavyweight libraries."""
 
     def load(self, artifact: Artifact) -> LoadedArtifact:
+        try:
+            return self._load_checked(artifact)
+        except ArtifactLoadError:
+            raise
+        except UnicodeDecodeError as exc:
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"{artifact.kind.value} artifact '{artifact.name}' is not valid UTF-8 text",
+                suggestion="Store JSON, template, schema, grammar, and fixture metadata artifacts as UTF-8.",
+                steps=(("decode artifact text", artifact.location.ref_path, str(exc)),),
+            ) from exc
+        except OSError as exc:
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"{artifact.kind.value} artifact '{artifact.name}' could not be read",
+                suggestion="Check file permissions, archive integrity, and local paths before running verification.",
+                steps=(("read artifact", artifact.location.ref_path, str(exc)),),
+            ) from exc
+        except ValueError as exc:
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"{artifact.kind.value} artifact '{artifact.name}' could not be normalized",
+                suggestion="Use a supported artifact shape and keep unsupported constructs explicit so PromptABI can abstain.",
+                steps=(("normalize artifact", artifact.location.ref_path, str(exc)),),
+            ) from exc
+
+    def _load_checked(self, artifact: Artifact) -> LoadedArtifact:
         if artifact.location.uri is not None:
             return self._load_uri(artifact)
 
@@ -1058,13 +1085,32 @@ def _directory_source_spans(
 
 def _archive_source_spans(path: Path, members: tuple[str, ...]) -> tuple[tuple[str, SourceSpan], ...]:
     spans: list[tuple[str, SourceSpan]] = []
-    if path.suffix.lower() == ".zip":
-        with zipfile.ZipFile(path) as archive:
+    try:
+        if path.suffix.lower() == ".zip":
+            with zipfile.ZipFile(path) as archive:
+                for member in members:
+                    if not member.endswith(".json"):
+                        continue
+                    try:
+                        text = archive.read(member).decode("utf-8")
+                    except UnicodeDecodeError as exc:
+                        raise ArtifactLoadError(
+                            rule_id="artifact-load-failed",
+                            message=f"fixture bundle member '{member}' is not UTF-8 JSON",
+                            suggestion="Store fixture JSON members as UTF-8 text.",
+                            steps=(("decode fixture bundle member", member, str(exc)),),
+                        ) from exc
+                    spans.extend(_json_source_spans(text, f"{path}!/{member}", prefix=member))
+            return tuple(spans)
+        with tarfile.open(path) as archive:
             for member in members:
                 if not member.endswith(".json"):
                     continue
+                extracted = archive.extractfile(member)
+                if extracted is None:
+                    continue
                 try:
-                    text = archive.read(member).decode("utf-8")
+                    text = extracted.read().decode("utf-8")
                 except UnicodeDecodeError as exc:
                     raise ArtifactLoadError(
                         rule_id="artifact-load-failed",
@@ -1074,24 +1120,13 @@ def _archive_source_spans(path: Path, members: tuple[str, ...]) -> tuple[tuple[s
                     ) from exc
                 spans.extend(_json_source_spans(text, f"{path}!/{member}", prefix=member))
         return tuple(spans)
-    with tarfile.open(path) as archive:
-        for member in members:
-            if not member.endswith(".json"):
-                continue
-            extracted = archive.extractfile(member)
-            if extracted is None:
-                continue
-            try:
-                text = extracted.read().decode("utf-8")
-            except UnicodeDecodeError as exc:
-                raise ArtifactLoadError(
-                    rule_id="artifact-load-failed",
-                    message=f"fixture bundle member '{member}' is not UTF-8 JSON",
-                    suggestion="Store fixture JSON members as UTF-8 text.",
-                    steps=(("decode fixture bundle member", member, str(exc)),),
-                ) from exc
-            spans.extend(_json_source_spans(text, f"{path}!/{member}", prefix=member))
-    return tuple(spans)
+    except (tarfile.TarError, zipfile.BadZipFile) as exc:
+        raise ArtifactLoadError(
+            rule_id="artifact-load-failed",
+            message=f"fixture bundle archive '{path}' cannot be source-mapped",
+            suggestion="Use a valid archive with UTF-8 JSON fixture metadata members.",
+            steps=(("source-map fixture bundle archive", str(path), str(exc)),),
+        ) from exc
 
 
 def _file_source_spans(artifact: Artifact, path: Path) -> tuple[tuple[str, SourceSpan], ...]:

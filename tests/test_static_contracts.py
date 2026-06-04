@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from promptabi.artifacts import (
     ArtifactKind,
     ArtifactLocation,
@@ -17,12 +19,42 @@ from promptabi.artifacts import (
 )
 from promptabi.cli import main
 from promptabi.config import VerificationConfig
+from promptabi.formal import BoolDomain, FiniteContractProblem, NamedConstraint, SolverStatus
 from promptabi.loaders import LoadedArtifact
 from promptabi.static_contracts import analyze_static_contracts
 
 
 def _loaded(artifact):
     return LoadedArtifact(artifact=artifact, source_type="memory", pinned=True, resolved=True)
+
+
+class _UnsupportedZ3Expression:
+    def evaluate(self, assignment):
+        del assignment
+        return False
+
+    def to_z3(self, context):
+        del context
+        raise TypeError("custom expression is not part of the Z3-backed fragment")
+
+    def to_dict(self):
+        return {"custom": "unsupported"}
+
+
+def test_finite_contract_solver_abstains_on_unsupported_z3_fragment() -> None:
+    pytest.importorskip("z3")
+    problem = FiniteContractProblem(
+        name="unsupported-z3-fragment",
+        variables=(BoolDomain("flag"),),
+        constraints=(NamedConstraint("custom-unsupported", _UnsupportedZ3Expression()),),
+    )
+
+    result = problem.solve(prefer_z3=True)
+
+    assert result.status is SolverStatus.UNKNOWN
+    assert result.reason is not None
+    assert "unsupported solver fragment" in result.reason
+    assert result.to_dict()["reason"] == result.reason
 
 
 def test_static_contracts_prove_budget_and_stop_exclusion_with_enumeration() -> None:

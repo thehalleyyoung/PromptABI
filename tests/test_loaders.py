@@ -67,6 +67,30 @@ def test_loader_rejects_hash_mismatches_and_malformed_pins(tmp_path: Path) -> No
         )
 
 
+def test_loader_reports_non_utf8_text_as_artifact_diagnostic(tmp_path: Path) -> None:
+    schema = tmp_path / "bad-utf8.schema.json"
+    schema.write_bytes(b'{"type":"object", "bad":"\xff"}')
+    config = tmp_path / "promptabi.json"
+    config.write_text(
+        json.dumps(
+            {
+                "name": "bad-utf8",
+                "artifacts": {"schema": {"kind": "schema", "path": schema.name}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = VerificationSession.from_config_file(config).run()
+
+    assert result.ok is False
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.rule_id == "artifact-load-failed"
+    assert "not valid UTF-8" in diagnostic.message
+    assert diagnostic.witness is not None
+    assert diagnostic.witness.steps[0].action == "decode artifact text"
+
+
 def test_loader_summarizes_tokenizer_directories_deterministically(tmp_path: Path) -> None:
     tokenizer_dir = tmp_path / "tok"
     tokenizer_dir.mkdir()
@@ -191,6 +215,23 @@ def test_loader_validates_provider_config_snapshots(tmp_path: Path) -> None:
     assert loaded.warnings == ()
 
 
+def test_loader_rejects_partial_provider_snapshots_with_guidance(tmp_path: Path) -> None:
+    snapshot = tmp_path / "partial.snapshot.json"
+    snapshot.write_text('{"provider":"openai-compatible"}', encoding="utf-8")
+    artifact = ProviderConfigArtifact(
+        kind=ArtifactKind.PROVIDER_CONFIG,
+        name="provider",
+        location=ArtifactLocation(path=str(snapshot)),
+        provider="openai-compatible",
+    )
+
+    with pytest.raises(ArtifactLoadError, match="lacks captured API shape metadata") as exc_info:
+        ArtifactLoader().load(artifact)
+
+    assert exc_info.value.suggestion == "Record request/response/streaming shape metadata in the snapshot."
+    assert exc_info.value.steps == (("validate provider snapshot", str(snapshot), "shape metadata missing"),)
+
+
 def test_stop_policy_parser_covers_common_provider_and_framework_shapes() -> None:
     openai = parse_stop_policy_config(
         {
@@ -310,6 +351,22 @@ def test_loader_summarizes_archived_fixture_bundles(tmp_path: Path) -> None:
     assert loaded.warnings == ()
 
 
+def test_loader_reports_corrupt_fixture_archives_without_crashing(tmp_path: Path) -> None:
+    archive_path = tmp_path / "fixtures.zip"
+    archive_path.write_bytes(b"not a zip archive")
+    artifact = SchemaArtifact(
+        kind=ArtifactKind.SCHEMA,
+        name="fixtures",
+        location=ArtifactLocation(path=str(archive_path)),
+    )
+
+    with pytest.raises(ArtifactLoadError, match="cannot be read") as exc_info:
+        ArtifactLoader().load(artifact)
+
+    assert exc_info.value.rule_id == "artifact-load-failed"
+    assert "valid zip" in exc_info.value.suggestion
+
+
 def test_verification_session_reports_loader_warnings_and_keeps_missing_canonical(tmp_path: Path) -> None:
     schema = tmp_path / "schema.json"
     schema.write_text("{}", encoding="utf-8")
@@ -334,3 +391,37 @@ def test_verification_session_reports_loader_warnings_and_keeps_missing_canonica
 
     assert missing_result.ok is False
     assert missing_result.diagnostics[0].rule_id == "artifact-missing"
+
+
+def test_stop_tokenizer_check_abstains_on_incompatible_tokenizer_backend(tmp_path: Path) -> None:
+    tokenizer = tmp_path / "tokenizer.json"
+    stops = tmp_path / "stops.json"
+    tokenizer.write_text("{}", encoding="utf-8")
+    stops.write_text('{"stop":["</s>"]}', encoding="utf-8")
+    config = tmp_path / "promptabi.json"
+    config.write_text(
+        json.dumps(
+            {
+                "name": "bad-tokenizer-backend",
+                "checks": ["stop-tokenizer-analysis"],
+                "artifacts": {
+                    "tokenizer": {
+                        "kind": "tokenizer",
+                        "path": tokenizer.name,
+                        "family": "byte-level",
+                        "metadata": {"normalization": 123},
+                    },
+                    "stops": {"kind": "stop-policy", "path": stops.name},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = VerificationSession.from_config_file(config).run()
+
+    diagnostics = [diagnostic for diagnostic in result.diagnostics if diagnostic.rule_id == "stop-tokenizer-abstained"]
+    assert diagnostics
+    assert "could not be analyzed" in diagnostics[0].message
+    assert diagnostics[0].witness is not None
+    assert any("metadata 'normalization'" in (step.output or "") for step in diagnostics[0].witness.steps)

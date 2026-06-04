@@ -67,7 +67,10 @@ tool-call sentinels from real chat-template artifacts, while JSON/escape/wrapper
 filters suppress false positives. Findings include minimized malicious inputs,
 rendered excerpts, byte-level token evidence, and exact forged-boundary
 locations; `examples/role-boundary/` demonstrates the unsafe and sanitized cases
-against the real CLI. Stop policies are now normalized from OpenAI-compatible
+against the real CLI. Malformed artifacts, corrupt fixture packs, partial provider
+snapshots, missing or incompatible tokenizer backends, invalid schemas, and
+unsupported solver fragments now fail closed as source-mapped diagnostics or
+explicit abstentions rather than crashes. Stop policies are now normalized from OpenAI-compatible
 requests, Hugging Face generation configs, llama.cpp/Ollama options, vLLM sampling
 params, LiteLLM params, and common wrapper kwargs, then checked against real
 tokenizer adapters for byte/string/token alignments, multi-token stops,

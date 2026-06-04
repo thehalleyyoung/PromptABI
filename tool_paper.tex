@@ -216,7 +216,10 @@ extracts automata, transducer, and solver witnesses for finite formal contracts,
 tracks check dependencies over artifact kinds, reuses cached tokenizer adapters,
 tokenizer/grammar analysis reports, budget reports, and static-contract query
 results, parallelizes independent embedded checks, serializes shared tokenizer and
-solver resources, emits deterministic
+solver resources, fails closed on malformed JSON or UTF-8 artifacts, corrupt
+fixture archives, partial provider snapshots, invalid schemas, missing or
+incompatible tokenizer backends, and unsupported solver fragments by emitting
+source-mapped loader diagnostics or explicit abstentions, emits deterministic
 typed diagnostics in text, JSON, and SARIF with structured snapshot coverage, exposes an embedding API for custom
 checks and typed results, ingests JSON Schema, regex, EBNF, Outlines,
 xgrammar, llguidance, and PromptABI grammar artifacts into typed rule and
