@@ -22,6 +22,7 @@ from .lockfiles import (
     lockfile_error_diagnostic,
     write_lockfile,
 )
+from .plugins import PluginError, PluginRegistry, load_plugin_modules
 from .render import render_json, render_sarif, render_text
 from .seed_corpus import SeedCorpusError, build_seed_corpus_manifest, write_seed_corpus_manifest
 from .session import VerificationSession
@@ -71,9 +72,15 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("-v", "--verbose", action="count", default=0, help="include additional workflow metadata")
     verify.add_argument(
         "--format",
-        choices=("text", "json", "sarif"),
         default="text",
-        help="output format (default: text)",
+        help="output format: text, json, sarif, or a plugin renderer (default: text)",
+    )
+    verify.add_argument(
+        "--plugin",
+        action="append",
+        default=[],
+        metavar="MODULE[:OBJECT]",
+        help="import a PromptABI plugin module for this run; may be repeated",
     )
     verify.add_argument(
         "--lockfile",
@@ -130,9 +137,15 @@ def build_parser() -> argparse.ArgumentParser:
     diff.add_argument("-v", "--verbose", action="count", default=0, help="include compared config paths")
     diff.add_argument(
         "--format",
-        choices=("text", "json", "sarif"),
         default="text",
-        help="output format (default: text)",
+        help="output format: text, json, sarif, or a plugin renderer (default: text)",
+    )
+    diff.add_argument(
+        "--plugin",
+        action="append",
+        default=[],
+        metavar="MODULE[:OBJECT]",
+        help="import a PromptABI plugin module for renderer extensions; may be repeated",
     )
 
     init = subparsers.add_parser("init", help="scaffold a PromptABI config for a common LLM stack")
@@ -211,9 +224,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             config_path = Path(args.config).resolve() if args.config else discover_config()
             cache_dir = _resolve_cache_dir(args.cache_dir)
             cache_dir.mkdir(parents=True, exist_ok=True)
+            plugin_registry = _load_cli_plugins(args.plugin)
             overrides = _parse_artifact_overrides(args.artifact, parser)
             config = load_config(config_path).with_artifact_overrides(overrides, base_dir=Path.cwd())
-            session = VerificationSession(config)
+            session = VerificationSession(config, plugin_registry=plugin_registry)
             result = session.run()
             lockfile_path = _resolve_lockfile_path(args.lockfile, config_path)
             if args.write_lockfile:
@@ -244,20 +258,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         except ConfigError as exc:
             print(f"promptabi: {exc}", file=sys.stderr)
             return 2
+        except PluginError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
         except OSError as exc:
             print(f"promptabi: cannot prepare cache directory: {exc}", file=sys.stderr)
             return 2
-        if args.format == "json":
-            output = render_json(result)
-        elif args.format == "sarif":
-            output = render_sarif(result)
-        else:
-            output = render_text(
+        try:
+            output = _render_verification_output(
                 result,
-                verbosity=args.verbose - args.quiet,
-                config_path=config_path,
-                cache_dir=cache_dir,
+                args.format,
+                plugin_registry=plugin_registry,
+                text_kwargs={
+                    "verbosity": args.verbose - args.quiet,
+                    "config_path": config_path,
+                    "cache_dir": cache_dir,
+                },
             )
+        except PluginError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
         print(output, end="")
         return _exit_code(result, fail_on=args.fail_on)
 
@@ -295,23 +315,30 @@ def main(argv: Sequence[str] | None = None) -> int:
                 parser.error("--quiet and --verbose cannot be used together")
             baseline_path = Path(args.baseline).resolve()
             current_path = Path(args.current).resolve()
+            plugin_registry = _load_cli_plugins(args.plugin)
             result = diff_config_files(baseline_path, current_path)
         except ConfigError as exc:
             print(f"promptabi: {exc}", file=sys.stderr)
             return 2
-        if args.format == "json":
-            output = render_json(result)
-        elif args.format == "sarif":
-            output = render_sarif(result)
-        else:
-            output = render_text(
+        except PluginError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        try:
+            output = _render_verification_output(
                 result,
-                verbosity=args.verbose - args.quiet,
-                config_path=current_path if args.verbose else None,
-                heading="PromptABI diff",
+                args.format,
+                plugin_registry=plugin_registry,
+                text_kwargs={
+                    "verbosity": args.verbose - args.quiet,
+                    "config_path": current_path if args.verbose else None,
+                    "heading": "PromptABI diff",
+                },
             )
-            if args.verbose:
-                output = output.replace(f"config: {current_path}\n", f"baseline: {baseline_path}\ncurrent: {current_path}\n")
+        except PluginError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        if args.format == "text" and args.verbose:
+            output = output.replace(f"config: {current_path}\n", f"baseline: {baseline_path}\ncurrent: {current_path}\n")
         print(output, end="")
         return _exit_code(result, fail_on=args.fail_on)
 
@@ -411,6 +438,29 @@ def _resolve_lockfile_path(value: str | None, config_path: Path) -> Path:
     if value:
         return Path(value).expanduser().resolve()
     return config_path.with_name("promptabi.lock.json")
+
+
+def _load_cli_plugins(values: Sequence[str]) -> PluginRegistry:
+    registry = PluginRegistry()
+    if values:
+        load_plugin_modules(values, registry=registry)
+    return registry
+
+
+def _render_verification_output(
+    result,
+    output_format: str,
+    *,
+    plugin_registry: PluginRegistry,
+    text_kwargs: dict[str, object],
+) -> str:
+    if output_format == "text":
+        return render_text(result, **text_kwargs)
+    if output_format == "json":
+        return render_json(result)
+    if output_format == "sarif":
+        return render_sarif(result)
+    return plugin_registry.render(output_format, result)
 
 
 def _exit_code(result, *, fail_on: str) -> int:

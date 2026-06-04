@@ -58,7 +58,9 @@ compressed lazy intersection witnesses, incremental DFA minimization, indexed
 transducer composition/projection, solver timeouts, and constraint-sliced finite
 enumeration, while the byte-level tokenizer memoizes normalization results so
 the same proofs scale to tokenizer-sized alphabets without changing the public
-diagnostic contract.
+diagnostic contract. A typed plugin registry now extends artifact loaders,
+checks, provider/grammar/template/truncation/solver backends, and diagnostic
+renderers without weakening deterministic sessions or CLI output.
 
 PromptABI now ships a bounded, sanitizer-aware role-boundary non-forgeability check:
 unsanitized user/tool/function content and dynamic role fields are checked against
@@ -138,7 +140,7 @@ delimiter-collision regression suite covering ChatML, Llama, Mistral,
 XML tool tags, markdown fences, and fine-tune headers. It also has a real tokenizer abstraction spanning byte-level, Hugging Face
 `tokenizers`, `tiktoken`, and SentencePiece backends, differential harnesses
 checked against actual libraries, an embedding API for custom checks and typed
-results, a curated CPU-only seed corpus with a reproducible manifest pipeline,
+results, first-class plugin extension points, a curated CPU-only seed corpus with a reproducible manifest pipeline,
 fixture-backed performance benchmarks across tokenizer/template/grammar/stop/SMT/budget/corpus/cache paths,
 plus docs, examples, and a contribution path for growing checks without changing
 the public surface.

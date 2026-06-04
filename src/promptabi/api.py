@@ -9,6 +9,7 @@ from .config import VerificationConfig, load_config
 from .diagnostics import Diagnostic
 from .explain import DiagnosticExplanation, explain_diagnostic, render_explanation_json, render_explanation_text
 from .loaders import ArtifactLoader, LoadedArtifact
+from .plugins import PluginRegistry
 from .render import render_json, render_sarif, render_text
 from .session import CheckCallable, VerificationResult, VerificationSession
 
@@ -20,6 +21,7 @@ def create_session(
     override_base_dir: str | Path | None = None,
     checks: Mapping[str, CheckCallable] | None = None,
     loader: ArtifactLoader | None = None,
+    plugin_registry: PluginRegistry | None = None,
 ) -> VerificationSession:
     """Create a verification session from a config object or JSON config path."""
 
@@ -27,7 +29,7 @@ def create_session(
     if artifact_overrides:
         base_dir = Path(override_base_dir) if override_base_dir is not None else Path.cwd()
         resolved_config = resolved_config.with_artifact_overrides(dict(artifact_overrides), base_dir=base_dir)
-    return VerificationSession(resolved_config, checks=checks, loader=loader)
+    return VerificationSession(resolved_config, checks=checks, loader=loader, plugin_registry=plugin_registry)
 
 
 def load_artifacts(
@@ -36,6 +38,7 @@ def load_artifacts(
     artifact_overrides: Mapping[str, str] | None = None,
     override_base_dir: str | Path | None = None,
     loader: ArtifactLoader | None = None,
+    plugin_registry: PluginRegistry | None = None,
 ) -> tuple[LoadedArtifact, ...]:
     """Load all artifacts for an embedding workflow using the default session semantics."""
 
@@ -44,6 +47,7 @@ def load_artifacts(
         artifact_overrides=artifact_overrides,
         override_base_dir=override_base_dir,
         loader=loader,
+        plugin_registry=plugin_registry,
     ).load_artifacts()
 
 
@@ -55,6 +59,7 @@ def collect_diagnostics(
     checks: Mapping[str, CheckCallable] | None = None,
     selected_checks: Sequence[str | CheckCallable] | None = None,
     loader: ArtifactLoader | None = None,
+    plugin_registry: PluginRegistry | None = None,
 ) -> tuple[Diagnostic, ...]:
     """Run verification and return diagnostics without constructing a result wrapper."""
 
@@ -64,6 +69,7 @@ def collect_diagnostics(
         override_base_dir=override_base_dir,
         checks=checks,
         loader=loader,
+        plugin_registry=plugin_registry,
     )
     return session.collect_diagnostics(checks=selected_checks)
 
@@ -76,6 +82,7 @@ def run_verification(
     checks: Mapping[str, CheckCallable] | None = None,
     selected_checks: Sequence[str | CheckCallable] | None = None,
     loader: ArtifactLoader | None = None,
+    plugin_registry: PluginRegistry | None = None,
 ) -> VerificationResult:
     """Run PromptABI verification from Python and return a typed result."""
 
@@ -85,6 +92,7 @@ def run_verification(
         override_base_dir=override_base_dir,
         checks=checks,
         loader=loader,
+        plugin_registry=plugin_registry,
     )
     return session.run(checks=selected_checks)
 
@@ -96,6 +104,7 @@ def render_result(
     verbosity: int = 0,
     config_path: str | Path | None = None,
     cache_dir: str | Path | None = None,
+    plugin_registry: PluginRegistry | None = None,
 ) -> str:
     """Render a typed verification result as text, JSON, or SARIF."""
 
@@ -110,6 +119,8 @@ def render_result(
         return render_json(result)
     if output_format == "sarif":
         return render_sarif(result)
+    if plugin_registry is not None and output_format in plugin_registry.renderers:
+        return plugin_registry.render(output_format, result)
     raise ValueError("output_format must be one of: text, json, sarif")
 
 

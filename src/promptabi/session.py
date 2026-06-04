@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from threading import RLock
 
@@ -36,6 +36,7 @@ from .parser_compatibility import (
     ParserCompatibilityStatus,
     analyze_parser_compatibility,
 )
+from .plugins import PluginRegistry
 from .provider_fixture_replay import ProviderFixtureReplayCase, ProviderFixtureReplayFinding, analyze_provider_fixture_replay
 from .provider_migration import ProviderMigrationFinding, analyze_provider_migration
 from .loaders import ArtifactLoadError, ArtifactLoadWarning, ArtifactLoader, LoadedArtifact
@@ -238,6 +239,7 @@ class ScheduledCheck:
     name: str
     callable: CheckCallable
     dependency: CheckDependency
+    modes: tuple[CheckMode, ...]
     ordinal: int
 
 
@@ -307,8 +309,16 @@ CHECK_DEPENDENCIES: dict[str, CheckDependency] = {
 class CheckScheduler:
     """Dependency-aware internal scheduler that keeps output deterministic."""
 
-    def __init__(self, checks: Mapping[str, CheckCallable]) -> None:
+    def __init__(
+        self,
+        checks: Mapping[str, CheckCallable],
+        *,
+        dependencies: Mapping[str, CheckDependency] | None = None,
+        modes: Mapping[str, tuple[CheckMode, ...]] | None = None,
+    ) -> None:
         self._checks = checks
+        self._dependencies = dependencies or CHECK_DEPENDENCIES
+        self._modes = modes or CHECK_MODE_CATALOG
 
     def run(
         self,
@@ -352,7 +362,8 @@ class CheckScheduler:
                 ScheduledCheck(
                     name=check_name,
                     callable=check_callable,
-                    dependency=CHECK_DEPENDENCIES.get(check_name, CheckDependency()),
+                    dependency=self._dependencies.get(check_name, CheckDependency()),
+                    modes=self._modes.get(check_name, ()),
                     ordinal=ordinal,
                 )
             )
@@ -399,6 +410,11 @@ def _run_scheduled_check(context: CheckContext, check: ScheduledCheck) -> tuple[
         diagnostics = tuple(check.callable(context))
     except Exception as exc:
         diagnostics = (_failed_check_diagnostic(check.name, exc),)
+    if check.modes:
+        diagnostics = tuple(
+            diagnostic if diagnostic.check_modes else replace(diagnostic, check_modes=check.modes)
+            for diagnostic in diagnostics
+        )
     return tuple(
         ScheduledDiagnostic(
             check_ordinal=check.ordinal,
@@ -445,9 +461,13 @@ class VerificationSession:
         *,
         checks: Mapping[str, CheckCallable] | None = None,
         loader: ArtifactLoader | None = None,
+        plugin_registry: PluginRegistry | None = None,
     ) -> None:
         self.config = config
-        self.loader = loader or ArtifactLoader()
+        self.plugin_registry = plugin_registry or PluginRegistry()
+        self.loader = loader or ArtifactLoader(plugin_registry=self.plugin_registry)
+        self.check_dependencies: dict[str, CheckDependency] = dict(CHECK_DEPENDENCIES)
+        self.check_modes: dict[str, tuple[CheckMode, ...]] = dict(CHECK_MODE_CATALOG)
         self.checks: dict[str, CheckCallable] = {
             "repository-skeleton": self._repository_skeleton_check,
             "role-boundary-nonforgeability": self._role_boundary_nonforgeability_check,
@@ -468,6 +488,15 @@ class VerificationSession:
             "tokenizer-config-drift": self._tokenizer_config_drift_check,
             "tokenizer-drift": self._tokenizer_config_drift_check,
         }
+        for registration in self.plugin_registry.checks.values():
+            self.checks[registration.name] = registration.callable
+            self.check_dependencies[registration.name] = CheckDependency(
+                artifact_kinds=registration.artifact_kinds,
+                after=registration.after,
+                resources=registration.resources,
+            )
+            if registration.modes:
+                self.check_modes[registration.name] = registration.modes
         if checks:
             self.checks.update(checks)
 
@@ -478,8 +507,9 @@ class VerificationSession:
         *,
         checks: Mapping[str, CheckCallable] | None = None,
         loader: ArtifactLoader | None = None,
+        plugin_registry: PluginRegistry | None = None,
     ) -> "VerificationSession":
-        return cls(load_config(path), checks=checks, loader=loader)
+        return cls(load_config(path), checks=checks, loader=loader, plugin_registry=plugin_registry)
 
     def load_artifacts(self) -> tuple[LoadedArtifact, ...]:
         """Load all configured artifacts or raise the first deterministic loader error."""
@@ -908,7 +938,11 @@ class VerificationSession:
         context: CheckContext,
         checks: Sequence[str | CheckCallable],
     ) -> tuple[ScheduledDiagnostic, ...]:
-        return CheckScheduler(self.checks).run(context, checks)
+        return CheckScheduler(
+            self.checks,
+            dependencies=self.check_dependencies,
+            modes=self.check_modes,
+        ).run(context, checks)
 
     def _load_error_diagnostic(self, artifact_model, exc: ArtifactLoadError) -> Diagnostic:
         artifact = artifact_model.to_ref()

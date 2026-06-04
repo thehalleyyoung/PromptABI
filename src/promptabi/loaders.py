@@ -27,6 +27,7 @@ from .diagnostics import SourceSpan
 from .grammar_differential import analyze_grammar_differential_corpus
 from .grammars import GrammarIngestionError, ingest_grammar_file, ingest_json_schema_mapping
 from .json_schema import compile_json_schema_mapping, normalize_json_schema_mapping
+from .plugins import PluginRegistry
 from .role_boundaries import build_role_boundary_model
 from .source import build_json_source_map
 from .stop_policies import StopPolicyParseError, parse_stop_policy_config
@@ -125,6 +126,9 @@ class ArtifactLoadError(ValueError):
 class ArtifactLoader:
     """Load PromptABI artifacts without network access or heavyweight libraries."""
 
+    def __init__(self, *, plugin_registry: PluginRegistry | None = None) -> None:
+        self.plugin_registry = plugin_registry or PluginRegistry()
+
     def load(self, artifact: Artifact) -> LoadedArtifact:
         try:
             return self._load_checked(artifact)
@@ -153,6 +157,12 @@ class ArtifactLoader:
             ) from exc
 
     def _load_checked(self, artifact: Artifact) -> LoadedArtifact:
+        plugin_loader = self.plugin_registry.resolve_artifact_loader(artifact)
+        if plugin_loader is not None:
+            loaded = plugin_loader(artifact)
+            if loaded is not None:
+                return loaded
+
         if artifact.location.uri is not None:
             return self._load_uri(artifact)
 
