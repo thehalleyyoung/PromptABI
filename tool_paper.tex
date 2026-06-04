@@ -38,6 +38,8 @@ solver, a minimal verification session, focused tests, examples, a fixture
 corpus layout, a curated ten-family seed corpus, a deterministic corpus manifest
 pipeline, a Hugging Face \texttt{tokenizer\_config.json} chat-template parser,
 a bounded symbolic executor for the supported Jinja chat-template fragment, a
+role-boundary model that decomposes symbolic renders into system, user,
+assistant, tool, developer, function, and provider-specific structural regions, a
 concrete renderer differentially checked against Hugging Face
 \texttt{apply\_chat\_template} behavior across the seed corpus, a CPU-only
 benchmark, documentation, and contribution guidance.
@@ -100,6 +102,7 @@ bundles, records source spans for config declarations and parsed JSON artifact
 fields, materializes local and metadata-only remote artifacts, validates sha256
 pins, adapts real tokenizer backends into stable encode/decode metadata,
 extracts Hugging Face chat-template structure from \texttt{tokenizer\_config.json},
+derives role-boundary regions over bounded rendered prompt patterns,
 extracts automata, transducer, and solver witnesses for finite formal contracts, prepares a cache directory for future expensive products, emits deterministic
 typed diagnostics in text, JSON, and SARIF with structured snapshot coverage, exposes an embedding API for custom
 checks and typed results, returns stable policy-controlled process exit codes,
@@ -359,6 +362,17 @@ iteration counts, and explicit abstentions when unsupported constructs or path
 budgets are reached. Loader metadata records whether symbolic execution was
 precise and how many bounded paths were produced for a real artifact.
 
+On top of those paths, PromptABI now builds a structural role-boundary model. For
+each symbolic rendered pattern it identifies message-indexed regions, records the
+conditions that prove a concrete role such as \texttt{system}, \texttt{user},
+\texttt{assistant}, \texttt{tool}, \texttt{developer}, or \texttt{function}, keeps
+unconstrained role variables symbolic, preserves residual else-branch exclusions,
+and creates explicit generated-assistant-prefix regions. Region offsets point
+into the symbolic pattern, content expressions identify the controlled fields,
+and loader metadata summarizes role coverage and region counts for real
+\texttt{tokenizer\_config.json} artifacts. This is the executable substrate for
+the non-forgeability checker rather than a prose-only design.
+
 PromptABI also now has a concrete evaluator for that same supported fragment. It
 renders real message and tool inputs through the position-preserving lexer and
 bounded parser, evaluating role conditionals, generation-prompt branches,
@@ -605,7 +619,8 @@ of files into an auditable experimental input.
 \clearpage
 \section{Role-Boundary Non-Forgeability}
 
-The first major formal checker will analyze whether user, tool, RAG, or other
+The first major formal checker now starts from an executable role-boundary model
+and will analyze whether user, tool, RAG, or other
 attacker-controlled fields can render as structural prompt boundaries. In
 ChatML-like templates the relevant strings may be \texttt{<|im\_start|>},
 \texttt{<|im\_end|>}, role names, or assistant prefixes. In Llama-style
@@ -613,10 +628,10 @@ templates they may be header IDs and end-of-turn sentinels. In instruction-tag
 templates they may be \texttt{[INST]}, \texttt{[/INST]}, or custom fine-tune
 delimiters. In XML-like tool formats they may be tool-call start and end tags.
 
-The checker should model the rendered prompt as regions: system, user,
-assistant, tool, developer, provider envelope, and generated assistant prefix.
-Then it should ask whether content controlled by one region can create syntax
-that is interpreted as another region. A witness should include a minimized
+PromptABI already models the rendered prompt as regions: system, user,
+assistant, tool, developer, function, provider-specific symbolic roles, and
+generated assistant prefixes. The next check asks whether content controlled by
+one region can create syntax that is interpreted as another region. A witness should include a minimized
 malicious field, a rendered excerpt, the tokenized representation, and the exact
 boundary that becomes ambiguous or forged.
 

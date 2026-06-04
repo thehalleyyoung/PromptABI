@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, urlparse
 from .artifacts import Artifact, ArtifactKind
 from .chat_templates import ChatTemplateParseError, parse_hf_tokenizer_config_chat_template, symbolically_execute_chat_template
 from .diagnostics import SourceSpan
+from .role_boundaries import build_role_boundary_model
 from .source import build_json_source_map
 
 
@@ -321,10 +322,15 @@ class ArtifactLoader:
                 steps=(("parse Hugging Face chat template", str(path), str(exc)),),
             ) from exc
         symbolic = symbolically_execute_chat_template(parsed)
+        role_boundaries = build_role_boundary_model(parsed)
         metadata = (
             ("filters", parsed.filters),
             ("generation_prompt_excerpts", parsed.generation_prompt_excerpts),
             ("message_fields", tuple(field.field for field in parsed.message_fields)),
+            ("role_boundary_path_count", len(role_boundaries.paths)),
+            ("role_boundary_region_count", sum(len(path.regions) for path in role_boundaries.paths)),
+            ("role_boundary_roles", role_boundaries.roles),
+            ("role_boundary_supported", role_boundaries.supported),
             ("role_assumptions", parsed.role_assumptions),
             ("special_tokens", tuple(token.text for token in parsed.special_tokens)),
             ("supported_fragment", parsed.supported),

@@ -90,6 +90,13 @@ from .formal import (
     Var,
 )
 from .loaders import ArtifactLoadError, ArtifactLoader, ArtifactLoadWarning, LoadedArtifact, load_artifact
+from .role_boundaries import (
+    DEFAULT_STRUCTURAL_ROLES,
+    RoleBoundaryModel,
+    RoleBoundaryPath,
+    RoleBoundaryRegion,
+    build_role_boundary_model,
+)
 from .seed_corpus import (
     MANIFEST_VERSION,
     REQUIRED_FAMILIES,
@@ -165,6 +172,7 @@ __all__ = [
     "Contains",
     "ByteLevelTokenizer",
     "DecodeResult",
+    "DEFAULT_STRUCTURAL_ROLES",
     "DeterministicFiniteAutomaton",
     "Diagnostic",
     "DiagnosticSeverity",
@@ -192,6 +200,9 @@ __all__ = [
     "PromptSegment",
     "PromptSegmentArtifact",
     "ProviderConfigArtifact",
+    "RoleBoundaryModel",
+    "RoleBoundaryPath",
+    "RoleBoundaryRegion",
     "RoundTripResult",
     "REQUIRED_FAMILIES",
     "SchemaArtifact",
@@ -232,6 +243,7 @@ __all__ = [
     "create_session",
     "discover_config",
     "build_json_source_map",
+    "build_role_boundary_model",
     "build_seed_corpus_manifest",
     "load_artifact",
     "load_artifacts",

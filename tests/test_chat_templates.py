@@ -92,6 +92,10 @@ def test_chat_template_loader_attaches_parsed_metadata() -> None:
     assert metadata["template_format"] == "jinja"
     assert metadata["message_fields"] == ("content", "role")
     assert metadata["role_assumptions"] == ("assistant",)
+    assert metadata["role_boundary_supported"] is True
+    assert metadata["role_boundary_path_count"] > 0
+    assert metadata["role_boundary_region_count"] > 0
+    assert "assistant" in metadata["role_boundary_roles"]
     assert metadata["uses_generation_prompt"] is True
     assert metadata["symbolic_supported_fragment"] is True
     assert metadata["symbolic_path_count"] > 0
