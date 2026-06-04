@@ -1,0 +1,47 @@
+{
+  "provider": "openai",
+  "provider_family": "openai",
+  "request": {
+    "method": "POST",
+    "endpoint": "/v1/chat/completions",
+    "fields": ["messages", "model", "tools", "tool_choice", "response_format", "stream"],
+    "tool_choice_values": ["auto", "required", "none", "named-tool"]
+  },
+  "response": {
+    "fields": ["choices", "finish_reason", "message", "tool_calls", "usage"],
+    "finish_reasons": ["stop", "tool_calls", "length", "content_filter"],
+    "tool_calls": {
+      "name_path": "choices[].message.tool_calls[].function.name",
+      "arguments_path": "choices[].message.tool_calls[].function.arguments",
+      "argument_encoding": "json-string",
+      "id_path": "choices[].message.tool_calls[].id",
+      "supports_parallel_tool_calls": true
+    }
+  },
+  "stops": {
+    "sequences": ["</tool_call>", "<|end|>"],
+    "finish_reason_path": "choices[].finish_reason",
+    "truncates_before_parser": true
+  },
+  "streaming": {
+    "delta_path": "choices[].delta",
+    "emits_argument_fragments": true,
+    "assembly_key": "tool_calls[].index"
+  },
+  "errors": {
+    "code_path": "error.code",
+    "message_path": "error.message",
+    "rate_limit_path": "error.type",
+    "sample": {"error": {"type": "rate_limit_error", "code": "rate_limit_exceeded", "message": "redacted"}}
+  },
+  "limits": {
+    "max_input_tokens": 128000,
+    "max_output_tokens": 4096,
+    "parallel_tool_call_limit": 128
+  },
+  "edge_cases": [
+    {"id": "parallel-tool-calls", "surface": "response.tool_calls", "expected_behavior": "multiple tool calls share one assistant message"},
+    {"id": "streamed-json-string-fragments", "surface": "streaming.delta", "expected_behavior": "argument bytes arrive in order but not on JSON-token boundaries"},
+    {"id": "length-finish-with-partial-tool", "surface": "stops.finish_reason", "expected_behavior": "length finish can leave a parser-incomplete argument string"}
+  ]
+}

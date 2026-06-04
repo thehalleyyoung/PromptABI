@@ -19,6 +19,11 @@ from .structured_schema_corpus import (
     build_structured_schema_corpus_manifest,
     write_structured_schema_corpus_manifest,
 )
+from .provider_fixture_packs import (
+    ProviderFixturePackError,
+    build_provider_fixture_pack_manifest,
+    write_provider_fixture_pack_manifest,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -80,6 +85,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="structured schema corpus root (default: repository fixtures/structured_schemas)",
     )
     schema_manifest.add_argument(
+        "--output",
+        help="write manifest JSON to this path instead of stdout",
+    )
+    provider_fixture_manifest = corpus_subparsers.add_parser(
+        "provider-fixture-manifest",
+        help="validate recorded provider fixture packs and emit their manifest",
+    )
+    provider_fixture_manifest.add_argument(
+        "--root",
+        help="provider fixture pack root (default: repository fixtures/provider_fixture_packs)",
+    )
+    provider_fixture_manifest.add_argument(
         "--output",
         help="write manifest JSON to this path instead of stdout",
     )
@@ -145,6 +162,22 @@ def main(argv: Sequence[str] | None = None) -> int:
                 manifest = build_structured_schema_corpus_manifest(args.root)
                 print(json.dumps(manifest, indent=2, sort_keys=True))
         except StructuredSchemaCorpusError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write corpus manifest: {exc}", file=sys.stderr)
+            return 2
+        return 0
+
+    if args.command == "corpus" and args.corpus_command == "provider-fixture-manifest":
+        try:
+            if args.output:
+                manifest = write_provider_fixture_pack_manifest(args.output, root=args.root)
+                print(f"wrote provider fixture pack manifest: {args.output} ({manifest['entry_count']} entries)")
+            else:
+                manifest = build_provider_fixture_pack_manifest(args.root)
+                print(json.dumps(manifest, indent=2, sort_keys=True))
+        except ProviderFixturePackError as exc:
             print(f"promptabi: {exc}", file=sys.stderr)
             return 2
         except OSError as exc:

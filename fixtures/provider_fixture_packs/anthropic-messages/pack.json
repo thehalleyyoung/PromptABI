@@ -1,0 +1,46 @@
+{
+  "provider": "anthropic",
+  "provider_family": "anthropic",
+  "request": {
+    "method": "POST",
+    "endpoint": "/v1/messages",
+    "fields": ["messages", "model", "max_tokens", "tools", "tool_choice", "system", "stop_sequences", "stream"],
+    "tool_choice_values": ["auto", "any", "tool", "none"]
+  },
+  "response": {
+    "fields": ["id", "content", "stop_reason", "usage"],
+    "finish_reasons": ["end_turn", "tool_use", "max_tokens", "stop_sequence"],
+    "tool_calls": {
+      "name_path": "content[].name",
+      "arguments_path": "content[].input",
+      "argument_encoding": "json-object",
+      "id_path": "content[].id",
+      "supports_parallel_tool_calls": true
+    }
+  },
+  "stops": {
+    "sequences": ["</tool_use>", "<END_OF_TURN>"],
+    "finish_reason_path": "stop_reason",
+    "truncates_before_parser": false
+  },
+  "streaming": {
+    "delta_path": "content_block_delta.delta",
+    "emits_argument_fragments": true,
+    "assembly_key": "content_block.index"
+  },
+  "errors": {
+    "code_path": "error.type",
+    "message_path": "error.message",
+    "rate_limit_path": "error.type",
+    "sample": {"error": {"type": "rate_limit_error", "message": "redacted"}}
+  },
+  "limits": {
+    "max_input_tokens": 200000,
+    "max_output_tokens": 8192,
+    "parallel_tool_call_limit": 64
+  },
+  "edge_cases": [
+    {"id": "json-object-tool-input", "surface": "response.tool_calls.arguments_path", "expected_behavior": "arguments are objects rather than JSON strings"},
+    {"id": "content-block-stream-assembly", "surface": "streaming.delta", "expected_behavior": "tool-use fields are split across content block events"}
+  ]
+}

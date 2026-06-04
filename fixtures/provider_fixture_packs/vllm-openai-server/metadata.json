@@ -1,0 +1,14 @@
+{
+  "id": "vllm-openai-server",
+  "provider_family": "vllm-openai-server",
+  "display_name": "vLLM OpenAI-compatible server fixture",
+  "source": "synthetic-recorded-provider-contract",
+  "license": "fixture-only",
+  "fixture_revision": "provider-fixtures-v1",
+  "upstream_reference": "vLLM OpenAI-compatible chat API shape",
+  "upstream_revision": "minimized-2026-06",
+  "download_required": false,
+  "secrets_included": false,
+  "anonymized": true,
+  "reproducibility_notes": "Offline vLLM-shaped fixture emphasizing OpenAI compatibility gaps and local context limits."
+}

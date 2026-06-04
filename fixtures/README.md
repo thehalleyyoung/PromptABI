@@ -14,3 +14,9 @@ The structured schema corpus contains labeled structured-output and
 tool-definition reductions from open-source-agent patterns, anonymized production
 shapes, and synthetic stress cases. Each entry carries provenance, labels,
 expected parser-compatibility outcomes, hashes, and a runnable PromptABI config.
+
+The provider fixture pack corpus records secret-free request/response shapes,
+tool-call encodings, stop behavior, streaming deltas, error shapes, and edge-case
+limits for representative provider families. `promptabi corpus
+provider-fixture-manifest` validates the packs, rejects secret-like fields, and
+emits deterministic hashes for offline replay and migration checks.

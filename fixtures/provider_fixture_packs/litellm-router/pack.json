@@ -1,0 +1,47 @@
+{
+  "provider": "litellm",
+  "provider_family": "litellm",
+  "request": {
+    "method": "POST",
+    "endpoint": "/v1/chat/completions",
+    "fields": ["messages", "model", "tools", "tool_choice", "response_format", "stream", "metadata"],
+    "tool_choice_values": ["auto", "required", "none", "named-tool"]
+  },
+  "response": {
+    "fields": ["choices", "finish_reason", "message", "tool_calls", "usage", "model"],
+    "finish_reasons": ["stop", "tool_calls", "length", "content_filter", "provider_error"],
+    "tool_calls": {
+      "name_path": "choices[].message.tool_calls[].function.name",
+      "arguments_path": "choices[].message.tool_calls[].function.arguments",
+      "argument_encoding": "provider-dependent",
+      "id_path": "choices[].message.tool_calls[].id",
+      "supports_parallel_tool_calls": true
+    }
+  },
+  "stops": {
+    "sequences": ["</tool_call>", "<END_OF_TURN>"],
+    "finish_reason_path": "choices[].finish_reason",
+    "truncates_before_parser": true
+  },
+  "streaming": {
+    "delta_path": "choices[].delta",
+    "emits_argument_fragments": true,
+    "assembly_key": "provider-normalized-index"
+  },
+  "errors": {
+    "code_path": "error.code",
+    "message_path": "error.message",
+    "rate_limit_path": "error.type",
+    "sample": {"error": {"type": "provider_rate_limit", "code": "upstream_rate_limited", "message": "redacted"}}
+  },
+  "limits": {
+    "max_input_tokens": 128000,
+    "max_output_tokens": 8192,
+    "parallel_tool_call_limit": 128
+  },
+  "edge_cases": [
+    {"id": "provider-dependent-argument-encoding", "surface": "response.tool_calls.argument_encoding", "expected_behavior": "router target can change argument object/string encoding"},
+    {"id": "target-limit-varies", "surface": "limits.max_input_tokens", "expected_behavior": "declared router limit must match selected upstream model"},
+    {"id": "normalized-error-shape", "surface": "errors", "expected_behavior": "upstream error code can be rewritten by router"}
+  ]
+}

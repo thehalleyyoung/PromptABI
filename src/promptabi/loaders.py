@@ -301,11 +301,11 @@ class ArtifactLoader:
                 suggestion="Add a non-empty 'provider' field to the provider snapshot.",
                 steps=(("validate provider snapshot", str(path), "provider missing"),),
             )
-        if not any(key in raw for key in ("request_shape", "response_shape", "streaming_deltas")):
+        if not any(key in raw for key in ("request_shape", "response_shape", "streaming_deltas", "request", "response", "streaming")):
             raise ArtifactLoadError(
                 rule_id="artifact-load-failed",
                 message=f"provider snapshot artifact '{artifact.name}' lacks captured API shape metadata",
-                suggestion="Record request_shape, response_shape, or streaming_deltas in the snapshot.",
+                suggestion="Record request/response/streaming shape metadata in the snapshot.",
                 steps=(("validate provider snapshot", str(path), "shape metadata missing"),),
             )
         loaded = self._load_file(artifact, path, source_type="provider-config-snapshot")

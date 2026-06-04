@@ -1,0 +1,14 @@
+{
+  "id": "bedrock-converse",
+  "provider_family": "bedrock",
+  "display_name": "Amazon Bedrock Converse tool-use fixture",
+  "source": "synthetic-recorded-provider-contract",
+  "license": "fixture-only",
+  "fixture_revision": "provider-fixtures-v1",
+  "upstream_reference": "Bedrock Converse public API shape",
+  "upstream_revision": "minimized-2026-06",
+  "download_required": false,
+  "secrets_included": false,
+  "anonymized": true,
+  "reproducibility_notes": "Synthetic Bedrock-shaped contract with no AWS account identifiers or signed headers."
+}

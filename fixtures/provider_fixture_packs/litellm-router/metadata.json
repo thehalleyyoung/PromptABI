@@ -1,0 +1,14 @@
+{
+  "id": "litellm-router",
+  "provider_family": "litellm",
+  "display_name": "LiteLLM routing fixture",
+  "source": "synthetic-recorded-provider-contract",
+  "license": "fixture-only",
+  "fixture_revision": "provider-fixtures-v1",
+  "upstream_reference": "LiteLLM OpenAI-compatible routing surface",
+  "upstream_revision": "minimized-2026-06",
+  "download_required": false,
+  "secrets_included": false,
+  "anonymized": true,
+  "reproducibility_notes": "Synthetic router contract with provider names only; contains no target URLs, tenant IDs, or credentials."
+}

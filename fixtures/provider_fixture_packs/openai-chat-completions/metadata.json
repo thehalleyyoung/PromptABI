@@ -1,0 +1,14 @@
+{
+  "id": "openai-chat-completions",
+  "provider_family": "openai",
+  "display_name": "OpenAI chat completions tool-call fixture",
+  "source": "synthetic-recorded-provider-contract",
+  "license": "fixture-only",
+  "fixture_revision": "provider-fixtures-v1",
+  "upstream_reference": "OpenAI-compatible chat completions public API shape",
+  "upstream_revision": "minimized-2026-06",
+  "download_required": false,
+  "secrets_included": false,
+  "anonymized": true,
+  "reproducibility_notes": "Minimized from documented request/response surfaces; contains no prompts, customer data, credentials, or live API payloads."
+}

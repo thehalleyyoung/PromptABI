@@ -1,0 +1,14 @@
+{
+  "id": "anthropic-messages",
+  "provider_family": "anthropic",
+  "display_name": "Anthropic messages tool-use fixture",
+  "source": "synthetic-recorded-provider-contract",
+  "license": "fixture-only",
+  "fixture_revision": "provider-fixtures-v1",
+  "upstream_reference": "Anthropic messages public API shape",
+  "upstream_revision": "minimized-2026-06",
+  "download_required": false,
+  "secrets_included": false,
+  "anonymized": true,
+  "reproducibility_notes": "Minimized offline contract with synthetic tool names and redacted error text."
+}

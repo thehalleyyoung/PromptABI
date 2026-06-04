@@ -1,0 +1,14 @@
+{
+  "id": "gemini-generate-content",
+  "provider_family": "gemini",
+  "display_name": "Gemini generateContent function-call fixture",
+  "source": "synthetic-recorded-provider-contract",
+  "license": "fixture-only",
+  "fixture_revision": "provider-fixtures-v1",
+  "upstream_reference": "Gemini generateContent public API shape",
+  "upstream_revision": "minimized-2026-06",
+  "download_required": false,
+  "secrets_included": false,
+  "anonymized": true,
+  "reproducibility_notes": "Minimized CPU-only fixture for function-call envelopes and safety/error surfaces."
+}

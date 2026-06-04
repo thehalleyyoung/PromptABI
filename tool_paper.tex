@@ -101,7 +101,11 @@ structured-output modes, error envelopes, and LiteLLM routing, and now takes the
 witnesses survive real tokenizer encode-normalize-decode assumptions, plus a
 bounded tokenizer x grammar ambiguity check that validates JSON lexical variants
 and detects tokenizer-path conflicts, decoded-text conflicts, whitespace and
-Unicode byte aliases, and added-token aliases,
+Unicode byte aliases, and added-token aliases, a secret-free provider fixture pack
+corpus that records request and response shapes, tool-call encodings, stop
+behavior, streaming deltas, error envelopes, and context/output limits for
+OpenAI, Anthropic, Gemini, Bedrock, vLLM OpenAI-compatible servers, and LiteLLM,
+with deterministic manifests and validation that rejects credential-like fields,
 a CPU-only benchmark, documentation, and contribution guidance.
 The remaining checkers fit into that surface rather than requiring a rewrite. We
 describe the transducer-oriented formalism, the artifact model, the diagnostic
@@ -192,7 +196,10 @@ agreement over names, argument encodings, escaping, IDs, parallel calls,
 streaming fragments, chat-template tool rendering, and stop delimiters,
 checks recorded provider migration contracts across all current first-party
 provider families for request, response, tool, stop, streaming, context,
-structured-output, error, and routing compatibility,
+structured-output, error, and routing compatibility, validates provider fixture
+packs that capture secret-free request/response shapes, tool-call encodings, stop
+behavior, streaming deltas, error envelopes, and edge-case limits for offline
+replay,
 returns stable policy-controlled process exit codes,
 and runs a CPU-only smoke benchmark against an example bundle.
 
@@ -213,7 +220,7 @@ The repository layout is designed to scale:
 \hline
 \texttt{examples/stop-policies} & A vLLM sampling-parameter fixture that exercises real stop-policy artifact loading and normalization. \\
 \hline
-\texttt{fixtures} & Curated seed corpus, real-world bug reductions, grammar differential cases, and labeled structured-schema/tool-calling fixtures with provenance metadata, expected behaviors, reproducibility notes, runnable configs, and deterministic hashes. \\
+\texttt{fixtures} & Curated seed corpus, real-world bug reductions, grammar differential cases, labeled structured-schema/tool-calling fixtures, and secret-free provider fixture packs with provenance metadata, expected behaviors, reproducibility notes, runnable configs, and deterministic hashes. \\
 \hline
 \texttt{benchmarks} & CPU-only benchmark entrypoints for repeatable performance baselines. \\
 \hline
@@ -397,7 +404,7 @@ Tokenizer directories & Stable manifest over sorted relative file names, file si
 \hline
 GGUF stubs & Header-level GGUF magic, version, tensor count, metadata-key count, and streamed file hash without loading weights. \\
 \hline
-Provider snapshots & Deterministic JSON validation for provider name, captured request/response or streaming shape metadata, and optional stop-trace fixtures for offline differential replay, with parse-error line and column diagnostics. \\
+Provider snapshots & Deterministic JSON validation for provider name, captured request/response or streaming shape metadata, provider fixture pack sections, and optional stop-trace fixtures for offline differential replay, with parse-error line and column diagnostics. \\
 \hline
 Tool definitions & Source-mapped ingestion for OpenAI function tools, Anthropic \texttt{input\_schema} tools, LangChain \texttt{args\_schema} tools, Pydantic model JSON Schemas, TypeScript-style function arrays, MCP \texttt{inputSchema} tools, and provider tool-call response envelopes, recording tool names, argument encodings, closed parameter schemas, enum/constraint paths, IDs, streaming chunks, and ingestion issues. \\
 \hline
@@ -896,6 +903,18 @@ and stop policies that omit the recorded tool-call delimiter. The fixture-backed
 test drives all of those findings through \texttt{promptabi verify}, with source
 spans into the provider JSON and witness steps for the compared fields.
 
+The provider evidence is no longer an ad hoc collection of JSON snippets.
+PromptABI now ships a first-class provider fixture pack corpus. Each pack records
+the request surface, response envelope, tool-call name and argument paths,
+argument encoding, stop behavior, streaming delta assembly, error-code shape, and
+edge-case context/output limits for a representative provider family. The corpus
+loader validates those sections, materializes each pack as a loadable
+\texttt{provider-config} artifact, emits deterministic manifest hashes, and
+rejects credential-like keys or values such as authorization headers and API-key
+patterns. This gives provider-migration, tool-serialization, and future replay
+checks an offline input format that can be shared in bug reports and CI without
+storing secrets.
+
 PromptABI now normalizes the supported JSON Schema subset into a typed tree that
 preserves objects, arrays, required fields, enum and const terminals, string and
 numeric constraints, type and composition unions, local reference expansion,
@@ -978,7 +997,7 @@ The testing strategy has three tiers:
 \item chat-template parser, symbolic-executor, concrete-renderer, role-region, and role-boundary non-forgeability tests across real \texttt{tokenizer\_config.json} fixtures and known delimiter-collision regressions, including ChatML, Llama header tokens, Mistral instruction tags, XML-ish tool tags, markdown fences, fine-tune hash headers, generation-prompt extraction, dynamic role headers, content-control delimiter collisions, role assumptions, field references, special tokens, bounded message/tool loops, filters, whitespace controls, path budgets, empty tool lists, tool-role messages, and unsupported constructs, with concrete outputs differentially checked against Hugging Face's renderer;
 \item loader and parser tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, tool-definition schemas spanning OpenAI, Anthropic, LangChain, Pydantic, TypeScript-style, MCP, and provider tool-call envelopes, tool-serialization contracts over names, arguments, escaping, IDs, parallel calls, streaming chunks, template tool rendering, and stop delimiters, stop-policy configs spanning OpenAI-compatible, Hugging Face, llama.cpp/Ollama, vLLM, LiteLLM, wrapper kwargs, fixture archives, and source-mapped JSON fields;
 \item stop-tokenizer, stop-differential, and stop-overreachability tests that exercise byte/string/token alignments, multi-token stops, invalid stop-token IDs, normalization collisions, prefix/suffix collisions, added/special-token interactions, OpenAI-compatible and Hugging Face delimiter-retention semantics, provider fixture replay, CLI mismatch diagnostics, serialized stop offsets, parser-state truncation witnesses, supported schema/tool string witnesses, structural delimiter collisions, real-world Qwen/Gemma/llama.cpp stop bug reductions, and a real Hugging Face \texttt{tokenizers} BPE fixture;
-\item fixture and corpus tests for minimized tokenizer/chat-template bundles, public real-bug provenance, expected behaviors, sentinel consistency, artifact materialization, deterministic manifest generation, labeled structured-schema reductions, anonymized contracts, synthetic parser stress cases, tool-definition bundles, and real CLI replay of every included structured-schema config;
+\item fixture and corpus tests for minimized tokenizer/chat-template bundles, public real-bug provenance, expected behaviors, sentinel consistency, artifact materialization, deterministic manifest generation, labeled structured-schema reductions, anonymized contracts, synthetic parser stress cases, tool-definition bundles, secret-free provider fixture packs with request/response/tool/stop/streaming/error/limit coverage and credential-pattern rejection, and real CLI replay of every included structured-schema config;
 \item future corpus tests for popular model and framework configurations pinned by immutable upstream revisions.
 \end{itemize}
 

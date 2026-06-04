@@ -1,0 +1,46 @@
+{
+  "provider": "gemini",
+  "provider_family": "gemini",
+  "request": {
+    "method": "POST",
+    "endpoint": "/v1beta/models/{model}:generateContent",
+    "fields": ["contents", "generationConfig", "tools", "toolConfig", "safetySettings"],
+    "tool_choice_values": ["AUTO", "ANY", "NONE", "function"]
+  },
+  "response": {
+    "fields": ["candidates", "finishReason", "content", "functionCall", "usageMetadata"],
+    "finish_reasons": ["STOP", "MAX_TOKENS", "SAFETY", "RECITATION"],
+    "tool_calls": {
+      "name_path": "candidates[].content.parts[].functionCall.name",
+      "arguments_path": "candidates[].content.parts[].functionCall.args",
+      "argument_encoding": "json-object",
+      "id_path": "none",
+      "supports_parallel_tool_calls": false
+    }
+  },
+  "stops": {
+    "sequences": ["</function_call>"],
+    "finish_reason_path": "candidates[].finishReason",
+    "truncates_before_parser": true
+  },
+  "streaming": {
+    "delta_path": "candidates[].content.parts[]",
+    "emits_argument_fragments": false,
+    "assembly_key": "candidate.index"
+  },
+  "errors": {
+    "code_path": "error.status",
+    "message_path": "error.message",
+    "rate_limit_path": "error.status",
+    "sample": {"error": {"status": "RESOURCE_EXHAUSTED", "message": "redacted"}}
+  },
+  "limits": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 8192,
+    "parallel_tool_call_limit": 1
+  },
+  "edge_cases": [
+    {"id": "missing-tool-call-id", "surface": "response.tool_calls.id_path", "expected_behavior": "function calls do not carry OpenAI-style call IDs"},
+    {"id": "safety-finish-with-no-parser-output", "surface": "response.finish_reasons", "expected_behavior": "safety finish can omit the expected structured part"}
+  ]
+}

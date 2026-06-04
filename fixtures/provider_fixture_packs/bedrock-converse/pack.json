@@ -1,0 +1,46 @@
+{
+  "provider": "bedrock",
+  "provider_family": "bedrock",
+  "request": {
+    "method": "POST",
+    "endpoint": "/model/{modelId}/converse",
+    "fields": ["messages", "system", "inferenceConfig", "toolConfig", "additionalModelRequestFields"],
+    "tool_choice_values": ["auto", "any", "tool"]
+  },
+  "response": {
+    "fields": ["output", "stopReason", "usage", "metrics"],
+    "finish_reasons": ["end_turn", "tool_use", "max_tokens", "stop_sequence"],
+    "tool_calls": {
+      "name_path": "output.message.content[].toolUse.name",
+      "arguments_path": "output.message.content[].toolUse.input",
+      "argument_encoding": "json-object",
+      "id_path": "output.message.content[].toolUse.toolUseId",
+      "supports_parallel_tool_calls": true
+    }
+  },
+  "stops": {
+    "sequences": ["</toolUse>"],
+    "finish_reason_path": "stopReason",
+    "truncates_before_parser": false
+  },
+  "streaming": {
+    "delta_path": "contentBlockDelta.delta",
+    "emits_argument_fragments": true,
+    "assembly_key": "contentBlockIndex"
+  },
+  "errors": {
+    "code_path": "__type",
+    "message_path": "message",
+    "rate_limit_path": "__type",
+    "sample": {"__type": "ThrottlingException", "message": "redacted"}
+  },
+  "limits": {
+    "max_input_tokens": 200000,
+    "max_output_tokens": 8192,
+    "parallel_tool_call_limit": 64
+  },
+  "edge_cases": [
+    {"id": "provider-specific-tool-id", "surface": "response.tool_calls.id_path", "expected_behavior": "toolUseId must be preserved through parser handoff"},
+    {"id": "content-block-fragments", "surface": "streaming.delta", "expected_behavior": "tool input can be split across content-block deltas"}
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "provider": "vllm",
+  "provider_family": "vllm-openai-server",
+  "request": {
+    "method": "POST",
+    "endpoint": "/v1/chat/completions",
+    "fields": ["messages", "model", "tools", "tool_choice", "guided_json", "stop", "stream"],
+    "tool_choice_values": ["auto", "none", "named-tool"]
+  },
+  "response": {
+    "fields": ["choices", "finish_reason", "message", "tool_calls", "usage"],
+    "finish_reasons": ["stop", "length", "tool_calls"],
+    "tool_calls": {
+      "name_path": "choices[].message.tool_calls[].function.name",
+      "arguments_path": "choices[].message.tool_calls[].function.arguments",
+      "argument_encoding": "json-string",
+      "id_path": "choices[].message.tool_calls[].id",
+      "supports_parallel_tool_calls": false
+    }
+  },
+  "stops": {
+    "sequences": ["</tool_call>", "<|eot_id|>"],
+    "finish_reason_path": "choices[].finish_reason",
+    "truncates_before_parser": true
+  },
+  "streaming": {
+    "delta_path": "choices[].delta",
+    "emits_argument_fragments": true,
+    "assembly_key": "tool_calls[].index"
+  },
+  "errors": {
+    "code_path": "error.code",
+    "message_path": "error.message",
+    "rate_limit_path": "error.type",
+    "sample": {"error": {"type": "server_error", "code": "context_length_exceeded", "message": "redacted"}}
+  },
+  "limits": {
+    "max_input_tokens": 32768,
+    "max_output_tokens": 4096,
+    "parallel_tool_call_limit": 1
+  },
+  "edge_cases": [
+    {"id": "local-context-regression", "surface": "limits.max_input_tokens", "expected_behavior": "served model limit can be lower than upstream hosted provider"},
+    {"id": "guided-json-plus-tools", "surface": "request.fields", "expected_behavior": "guided decoding fields can coexist with tool fields but need parser agreement"}
+  ]
+}
