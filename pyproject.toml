@@ -28,6 +28,7 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 docs = ["mkdocs>=1.6"]
+tokenizers = ["sentencepiece>=0.2", "tiktoken>=0.7", "tokenizers>=0.15"]
 
 [project.scripts]
 promptabi = "promptabi.cli:main"
@@ -44,4 +45,4 @@ promptabi = ["py.typed"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
-
+pythonpath = ["src"]

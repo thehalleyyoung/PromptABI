@@ -29,9 +29,11 @@ This paper presents the repository as it now stands and the research system it
 is designed to become. The implementation already contains a typed Python
 package, a deterministic command line workflow, a public embedding API, a
 typed artifact model, a stable diagnostic contract with text, JSON, and SARIF
-renderers, offline version-pinned artifact loading, a minimal verification
-session, focused tests, examples, a fixture corpus layout, a CPU-only benchmark,
-documentation, and contribution guidance.
+renderers, offline version-pinned artifact loading, a tokenizer abstraction
+validated against real Hugging Face \texttt{tokenizers}, \texttt{tiktoken}, and
+SentencePiece libraries, a minimal verification session, focused tests,
+examples, a fixture corpus layout, a CPU-only benchmark, documentation, and
+contribution guidance.
 The remaining checkers fit into that surface rather than requiring a rewrite. We
 describe the transducer-oriented formalism, the artifact model, the diagnostic
 contract, the first benchmark line, and the planned evaluation against real tokenizer, template,
@@ -86,10 +88,11 @@ The implementation is intentionally small, but it is not a paper mockup: it
 loads real JSON configuration, discovers configs from subdirectories, accepts
 explicit artifact overrides, normalizes artifact paths, builds typed artifact
 bundles, materializes local and metadata-only remote artifacts, validates sha256
-pins, prepares a cache directory for future expensive products, emits
-deterministic typed diagnostics in text, JSON, and SARIF, returns stable
-policy-controlled process exit codes, and runs a CPU-only smoke benchmark against
-an example bundle.
+pins, adapts real tokenizer backends into stable encode/decode metadata,
+prepares a cache directory for future expensive products, emits deterministic
+typed diagnostics in text, JSON, and SARIF, returns stable policy-controlled
+process exit codes, and runs a CPU-only smoke benchmark against an example
+bundle.
 
 The repository layout is designed to scale:
 
@@ -240,6 +243,54 @@ for the research system: every future role-boundary, stop-reachability,
 grammar-emptiness, provider-migration, and budget-survival finding can cite the
 exact artifact reference, actual hash, revision strength, and loader witness that
 made the claim reproducible.
+
+\clearpage
+\section{Tokenizer Abstraction Layer}
+
+Tokenizers are not a peripheral convenience in PromptABI; they are one of the
+central semantic boundaries. A role delimiter, stop string, JSON escape, or tool
+sentinel is only meaningful after normalization, added-token recognition,
+special-token handling, byte fallback, tokenization, and decoding are known. The
+repository now exposes a backend-neutral tokenizer interface that records token
+IDs, token surfaces, byte spans, special-token flags, added-token flags,
+normalization steps, decoded text, and round-trip metadata.
+
+The implemented layer covers four practical families:
+
+\begin{center}
+\begin{tabular}{|p{0.28\linewidth}|p{0.58\linewidth}|}
+\hline
+\textbf{Backend} & \textbf{Capability} \\
+\hline
+Byte-level & Deterministic byte alphabet with greedy added-token matching, portable Unicode normalization rules, UTF-8 byte spans, and exact decode reconstruction. \\
+\hline
+Hugging Face \texttt{tokenizers} & Local \texttt{tokenizer.json} and tokenizer-directory loading, real backend encode/decode, backend normalizer metadata, offsets converted to byte spans, and added-token detection. \\
+\hline
+\texttt{tiktoken} & Installed encoding adapters such as \texttt{cl100k\_base}, special-token handling, token-byte metadata, and round-trip checks against the real library. \\
+\hline
+SentencePiece & Local \texttt{.model} loading, piece/id extraction, decode comparison, and best-effort byte spans where the piece surface can be matched. \\
+\hline
+\end{tabular}
+\end{center}
+
+This abstraction is deliberately thinner than a tokenizer reimplementation. Its
+job is to expose the observable behavior of real libraries in a stable shape that
+formal checks can consume. A stop-reachability checker can ask for byte spans and
+token IDs without knowing whether the source was ByteLevel BPE, SentencePiece, or
+\texttt{tiktoken}. A role-boundary checker can see whether a delimiter is an
+ordinary byte sequence, an added token, or a special token. A drift checker can
+compare normalized text, token IDs, token surfaces, and decode results across
+versions.
+
+The current tests validate this layer against real code rather than mocks. A
+trained local Hugging Face ByteLevel BPE tokenizer is compared against
+\texttt{tokenizers.Tokenizer.encode} and \texttt{decode}. The \texttt{tiktoken}
+adapter is compared against \texttt{cl100k\_base}, including special-token
+handling. A temporary SentencePiece model is trained and compared against
+\texttt{SentencePieceProcessor}. The byte-level adapter separately proves
+normalization, added-token, special-token, UTF-8 span, and round-trip behavior.
+These tests form the first differential benchline for the eventual tokenizer
+corpus.
 
 \clearpage
 \section{Diagnostic Contract}
@@ -459,6 +510,7 @@ The testing strategy has three tiers:
 
 \begin{itemize}
 \item unit tests for public API and deterministic rendering;
+\item tokenizer abstraction tests against real Hugging Face \texttt{tokenizers}, \texttt{tiktoken}, SentencePiece, and byte-level adapters;
 \item loader tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, and fixture archives;
 \item fixture tests for minimized artifact bundles with expected diagnostics;
 \item corpus tests for popular model and framework configurations pinned by revision.
@@ -628,11 +680,11 @@ whether their composed contract remains valid as artifacts evolve.
 \section{Roadmap Without Step Enumeration}
 
 The roadmap is best understood as a progression from stable surfaces to formal
-checks to ecosystem integration. The skeleton and core artifact model now provide
-stable surfaces. The next phase should implement source-span tracking, richer
-artifact loaders, deterministic diagnostic snapshots, and the tokenizer
-abstraction with differential tests. After that, a finite-state automata and
-transducer layer can support role-boundary, stop-reachability,
+checks to ecosystem integration. The skeleton, core artifact model, loader layer,
+diagnostic contract, CLI, and tokenizer abstraction now provide stable surfaces.
+The next phase should implement source-span tracking, deterministic diagnostic
+snapshots, and a finite-state automata and transducer layer that can support
+role-boundary, stop-reachability,
 grammar-emptiness, and budget-survival checks. Corpus growth, lockfiles, drift
 detection, SARIF, GitHub Actions, pre-commit hooks, HTML reports, suppression
 policies, and plugin APIs turn the verifier from a library into an everyday CI
@@ -650,7 +702,10 @@ for researchers to reproduce.
 \section{Current Smoke Results}
 
 The current codebase was validated with focused tests for the package, artifact
-model, configuration loader, public API, and CLI workflow. The CLI tests exercise
+model, tokenizer abstraction, configuration loader, public API, and CLI workflow.
+The tokenizer tests exercise normalization, added tokens, special tokens,
+round-trip metadata, Hugging Face ByteLevel BPE behavior, \texttt{tiktoken}
+\texttt{cl100k\_base}, and a trained SentencePiece model. The CLI tests exercise
 config discovery from nested directories, artifact-location overrides,
 deterministic JSON output, SARIF output, missing-artifact failures, cache
 directory preparation, quiet/verbose text controls, and configurable exit-code
@@ -666,6 +721,8 @@ that the repository can already execute code, not just describe a future tool.
 \textbf{Line} & \textbf{Current status} \\
 \hline
 Focused tests & Artifact model, public API, config loading, and CLI workflow behavior pass in isolation. \\
+\hline
+Tokenizer differential tests & Byte-level normalization and added-token behavior, Hugging Face ByteLevel BPE, \texttt{tiktoken}, and SentencePiece adapters match real backend behavior. \\
 \hline
 CLI smoke & \texttt{promptabi verify --config examples/minimal/promptabi.json} returns pass, and \texttt{--fail-on}, \texttt{--artifact}, \texttt{--cache-dir}, \texttt{--quiet}, and \texttt{--verbose} are covered. \\
 \hline
@@ -711,14 +768,14 @@ PromptABI is positioned to verify a layer of LLM systems that is both fragile
 and under-tooled: the discrete interface between application data structures,
 prompt rendering, tokenization, constrained output, provider protocols, and
 application parsing. The first repository milestone establishes the engineering
-foundation: typed package, artifact model, CLI, public API, diagnostics, tests,
-docs, examples, fixtures, benchmarks, and contribution guidance. The research
-foundation is the transducer view of prompts, tokenizers, grammars, stop
+foundation: typed package, artifact model, tokenizer abstraction, CLI, public
+API, diagnostics, tests, docs, examples, fixtures, benchmarks, and contribution
+guidance. The research foundation is the transducer view of prompts, tokenizers, grammars, stop
 policies, parsers, and budget policies.
 
 The next milestones should add source spans, stable diagnostic snapshots,
-artifact loaders, and then the first formal checkers without changing the public
-surface. If the project maintains deterministic outputs, minimized witnesses,
+automata/transducer operations, and then the first formal checkers without
+changing the public surface. If the project maintains deterministic outputs, minimized witnesses,
 clear abstention boundaries, and real corpus validation, it can become both a
 practical CI tool and a credible systems research contribution. The core insight
 is simple but powerful: many production LLM failures happen before the neural
