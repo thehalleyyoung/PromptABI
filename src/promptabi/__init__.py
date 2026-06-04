@@ -27,6 +27,17 @@ from .artifacts import (
     ToolDefinitionArtifact,
     TruncationStrategy,
 )
+from .chat_templates import (
+    ChatTemplateCondition,
+    ChatTemplateFieldUse,
+    ChatTemplateLoop,
+    ChatTemplateParseError,
+    ChatTemplateParseResult,
+    ChatTemplateSpecialToken,
+    ChatTemplateUnsupportedConstruct,
+    parse_hf_chat_template_config,
+    parse_hf_tokenizer_config_chat_template,
+)
 from .config import ConfigError, VerificationConfig, discover_config, load_config
 from .diagnostics import (
     ArtifactRef,
@@ -119,6 +130,13 @@ __all__ = [
     "BoolDomain",
     "BoundedStringDomain",
     "ChatTemplateArtifact",
+    "ChatTemplateCondition",
+    "ChatTemplateFieldUse",
+    "ChatTemplateLoop",
+    "ChatTemplateParseError",
+    "ChatTemplateParseResult",
+    "ChatTemplateSpecialToken",
+    "ChatTemplateUnsupportedConstruct",
     "CheckCallable",
     "CheckContext",
     "CheckMode",
@@ -201,6 +219,8 @@ __all__ = [
     "load_tokenizer",
     "render_result",
     "run_verification",
+    "parse_hf_chat_template_config",
+    "parse_hf_tokenizer_config_chat_template",
     "run_tokenizer_differential",
     "write_seed_corpus_manifest",
 ]

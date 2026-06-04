@@ -13,6 +13,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .artifacts import Artifact, ArtifactKind
+from .chat_templates import ChatTemplateParseError, parse_hf_tokenizer_config_chat_template
 from .diagnostics import SourceSpan
 from .source import build_json_source_map
 
@@ -133,6 +134,8 @@ class ArtifactLoader:
             return self._load_gguf_stub(artifact, path)
         if _is_archive(path):
             return self._load_archive(artifact, path)
+        if artifact.kind is ArtifactKind.CHAT_TEMPLATE:
+            return self._load_chat_template(artifact, path)
         if artifact.kind is ArtifactKind.PROVIDER_CONFIG:
             return self._load_provider_snapshot(artifact, path)
         return self._load_file(artifact, path, source_type="local-file")
@@ -300,6 +303,46 @@ class ArtifactLoader:
             actual_sha256=loaded.actual_sha256,
             size_bytes=loaded.size_bytes,
             metadata=(("provider", provider),),
+            source_spans=loaded.source_spans,
+            warnings=loaded.warnings,
+        )
+
+    def _load_chat_template(self, artifact: Artifact, path: Path) -> LoadedArtifact:
+        loaded = self._load_file(artifact, path, source_type="chat-template-file")
+        if path.suffix.lower() != ".json":
+            return loaded
+        try:
+            parsed = parse_hf_tokenizer_config_chat_template(path)
+        except ChatTemplateParseError as exc:
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"chat-template artifact '{artifact.name}' could not be parsed",
+                suggestion="Point Hugging Face chat-template artifacts at tokenizer_config.json with a string chat_template.",
+                steps=(("parse Hugging Face chat template", str(path), str(exc)),),
+            ) from exc
+        metadata = (
+            ("filters", parsed.filters),
+            ("generation_prompt_excerpts", parsed.generation_prompt_excerpts),
+            ("message_fields", tuple(field.field for field in parsed.message_fields)),
+            ("role_assumptions", parsed.role_assumptions),
+            ("special_tokens", tuple(token.text for token in parsed.special_tokens)),
+            ("supported_fragment", parsed.supported),
+            ("template_format", parsed.template_format),
+            ("template_length", len(parsed.template_source)),
+            ("tool_fields", tuple(field.field for field in parsed.tool_fields)),
+            ("unsupported_constructs", tuple(item.expression for item in parsed.unsupported_constructs)),
+            ("uses_generation_prompt", parsed.uses_generation_prompt),
+            ("uses_tools", parsed.uses_tools),
+            ("uses_whitespace_control", parsed.uses_whitespace_control),
+        )
+        return LoadedArtifact(
+            artifact=loaded.artifact,
+            source_type="huggingface-tokenizer-config-chat-template",
+            pinned=loaded.pinned,
+            resolved=loaded.resolved,
+            actual_sha256=loaded.actual_sha256,
+            size_bytes=loaded.size_bytes,
+            metadata=metadata,
             source_spans=loaded.source_spans,
             warnings=loaded.warnings,
         )

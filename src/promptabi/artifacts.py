@@ -197,7 +197,7 @@ class TokenizerArtifact(BaseArtifact):
     added_tokens: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        super().__post_init__()
+        BaseArtifact.__post_init__(self)
         _require_kind(self.kind, ArtifactKind.TOKENIZER)
         object.__setattr__(self, "added_tokens", tuple(sorted(dict.fromkeys(self.added_tokens))))
 
@@ -217,7 +217,7 @@ class ChatTemplateArtifact(BaseArtifact):
     add_generation_prompt: bool | None = None
 
     def __post_init__(self) -> None:
-        super().__post_init__()
+        BaseArtifact.__post_init__(self)
         _require_kind(self.kind, ArtifactKind.CHAT_TEMPLATE)
         if not self.template_format:
             raise ValueError("chat template format must be non-empty")
@@ -238,7 +238,7 @@ class SpecialTokenMapArtifact(BaseArtifact):
     tokens: tuple[SpecialToken, ...] = ()
 
     def __post_init__(self) -> None:
-        super().__post_init__()
+        BaseArtifact.__post_init__(self)
         _require_kind(self.kind, ArtifactKind.SPECIAL_TOKEN_MAP)
         object.__setattr__(self, "tokens", tuple(sorted(self.tokens, key=lambda token: token.name)))
 
@@ -254,7 +254,7 @@ class StopPolicyArtifact(BaseArtifact):
     include_eos: bool = True
 
     def __post_init__(self) -> None:
-        super().__post_init__()
+        BaseArtifact.__post_init__(self)
         _require_kind(self.kind, ArtifactKind.STOP_POLICY)
         if any(sequence == "" for sequence in self.stop_sequences):
             raise ValueError("stop sequences must be non-empty")
@@ -272,7 +272,7 @@ class SchemaArtifact(BaseArtifact):
     dialect: str = "json-schema"
 
     def __post_init__(self) -> None:
-        super().__post_init__()
+        BaseArtifact.__post_init__(self)
         _require_kind(self.kind, ArtifactKind.SCHEMA)
         if not self.dialect:
             raise ValueError("schema dialect must be non-empty")
@@ -288,7 +288,7 @@ class GrammarArtifact(BaseArtifact):
     grammar_type: str = "promptabi"
 
     def __post_init__(self) -> None:
-        super().__post_init__()
+        BaseArtifact.__post_init__(self)
         _require_kind(self.kind, ArtifactKind.GRAMMAR)
         if not self.grammar_type:
             raise ValueError("grammar type must be non-empty")
@@ -305,7 +305,7 @@ class ToolDefinitionArtifact(BaseArtifact):
     tool_names: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        super().__post_init__()
+        BaseArtifact.__post_init__(self)
         _require_kind(self.kind, ArtifactKind.TOOL_DEFINITION)
         object.__setattr__(self, "tool_names", tuple(sorted(dict.fromkeys(self.tool_names))))
 
@@ -323,7 +323,7 @@ class PromptSegmentArtifact(BaseArtifact):
     segments: tuple[PromptSegment, ...] = ()
 
     def __post_init__(self) -> None:
-        super().__post_init__()
+        BaseArtifact.__post_init__(self)
         _require_kind(self.kind, ArtifactKind.PROMPT_SEGMENT)
         if not self.segments:
             raise ValueError("prompt-segment artifacts must define at least one segment")
@@ -345,7 +345,7 @@ class ProviderConfigArtifact(BaseArtifact):
     api_family: str | None = None
 
     def __post_init__(self) -> None:
-        super().__post_init__()
+        BaseArtifact.__post_init__(self)
         _require_kind(self.kind, ArtifactKind.PROVIDER_CONFIG)
         if not self.provider:
             raise ValueError("provider name must be non-empty")
@@ -366,7 +366,7 @@ class FrameworkTruncationConfigArtifact(BaseArtifact):
     reserve_output_tokens: int = 0
 
     def __post_init__(self) -> None:
-        super().__post_init__()
+        BaseArtifact.__post_init__(self)
         _require_kind(self.kind, ArtifactKind.FRAMEWORK_TRUNCATION_CONFIG)
         if not self.framework:
             raise ValueError("framework name must be non-empty")

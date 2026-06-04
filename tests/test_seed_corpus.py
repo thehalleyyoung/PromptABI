@@ -38,7 +38,10 @@ def test_seed_corpus_entries_materialize_loadable_promptabi_artifacts() -> None:
 
     assert len(bundle.artifacts) == len(corpus.entries) * 2
     assert {artifact.kind.value for artifact in bundle.artifacts} == {"chat-template", "tokenizer"}
-    assert {item.source_type for item in loaded} == {"local-file", "tokenizer-directory"}
+    assert {item.source_type for item in loaded} == {
+        "huggingface-tokenizer-config-chat-template",
+        "tokenizer-directory",
+    }
     assert all(item.resolved for item in loaded)
     assert all(item.warnings == () for item in loaded)
     assert {

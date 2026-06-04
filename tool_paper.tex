@@ -36,7 +36,8 @@ validated against real Hugging Face \texttt{tokenizers},
 finite-state transducers with composition and projection, a finite-contract
 solver, a minimal verification session, focused tests, examples, a fixture
 corpus layout, a curated ten-family seed corpus, a deterministic corpus manifest
-pipeline, a CPU-only benchmark, documentation, and contribution guidance.
+pipeline, a Hugging Face \texttt{tokenizer\_config.json} chat-template parser,
+a CPU-only benchmark, documentation, and contribution guidance.
 The remaining checkers fit into that surface rather than requiring a rewrite. We
 describe the transducer-oriented formalism, the artifact model, the diagnostic
 contract, the first benchmark line, and the planned evaluation against real tokenizer, template,
@@ -95,6 +96,7 @@ explicit artifact overrides, normalizes artifact paths, builds typed artifact
 bundles, records source spans for config declarations and parsed JSON artifact
 fields, materializes local and metadata-only remote artifacts, validates sha256
 pins, adapts real tokenizer backends into stable encode/decode metadata,
+extracts Hugging Face chat-template structure from \texttt{tokenizer\_config.json},
 extracts automata, transducer, and solver witnesses for finite formal contracts, prepares a cache directory for future expensive products, emits deterministic
 typed diagnostics in text, JSON, and SARIF with structured snapshot coverage, exposes an embedding API for custom
 checks and typed results, returns stable policy-controlled process exit codes,
@@ -317,6 +319,30 @@ debuggability boundary for the research system: every future role-boundary,
 stop-reachability, grammar-emptiness, provider-migration, and budget-survival
 finding can cite the exact artifact reference, actual hash, revision strength,
 loader witness, and source span that made the claim reproducible.
+
+\clearpage
+\section{Chat-Template Parsing}
+
+PromptABI now parses Hugging Face \texttt{tokenizer\_config.json} chat templates
+into a typed summary instead of treating them as opaque strings. The parser
+extracts the template source and its JSON source span, declared special tokens
+from standard tokenizer fields, message and tool field references, loops over
+\texttt{messages} and \texttt{tools}, role-condition literals, generation-prompt
+branches, filters, constants, whitespace-control usage, and unsupported Jinja
+constructs that require abstention by later symbolic checks.
+
+This is intentionally a parser for verification inputs, not a replacement Jinja
+runtime. It recognizes the bounded fragment used by the seed corpus and records
+unsupported macros, imports, blocks, complex loops, and runtime globals such as
+\texttt{raise\_exception}. The offline loader now recognizes chat-template
+artifacts backed by \texttt{tokenizer\_config.json}, validates the template,
+attaches parsed metadata to the loaded artifact, preserves source spans, and
+keeps malformed or missing \texttt{chat\_template} fields as deterministic loader
+errors. Focused tests run the parser across every curated seed-corpus template
+and targeted fixtures for tools, filters, whitespace controls, generation prompts,
+special-token declarations, and unsupported constructs. This creates the concrete
+input contract needed for bounded symbolic execution and role-boundary
+non-forgeability checks.
 
 \clearpage
 \section{Tokenizer Abstraction Layer}
@@ -660,6 +686,7 @@ The testing strategy has three tiers:
 \begin{itemize}
 \item unit and structured snapshot tests for public API and deterministic text, JSON, and SARIF rendering;
 \item tokenizer abstraction tests against real Hugging Face \texttt{tokenizers}, \texttt{tiktoken}, SentencePiece, and byte-level adapters;
+\item chat-template parser tests across every seed-corpus \texttt{tokenizer\_config.json}, including generation-prompt extraction, role assumptions, field references, special tokens, filters, tools, whitespace controls, and unsupported constructs;
 \item loader tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, fixture archives, and source-mapped JSON fields;
 \item fixture and corpus tests for minimized tokenizer/chat-template bundles, expected behaviors, sentinel consistency, artifact materialization, and deterministic manifest generation;
 \item future corpus tests for popular model and framework configurations pinned by immutable upstream revisions.
@@ -696,7 +723,7 @@ validates coverage of all required families, checks that declared sentinels
 appear in either the template or special-token metadata, verifies
 \texttt{add\_generation\_prompt} declarations against the template, computes
 sha256 hashes for metadata and tokenizer configs, and materializes entries as
-PromptABI tokenizer and chat-template artifacts. The same path is exposed through
+PromptABI tokenizer and parsed chat-template artifacts. The same path is exposed through
 \texttt{promptabi corpus manifest}, which produces a deterministic manifest for
 CI and paper artifacts. The next corpus layer should add exact immutable
 upstream revisions for vendored tokenizer configs, llama.cpp GGUF metadata, real
@@ -917,6 +944,8 @@ Formal core tests & Automata reachability and difference, transducer composition
 Check-mode taxonomy tests & Diagnostic objects, JSON output, text output, and SARIF output preserve sound/complete/bounded/Z3-backed/heuristic/abstaining metadata deterministically. \\
 \hline
 Tokenizer differential tests & Byte-level normalization and added-token behavior, Hugging Face ByteLevel BPE, \texttt{tiktoken}, and SentencePiece adapters match real backend behavior. \\
+\hline
+Chat-template parser tests & Hugging Face \texttt{tokenizer\_config.json} templates across ten seed families expose template source, special tokens, generation prompts, roles, fields, tools, filters, whitespace controls, and unsupported constructs. \\
 \hline
 CLI smoke & \texttt{promptabi verify --config examples/minimal/promptabi.json} returns pass, and \texttt{--fail-on}, \texttt{--artifact}, \texttt{--cache-dir}, \texttt{--quiet}, and \texttt{--verbose} are covered. \\
 \hline
