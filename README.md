@@ -66,8 +66,10 @@ current role-boundary and stop-overreachability checkers catch the same failure
 classes without copying upstream code. Grammar ingestion now normalizes JSON
 Schema, regex, EBNF, Outlines, xgrammar, llguidance, and PromptABI grammars into
 typed rules, terminals, source spans, and explicit abstentions; the JSON Schema
-normalizer preserves objects, arrays, required fields, unions, constraints,
-bounded local references, and additional-property semantics. The repository
+path compiles the supported subset into a bounded grammar IR and DFA witness with
+parser states, source maps, and real `jsonschema` validator round-trips for
+objects, arrays, required fields, unions, constraints, bounded local references,
+and additional-property semantics. The repository
 already has the typed Python package,
 core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,
 snapshot-locked output stability, discoverable `promptabi verify` workflow,

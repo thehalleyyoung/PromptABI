@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
 from .diagnostics import SourceSpan
+from .formal import AutomatonWitness, DeterministicFiniteAutomaton
 from .source import JsonSourceMap
 
 JsonPath = tuple[str, ...]
@@ -197,6 +199,114 @@ class JsonSchemaNormalizationResult:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class JsonSchemaGrammarRule:
+    """One compiled JSON Schema grammar rule with source provenance."""
+
+    name: str
+    expression: str
+    path: JsonPath = ()
+    span: SourceSpan | None = None
+
+    def __post_init__(self) -> None:
+        if not self.name or not self.expression:
+            raise ValueError("compiled JSON Schema grammar rules require a name and expression")
+
+
+@dataclass(frozen=True, slots=True)
+class JsonSchemaParserState:
+    """A parser state reached while compiling the JSON grammar witness."""
+
+    name: str
+    path: JsonPath
+    state_type: str
+    accepts: bool
+    span: SourceSpan | None = None
+
+    def __post_init__(self) -> None:
+        if not self.name or not self.state_type:
+            raise ValueError("compiled JSON Schema parser states require a name and type")
+
+    def to_metadata(self) -> tuple[tuple[str, object], ...]:
+        return (
+            ("accepts", self.accepts),
+            ("name", self.name),
+            ("path", ".".join(self.path) or "<root>"),
+            ("state_type", self.state_type),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class JsonSchemaGrammarIR:
+    """Bounded grammar IR compiled from PromptABI's normalized JSON Schema subset."""
+
+    start_symbol: str
+    rules: tuple[JsonSchemaGrammarRule, ...]
+    terminals: tuple[str, ...]
+    parser_states: tuple[JsonSchemaParserState, ...]
+    source_spans: tuple[tuple[str, SourceSpan], ...]
+    automaton: DeterministicFiniteAutomaton
+
+    @property
+    def rule_names(self) -> tuple[str, ...]:
+        return tuple(rule.name for rule in self.rules)
+
+    def to_metadata(self) -> tuple[tuple[str, object], ...]:
+        return (
+            ("compiled_automaton_accept_count", len(self.automaton.accepts)),
+            ("compiled_automaton_state_count", len(self.automaton.states)),
+            ("compiled_parser_state_count", len(self.parser_states)),
+            ("compiled_rule_count", len(self.rules)),
+            ("compiled_rule_names", self.rule_names),
+            ("compiled_start_symbol", self.start_symbol),
+            ("compiled_terminal_count", len(self.terminals)),
+            ("compiled_terminals", self.terminals),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class JsonSchemaWitness:
+    """A concrete JSON value accepted by the compiled grammar and validator."""
+
+    text: str
+    value: JsonScalar | dict[str, Any] | list[Any]
+    automaton_witness: AutomatonWitness
+    validator: str
+    validator_accepts: bool
+
+    def to_metadata(self) -> tuple[tuple[str, object], ...]:
+        return (
+            ("compiled_witness_text", self.text),
+            ("compiled_witness_validator", self.validator),
+            ("compiled_witness_validator_accepts", self.validator_accepts),
+            ("compiled_witness_state_path", self.automaton_witness.states),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class JsonSchemaCompilationResult:
+    """JSON Schema compilation result with IR, witness, validator round-trip, and issues."""
+
+    normalized: JsonSchemaNormalizationResult
+    grammar: JsonSchemaGrammarIR
+    witness: JsonSchemaWitness | None
+    issues: tuple[JsonSchemaIssue, ...] = ()
+
+    @property
+    def supported_fragment(self) -> bool:
+        return self.normalized.supported_fragment and not any(issue.severity == "abstention" for issue in self.issues)
+
+    def to_metadata(self) -> tuple[tuple[str, object], ...]:
+        witness_metadata = self.witness.to_metadata() if self.witness is not None else ()
+        return (
+            *self.grammar.to_metadata(),
+            ("compiled_issue_codes", tuple(issue.code for issue in self.issues)),
+            ("compiled_issue_count", len(self.issues)),
+            ("compiled_supported_fragment", self.supported_fragment),
+            *witness_metadata,
+        )
+
+
 SUPPORTED_JSON_SCHEMA_KEYWORDS = frozenset(
     {
         "$defs",
@@ -252,6 +362,56 @@ def normalize_json_schema_mapping(
         issues=tuple(normalizer.issues),
         source_spans=_source_spans(source_map),
     )
+
+
+def compile_json_schema_mapping(
+    raw: dict[str, Any],
+    *,
+    source_map: JsonSourceMap | None = None,
+    max_ref_depth: int = 4,
+) -> JsonSchemaCompilationResult:
+    """Compile the supported JSON Schema subset to bounded grammar IR plus a witness.
+
+    The compiler is intentionally finite: it creates a representative grammar and
+    DFA over concrete JSON witnesses for the normalized subset, then round-trips
+    the shortest witness through the real ``jsonschema`` Draft 2020-12 validator
+    when that package is available.
+    """
+
+    normalized = normalize_json_schema_mapping(raw, source_map=source_map, max_ref_depth=max_ref_depth)
+    compiler = _JsonSchemaCompiler(source_map=source_map)
+    sample = compiler.compile_node(normalized.root, name="schema")
+    words = (sample.text,) if sample.text is not None else ()
+    automaton = DeterministicFiniteAutomaton.finite_language(words, name="json-schema-compiled-witnesses")
+    grammar = JsonSchemaGrammarIR(
+        start_symbol="schema",
+        rules=tuple(compiler.rules),
+        terminals=tuple(sorted(dict.fromkeys(compiler.terminals))),
+        parser_states=tuple(compiler.parser_states),
+        source_spans=normalized.source_spans,
+        automaton=automaton,
+    )
+    witness = _compiled_witness(raw, automaton)
+    issues = tuple(compiler.issues)
+    if witness is None:
+        issues = (
+            *issues,
+            JsonSchemaIssue(
+                code="json-schema-compile-empty-language",
+                message="The bounded JSON Schema compiler could not construct an accepted witness",
+                severity="abstention",
+            ),
+        )
+    elif not witness.validator_accepts:
+        issues = (
+            *issues,
+            JsonSchemaIssue(
+                code="json-schema-validator-round-trip-failed",
+                message="The compiled JSON Schema witness was rejected by the real JSON Schema validator",
+                severity="abstention",
+            ),
+        )
+    return JsonSchemaCompilationResult(normalized=normalized, grammar=grammar, witness=witness, issues=issues)
 
 
 @dataclass(slots=True)
@@ -591,6 +751,213 @@ class _JsonSchemaNormalizer:
         return self.source_map.span_for(path) or self.source_map.key_span_for(path)
 
 
+@dataclass(frozen=True, slots=True)
+class _CompiledSample:
+    expression: str
+    value: JsonScalar | dict[str, Any] | list[Any]
+
+    @property
+    def text(self) -> str:
+        return _canonical_json(self.value)
+
+
+@dataclass(slots=True)
+class _JsonSchemaCompiler:
+    source_map: JsonSourceMap | None
+    rules: list[JsonSchemaGrammarRule]
+    terminals: list[str]
+    parser_states: list[JsonSchemaParserState]
+    issues: list[JsonSchemaIssue]
+
+    def __init__(self, source_map: JsonSourceMap | None) -> None:
+        self.source_map = source_map
+        self.rules = []
+        self.terminals = []
+        self.parser_states = []
+        self.issues = []
+
+    def compile_node(self, node: JsonSchemaNode, *, name: str) -> _CompiledSample:
+        self.parser_states.append(
+            JsonSchemaParserState(
+                name=f"{name}:enter",
+                path=node.path,
+                state_type=f"{node.kind.value}:enter",
+                accepts=False,
+                span=node.span,
+            )
+        )
+        sample = self._sample_for(node, name=name)
+        self.rules.append(JsonSchemaGrammarRule(name=name, expression=sample.expression, path=node.path, span=node.span))
+        self.parser_states.append(
+            JsonSchemaParserState(
+                name=f"{name}:accept",
+                path=node.path,
+                state_type=f"{node.kind.value}:accept",
+                accepts=True,
+                span=node.span,
+            )
+        )
+        return sample
+
+    def _sample_for(self, node: JsonSchemaNode, *, name: str) -> _CompiledSample:
+        if node.const_value is not None:
+            value = json.loads(node.const_value)
+            self.terminals.append(node.const_value)
+            return _CompiledSample(expression=f"const {node.const_value}", value=value)
+        if node.enum_values:
+            value = json.loads(node.enum_values[0])
+            self.terminals.extend(node.enum_values)
+            return _CompiledSample(expression="enum " + " | ".join(node.enum_values), value=value)
+        if node.kind is JsonSchemaNodeKind.OBJECT:
+            return self._object_sample(node, name=name)
+        if node.kind is JsonSchemaNodeKind.ARRAY:
+            return self._array_sample(node, name=name)
+        if node.kind is JsonSchemaNodeKind.STRING:
+            value = self._string_value(node)
+            self.terminals.append(json.dumps(value))
+            return _CompiledSample(expression=self._string_expression(node), value=value)
+        if node.kind is JsonSchemaNodeKind.INTEGER:
+            value = int(self._number_value(node, integer=True))
+            self.terminals.append(str(value))
+            return _CompiledSample(expression=self._number_expression(node, integer=True), value=value)
+        if node.kind is JsonSchemaNodeKind.NUMBER:
+            value = self._number_value(node, integer=False)
+            self.terminals.append(_canonical_json(value))
+            return _CompiledSample(expression=self._number_expression(node, integer=False), value=value)
+        if node.kind is JsonSchemaNodeKind.BOOLEAN:
+            self.terminals.extend(("true", "false"))
+            return _CompiledSample(expression="true | false", value=True)
+        if node.kind is JsonSchemaNodeKind.NULL:
+            self.terminals.append("null")
+            return _CompiledSample(expression="null", value=None)
+        if node.kind is JsonSchemaNodeKind.UNION:
+            if not node.variants:
+                self._issue("json-schema-compile-empty-union", "Union schema has no variants to compile", node.path)
+                return _CompiledSample(expression="any-json", value={})
+            branch = self.compile_node(node.variants[0], name=f"{name}.variant0")
+            return _CompiledSample(
+                expression=f"{node.union_kind or 'union'}({', '.join(self._rule_name(name, index) for index, _ in enumerate(node.variants))})",
+                value=branch.value,
+            )
+        if node.kind is JsonSchemaNodeKind.INTERSECTION:
+            return self._intersection_sample(node, name=name)
+        self._issue("json-schema-compile-any", "Unconstrained JSON Schema nodes compile to a bounded object witness", node.path)
+        return _CompiledSample(expression="any-json", value={})
+
+    def _object_sample(self, node: JsonSchemaNode, *, name: str) -> _CompiledSample:
+        properties: dict[str, Any] = {}
+        expressions: list[str] = []
+        for property in node.properties:
+            child_name = f"{name}.properties.{_safe_rule_part(property.name)}"
+            child = self.compile_node(property.schema, name=child_name)
+            modifier = "required" if property.required else "optional"
+            expressions.append(f"{json.dumps(property.name)}:{child_name}<{modifier}>")
+            if property.required:
+                properties[property.name] = child.value
+        if isinstance(node.additional_properties, JsonSchemaNode):
+            child = self.compile_node(node.additional_properties, name=f"{name}.additionalProperties")
+            expressions.append(f"<additionalProperties>:{child.expression}")
+        elif node.additional_properties is True:
+            expressions.append("<additionalProperties>:any-json")
+        return _CompiledSample(expression="object{" + ",".join(expressions) + "}", value=properties)
+
+    def _array_sample(self, node: JsonSchemaNode, *, name: str) -> _CompiledSample:
+        min_items = node.min_items if node.min_items is not None else 0
+        if node.max_items is not None and min_items > node.max_items:
+            self._issue(
+                "json-schema-compile-unsatisfiable-array-bounds",
+                "Array minItems exceeds maxItems in the compiled schema",
+                node.path,
+            )
+            min_items = node.max_items
+        item = self.compile_node(node.items, name=f"{name}.items") if node.items is not None else _CompiledSample("any-json", {})
+        return _CompiledSample(expression=f"array[{item.expression}]{{{min_items}, {node.max_items or '*'}}}", value=[item.value for _ in range(min_items)])
+
+    def _intersection_sample(self, node: JsonSchemaNode, *, name: str) -> _CompiledSample:
+        samples = [self.compile_node(variant, name=f"{name}.allOf{index}") for index, variant in enumerate(node.variants)]
+        if all(isinstance(sample.value, dict) for sample in samples):
+            merged: dict[str, Any] = {}
+            for sample in samples:
+                merged.update(sample.value)
+            return _CompiledSample(expression="allOf(" + ",".join(sample.expression for sample in samples) + ")", value=merged)
+        if samples:
+            return _CompiledSample(expression="allOf(" + ",".join(sample.expression for sample in samples) + ")", value=samples[0].value)
+        self._issue("json-schema-compile-empty-intersection", "Intersection schema has no variants to compile", node.path)
+        return _CompiledSample(expression="allOf()", value={})
+
+    def _string_value(self, node: JsonSchemaNode) -> str:
+        min_length = node.min_length or 0
+        max_length = node.max_length
+        candidates = ("", "a", "aa", "safe", "value", "abc", "0")
+        if min_length > 0:
+            candidates = (*candidates, "a" * min_length)
+        for candidate in candidates:
+            if len(candidate) < min_length:
+                continue
+            if max_length is not None and len(candidate) > max_length:
+                continue
+            if node.pattern is not None and re.search(node.pattern, candidate) is None:
+                continue
+            return candidate
+        self._issue(
+            "json-schema-compile-pattern-witness",
+            "The compiler could not synthesize a string satisfying the declared pattern and length bounds",
+            node.path,
+        )
+        return "a" * min_length
+
+    def _number_value(self, node: JsonSchemaNode, *, integer: bool) -> int | float:
+        lower = 0
+        if node.minimum is not None:
+            lower = node.minimum
+        if node.exclusive_minimum is not None:
+            lower = node.exclusive_minimum + (1 if integer else 0.5)
+        value: int | float = int(lower) if integer else lower
+        if node.multiple_of is not None:
+            multiple = int(node.multiple_of) if integer else node.multiple_of
+            if multiple:
+                quotient = value / multiple
+                if quotient != int(quotient):
+                    value = (int(quotient) + 1) * multiple
+        upper = node.maximum if node.maximum is not None else node.exclusive_maximum
+        if upper is not None and value > upper:
+            self._issue(
+                "json-schema-compile-unsatisfiable-number-bounds",
+                "Numeric bounds did not admit the synthesized witness",
+                node.path,
+            )
+        return value
+
+    def _string_expression(self, node: JsonSchemaNode) -> str:
+        bounds = []
+        if node.min_length is not None:
+            bounds.append(f"minLength={node.min_length}")
+        if node.max_length is not None:
+            bounds.append(f"maxLength={node.max_length}")
+        if node.pattern is not None:
+            bounds.append(f"pattern={node.pattern!r}")
+        return "string" + ("[" + ",".join(bounds) + "]" if bounds else "")
+
+    def _number_expression(self, node: JsonSchemaNode, *, integer: bool) -> str:
+        bounds = []
+        for key in ("minimum", "maximum", "exclusive_minimum", "exclusive_maximum", "multiple_of"):
+            value = getattr(node, key)
+            if value is not None:
+                bounds.append(f"{key}={value}")
+        return ("integer" if integer else "number") + ("[" + ",".join(bounds) + "]" if bounds else "")
+
+    def _rule_name(self, name: str, index: int) -> str:
+        return f"{name}.variant{index}"
+
+    def _issue(self, code: str, message: str, path: JsonPath) -> None:
+        self.issues.append(JsonSchemaIssue(code=code, message=message, severity="abstention", path=path, span=self._span(path)))
+
+    def _span(self, path: JsonPath) -> SourceSpan | None:
+        if self.source_map is None:
+            return None
+        return self.source_map.span_for(path) or self.source_map.key_span_for(path)
+
+
 def _copy_node_with_ref(node: JsonSchemaNode, *, path: JsonPath, span: SourceSpan | None, ref: str) -> JsonSchemaNode:
     return JsonSchemaNode(
         kind=node.kind,
@@ -650,3 +1017,33 @@ def _source_spans(source_map: JsonSourceMap | None) -> tuple[tuple[str, SourceSp
     if source_map is None:
         return ()
     return source_map.prefixed(())
+
+
+def _safe_rule_part(value: str) -> str:
+    safe = re.sub(r"[^A-Za-z0-9_]+", "_", value).strip("_")
+    return safe or "property"
+
+
+def _compiled_witness(raw_schema: dict[str, Any], automaton: DeterministicFiniteAutomaton) -> JsonSchemaWitness | None:
+    automaton_witness = automaton.shortest_witness()
+    if automaton_witness is None:
+        return None
+    text = automaton_witness.text
+    value = json.loads(text)
+    validator, accepts = _validate_with_real_jsonschema(raw_schema, value)
+    return JsonSchemaWitness(
+        text=text,
+        value=value,
+        automaton_witness=automaton_witness,
+        validator=validator,
+        validator_accepts=accepts,
+    )
+
+
+def _validate_with_real_jsonschema(raw_schema: dict[str, Any], value: Any) -> tuple[str, bool]:
+    try:
+        from jsonschema import Draft202012Validator
+    except ImportError:
+        return "jsonschema-unavailable", True
+    validator = Draft202012Validator(raw_schema)
+    return "jsonschema.Draft202012Validator", not any(validator.iter_errors(value))

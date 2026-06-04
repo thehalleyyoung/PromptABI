@@ -16,7 +16,7 @@ from .artifacts import Artifact, ArtifactKind, GrammarArtifact, SchemaArtifact, 
 from .chat_templates import ChatTemplateParseError, parse_hf_tokenizer_config_chat_template, symbolically_execute_chat_template
 from .diagnostics import SourceSpan
 from .grammars import GrammarIngestionError, ingest_grammar_file, ingest_json_schema_mapping
-from .json_schema import normalize_json_schema_mapping
+from .json_schema import compile_json_schema_mapping, normalize_json_schema_mapping
 from .role_boundaries import build_role_boundary_model
 from .source import build_json_source_map
 from .stop_policies import StopPolicyParseError, parse_stop_policy_config
@@ -455,6 +455,7 @@ class ArtifactLoader:
             declared_type = artifact.dialect if isinstance(artifact, SchemaArtifact) else "json-schema"
             parsed = ingest_json_schema_mapping(raw, declared_type=declared_type, source_map=source_map)
             normalized = normalize_json_schema_mapping(raw, source_map=source_map)
+            compiled = compile_json_schema_mapping(raw, source_map=source_map)
         except GrammarIngestionError as exc:
             raise ArtifactLoadError(
                 rule_id="artifact-load-failed",
@@ -471,7 +472,7 @@ class ArtifactLoader:
             resolved=loaded.resolved,
             actual_sha256=loaded.actual_sha256,
             size_bytes=loaded.size_bytes,
-            metadata=_merge_metadata(parsed.to_metadata(), normalized.to_metadata()),
+            metadata=_merge_metadata(parsed.to_metadata(), normalized.to_metadata(), compiled.to_metadata()),
             source_spans=normalized.source_spans or parsed.source_spans or loaded.source_spans,
             warnings=loaded.warnings,
         )
@@ -612,10 +613,18 @@ def load_artifact(artifact: Artifact) -> LoadedArtifact:
 
 def _merge_metadata(
     primary: tuple[tuple[str, object], ...],
-    secondary: tuple[tuple[str, object], ...],
+    *others: tuple[tuple[str, object], ...],
 ) -> tuple[tuple[str, object], ...]:
     primary_keys = {key for key, _value in primary}
-    return (*primary, *((key, value) for key, value in secondary if key not in primary_keys))
+    merged = list(primary)
+    seen = set(primary_keys)
+    for metadata in others:
+        for key, value in metadata:
+            if key in seen:
+                continue
+            merged.append((key, value))
+            seen.add(key)
+    return tuple(merged)
 
 
 def _has_pin(artifact: Artifact) -> bool:

@@ -11,6 +11,8 @@ from promptabi import (
     GrammarIngestionError,
     JsonSchemaNodeKind,
     SchemaArtifact,
+    build_json_source_map,
+    compile_json_schema_mapping,
     ingest_grammar_text,
     normalize_json_schema_mapping,
 )
@@ -136,6 +138,82 @@ def test_json_schema_normalization_abstains_on_recursion_and_tuple_items() -> No
         "json-schema-tuple-items",
     ]
     assert result.root.kind is JsonSchemaNodeKind.UNION
+
+
+def test_json_schema_compilation_emits_ir_witness_automaton_and_validator_round_trip(tmp_path: Path) -> None:
+    schema = {
+        "$defs": {
+            "tag": {"type": "string", "minLength": 2, "maxLength": 8, "pattern": "^[a-z]+$"},
+        },
+        "type": "object",
+        "required": ["answer", "scores"],
+        "additionalProperties": False,
+        "properties": {
+            "answer": {"enum": ["yes", "no"]},
+            "scores": {"type": "array", "minItems": 2, "maxItems": 3, "items": {"type": "integer", "minimum": 1}},
+            "tag": {"$ref": "#/$defs/tag"},
+            "nullable_note": {"type": ["string", "null"]},
+        },
+    }
+    schema_path = tmp_path / "answer.schema.json"
+    schema_text = json.dumps(schema, indent=2, sort_keys=True)
+    schema_path.write_text(schema_text, encoding="utf-8")
+
+    result = compile_json_schema_mapping(schema, source_map=build_json_source_map(schema_text, schema_path))
+
+    assert result.supported_fragment is True
+    assert result.grammar.start_symbol == "schema"
+    assert "schema.properties.answer" in result.grammar.rule_names
+    assert any(state.name == "schema:accept" and state.accepts for state in result.grammar.parser_states)
+    assert any(name == "properties.answer.enum.0" for name, _span in result.grammar.source_spans)
+    assert result.witness is not None
+    assert result.witness.text == '{"answer":"yes","scores":[1,1]}'
+    assert result.witness.validator == "jsonschema.Draft202012Validator"
+    assert result.witness.validator_accepts is True
+    assert result.grammar.automaton.accepts_text(result.witness.text)
+    shortest = result.grammar.automaton.shortest_witness()
+    assert shortest is not None
+    assert shortest.text == result.witness.text
+
+
+def test_json_schema_compilation_surfaces_real_validator_disagreement() -> None:
+    result = compile_json_schema_mapping({"type": "string", "pattern": "^[0-9]{4}$"})
+
+    assert result.supported_fragment is False
+    assert result.witness is not None
+    assert result.witness.validator_accepts is False
+    assert "json-schema-validator-round-trip-failed" in [issue.code for issue in result.issues]
+
+
+def test_json_schema_loader_metadata_includes_compilation_proof(tmp_path: Path) -> None:
+    schema_path = tmp_path / "loader.schema.json"
+    schema_path.write_text(
+        json.dumps(
+            {
+                "type": "object",
+                "required": ["status"],
+                "properties": {"status": {"const": "ok"}},
+                "additionalProperties": False,
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    artifact = SchemaArtifact(
+        kind=ArtifactKind.SCHEMA,
+        name="loader-schema",
+        location=ArtifactLocation(path=str(schema_path)),
+        dialect="json-schema-2020-12",
+    )
+
+    loaded = ArtifactLoader().load(artifact)
+    metadata = dict(loaded.metadata)
+
+    assert metadata["compiled_supported_fragment"] is True
+    assert metadata["compiled_witness_text"] == '{"status":"ok"}'
+    assert metadata["compiled_witness_validator_accepts"] is True
+    assert metadata["compiled_parser_state_count"] >= 4
+    assert "schema.properties.status" in metadata["compiled_rule_names"]
 
 
 def test_regex_ingestion_accepts_supported_subset_and_flags_lookaround() -> None:
