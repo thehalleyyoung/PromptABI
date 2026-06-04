@@ -64,8 +64,8 @@ a bounded stop-overreachability checker proves when raw substring stops can fire
 inside schema/tool string fields or before JSON, markdown-fence, XML-like
 tool-call, and provider-envelope structures are parser-complete, with witnesses
 that pinpoint the firing line/column, parser state, valid prefix, and malformed or
-prematurely accepted result. A new real-world bug corpus reduces public
-llama.cpp and vLLM reports into synthetic, offline fixtures and proves the
+prematurely accepted result. A real-world bug corpus reduces public llama.cpp,
+vLLM, and Hugging Face reports into synthetic, offline fixtures and proves the
 current role-boundary and stop-overreachability checkers catch the same failure
 classes without copying upstream code. Grammar ingestion now normalizes JSON
 Schema, regex, EBNF, Outlines, xgrammar, llguidance, and PromptABI grammars into

@@ -22,6 +22,24 @@
         ["{messages[0].content}", "<|user|>", "special-token"],
         ["{messages[0].content}", "<|end|>", "special-token"]
       ]
+    },
+    {
+      "id": "hf_apply_chat_template_special_token_injection",
+      "public_reference": "https://github.com/huggingface/transformers/issues/29279",
+      "bug_class": "chat-template rendering can preserve user-supplied special tokens as apparent control text",
+      "template_config": {
+        "chat_template": "{% for message in messages %}<|im_start|>{{ message['role'] }}\n{{ message['content'] }}<|im_end|>\n{% endfor %}{% if add_generation_prompt %}<|im_start|>assistant\n{% endif %}",
+        "eos_token": "<|im_end|>",
+        "additional_special_tokens": [
+          "<|im_start|>",
+          "<|im_end|>"
+        ]
+      },
+      "expected_witnesses": [
+        ["{messages[0].role}", "assistant", "role-header"],
+        ["{messages[0].content}", "<|im_start|>", "assistant-prefix"],
+        ["{messages[0].content}", "<|im_end|>", "special-token"]
+      ]
     }
   ],
   "stop_overreachability_cases": [
@@ -62,6 +80,124 @@
           "category": "content",
           "region_kind": "xml-tool-call-content",
           "parser_state_contains": "$.source"
+        }
+      ]
+    },
+    {
+      "id": "vllm_streaming_stop_interrupts_tool_parser",
+      "public_reference": "https://github.com/vllm-project/vllm/issues/42210",
+      "bug_class": "streaming tool parsing can drop partial content when a stop string appears inside function.arguments",
+      "stop_sequences": ["Observation:", "\nObservation:"],
+      "artifact_kind": "tool-definition",
+      "artifact_json": [
+        {
+          "type": "function",
+          "function": {
+            "name": "write_note",
+            "parameters": {
+              "type": "object",
+              "required": ["body"],
+              "properties": {
+                "body": {
+                  "type": "string",
+                  "description": "Free-form note text may quote agent scratchpad labels."
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ],
+      "expected_findings": [
+        {
+          "stop_sequence": "Observation:",
+          "category": "content",
+          "region_kind": "openai-tool-call-content",
+          "parser_state_contains": "$.body"
+        }
+      ]
+    },
+    {
+      "id": "llama_cpp_qwen_array_object_tool_leak",
+      "public_reference": "https://github.com/ggml-org/llama.cpp/issues/21771",
+      "bug_class": "array<object> tool parameters can leak a partial XML-style tool call when an item string contains a close marker",
+      "stop_sequences": ["</tool_call>", "</parameter>"],
+      "artifact_kind": "tool-definition",
+      "artifact_json": [
+        {
+          "type": "function",
+          "function": {
+            "name": "batch_update",
+            "parameters": {
+              "type": "object",
+              "required": ["updates"],
+              "properties": {
+                "updates": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["comment"],
+                    "properties": {
+                      "comment": {
+                        "type": "string",
+                        "description": "User-visible update comment."
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ],
+      "expected_findings": [
+        {
+          "stop_sequence": "</tool_call>",
+          "category": "content",
+          "region_kind": "tool-arguments-json",
+          "parser_state_contains": "$.updates[0].comment"
+        },
+        {
+          "stop_sequence": "</tool_call>",
+          "category": "content",
+          "region_kind": "xml-tool-call-content",
+          "parser_state_contains": "$.updates[0].comment"
+        }
+      ]
+    },
+    {
+      "id": "vllm_qwen_multi_function_block_boundary",
+      "public_reference": "https://github.com/vllm-project/vllm/issues/43713",
+      "bug_class": "multiple XML-like function blocks can produce invalid JSON if parser boundaries are inferred from a stop delimiter",
+      "stop_sequences": ["</function>", "</tool_call>"],
+      "artifact_kind": "tool-definition",
+      "artifact_json": [
+        {
+          "type": "function",
+          "function": {
+            "name": "compose_calls",
+            "parameters": {
+              "type": "object",
+              "required": ["payload"],
+              "properties": {
+                "payload": {
+                  "type": "string",
+                  "description": "Serialized function blocks supplied by another system."
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ],
+      "expected_findings": [
+        {
+          "stop_sequence": "</function>",
+          "category": "content",
+          "region_kind": "tool-arguments-json",
+          "parser_state_contains": "$.payload"
         }
       ]
     },

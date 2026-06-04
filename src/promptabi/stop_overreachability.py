@@ -377,6 +377,18 @@ def _schema_string_witnesses(
         if _is_free_string_schema(schema):
             return ((path, _STOP_MARKER),)
         return ()
+    if schema_type == "array":
+        items = schema.get("items")
+        if not isinstance(items, Mapping):
+            return ()
+        witnesses: list[tuple[str, Any]] = []
+        for string_path, marker_object in _schema_string_witnesses(
+            items,
+            depth=depth + 1,
+            path=f"{path}[0]",
+        ):
+            witnesses.append((string_path, [marker_object]))
+        return tuple(witnesses)
     if schema_type not in (None, "object") or not isinstance(schema.get("properties"), Mapping):
         return ()
     required = schema.get("required", ())

@@ -64,10 +64,13 @@ concrete renderer differentially checked against Hugging Face
 \texttt{apply\_chat\_template} behavior across the seed corpus, a delimiter-
 collision regression suite covering ChatML, Llama header tokens, Mistral
 instruction tags, XML-ish tool tags, markdown role fences, and fine-tune hash
-headers, a real-world bug corpus that reduces public llama.cpp and vLLM reports
-into synthetic offline fixtures for Phi-style role delimiter forgery,
-Qwen/Gemma-style tool argument truncation, and XML tool-call parser-boundary
-stops, a grammar ingestion layer that normalizes JSON Schema, regex, EBNF,
+headers, a real-world bug corpus that reduces public llama.cpp, vLLM, and
+Hugging Face Transformers reports into synthetic offline fixtures for Phi-style
+role delimiter forgery, ChatML special-token injection, Qwen/Gemma-style tool
+argument truncation, streaming stop interruption, array-of-object tool-argument
+leakage, multi-function XML boundary confusion, and XML tool-call
+parser-boundary stops, a grammar ingestion layer that normalizes JSON Schema,
+regex, EBNF,
 Outlines, xgrammar, llguidance, and PromptABI grammars into typed rules,
 terminals, source spans, supported-fragment metadata, and explicit abstentions,
 plus a JSON Schema path that normalizes objects, arrays, enums, consts, required
@@ -912,7 +915,8 @@ supported content witnesses. Structural checks cover nested JSON delimiters,
 markdown code fences, XML-like tool-call tags, and OpenAI/Anthropic-style
 tool-call envelopes. Content checks are emitted only for supported JSON Schema
 and tool-parameter fragments where an unconstrained string field makes the stop
-text valid data. All offsets are computed on the serialized wire text, including
+text valid data, including bounded object and array-of-object parameter paths
+that occur in real tool schemas. All offsets are computed on the serialized wire text, including
 escaped characters, so the witness is not merely "the stop appears." It is a
 valid output prefix, the exact line and column where the stop fires, the parser
 state at truncation, and the malformed or prematurely accepted structure received
@@ -1159,14 +1163,18 @@ notes, fixture revision, upstream reference, reproducibility notes, and the fact
 that no download is required.
 
 It also contains the first real-world bug corpus. Public reports from
-llama.cpp and vLLM are reduced to synthetic fixtures that preserve only the
-interface contract failure: Phi-style user content that can render role
-delimiters as structure, Qwen-style XML tool-call delimiters inside free-form
-tool parameters, Gemma-style quote sentinels that decode to raw string
-delimiters, and a llama.cpp tool-call close marker that can stop before the
-downstream parser is in a safe state. Each case records its public GitHub
-reference, bug class, minimized artifact, and expected PromptABI witness. The
-tests load the corpus and assert that the executable role-boundary and
+llama.cpp, vLLM, and Hugging Face Transformers are reduced to synthetic fixtures
+that preserve only the interface contract failure: Phi-style user content that
+can render role delimiters as structure, ChatML special tokens preserved by
+\texttt{apply\_chat\_template} as apparent control text, Qwen-style XML
+tool-call delimiters inside free-form tool parameters, streaming tool parsing
+interrupted by stop strings inside \texttt{function.arguments}, array-of-object
+tool parameters whose item strings can leak partial XML-style tool calls,
+multi-function XML boundary confusion, Gemma-style quote sentinels that decode
+to raw string delimiters, and a llama.cpp tool-call close marker that can stop
+before the downstream parser is in a safe state. Each case records its public
+GitHub reference, bug class, minimized artifact, and expected PromptABI witness.
+The tests load the corpus and assert that the executable role-boundary and
 stop-overreachability checkers produce those witnesses, making the paper claim
 auditable without network calls or copied upstream code.
 
@@ -1303,13 +1311,16 @@ the CLI, and produce a deterministic manifest containing source categories,
 expected rule IDs, hashes, and provenance.
 
 The real-world bug corpus supplies the first labeled detection experiment. In
-the current snapshot, four public bug patterns map to executable checks:
-Phi-style role delimiter forgery from llama.cpp, Qwen XML tool-call delimiter
-overreach from vLLM, Gemma quote-sentinel truncation from vLLM, and a llama.cpp
-tool-call parser-boundary stop failure. PromptABI detects all four with bounded
-structural witnesses. The result is intentionally modest but important: the
-evaluation is no longer only synthetic, and each claimed detection is backed by
-a minimized fixture that can run in ordinary CPU-only CI.
+the current snapshot, eight public bug patterns map to executable checks:
+Phi-style role delimiter forgery from llama.cpp, special-token injection through
+Hugging Face \texttt{apply\_chat\_template}, Qwen XML tool-call delimiter
+overreach from vLLM, streaming stop interruption inside OpenAI-compatible
+\texttt{function.arguments}, llama.cpp array-of-object tool-argument leakage,
+vLLM multi-function XML boundary confusion, Gemma quote-sentinel truncation from
+vLLM, and a llama.cpp tool-call parser-boundary stop failure. PromptABI detects
+all eight with bounded structural witnesses. The result is intentionally modest
+but important: the evaluation is no longer only synthetic, and each claimed
+detection is backed by a minimized fixture that can run in ordinary CPU-only CI.
 
 The grammar-emptiness benchline adds a complementary satisfiability experiment:
 one fixture proves that an ordinary byte-level tokenizer can produce the bounded
@@ -1426,9 +1437,10 @@ OpenAI-compatible and Hugging Face simulators, assert delimiter-retention behavi
 exercise mismatch diagnostics through the real CLI, and the
 \texttt{examples/stop-policies} workflow emits a concrete
 \texttt{stop-differential-agreement} diagnostic for a vLLM-compatible fixture.
-The real-world bug corpus tests load four public GitHub bug reductions and prove
+The real-world bug corpus tests load eight public GitHub bug reductions and prove
 that the current role-boundary and stop-overreachability implementations emit the
-expected minimized witnesses against executable code.
+expected minimized witnesses against executable code, including the new
+array-of-object tool-parameter witness path.
 The CLI was also run against the minimal typed-artifact example
 configuration, producing a passing informational diagnostic. The smoke benchmark
 runs the skeleton verifier repeatedly on the example config and reports a
@@ -1452,7 +1464,7 @@ Chat-template symbolic tests & Hugging Face \texttt{tokenizer\_config.json} temp
 \hline
 Role-boundary checker tests & Bounded non-forgeability diagnostics catch dynamic role-header forgery and user-content delimiter forgery across ChatML, Llama, Mistral, XML tool tags, markdown fences, and fine-tune hash headers; witnesses include minimized inputs, rendered excerpts, centered token evidence, and exact offsets, while sanitizer tests prove JSON/escape filters plus sanitizer-preserving bindings suppress only protected-expression false positives. \\
 \hline
-Real-world bug corpus & Four public llama.cpp/vLLM bug patterns are reduced to synthetic offline fixtures and detected by the role-boundary and stop-overreachability checkers with concrete witnesses. \\
+Real-world bug corpus & Eight public llama.cpp/vLLM/Hugging Face bug patterns are reduced to synthetic offline fixtures and detected by the role-boundary and stop-overreachability checkers with concrete witnesses. \\
 \hline
 Stop differential tests & Recorded provider/framework chunks replay through CPU-only stop simulators; OpenAI-compatible/vLLM traces exclude delimiters, Hugging Face traces retain them, and CLI diagnostics flag mismatches with witness steps. \\
 \hline
