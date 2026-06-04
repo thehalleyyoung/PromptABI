@@ -203,6 +203,7 @@ class Diagnostic:
     witness: WitnessTrace | None = None
     suggestions: tuple[str, ...] = field(default_factory=tuple)
     check_modes: tuple[CheckMode | str, ...] = field(default_factory=tuple)
+    properties: tuple[tuple[str, Any], ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
         if not self.rule_id:
@@ -216,6 +217,9 @@ class Diagnostic:
         if len(set(modes)) != len(modes):
             raise ValueError("diagnostic check_modes must not contain duplicates")
         object.__setattr__(self, "check_modes", tuple(sorted(modes, key=lambda mode: mode.value)))
+        if any(not key for key, _value in self.properties):
+            raise ValueError("diagnostic property keys must be non-empty")
+        object.__setattr__(self, "properties", tuple(sorted(self.properties, key=lambda item: item[0])))
 
     @property
     def fingerprint(self) -> str:
@@ -251,6 +255,8 @@ class Diagnostic:
             data["span"] = self.span.to_dict()
         if self.witness is not None:
             data["witness"] = self.witness.to_dict()
+        if self.properties:
+            data["properties"] = dict(self.properties)
         return data
 
 

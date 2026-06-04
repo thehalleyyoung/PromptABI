@@ -109,8 +109,9 @@ with deterministic manifests, replay hashes, source-mapped diagnostics, and vali
 a context-window budget model that combines named prompt segments, must-survive
 flags, declared or tokenizer-derived token counts, output reserves, tool-token
 reserves, generation-prompt tokens, and model-specific special-token overhead into
-bounded survival proofs against real framework truncation policies, including
-minimized counterexamples when required regions can be dropped, a dedicated RAG
+bounded survival proofs and compact text/JSON/SARIF budget visualizations against
+real framework truncation policies, including minimized counterexamples when
+required regions can be dropped, a dedicated RAG
 chunking compatibility check that verifies tokenizer identity, chunk-boundary
 stability, citation survival, overlap accounting, metadata inflation,
 prompt-template overhead, and retrieval payload limits against the same packed
@@ -218,8 +219,10 @@ behavior, streaming deltas, error envelopes, and edge-case limits for offline
 replay,
 models context-window budgets from named prompt segments, must-survive flags,
 declared or real-tokenizer token counts, output reservations, reserved tool
-tokens, generation-prompt tokens, model-specific special-token overhead, and
-bounded truncation-policy survival proofs with minimized failing segment sets,
+tokens, generation-prompt tokens, model-specific special-token overhead, bounded
+truncation-policy survival proofs with minimized failing segment sets, and
+machine-readable budget visualizations that expose spans, dropped fields, and
+survival guarantees,
 derives Z3-backed finite static contracts over cross-artifact obligations such as
 required-prompt-token budget survival, stop strings colliding with special or
 added control tokens, controlled prompt regions containing role/control boundary
@@ -1074,11 +1077,17 @@ ordered segment subset found by deletion that still makes the real policy drop a
 must-survive segment. The witness records the selected budget source,
 reserved-token arithmetic, known segment counts and their sources, unknown
 segments, kept segments, dropped segments, required-token sums, proof status, and
-counterexample token totals. The \texttt{examples/token-budget} workflow exercises
-this through the real CLI: a vLLM-style budget reserves output, tool,
-generation-prompt, and special-token overhead, then fails because required system
-and user segments exceed the modeled input budget and the selected truncation
-policy can remove required content.
+counterexample token totals. The same diagnostic now carries a compact
+visualization row for every prompt segment: role, required/optional status,
+declared or tokenizer-derived count source, overhead contributions, cumulative
+token span, kept/dropped decision, truncation boundary, and survival label. This
+visualization is visible in human CLI text and is also emitted as the structured
+\texttt{token\_budget\_visualization} property in JSON and SARIF, so CI systems can
+annotate exactly which prompt fields disappear without scraping prose. The
+\texttt{examples/token-budget} workflow exercises this through the real CLI: a
+vLLM-style budget reserves output, tool, generation-prompt, and special-token
+overhead, then fails because required system and user segments exceed the modeled
+input budget and the selected truncation policy can remove required content.
 
 The same prompt-segment path now carries RAG-specific chunk contracts rather than
 treating retrieved context as anonymous optional text. A retrieval chunk can
@@ -1115,7 +1124,7 @@ The testing strategy has three tiers:
 \item chat-template parser, symbolic-executor, concrete-renderer, role-region, and role-boundary non-forgeability tests across real \texttt{tokenizer\_config.json} fixtures and known delimiter-collision regressions, including ChatML, Llama header tokens, Mistral instruction tags, XML-ish tool tags, markdown fences, fine-tune hash headers, generation-prompt extraction, dynamic role headers, content-control delimiter collisions, role assumptions, field references, special tokens, bounded message/tool loops, filters, whitespace controls, path budgets, empty tool lists, tool-role messages, and unsupported constructs, with concrete outputs differentially checked against Hugging Face's renderer;
 \item loader and parser tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, tool-definition schemas spanning OpenAI, Anthropic, LangChain, Pydantic, TypeScript-style, MCP, and provider tool-call envelopes, tool-serialization contracts over names, arguments, escaping, IDs, parallel calls, streaming chunks, template tool rendering, and stop delimiters, stop-policy configs spanning OpenAI-compatible, Hugging Face, llama.cpp/Ollama, vLLM, LiteLLM, wrapper kwargs, fixture archives, and source-mapped JSON fields;
 \item stop-tokenizer, stop-differential, and stop-overreachability tests that exercise byte/string/token alignments, multi-token stops, invalid stop-token IDs, normalization collisions, prefix/suffix collisions, added/special-token interactions, OpenAI-compatible and Hugging Face delimiter-retention semantics, provider fixture replay, CLI mismatch diagnostics, serialized stop offsets, parser-state truncation witnesses, supported schema/tool string witnesses, structural delimiter collisions, real-world Qwen/Gemma/llama.cpp stop bug reductions, and a real Hugging Face \texttt{tokenizers} BPE fixture;
-\item token-budget and RAG chunking tests that exercise context-window reservation arithmetic, required-segment overflow over declared counts, prompt-segment file/message merging, config-versus-framework budget precedence, LangChain/vLLM/custom-RAG truncation simulation, optional retrieval dropping, required segment truncation, order preservation, proven must-survive cases, minimized counterexample extraction, real CLI diagnostics for output, tool, generation-prompt, and special-token overhead, plus tokenizer mismatch, chunk-boundary drift, citation loss, overlap accounting, metadata inflation, prompt-template overhead, and retrieval payload truncation over repository fixtures;
+\item token-budget and RAG chunking tests that exercise context-window reservation arithmetic, required-segment overflow over declared counts, prompt-segment file/message merging, config-versus-framework budget precedence, LangChain/vLLM/custom-RAG truncation simulation, optional retrieval dropping, required segment truncation, order preservation, proven must-survive cases, minimized counterexample extraction, text/JSON/SARIF budget visualizations with token spans and dropped-field properties, real CLI diagnostics for output, tool, generation-prompt, and special-token overhead, plus tokenizer mismatch, chunk-boundary drift, citation loss, overlap accounting, metadata inflation, prompt-template overhead, and retrieval payload truncation over repository fixtures;
 \item fixture and corpus tests for minimized tokenizer/chat-template bundles, public real-bug provenance, expected behaviors, sentinel consistency, artifact materialization, deterministic manifest generation, labeled structured-schema reductions, anonymized contracts, synthetic parser stress cases, tool-definition bundles, secret-free provider fixture packs with request/response/tool/stop/streaming/error/limit coverage and credential-pattern rejection, and real CLI replay of every included structured-schema config;
 \item future corpus tests for popular model and framework configurations pinned by immutable upstream revisions.
 \end{itemize}

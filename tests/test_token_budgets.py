@@ -239,6 +239,16 @@ def test_vllm_left_truncation_uses_declaration_order_not_segment_name_order() ->
     assert report.must_survive_proof is not None
     assert report.must_survive_proof.status == "proven"
     assert report.must_survive_proof.survived_segments == ("a-second", "m-third")
+    assert report.visualization is not None
+    visualization = report.visualization.to_dict()
+    assert visualization["input_budget_tokens"] == 45
+    assert visualization["dropped_fields"] == ["z-first"]
+    assert visualization["must_survive_status"] == "proven"
+    rows = visualization["rows"]
+    assert [row["name"] for row in rows] == ["z-first", "a-second", "m-third"]
+    assert [row["status"] for row in rows] == ["dropped", "kept", "kept"]
+    assert [row["survival"] for row in rows] == ["optional-dropped", "guaranteed", "guaranteed"]
+    assert [(row["start_token"], row["end_token"]) for row in rows] == [(0, 25), (25, 45), (45, 65)]
 
 
 def test_must_survive_counterexample_is_minimized_for_real_truncation_policy() -> None:
@@ -381,3 +391,77 @@ def test_verify_rag_chunking_example_uses_dedicated_check(capsys) -> None:
     assert "rag-overlap-accounting" in rule_ids
     assert "rag-template-overhead" in rule_ids
     assert "token-budget-model" not in rule_ids
+
+
+def test_token_budget_visualizer_renders_through_text_json_and_sarif(capsys) -> None:
+    exit_code = main(
+        [
+            "verify",
+            "--config",
+            "examples/token-budget/promptabi.json",
+            "--format",
+            "text",
+            "--fail-on",
+            "never",
+        ]
+    )
+    text_output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "render token-budget visualization" in text_output
+    assert "budget=runtime-budget framework=vllm:left" in text_output
+    assert "dropped=system-policy" in text_output
+    assert "boundary=60" in text_output
+
+    exit_code = main(
+        [
+            "verify",
+            "--config",
+            "examples/token-budget/promptabi.json",
+            "--format",
+            "json",
+            "--fail-on",
+            "never",
+        ]
+    )
+    json_payload = json.loads(capsys.readouterr().out)
+    summary = next(
+        diagnostic
+        for diagnostic in json_payload["diagnostics"]
+        if diagnostic["rule_id"] == "token-budget-model"
+    )
+    json_visualization = summary["properties"]["token_budget_visualization"]
+
+    assert exit_code == 0
+    assert json_visualization["input_budget_tokens"] == 60
+    assert json_visualization["total_prompt_tokens"] == 114
+    assert json_visualization["dropped_fields"] == ["system-policy"]
+    assert [row["name"] for row in json_visualization["rows"]] == [
+        "system-policy",
+        "retrieval-context",
+        "user-request",
+    ]
+    assert [row["status"] for row in json_visualization["rows"]] == ["dropped", "kept", "kept"]
+
+    exit_code = main(
+        [
+            "verify",
+            "--config",
+            "examples/token-budget/promptabi.json",
+            "--format",
+            "sarif",
+            "--fail-on",
+            "never",
+        ]
+    )
+    sarif_payload = json.loads(capsys.readouterr().out)
+    sarif_summary = next(
+        result
+        for result in sarif_payload["runs"][0]["results"]
+        if result["ruleId"] == "token-budget-model"
+    )
+    sarif_visualization = sarif_summary["properties"]["token_budget_visualization"]
+
+    assert exit_code == 0
+    assert sarif_visualization["must_survive_status"] == "violated"
+    assert sarif_visualization["rows"][0]["survival"] == "violated"

@@ -6,6 +6,7 @@ Install the package in editable mode while developing:
 python -m pip install -e ".[dev]"
 promptabi verify --config examples/minimal/promptabi.json
 promptabi verify --config examples/role-boundary/unsafe.promptabi.json
+promptabi verify --config examples/token-budget/promptabi.json --format json
 promptabi verify --config examples/minimal/promptabi.json --format sarif > promptabi.sarif
 ```
 

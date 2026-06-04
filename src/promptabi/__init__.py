@@ -36,7 +36,10 @@ from .budgets import (
     TokenBudgetReport,
     TokenBudgetReservation,
     TokenBudgetSegment,
+    TokenBudgetVisualization,
+    TokenBudgetVisualizationRow,
     analyze_token_budget,
+    build_token_budget_visualization,
 )
 from .chat_templates import (
     ChatTemplateCondition,

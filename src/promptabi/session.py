@@ -1246,6 +1246,13 @@ def _token_budget_summary_diagnostic(report: TokenBudgetReport) -> Diagnostic:
     proof_detail = "<none>"
     if proof is not None:
         proof_detail = "; ".join(f"{key}={value}" for key, value in proof.to_metadata())
+    visualization = report.visualization
+    visualization_text = visualization.render_text() if visualization is not None else "<not modeled>"
+    properties = (
+        (("token_budget_visualization", visualization.to_dict()),)
+        if visualization is not None
+        else ()
+    )
     return Diagnostic(
         rule_id="token-budget-model",
         severity=DiagnosticSeverity.INFO,
@@ -1273,8 +1280,10 @@ def _token_budget_summary_diagnostic(report: TokenBudgetReport) -> Diagnostic:
                 WitnessStep(action="record dropped segments", output=dropped or "<none>"),
                 WitnessStep(action="prove must-survive prompt segments", output=proof_status),
                 WitnessStep(action="record must-survive proof", output=proof_detail),
+                WitnessStep(action="render token-budget visualization", output=visualization_text),
             ),
         ),
+        properties=properties,
     )
 
 

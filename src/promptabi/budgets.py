@@ -188,6 +188,141 @@ class MustSurviveProof:
 
 
 @dataclass(frozen=True, slots=True)
+class TokenBudgetVisualizationRow:
+    """One prompt-region row in a deterministic budget visualization."""
+
+    index: int
+    name: str
+    role: str | None
+    required: bool
+    token_count: int | None
+    overhead_tokens: int
+    metadata_tokens: int
+    template_overhead_tokens: int
+    total_tokens: int | None
+    source: str
+    start_token: int | None
+    end_token: int | None
+    status: str
+    survival: str
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {
+            "index": self.index,
+            "name": self.name,
+            "required": self.required,
+            "overhead_tokens": self.overhead_tokens,
+            "metadata_tokens": self.metadata_tokens,
+            "template_overhead_tokens": self.template_overhead_tokens,
+            "source": self.source,
+            "status": self.status,
+            "survival": self.survival,
+        }
+        if self.role is not None:
+            data["role"] = self.role
+        if self.token_count is not None:
+            data["token_count"] = self.token_count
+        if self.total_tokens is not None:
+            data["total_tokens"] = self.total_tokens
+        if self.start_token is not None:
+            data["start_token"] = self.start_token
+        if self.end_token is not None:
+            data["end_token"] = self.end_token
+        return data
+
+    def compact_line(self) -> str:
+        role = self.role or "unknown-role"
+        total = "unknown" if self.total_tokens is None else str(self.total_tokens)
+        if self.start_token is None or self.end_token is None:
+            span = "?:?"
+        else:
+            span = f"{self.start_token}:{self.end_token}"
+        requirement = "must-survive" if self.required else "optional"
+        extras = []
+        if self.overhead_tokens:
+            extras.append(f"overhead={self.overhead_tokens}")
+        if self.metadata_tokens:
+            extras.append(f"metadata={self.metadata_tokens}")
+        if self.template_overhead_tokens:
+            extras.append(f"template={self.template_overhead_tokens}")
+        extras.append(f"source={self.source}")
+        return (
+            f"{self.index}. {self.name} ({role}, {requirement}) "
+            f"tokens={total} span={span} status={self.status} survival={self.survival}; "
+            + ", ".join(extras)
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class TokenBudgetVisualization:
+    """Stable prompt-budget visualization shared by text, JSON, and SARIF witnesses."""
+
+    budget_source: str
+    framework: str
+    strategy: str
+    max_context_tokens: int
+    reserved_total: int
+    input_budget_tokens: int
+    total_prompt_tokens: int | None
+    required_prompt_tokens: int | None
+    overflow_tokens: int | None
+    truncation_boundary_tokens: int | None
+    must_survive_status: str
+    rows: tuple[TokenBudgetVisualizationRow, ...]
+
+    @property
+    def dropped_fields(self) -> tuple[str, ...]:
+        return tuple(row.name for row in self.rows if row.status == "dropped")
+
+    @property
+    def unknown_fields(self) -> tuple[str, ...]:
+        return tuple(row.name for row in self.rows if row.total_tokens is None)
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {
+            "budget_source": self.budget_source,
+            "framework": self.framework,
+            "strategy": self.strategy,
+            "max_context_tokens": self.max_context_tokens,
+            "reserved_total": self.reserved_total,
+            "input_budget_tokens": self.input_budget_tokens,
+            "must_survive_status": self.must_survive_status,
+            "rows": [row.to_dict() for row in self.rows],
+            "dropped_fields": list(self.dropped_fields),
+            "unknown_fields": list(self.unknown_fields),
+        }
+        if self.total_prompt_tokens is not None:
+            data["total_prompt_tokens"] = self.total_prompt_tokens
+        if self.required_prompt_tokens is not None:
+            data["required_prompt_tokens"] = self.required_prompt_tokens
+        if self.overflow_tokens is not None:
+            data["overflow_tokens"] = self.overflow_tokens
+        if self.truncation_boundary_tokens is not None:
+            data["truncation_boundary_tokens"] = self.truncation_boundary_tokens
+        return data
+
+    def render_text(self) -> str:
+        total = "unknown" if self.total_prompt_tokens is None else str(self.total_prompt_tokens)
+        required = "unknown" if self.required_prompt_tokens is None else str(self.required_prompt_tokens)
+        overflow = "unknown" if self.overflow_tokens is None else str(self.overflow_tokens)
+        boundary = (
+            "unknown"
+            if self.truncation_boundary_tokens is None
+            else str(self.truncation_boundary_tokens)
+        )
+        header = (
+            f"budget={self.budget_source} framework={self.framework}:{self.strategy} "
+            f"context={self.max_context_tokens} reserved={self.reserved_total} "
+            f"input={self.input_budget_tokens} total={total} required={required} "
+            f"overflow={overflow} boundary={boundary} must_survive={self.must_survive_status}"
+        )
+        dropped = ", ".join(self.dropped_fields) or "<none>"
+        unknown = ", ".join(self.unknown_fields) or "<none>"
+        rows = " | ".join(row.compact_line() for row in self.rows) or "<no prompt segments>"
+        return f"{header}; dropped={dropped}; unknown={unknown}; rows: {rows}"
+
+
+@dataclass(frozen=True, slots=True)
 class TokenBudgetFinding:
     """A budget-model observation that should become a diagnostic."""
 
@@ -212,6 +347,7 @@ class TokenBudgetReport:
     must_survive_proof: MustSurviveProof | None
     segments: tuple[TokenBudgetSegment, ...]
     findings: tuple[TokenBudgetFinding, ...]
+    visualization: TokenBudgetVisualization | None = None
 
     @property
     def known_segments(self) -> tuple[TokenBudgetSegment, ...]:
@@ -472,7 +608,7 @@ def analyze_token_budget(
 
     findings.extend(_rag_chunking_findings(segments, truncation, tokenizers))
 
-    return TokenBudgetReport(
+    report = TokenBudgetReport(
         budget_source=budget_source,
         framework=budget_artifact.framework if budget_artifact is not None else "config",
         strategy=budget_artifact.strategy.value if budget_artifact is not None else "none",
@@ -484,6 +620,111 @@ def analyze_token_budget(
         segments=segments,
         findings=tuple(findings),
     )
+    return TokenBudgetReport(
+        budget_source=report.budget_source,
+        framework=report.framework,
+        strategy=report.strategy,
+        model=report.model,
+        reservation=report.reservation,
+        policy=report.policy,
+        truncation=report.truncation,
+        must_survive_proof=report.must_survive_proof,
+        segments=report.segments,
+        findings=report.findings,
+        visualization=build_token_budget_visualization(report),
+    )
+
+
+def build_token_budget_visualization(report: TokenBudgetReport) -> TokenBudgetVisualization | None:
+    """Render prompt budget arithmetic and truncation decisions as stable data."""
+
+    if report.reservation is None:
+        return None
+    truncation = report.truncation
+    policy = report.policy
+    dropped_names = {segment.name for segment in truncation.dropped_segments} if truncation is not None else set()
+    unknown_names = {segment.name for segment in truncation.unknown_segments} if truncation is not None else set()
+    proof = report.must_survive_proof
+    proof_dropped = set(proof.dropped_segments) if proof is not None else set()
+    proof_survived = set(proof.survived_segments) if proof is not None else set()
+    rows: list[TokenBudgetVisualizationRow] = []
+    running_start: int | None = 0
+    for segment in sorted(report.segments, key=lambda item: item.index):
+        total = segment.total_tokens
+        if running_start is None or total is None:
+            start_token = None
+            end_token = None
+            running_start = None
+        else:
+            start_token = running_start
+            end_token = running_start + total
+            running_start = end_token
+        rows.append(
+            TokenBudgetVisualizationRow(
+                index=segment.index,
+                name=segment.name,
+                role=segment.role,
+                required=segment.required,
+                token_count=segment.token_count,
+                overhead_tokens=segment.overhead_tokens,
+                metadata_tokens=segment.metadata_tokens,
+                template_overhead_tokens=segment.template_overhead_tokens,
+                total_tokens=total,
+                source=segment.source,
+                start_token=start_token,
+                end_token=end_token,
+                status=_visualization_status(segment.name, dropped_names, unknown_names, total),
+                survival=_visualization_survival(segment, dropped_names, proof_dropped, proof_survived, proof),
+            )
+        )
+    overflow = truncation.overflow_tokens if truncation is not None else None
+    return TokenBudgetVisualization(
+        budget_source=report.budget_source or "missing",
+        framework=policy.framework if policy is not None else report.framework or "config",
+        strategy=policy.strategy if policy is not None else report.strategy or "none",
+        max_context_tokens=report.reservation.max_context_tokens,
+        reserved_total=report.reservation.reserved_total,
+        input_budget_tokens=report.reservation.input_budget_tokens,
+        total_prompt_tokens=report.total_prompt_tokens,
+        required_prompt_tokens=report.required_prompt_tokens,
+        overflow_tokens=overflow,
+        truncation_boundary_tokens=report.reservation.input_budget_tokens,
+        must_survive_status=proof.status if proof is not None else "not-modeled",
+        rows=tuple(rows),
+    )
+
+
+def _visualization_status(
+    name: str,
+    dropped_names: set[str],
+    unknown_names: set[str],
+    total_tokens: int | None,
+) -> str:
+    if total_tokens is None or name in unknown_names:
+        return "unknown"
+    if name in dropped_names:
+        return "dropped"
+    return "kept"
+
+
+def _visualization_survival(
+    segment: TokenBudgetSegment,
+    dropped_names: set[str],
+    proof_dropped: set[str],
+    proof_survived: set[str],
+    proof: MustSurviveProof | None,
+) -> str:
+    if not segment.required:
+        return "optional-dropped" if segment.name in dropped_names else "optional-kept"
+    if proof is None:
+        return "not-modeled"
+    if proof.status == "abstained":
+        return "abstained"
+    if segment.name in proof_dropped:
+        return "violated"
+    if segment.name in proof_survived:
+        return "guaranteed"
+    return proof.status
 
 
 def _select_budget(

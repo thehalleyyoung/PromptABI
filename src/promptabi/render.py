@@ -117,6 +117,8 @@ def _diagnostic_to_sarif_result(diagnostic) -> dict[str, object]:
     }
     if diagnostic.witness is not None:
         result["properties"]["witness"] = diagnostic.witness.to_dict()
+    if diagnostic.properties:
+        result["properties"].update(dict(diagnostic.properties))
     location = _sarif_location(diagnostic)
     if location is not None:
         result["locations"] = [location]

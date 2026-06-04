@@ -40,3 +40,9 @@ tool-call parser-boundary stop failures.
 
 Do required prompt segments remain present after the actual framework truncation
 policy is applied?
+
+`promptabi verify --config examples/token-budget/promptabi.json` now includes a
+token-budget visualization in the `token-budget-model` diagnostic: each row
+shows the prompt segment, token span, count source, kept/dropped status, and
+must-survive guarantee. The same structured `token_budget_visualization` payload
+is available in JSON output and SARIF properties.
