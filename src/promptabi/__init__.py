@@ -158,6 +158,17 @@ from .json_schema import (
     normalize_json_schema_mapping,
 )
 from .loaders import ArtifactLoadError, ArtifactLoader, ArtifactLoadWarning, LoadedArtifact, load_artifact
+from .lockfiles import (
+    LOCKFILE_VERSION,
+    Lockfile,
+    LockfileArtifact,
+    LockfileError,
+    build_lockfile,
+    compare_lockfile,
+    load_lockfile,
+    lockfile_to_json,
+    write_lockfile,
+)
 from .parser_compatibility import (
     ParserCompatibilityDirection,
     ParserCompatibilityObservation,

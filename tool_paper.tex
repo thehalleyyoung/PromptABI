@@ -40,6 +40,9 @@ pipeline, a Hugging Face \texttt{tokenizer\_config.json} chat-template parser,
 a tokenizer/config drift checker that compares real tokenizer revisions for
 special-token ID changes, added-token changes, normalizer changes, chat-template
 hashes, BOS/EOS flags and IDs, and generation stop-policy deltas,
+deterministic PromptABI lockfiles that pin verified artifact hashes, upstream
+revisions, library versions, provider fixture versions, supported-fragment
+metadata, and expected diagnostic fingerprints for CI enforcement,
 a stop-policy parser that normalizes OpenAI-compatible request snapshots,
 Hugging Face generation configs, llama.cpp/Ollama options, vLLM sampling params,
 LiteLLM passthrough params, and common framework wrapper kwargs into one typed
@@ -235,7 +238,10 @@ added control tokens, controlled prompt regions containing role/control boundary
 markers, tool schemas requiring parameters absent from their declared properties,
 tool-provider family mismatches, and training target roles outside the serving
 chat-template role universe,
-returns stable policy-controlled process exit codes,
+returns stable policy-controlled process exit codes, writes and enforces
+deterministic verification lockfiles that fail closed on artifact, config,
+provider-fixture, library-version, supported-fragment, or diagnostic-baseline
+drift,
 and runs a CPU-only smoke benchmark against an example bundle.
 
 The repository layout is designed to scale:

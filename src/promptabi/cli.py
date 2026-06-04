@@ -11,6 +11,14 @@ from pathlib import Path
 
 from ._version import __version__
 from .config import ConfigError, discover_config, load_config
+from .lockfiles import (
+    LockfileError,
+    build_lockfile,
+    compare_lockfile,
+    load_lockfile,
+    lockfile_error_diagnostic,
+    write_lockfile,
+)
 from .render import render_json, render_sarif, render_text
 from .seed_corpus import SeedCorpusError, build_seed_corpus_manifest, write_seed_corpus_manifest
 from .session import VerificationSession
@@ -64,6 +72,20 @@ def build_parser() -> argparse.ArgumentParser:
         default="text",
         help="output format (default: text)",
     )
+    verify.add_argument(
+        "--lockfile",
+        help="path to a PromptABI lockfile (default: promptabi.lock.json beside the config)",
+    )
+    verify.add_argument(
+        "--write-lockfile",
+        action="store_true",
+        help="write a lockfile pinning artifact hashes, revisions, tool versions, and diagnostic baselines",
+    )
+    verify.add_argument(
+        "--require-lockfile",
+        action="store_true",
+        help="fail verification if the current artifacts or diagnostic baseline drift from the lockfile",
+    )
 
     corpus = subparsers.add_parser("corpus", help="seed corpus maintenance commands")
     corpus_subparsers = corpus.add_subparsers(dest="corpus_command", required=True)
@@ -116,7 +138,34 @@ def main(argv: Sequence[str] | None = None) -> int:
             cache_dir.mkdir(parents=True, exist_ok=True)
             overrides = _parse_artifact_overrides(args.artifact, parser)
             config = load_config(config_path).with_artifact_overrides(overrides, base_dir=Path.cwd())
-            result = VerificationSession(config).run()
+            session = VerificationSession(config)
+            result = session.run()
+            lockfile_path = _resolve_lockfile_path(args.lockfile, config_path)
+            if args.write_lockfile:
+                loaded_artifacts, load_diagnostics = session.load_artifacts_with_diagnostics()
+                load_failed = any(diagnostic.severity.value == "error" for diagnostic in load_diagnostics)
+                if load_failed:
+                    print("promptabi: cannot write lockfile while artifact loading has errors", file=sys.stderr)
+                    return 2
+                write_lockfile(lockfile_path, build_lockfile(config, loaded_artifacts, result.diagnostics))
+            if args.require_lockfile:
+                loaded_artifacts, _load_diagnostics = session.load_artifacts_with_diagnostics()
+                try:
+                    lockfile = load_lockfile(lockfile_path)
+                    lock_diagnostics = compare_lockfile(
+                        lockfile,
+                        config,
+                        loaded_artifacts,
+                        result.diagnostics,
+                        lockfile_path=lockfile_path,
+                    )
+                except LockfileError as exc:
+                    lock_diagnostics = (lockfile_error_diagnostic(exc, lockfile_path=lockfile_path),)
+                if lock_diagnostics:
+                    result = type(result)(
+                        config=result.config,
+                        diagnostics=tuple(sorted((*result.diagnostics, *lock_diagnostics), key=lambda item: item.sort_key)),
+                    )
         except ConfigError as exc:
             print(f"promptabi: {exc}", file=sys.stderr)
             return 2
@@ -209,6 +258,12 @@ def _resolve_cache_dir(value: str | None) -> Path:
     if xdg_cache_home:
         return (Path(xdg_cache_home).expanduser() / "promptabi").resolve()
     return (Path.home() / ".cache" / "promptabi").resolve()
+
+
+def _resolve_lockfile_path(value: str | None, config_path: Path) -> Path:
+    if value:
+        return Path(value).expanduser().resolve()
+    return config_path.with_name("promptabi.lock.json")
 
 
 def _exit_code(result, *, fail_on: str) -> int:

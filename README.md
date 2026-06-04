@@ -102,7 +102,10 @@ mismatch, boundary drift, citation loss, overlap accounting errors, metadata
 inflation, template overhead, and retrieval payload truncation. Tokenizer/config
 drift detection now compares real tokenizer revisions for special-token IDs,
 added tokens, normalizers, chat templates, BOS/EOS behavior, and generation stop
-policy deltas before upgrades reach production. A labeled structured-schema corpus turns open-source-agent reductions,
+policy deltas before upgrades reach production; lockfiles now freeze verified
+artifact hashes, upstream revisions, library versions, supported fragments,
+provider fixture versions, and diagnostic baselines so CI can reject unreviewed
+contract drift. A labeled structured-schema corpus turns open-source-agent reductions,
 anonymized patterns, and synthetic tool-call stress cases into manifest-pinned CLI fixtures. The repository
 already has the typed Python package,
 core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,

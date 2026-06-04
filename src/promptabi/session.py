@@ -37,6 +37,7 @@ from .parser_compatibility import (
 from .provider_fixture_replay import ProviderFixtureReplayCase, ProviderFixtureReplayFinding, analyze_provider_fixture_replay
 from .provider_migration import ProviderMigrationFinding, analyze_provider_migration
 from .loaders import ArtifactLoadError, ArtifactLoadWarning, ArtifactLoader, LoadedArtifact
+from .lockfiles import LOCKFILE_CHECK_MODES
 from .role_boundaries import RoleBoundaryForgeryFinding, analyze_role_boundary_nonforgeability
 from .static_contracts import StaticContractFinding, StaticContractReport, analyze_static_contracts
 from .stop_analysis import (
@@ -71,6 +72,15 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "artifact-weak-pin": (CheckMode.SOUND, CheckMode.COMPLETE),
     "artifact-pin-invalid": (CheckMode.SOUND, CheckMode.COMPLETE),
     "artifact-hash-mismatch": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "lockfile-artifact-added": LOCKFILE_CHECK_MODES,
+    "lockfile-artifact-drift": LOCKFILE_CHECK_MODES,
+    "lockfile-artifact-missing": LOCKFILE_CHECK_MODES,
+    "lockfile-config-drift": LOCKFILE_CHECK_MODES,
+    "lockfile-diagnostic-baseline-drift": LOCKFILE_CHECK_MODES,
+    "lockfile-library-version-drift": LOCKFILE_CHECK_MODES,
+    "lockfile-load-failed": LOCKFILE_CHECK_MODES,
+    "lockfile-provider-fixture-drift": LOCKFILE_CHECK_MODES,
+    "lockfile-verified": LOCKFILE_CHECK_MODES,
     "role-boundary-abstained": (CheckMode.ABSTAINING, CheckMode.BOUNDED),
     "role-boundary-nonforgeability": (CheckMode.SOUND, CheckMode.BOUNDED),
     "stop-tokenizer-abstained": (CheckMode.ABSTAINING,),
@@ -225,10 +235,17 @@ class VerificationSession:
             )
         return loaded_artifacts
 
+    def load_artifacts_with_diagnostics(self) -> tuple[tuple[LoadedArtifact, ...], tuple[Diagnostic, ...]]:
+        """Load configured artifacts and return deterministic non-fatal diagnostics."""
+
+        loaded_artifacts, diagnostics = self._load_artifacts_with_diagnostics()
+        return loaded_artifacts, tuple(diagnostics)
+
     def collect_diagnostics(self, *, checks: Sequence[str | CheckCallable] | None = None) -> tuple[Diagnostic, ...]:
         """Run preflight loading plus selected checks and return sorted diagnostics."""
 
-        loaded_artifacts, diagnostics = self._load_artifacts_with_diagnostics()
+        loaded_artifacts, diagnostics_tuple = self.load_artifacts_with_diagnostics()
+        diagnostics = list(diagnostics_tuple)
         context = CheckContext(config=self.config, loaded_artifacts=loaded_artifacts)
         diagnostics.extend(self._check_diagnostics(context, checks or self.config.checks))
         diagnostics.sort(key=diagnostic_sort_key)
