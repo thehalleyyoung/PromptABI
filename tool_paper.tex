@@ -37,6 +37,10 @@ finite-state transducers with composition and projection, a finite-contract
 solver, a minimal verification session, focused tests, examples, a fixture
 corpus layout, a curated ten-family seed corpus, a deterministic corpus manifest
 pipeline, a Hugging Face \texttt{tokenizer\_config.json} chat-template parser,
+a stop-policy parser that normalizes OpenAI-compatible request snapshots,
+Hugging Face generation configs, llama.cpp/Ollama options, vLLM sampling params,
+LiteLLM passthrough params, and common framework wrapper kwargs into one typed
+artifact model with source spans,
 a bounded symbolic executor for the supported Jinja chat-template fragment, a
 bounded role-boundary non-forgeability checker that detects unsanitized content
 and role fields capable of rendering control delimiters, special tokens,
@@ -132,6 +136,8 @@ The repository layout is designed to scale:
 \texttt{examples/minimal} & A typed artifact config, messages file, tool schema, and answer schema used by tests and docs. \\
 \hline
 \texttt{examples/role-boundary} & Paired unsafe and sanitized ChatML-style \texttt{tokenizer\_config.json} artifacts that exercise the real role-boundary non-forgeability CLI check. \\
+\hline
+\texttt{examples/stop-policies} & A vLLM sampling-parameter fixture that exercises real stop-policy artifact loading and normalization. \\
 \hline
 \texttt{fixtures} & Curated seed corpus for tokenizer and chat-template bundles with provenance metadata, expected behaviors, reproducibility notes, and deterministic hashes. \\
 \hline
@@ -318,6 +324,8 @@ Tokenizer directories & Stable manifest over sorted relative file names, file si
 GGUF stubs & Header-level GGUF magic, version, tensor count, metadata-key count, and streamed file hash without loading weights. \\
 \hline
 Provider snapshots & Deterministic JSON validation for provider name and captured request, response, or streaming shape metadata, with parse-error line and column diagnostics. \\
+\hline
+Stop-policy configs & Deterministic extraction of stop strings, stop token IDs, EOS behavior, source family, ignored empty stops, and source paths from OpenAI-compatible, Hugging Face, llama.cpp/Ollama, vLLM, LiteLLM, and wrapper shapes. \\
 \hline
 Fixture archives & Zip/tar member lists and archive-byte hashes without extraction or timestamp-dependent manifests. \\
 \hline
@@ -708,6 +716,20 @@ same visible text. It can overreach because the string appears inside a valid
 JSON string, tool argument, markdown fence, or XML-like field before the
 structured object is complete.
 
+PromptABI now implements the first concrete layer for this family: stop-policy
+parsing. A dedicated parser accepts the shapes developers actually check into
+repositories or capture from serving stacks: OpenAI-compatible \texttt{stop}
+request fields, Hugging Face \texttt{generation\_config} objects with
+\texttt{stop\_strings} and EOS token IDs, llama.cpp/Ollama
+\texttt{reverse\_prompt}/\texttt{antiprompt}/\texttt{ignore\_eos} options, vLLM
+\texttt{sampling\_params} with \texttt{stop\_token\_ids}, LiteLLM
+\texttt{litellm\_params}, and nested framework kwargs such as
+\texttt{model\_kwargs}, \texttt{generation\_kwargs}, \texttt{parameters}, and
+\texttt{extra\_body}. The loader normalizes those forms into a typed stop-policy
+artifact containing sorted unique stop sequences, stop token IDs, EOS behavior,
+source-family metadata, ignored empty stops, and JSON source spans. Malformed
+fields become deterministic loader errors rather than silent fallbacks.
+
 PromptABI should analyze stop policies jointly with tokenizers and grammars. A
 useful witness for overreachability is not just "the stop appears." It is a
 valid output prefix, the parser state at truncation, the exact stop firing point,
@@ -786,7 +808,7 @@ The testing strategy has three tiers:
 \item unit and structured snapshot tests for public API and deterministic text, JSON, and SARIF rendering;
 \item tokenizer abstraction tests against real Hugging Face \texttt{tokenizers}, \texttt{tiktoken}, SentencePiece, and byte-level adapters;
 \item chat-template parser, symbolic-executor, concrete-renderer, role-region, and role-boundary non-forgeability tests across real \texttt{tokenizer\_config.json} fixtures and known delimiter-collision regressions, including ChatML, Llama header tokens, Mistral instruction tags, XML-ish tool tags, markdown fences, fine-tune hash headers, generation-prompt extraction, dynamic role headers, content-control delimiter collisions, role assumptions, field references, special tokens, bounded message/tool loops, filters, whitespace controls, path budgets, empty tool lists, tool-role messages, and unsupported constructs, with concrete outputs differentially checked against Hugging Face's renderer;
-\item loader tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, fixture archives, and source-mapped JSON fields;
+\item loader and parser tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, stop-policy configs spanning OpenAI-compatible, Hugging Face, llama.cpp/Ollama, vLLM, LiteLLM, wrapper kwargs, fixture archives, and source-mapped JSON fields;
 \item fixture and corpus tests for minimized tokenizer/chat-template bundles, expected behaviors, sentinel consistency, artifact materialization, and deterministic manifest generation;
 \item future corpus tests for popular model and framework configurations pinned by immutable upstream revisions.
 \end{itemize}

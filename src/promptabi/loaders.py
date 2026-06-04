@@ -8,15 +8,16 @@ import re
 import struct
 import tarfile
 import zipfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from .artifacts import Artifact, ArtifactKind
+from .artifacts import Artifact, ArtifactKind, StopPolicyArtifact
 from .chat_templates import ChatTemplateParseError, parse_hf_tokenizer_config_chat_template, symbolically_execute_chat_template
 from .diagnostics import SourceSpan
 from .role_boundaries import build_role_boundary_model
 from .source import build_json_source_map
+from .stop_policies import StopPolicyParseError, parse_stop_policy_config
 
 
 _SHA256_RE = re.compile(r"^[0-9a-fA-F]{64}$")
@@ -137,6 +138,8 @@ class ArtifactLoader:
             return self._load_archive(artifact, path)
         if artifact.kind is ArtifactKind.CHAT_TEMPLATE:
             return self._load_chat_template(artifact, path)
+        if artifact.kind is ArtifactKind.STOP_POLICY:
+            return self._load_stop_policy(artifact, path)
         if artifact.kind is ArtifactKind.PROVIDER_CONFIG:
             return self._load_provider_snapshot(artifact, path)
         return self._load_file(artifact, path, source_type="local-file")
@@ -353,6 +356,69 @@ class ArtifactLoader:
             actual_sha256=loaded.actual_sha256,
             size_bytes=loaded.size_bytes,
             metadata=metadata,
+            source_spans=loaded.source_spans,
+            warnings=loaded.warnings,
+        )
+
+    def _load_stop_policy(self, artifact: Artifact, path: Path) -> LoadedArtifact:
+        if path.suffix.lower() != ".json":
+            return self._load_file(artifact, path, source_type="stop-policy-file")
+        try:
+            text = path.read_text(encoding="utf-8")
+            raw = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"stop-policy artifact '{artifact.name}' is not valid JSON",
+                suggestion="Store stop policies as deterministic JSON objects.",
+                steps=(("parse stop-policy JSON", str(path), exc.msg),),
+                span=SourceSpan(path=str(path), start_line=exc.lineno, start_column=exc.colno),
+            ) from exc
+        if not isinstance(raw, dict):
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"stop-policy artifact '{artifact.name}' must be a JSON object",
+                suggestion="Use a provider request snapshot, generation config, or wrapper config object.",
+                steps=(("parse stop-policy root", str(path), type(raw).__name__),),
+            )
+        try:
+            source_map = build_json_source_map(text, path)
+            parsed = parse_stop_policy_config(
+                raw,
+                source_map=source_map,
+                declared_family=artifact.source_family if isinstance(artifact, StopPolicyArtifact) else None,
+            )
+        except StopPolicyParseError as exc:
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"stop-policy artifact '{artifact.name}' could not be parsed",
+                suggestion="Use string stop sequences and integer stop token IDs in supported provider/framework fields.",
+                steps=(("parse stop-policy fields", ".".join(exc.path) or "<root>", str(exc)),),
+                span=exc.span,
+            ) from exc
+        loaded = self._load_file(artifact, path, source_type="stop-policy-config")
+        parsed_artifact = artifact
+        if isinstance(artifact, StopPolicyArtifact):
+            parsed_artifact = replace(
+                artifact,
+                stop_sequences=parsed.stop_sequences or artifact.stop_sequences,
+                stop_token_ids=parsed.stop_token_ids or artifact.stop_token_ids,
+                include_eos=parsed.include_eos,
+                source_family=artifact.source_family or parsed.source_family,
+            )
+        source_metadata = tuple(
+            (f"source_{index}_{key}", value)
+            for index, source in enumerate(parsed.sources)
+            for key, value in source.to_metadata()
+        )
+        return LoadedArtifact(
+            artifact=parsed_artifact,
+            source_type="stop-policy-config",
+            pinned=loaded.pinned,
+            resolved=loaded.resolved,
+            actual_sha256=loaded.actual_sha256,
+            size_bytes=loaded.size_bytes,
+            metadata=(*parsed.to_metadata(), *source_metadata),
             source_spans=loaded.source_spans,
             warnings=loaded.warnings,
         )

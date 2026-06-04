@@ -54,7 +54,9 @@ def test_core_artifact_model_serializes_every_kind_deterministically() -> None:
             name="stops",
             location=location,
             stop_sequences=("</tool_call>", "\n\n", "</tool_call>"),
+            stop_token_ids=(2, 2, 128001),
             include_eos=False,
+            source_family="openai-compatible",
         ),
         SchemaArtifact(
             kind=ArtifactKind.SCHEMA,
@@ -126,7 +128,12 @@ def test_config_artifact_parser_accepts_the_same_kinds_as_the_model(tmp_path: Pa
         ArtifactKind.TOKENIZER: {"family": "byte-bpe", "added_tokens": ["<s>"]},
         ArtifactKind.CHAT_TEMPLATE: {"roles": ["system", "user"], "add_generation_prompt": True},
         ArtifactKind.SPECIAL_TOKEN_MAP: {"tokens": {"bos": "<s>", "eos": "</s>"}},
-        ArtifactKind.STOP_POLICY: {"stop_sequences": ["</tool_call>"], "include_eos": False},
+        ArtifactKind.STOP_POLICY: {
+            "stop_sequences": ["</tool_call>"],
+            "stop_token_ids": [128001],
+            "include_eos": False,
+            "source_family": "vllm",
+        },
         ArtifactKind.SCHEMA: {"dialect": "json-schema"},
         ArtifactKind.GRAMMAR: {"grammar_type": "regex"},
         ArtifactKind.TOOL_DEFINITION: {"provider": "anthropic", "tool_names": ["refund_user"]},

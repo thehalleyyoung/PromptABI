@@ -1,0 +1,8 @@
+{
+  "framework": "vllm",
+  "sampling_params": {
+    "stop": ["</tool_call>", "<|eot_id|>"],
+    "stop_token_ids": [128001, 128009],
+    "ignore_eos": false
+  }
+}

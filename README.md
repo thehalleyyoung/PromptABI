@@ -49,8 +49,10 @@ tool-call sentinels from real chat-template artifacts, while JSON/escape/wrapper
 filters suppress false positives. Findings include minimized malicious inputs,
 rendered excerpts, byte-level token evidence, and exact forged-boundary
 locations; `examples/role-boundary/` demonstrates the unsafe and sanitized cases
-against the real CLI. The next high-value checks are stop/grammar/tokenizer
-reachability and must-survive token-budget verification. The repository already has the typed Python package,
+against the real CLI. Stop policies are now normalized from OpenAI-compatible
+requests, Hugging Face generation configs, llama.cpp/Ollama options, vLLM sampling
+params, LiteLLM params, and common wrapper kwargs, setting up the next
+stop/grammar/tokenizer reachability checks. The repository already has the typed Python package,
 core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,
 snapshot-locked output stability, discoverable `promptabi verify` workflow,
 source-mapped diagnostics that point to exact config and artifact lines, offline

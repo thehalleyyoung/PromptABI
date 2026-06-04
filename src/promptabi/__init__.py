@@ -113,6 +113,12 @@ from .seed_corpus import (
 )
 from .session import CheckCallable, CheckContext, VerificationResult, VerificationSession
 from .source import JsonSourceMap, build_json_source_map
+from .stop_policies import (
+    StopPolicyParseError,
+    StopPolicyParseResult,
+    StopPolicySource,
+    parse_stop_policy_config,
+)
 from .tokenizer_diff import (
     TokenizerDifferentialCase,
     TokenizerDifferentialMismatch,
@@ -224,6 +230,9 @@ __all__ = [
     "SpecialToken",
     "SpecialTokenMapArtifact",
     "StopPolicyArtifact",
+    "StopPolicyParseError",
+    "StopPolicyParseResult",
+    "StopPolicySource",
     "TiktokenAdapter",
     "TokenizerDifferentialCase",
     "TokenizerDifferentialMismatch",
@@ -262,6 +271,7 @@ __all__ = [
     "run_verification",
     "parse_hf_chat_template_config",
     "parse_hf_tokenizer_config_chat_template",
+    "parse_stop_policy_config",
     "render_chat_template_supported_fragment",
     "run_tokenizer_differential",
     "run_chat_template_differential",

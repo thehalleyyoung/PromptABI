@@ -6,10 +6,18 @@ from pathlib import Path
 
 import pytest
 
-from promptabi import ArtifactKind, ArtifactLocation, ArtifactProvenance, ProviderConfigArtifact, TokenizerArtifact
+from promptabi import (
+    ArtifactKind,
+    ArtifactLocation,
+    ArtifactProvenance,
+    ProviderConfigArtifact,
+    StopPolicyArtifact,
+    TokenizerArtifact,
+)
 from promptabi.artifacts import SchemaArtifact, artifact_from_config
 from promptabi.loaders import ArtifactLoadError, ArtifactLoader
 from promptabi.session import VerificationSession
+from promptabi.stop_policies import parse_stop_policy_config
 
 
 def test_loader_hashes_and_validates_pinned_local_files(tmp_path: Path) -> None:
@@ -180,6 +188,106 @@ def test_loader_validates_provider_config_snapshots(tmp_path: Path) -> None:
     assert loaded.source_type == "provider-config-snapshot"
     assert dict(loaded.metadata) == {"provider": "openai-compatible"}
     assert loaded.warnings == ()
+
+
+def test_stop_policy_parser_covers_common_provider_and_framework_shapes() -> None:
+    openai = parse_stop_policy_config(
+        {
+            "provider": "openai",
+            "request_shape": {"messages": "array"},
+            "stop": ["</tool_call>", "\n\n"],
+        }
+    )
+    assert openai.source_family == "openai-compatible"
+    assert openai.stop_sequences == ("\n\n", "</tool_call>")
+    assert openai.include_eos is True
+
+    huggingface = parse_stop_policy_config(
+        {
+            "generation_config": {
+                "stop_strings": ["<|eot_id|>"],
+                "eos_token_id": [128001, 128009],
+            }
+        }
+    )
+    assert huggingface.source_family == "huggingface"
+    assert huggingface.stop_sequences == ("<|eot_id|>",)
+    assert huggingface.stop_token_ids == (128001, 128009)
+
+    llama_cpp = parse_stop_policy_config(
+        {"backend": "llama.cpp", "reverse_prompt": ["User:"], "ignore_eos": True}
+    )
+    assert llama_cpp.source_family == "llama.cpp"
+    assert llama_cpp.stop_sequences == ("User:",)
+    assert llama_cpp.include_eos is False
+
+    vllm = parse_stop_policy_config(
+        {"framework": "vllm", "sampling_params": {"stop": "</s>", "stop_token_ids": [2], "ignore_eos": False}}
+    )
+    assert vllm.source_family == "vllm"
+    assert vllm.stop_sequences == ("</s>",)
+    assert vllm.stop_token_ids == (2,)
+    assert vllm.include_eos is True
+
+    litellm = parse_stop_policy_config({"litellm_params": {"stop": ["Observation:"], "include_eos": False}})
+    assert litellm.source_family == "litellm"
+    assert litellm.stop_sequences == ("Observation:",)
+    assert litellm.include_eos is False
+
+    wrapper = parse_stop_policy_config({"model_kwargs": {"generation_kwargs": {"stop_sequences": ["###"]}}})
+    assert wrapper.source_family == "framework-wrapper"
+    assert wrapper.stop_sequences == ("###",)
+
+
+def test_loader_parses_stop_policy_config_and_preserves_source_metadata(tmp_path: Path) -> None:
+    config = tmp_path / "vllm-stop-policy.json"
+    config.write_text(
+        json.dumps(
+            {
+                "framework": "vllm",
+                "sampling_params": {
+                    "stop": ["</tool_call>", ""],
+                    "stop_token_ids": [128001, 128009],
+                    "ignore_eos": True,
+                },
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    artifact = StopPolicyArtifact(
+        kind=ArtifactKind.STOP_POLICY,
+        name="stops",
+        location=ArtifactLocation(path=str(config)),
+        provenance=ArtifactProvenance(sha256=sha256(config.read_bytes()).hexdigest()),
+    )
+
+    loaded = ArtifactLoader().load(artifact)
+
+    assert loaded.source_type == "stop-policy-config"
+    assert isinstance(loaded.artifact, StopPolicyArtifact)
+    assert loaded.artifact.stop_sequences == ("</tool_call>",)
+    assert loaded.artifact.stop_token_ids == (128001, 128009)
+    assert loaded.artifact.include_eos is False
+    metadata = dict(loaded.metadata)
+    assert metadata["source_family"] == "vllm"
+    assert metadata["stop_sequence_count"] == 1
+    assert metadata["stop_token_id_count"] == 2
+    assert metadata["ignored_empty_sequences"] == ("sampling_params.stop[1]",)
+    assert any(name == "sampling_params.stop.0" for name, _span in loaded.source_spans)
+
+
+def test_loader_rejects_malformed_stop_policy_fields(tmp_path: Path) -> None:
+    config = tmp_path / "bad-stop-policy.json"
+    config.write_text('{"stop": [123]}', encoding="utf-8")
+    artifact = StopPolicyArtifact(
+        kind=ArtifactKind.STOP_POLICY,
+        name="bad-stops",
+        location=ArtifactLocation(path=str(config)),
+    )
+
+    with pytest.raises(ArtifactLoadError, match="could not be parsed"):
+        ArtifactLoader().load(artifact)
 
 
 def test_loader_summarizes_archived_fixture_bundles(tmp_path: Path) -> None:

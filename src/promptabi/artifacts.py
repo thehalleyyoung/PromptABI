@@ -251,19 +251,28 @@ class SpecialTokenMapArtifact(BaseArtifact):
 @dataclass(frozen=True, slots=True)
 class StopPolicyArtifact(BaseArtifact):
     stop_sequences: tuple[str, ...] = ()
+    stop_token_ids: tuple[int, ...] = ()
     include_eos: bool = True
+    source_family: str | None = None
 
     def __post_init__(self) -> None:
         BaseArtifact.__post_init__(self)
         _require_kind(self.kind, ArtifactKind.STOP_POLICY)
         if any(sequence == "" for sequence in self.stop_sequences):
             raise ValueError("stop sequences must be non-empty")
+        if any(token_id < 0 for token_id in self.stop_token_ids):
+            raise ValueError("stop token ids must be non-negative")
         object.__setattr__(self, "stop_sequences", tuple(sorted(dict.fromkeys(self.stop_sequences))))
+        object.__setattr__(self, "stop_token_ids", tuple(sorted(dict.fromkeys(self.stop_token_ids))))
 
     def to_dict(self) -> dict[str, object]:
         data = super().to_dict()
         data["stop_sequences"] = list(self.stop_sequences)
+        if self.stop_token_ids:
+            data["stop_token_ids"] = list(self.stop_token_ids)
         data["include_eos"] = self.include_eos
+        if self.source_family is not None:
+            data["source_family"] = self.source_family
         return data
 
 
@@ -498,7 +507,9 @@ def artifact_from_config(
         return StopPolicyArtifact(
             **common,
             stop_sequences=_tuple_of_str(spec, "stop_sequences"),
+            stop_token_ids=_tuple_of_int(spec, "stop_token_ids"),
             include_eos=_bool(spec, "include_eos", default=True),
+            source_family=_optional_str(spec, "source_family"),
         )
     if kind is ArtifactKind.SCHEMA:
         return SchemaArtifact(**common, dialect=_str(spec, "dialect", default="json-schema"))
@@ -640,6 +651,13 @@ def _tuple_of_str(spec: dict[str, Any], key: str) -> tuple[str, ...]:
     value = spec.get(key, [])
     if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):
         raise ValueError(f"artifact field '{key}' must be a list of non-empty strings")
+    return tuple(value)
+
+
+def _tuple_of_int(spec: dict[str, Any], key: str) -> tuple[int, ...]:
+    value = spec.get(key, [])
+    if not isinstance(value, list) or not all(isinstance(item, int) and not isinstance(item, bool) for item in value):
+        raise ValueError(f"artifact field '{key}' must be a list of integers")
     return tuple(value)
 
 

@@ -1,0 +1,11 @@
+{
+  "name": "stop-policy-vllm",
+  "checks": ["repository-skeleton"],
+  "artifacts": {
+    "vllm-stops": {
+      "kind": "stop-policy",
+      "path": "vllm-sampling-params.json",
+      "source_family": "vllm"
+    }
+  }
+}
