@@ -44,6 +44,15 @@ def test_stop_overreachability_builds_schema_string_witness(tmp_path: Path) -> N
     assert parsed["comment"] == "</tool_call>"
     assert finding.truncated_prefix == finding.valid_output[: finding.firing_offset]
     assert finding.resulting_state == "inside JSON string value at $.comment"
+    assert "matched '</tool_call>'" in finding.firing_point
+    assert finding.firing_point.startswith("offset ")
+    assert finding.resulting_structure.startswith("malformed JSON prefix:")
+    try:
+        json.loads(finding.truncated_prefix)
+    except json.JSONDecodeError as exc:
+        assert exc.msg in finding.resulting_structure
+    else:  # pragma: no cover - this branch would invalidate the witness
+        raise AssertionError("truncated prefix should be malformed JSON")
     assert report.abstentions == ()
 
 
@@ -63,6 +72,8 @@ def test_stop_overreachability_offsets_use_serialized_output_for_escaped_stops()
     assert finding.valid_output[finding.firing_offset] == '"'
     assert finding.valid_output_prefix == '{"'
     assert finding.resulting_state.startswith("inside nested JSON")
+    assert "line 1, column 2" in finding.firing_point
+    assert "malformed JSON prefix" in finding.resulting_structure
 
 
 def test_stop_overreachability_cli_reports_tool_argument_and_provider_envelope(
@@ -135,4 +146,36 @@ def test_stop_overreachability_cli_reports_tool_argument_and_provider_envelope(
         step["action"] == "record parser state at truncation"
         for step in content["witness"]["steps"]
     )
+    assert any(
+        step["action"] == "show resulting malformed or prematurely accepted structure"
+        and step["output"].startswith("malformed JSON prefix:")
+        for step in content["witness"]["steps"]
+    )
+    assert any(
+        step["action"] == "locate stop firing point"
+        and "matched '</tool_call>'" in step["output"]
+        for step in content["witness"]["steps"]
+    )
     assert captured.err == ""
+
+
+def test_stop_overreachability_xml_structural_witness_explains_missing_tags() -> None:
+    policy = StopPolicyArtifact(
+        kind=ArtifactKind.STOP_POLICY,
+        name="xml-stop",
+        location=ArtifactLocation(uri="memory://stop"),
+        stop_sequences=("</arguments>",),
+    )
+
+    report = analyze_stop_overreachability(policy)
+
+    finding = [
+        item
+        for item in report.structural_findings
+        if item.region.kind == "xml-tool-call" and item.stop_sequence == "</arguments>"
+    ][0]
+    assert finding.valid_output_prefix.endswith("</arguments>")
+    assert finding.truncated_prefix.endswith('{"ok":true}')
+    assert finding.resulting_structure == (
+        "malformed XML-like prefix: missing closing tag(s) </tool_call>, </arguments>"
+    )

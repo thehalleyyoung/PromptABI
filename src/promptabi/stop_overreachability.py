@@ -39,6 +39,8 @@ class StopOverreachabilityFinding:
     valid_output_prefix: str
     truncated_prefix: str
     resulting_state: str
+    firing_point: str
+    resulting_structure: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,15 +133,19 @@ def _finding_for(
         offset = witness_text.find(stop_sequence)
     if offset < 0:
         return None
+    truncated_prefix = witness_text[:offset]
+    valid_output_prefix = witness_text[: offset + len(stop_sequence)]
     return StopOverreachabilityFinding(
         stop_sequence=stop_sequence,
         category=category,
         region=region,
         firing_offset=offset,
         valid_output=witness_text,
-        valid_output_prefix=witness_text[: offset + len(stop_sequence)],
-        truncated_prefix=witness_text[:offset],
+        valid_output_prefix=valid_output_prefix,
+        truncated_prefix=truncated_prefix,
         resulting_state=region.parser_state,
+        firing_point=_firing_point(witness_text, offset, stop_sequence),
+        resulting_structure=_resulting_structure(region, truncated_prefix, witness_text),
     )
 
 
@@ -150,6 +156,80 @@ def _finding_sort_key(finding: StopOverreachabilityFinding) -> tuple[str, str, s
         finding.region.kind,
         finding.firing_offset,
     )
+
+
+def _firing_point(valid_output: str, offset: int, stop_sequence: str) -> str:
+    line = valid_output.count("\n", 0, offset) + 1
+    line_start = valid_output.rfind("\n", 0, offset) + 1
+    column = offset - line_start + 1
+    context_start = max(0, offset - 24)
+    context_end = min(len(valid_output), offset + len(stop_sequence) + 24)
+    context = valid_output[context_start:context_end]
+    return (
+        f"offset {offset}, line {line}, column {column}, matched "
+        f"{stop_sequence!r} in context {_visible(context)!r}"
+    )
+
+
+def _resulting_structure(
+    region: StructuredOutputRegion,
+    truncated_prefix: str,
+    valid_output: str,
+) -> str:
+    if region.kind in {
+        "json",
+        "json-schema-string",
+        "tool-arguments-json",
+        "openai-tool-envelope",
+        "anthropic-tool-envelope",
+        "openai-tool-call-content",
+    }:
+        return _json_truncation_effect(truncated_prefix)
+    if region.kind in {"xml-tool-call", "xml-tool-call-content"}:
+        return _xml_truncation_effect(truncated_prefix)
+    if region.kind == "markdown-code-block":
+        return _markdown_truncation_effect(truncated_prefix)
+    remaining = len(valid_output) - len(truncated_prefix)
+    return f"prematurely accepted prefix with {remaining} required trailing character(s) removed"
+
+
+def _json_truncation_effect(truncated_prefix: str) -> str:
+    decoder = json.JSONDecoder()
+    try:
+        value, end = decoder.raw_decode(truncated_prefix)
+    except json.JSONDecodeError as exc:
+        return f"malformed JSON prefix: {exc.msg} at line {exc.lineno}, column {exc.colno}"
+    trailing = truncated_prefix[end:].strip()
+    if trailing:
+        return f"malformed JSON prefix: valid JSON value followed by trailing text {trailing!r}"
+    return f"prematurely accepted JSON prefix: {type(value).__name__} value parses before the full witness"
+
+
+def _xml_truncation_effect(truncated_prefix: str) -> str:
+    if not truncated_prefix:
+        return "prematurely accepted empty prefix before XML-like tool-call envelope"
+    missing: list[str] = []
+    for tag in ("tool_call", "arguments"):
+        opens = truncated_prefix.count(f"<{tag}")
+        closes = truncated_prefix.count(f"</{tag}>")
+        if opens > closes:
+            missing.append(f"</{tag}>")
+    if missing:
+        return f"malformed XML-like prefix: missing closing tag(s) {', '.join(missing)}"
+    return "prematurely accepted XML-like prefix before the complete tool-call envelope"
+
+
+def _markdown_truncation_effect(truncated_prefix: str) -> str:
+    fence_count = truncated_prefix.count("```")
+    if fence_count % 2 == 1:
+        return "malformed markdown prefix: code fence is open at truncation"
+    if not truncated_prefix:
+        return "prematurely accepted empty prefix before fenced structured output"
+    return "prematurely accepted markdown prefix before fenced structured output is complete"
+
+
+def _visible(text: str) -> str:
+    return text.replace("\n", "\\n").replace("\r", "\\r")
 
 
 def _builtin_structural_regions() -> tuple[StructuredOutputRegion, ...]:

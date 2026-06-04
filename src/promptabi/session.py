@@ -668,11 +668,15 @@ def _stop_overreachability_finding_diagnostic(
                 WitnessStep(
                     action="locate stop firing point",
                     input=finding.stop_sequence,
-                    output=f"offset {finding.firing_offset}",
+                    output=finding.firing_point,
                 ),
                 WitnessStep(action="record parser state at truncation", output=finding.resulting_state),
                 WitnessStep(action="show valid output prefix through stop", output=finding.valid_output_prefix),
                 WitnessStep(action="show runtime-truncated prefix", output=finding.truncated_prefix),
+                WitnessStep(
+                    action="show resulting malformed or prematurely accepted structure",
+                    output=finding.resulting_structure,
+                ),
             ),
             artifacts=(stop_loaded.artifact.to_ref(),),
         ),
