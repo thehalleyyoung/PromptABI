@@ -101,6 +101,7 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "token-budget-context-conflict": (CheckMode.BOUNDED, CheckMode.HEURISTIC),
     "token-budget-framework-truncation": (CheckMode.SOUND, CheckMode.BOUNDED),
     "token-budget-invalid": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "token-budget-must-survive": (CheckMode.SOUND, CheckMode.BOUNDED),
     "token-budget-model": (CheckMode.SOUND, CheckMode.BOUNDED),
     "token-budget-policy-overflow": (CheckMode.SOUND, CheckMode.BOUNDED),
     "token-budget-required-overflow": (CheckMode.SOUND, CheckMode.BOUNDED),
@@ -1098,6 +1099,12 @@ def _token_budget_finding_diagnostic(report: TokenBudgetReport, finding: TokenBu
         WitnessStep(action="inspect budget evidence", input=key, output=value)
         for key, value in finding.evidence
     )
+    if report.must_survive_proof is not None and finding.rule_id == "token-budget-required-truncated":
+        proof = report.must_survive_proof
+        steps.extend(
+            WitnessStep(action="prove must-survive field", input=key, output=value)
+            for key, value in proof.to_metadata()
+        )
     return Diagnostic(
         rule_id=finding.rule_id,
         severity=severity,
@@ -1122,6 +1129,11 @@ def _token_budget_summary_diagnostic(report: TokenBudgetReport) -> Diagnostic:
     truncation = report.truncation
     kept = ", ".join(segment.name for segment in truncation.kept_segments) if truncation is not None else "<not modeled>"
     dropped = ", ".join(segment.name for segment in truncation.dropped_segments) if truncation is not None else "<not modeled>"
+    proof = report.must_survive_proof
+    proof_status = proof.status if proof is not None else "not modeled"
+    proof_detail = "<none>"
+    if proof is not None:
+        proof_detail = "; ".join(f"{key}={value}" for key, value in proof.to_metadata())
     return Diagnostic(
         rule_id="token-budget-model",
         severity=DiagnosticSeverity.INFO,
@@ -1147,6 +1159,8 @@ def _token_budget_summary_diagnostic(report: TokenBudgetReport) -> Diagnostic:
                 WitnessStep(action="simulate framework truncation", input=report.framework or "config", output=report.strategy or "none"),
                 WitnessStep(action="record kept segments", output=kept or "<none>"),
                 WitnessStep(action="record dropped segments", output=dropped or "<none>"),
+                WitnessStep(action="prove must-survive prompt segments", output=proof_status),
+                WitnessStep(action="record must-survive proof", output=proof_detail),
             ),
         ),
     )

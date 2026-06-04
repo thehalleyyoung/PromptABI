@@ -111,6 +111,49 @@ class TruncationDecision:
 
 
 @dataclass(frozen=True, slots=True)
+class MustSurviveProof:
+    """Bounded proof or counterexample for must-survive prompt segments."""
+
+    status: str
+    required_segments: tuple[str, ...]
+    survived_segments: tuple[str, ...]
+    dropped_segments: tuple[str, ...]
+    input_budget_tokens: int
+    policy: TruncationPolicy
+    minimal_counterexample: tuple[TokenBudgetSegment, ...] = ()
+    reason: str | None = None
+
+    @property
+    def counterexample_tokens(self) -> int | None:
+        if not self.minimal_counterexample:
+            return 0
+        if any(segment.total_tokens is None for segment in self.minimal_counterexample):
+            return None
+        return sum(segment.total_tokens or 0 for segment in self.minimal_counterexample)
+
+    def to_metadata(self) -> tuple[tuple[str, str], ...]:
+        counterexample_tokens = self.counterexample_tokens
+        return (
+            ("must_survive_status", self.status),
+            ("required_segments", ", ".join(self.required_segments) or "<none>"),
+            ("survived_required", ", ".join(self.survived_segments) or "<none>"),
+            ("dropped_required", ", ".join(self.dropped_segments) or "<none>"),
+            (
+                "minimal_counterexample",
+                ", ".join(_segment_token_summary(segment) for segment in self.minimal_counterexample) or "<none>",
+            ),
+            (
+                "minimal_counterexample_tokens",
+                str(counterexample_tokens) if counterexample_tokens is not None else "unknown",
+            ),
+            ("input_budget_tokens", str(self.input_budget_tokens)),
+            ("framework", self.policy.framework),
+            ("strategy", self.policy.strategy),
+            ("reason", self.reason or "<none>"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class TokenBudgetFinding:
     """A budget-model observation that should become a diagnostic."""
 
@@ -132,6 +175,7 @@ class TokenBudgetReport:
     reservation: TokenBudgetReservation | None
     policy: TruncationPolicy | None
     truncation: TruncationDecision | None
+    must_survive_proof: MustSurviveProof | None
     segments: tuple[TokenBudgetSegment, ...]
     findings: tuple[TokenBudgetFinding, ...]
 
@@ -186,6 +230,7 @@ def analyze_token_budget(
             reservation=None,
             policy=None,
             truncation=None,
+            must_survive_proof=None,
             segments=(),
             findings=(
                 TokenBudgetFinding(
@@ -215,6 +260,7 @@ def analyze_token_budget(
             reservation=None,
             policy=None,
             truncation=None,
+            must_survive_proof=None,
             segments=segments,
             findings=(
                 *findings,
@@ -313,6 +359,7 @@ def analyze_token_budget(
             )
 
     truncation = _apply_truncation_policy(policy, segments, reservation)
+    must_survive_proof = _prove_must_survive(policy, segments, reservation, truncation)
     if truncation.unknown_segments:
         findings.append(
             TokenBudgetFinding(
@@ -362,6 +409,11 @@ def analyze_token_budget(
                         ("dropped_required", ", ".join(segment.name for segment in dropped_required)),
                         ("kept_segments", ", ".join(segment.name for segment in truncation.kept_segments) or "<none>"),
                         ("dropped_segments", ", ".join(segment.name for segment in truncation.dropped_segments) or "<none>"),
+                        *(
+                            must_survive_proof.to_metadata()
+                            if must_survive_proof is not None
+                            else ()
+                        ),
                     ),
                 )
             )
@@ -392,6 +444,7 @@ def analyze_token_budget(
         reservation=reservation,
         policy=policy,
         truncation=truncation,
+        must_survive_proof=must_survive_proof,
         segments=segments,
         findings=tuple(findings),
     )
@@ -636,6 +689,87 @@ def _apply_truncation_policy(
     return TruncationDecision(policy=policy, kept_segments=kept, dropped_segments=dropped, overflow_tokens=overflow)
 
 
+def _prove_must_survive(
+    policy: TruncationPolicy,
+    segments: tuple[TokenBudgetSegment, ...],
+    reservation: TokenBudgetReservation,
+    truncation: TruncationDecision,
+) -> MustSurviveProof:
+    required = tuple(segment for segment in segments if segment.required)
+    required_names = tuple(segment.name for segment in required)
+    if not required:
+        return MustSurviveProof(
+            status="proven",
+            required_segments=(),
+            survived_segments=(),
+            dropped_segments=(),
+            input_budget_tokens=reservation.input_budget_tokens,
+            policy=policy,
+            reason="no must-survive prompt segments declared",
+        )
+    if truncation.unknown_segments or not policy.supported:
+        return MustSurviveProof(
+            status="abstained",
+            required_segments=required_names,
+            survived_segments=(),
+            dropped_segments=(),
+            input_budget_tokens=reservation.input_budget_tokens,
+            policy=policy,
+            reason="segment token counts or truncation policy are outside the bounded model",
+        )
+    dropped_required = tuple(segment for segment in truncation.dropped_segments if segment.required)
+    if not dropped_required:
+        return MustSurviveProof(
+            status="proven",
+            required_segments=required_names,
+            survived_segments=tuple(segment.name for segment in required),
+            dropped_segments=(),
+            input_budget_tokens=reservation.input_budget_tokens,
+            policy=policy,
+            reason="simulated truncation keeps every must-survive segment",
+        )
+    counterexample = _minimize_survival_counterexample(
+        policy,
+        segments,
+        reservation,
+        target_names=tuple(segment.name for segment in dropped_required),
+    )
+    dropped_names = tuple(segment.name for segment in dropped_required)
+    survived_names = tuple(segment.name for segment in required if segment.name not in dropped_names)
+    return MustSurviveProof(
+        status="violated",
+        required_segments=required_names,
+        survived_segments=survived_names,
+        dropped_segments=dropped_names,
+        input_budget_tokens=reservation.input_budget_tokens,
+        policy=policy,
+        minimal_counterexample=counterexample,
+        reason="framework truncation can remove a must-survive segment",
+    )
+
+
+def _minimize_survival_counterexample(
+    policy: TruncationPolicy,
+    segments: tuple[TokenBudgetSegment, ...],
+    reservation: TokenBudgetReservation,
+    *,
+    target_names: tuple[str, ...],
+) -> tuple[TokenBudgetSegment, ...]:
+    counterexample = list(segments)
+    target_name_set = set(target_names)
+    for candidate in segments:
+        if candidate.name in target_name_set:
+            continue
+        trial = tuple(segment for segment in counterexample if segment != candidate)
+        trial_decision = _apply_truncation_policy(policy, trial, reservation)
+        trial_dropped = {
+            segment.name for segment in trial_decision.dropped_segments if segment.required
+        }
+        if trial_dropped.intersection(target_name_set):
+            counterexample = list(trial)
+    return tuple(sorted(counterexample, key=lambda segment: segment.index))
+
+
 def _drop_until_fits(
     segments: tuple[TokenBudgetSegment, ...],
     budget: int,
@@ -670,3 +804,9 @@ def _middle_out_candidates(segments: tuple[TokenBudgetSegment, ...]) -> tuple[To
         return ()
     center = (len(segments) - 1) / 2
     return tuple(sorted(segments, key=lambda segment: (abs(segment.index - center), segment.index)))
+
+
+def _segment_token_summary(segment: TokenBudgetSegment) -> str:
+    tokens = segment.total_tokens
+    suffix = "unknown" if tokens is None else str(tokens)
+    return f"{segment.name}={suffix}"

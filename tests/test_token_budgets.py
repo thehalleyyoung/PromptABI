@@ -150,6 +150,14 @@ def test_langchain_default_truncation_preserves_system_but_drops_old_required_me
         "system-policy",
         "latest-user-task",
     ]
+    assert report.must_survive_proof is not None
+    assert report.must_survive_proof.status == "violated"
+    assert report.must_survive_proof.dropped_segments == ("early-user-task",)
+    assert [segment.name for segment in report.must_survive_proof.minimal_counterexample] == [
+        "system-policy",
+        "early-user-task",
+        "latest-user-task",
+    ]
     assert [finding.rule_id for finding in report.findings] == [
         "token-budget-required-overflow",
         "token-budget-total-overflow",
@@ -226,3 +234,45 @@ def test_vllm_left_truncation_uses_declaration_order_not_segment_name_order() ->
     assert report.truncation is not None
     assert [segment.name for segment in report.truncation.dropped_segments] == ["z-first"]
     assert [segment.name for segment in report.truncation.kept_segments] == ["a-second", "m-third"]
+    assert report.must_survive_proof is not None
+    assert report.must_survive_proof.status == "proven"
+    assert report.must_survive_proof.survived_segments == ("a-second", "m-third")
+
+
+def test_must_survive_counterexample_is_minimized_for_real_truncation_policy() -> None:
+    segments = PromptSegmentArtifact(
+        kind=ArtifactKind.PROMPT_SEGMENT,
+        name="chat",
+        location=ArtifactLocation(uri="memory://chat"),
+        segments=(
+            PromptSegment("optional-preface", role="user", required=False, token_count=12),
+            PromptSegment("must-survive-system", role="system", required=True, token_count=30),
+            PromptSegment("optional-retrieval", role="retrieval", required=False, token_count=45),
+            PromptSegment("latest-question", role="user", required=True, token_count=25),
+        ),
+    )
+    budget = FrameworkTruncationConfigArtifact(
+        kind=ArtifactKind.FRAMEWORK_TRUNCATION_CONFIG,
+        name="transformers-budget",
+        location=ArtifactLocation(uri="memory://transformers-budget"),
+        framework="transformers",
+        max_context_tokens=50,
+    )
+
+    report = analyze_token_budget(
+        VerificationConfig(name="must-survive", artifact_bundle=()),
+        (ArtifactLoader().load(segments), ArtifactLoader().load(budget)),
+    )
+
+    assert report.must_survive_proof is not None
+    assert report.must_survive_proof.status == "violated"
+    assert report.must_survive_proof.dropped_segments == ("must-survive-system",)
+    assert [segment.name for segment in report.must_survive_proof.minimal_counterexample] == [
+        "must-survive-system",
+        "latest-question",
+    ]
+    assert report.must_survive_proof.counterexample_tokens == 55
+    truncated = next(finding for finding in report.findings if finding.rule_id == "token-budget-required-truncated")
+    evidence = dict(truncated.evidence)
+    assert evidence["minimal_counterexample"] == "must-survive-system=30, latest-question=25"
+    assert evidence["minimal_counterexample_tokens"] == "55"

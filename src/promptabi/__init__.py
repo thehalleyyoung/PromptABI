@@ -28,6 +28,7 @@ from .artifacts import (
     TruncationStrategy,
 )
 from .budgets import (
+    MustSurviveProof,
     TruncationDecision,
     TruncationPolicy,
     TokenBudgetFinding,
@@ -377,6 +378,7 @@ __all__ = [
     "Length",
     "LoadedArtifact",
     "MANIFEST_VERSION",
+    "MustSurviveProof",
     "NamedConstraint",
     "Ne",
     "NormalizationRule",
