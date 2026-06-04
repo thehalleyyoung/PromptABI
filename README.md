@@ -7,6 +7,8 @@ structured-output grammars, provider contracts, and token budgets.
 
 ```bash
 promptabi verify --config examples/minimal/promptabi.json
+# scaffold a real stack contract:
+promptabi init --stack openai-tools --output-dir .promptabi-demo
 # or, inside a repo with promptabi.json:
 promptabi verify --artifact schema=schemas/answer.json --fail-on warning
 # gate upgrades:
@@ -116,8 +118,10 @@ core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,
 snapshot-locked output stability, discoverable `promptabi verify` workflow,
 source-mapped diagnostics that point to exact config and artifact lines, offline
 version-pinned artifact loading, Hugging Face chat-template parsing plus bounded
-symbolic/concrete rendering, and role-region non-forgeability checked across the seed
-corpus and a delimiter-collision regression suite covering ChatML, Llama, Mistral,
+symbolic/concrete rendering, one-command scaffolds for OpenAI tools, Hugging Face
+local models, vLLM, llama.cpp, LangChain RAG, LlamaIndex agents, and custom JSON
+schemas, and role-region non-forgeability checked across the seed corpus and a
+delimiter-collision regression suite covering ChatML, Llama, Mistral,
 XML tool tags, markdown fences, and fine-tune headers. It also has a real tokenizer abstraction spanning byte-level, Hugging Face
 `tokenizers`, `tiktoken`, and SentencePiece backends, differential harnesses
 checked against actual libraries, an embedding API for custom checks and typed

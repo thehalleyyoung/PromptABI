@@ -12,6 +12,7 @@ from pathlib import Path
 from ._version import __version__
 from .config import ConfigError, discover_config, load_config
 from .diff import diff_config_files
+from .init import InitError, available_stacks, scaffold_promptabi_project
 from .lockfiles import (
     LockfileError,
     build_lockfile,
@@ -104,6 +105,33 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("text", "json", "sarif"),
         default="text",
         help="output format (default: text)",
+    )
+
+    init = subparsers.add_parser("init", help="scaffold a PromptABI config for a common LLM stack")
+    init.add_argument(
+        "--stack",
+        choices=available_stacks(),
+        default="openai-tools",
+        help="application stack to scaffold (default: openai-tools)",
+    )
+    init.add_argument(
+        "--output-dir",
+        default=".",
+        help="directory to write promptabi.json and local fixture stubs into (default: cwd)",
+    )
+    init.add_argument(
+        "--name",
+        help="verification config name (default: <stack>-promptabi)",
+    )
+    init.add_argument(
+        "--config",
+        default="promptabi.json",
+        help="config file name to write inside output-dir (default: promptabi.json)",
+    )
+    init.add_argument(
+        "--force",
+        action="store_true",
+        help="overwrite existing scaffold files",
     )
 
     corpus = subparsers.add_parser("corpus", help="seed corpus maintenance commands")
@@ -230,6 +258,24 @@ def main(argv: Sequence[str] | None = None) -> int:
                 output = output.replace(f"config: {current_path}\n", f"baseline: {baseline_path}\ncurrent: {current_path}\n")
         print(output, end="")
         return _exit_code(result, fail_on=args.fail_on)
+
+    if args.command == "init":
+        try:
+            written = scaffold_promptabi_project(
+                stack=args.stack,
+                output_dir=args.output_dir,
+                name=args.name,
+                config_filename=args.config,
+                force=args.force,
+            )
+        except InitError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        print(f"wrote PromptABI {args.stack} scaffold:")
+        for path in written:
+            print(f"  {path}")
+        print(f"next: promptabi verify --config {written[0]}")
+        return 0
 
     if args.command == "corpus" and args.corpus_command == "manifest":
         try:

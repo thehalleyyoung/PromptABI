@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from promptabi.cli import main
+from promptabi.init import available_stacks
 
 
 def test_verify_text_output_passes_for_example_config(capsys) -> None:
@@ -225,3 +226,39 @@ def test_verify_role_boundary_example_accepts_sanitized_template(capsys) -> None
         for diagnostic in payload["diagnostics"]
         if diagnostic["rule_id"] == "role-boundary-nonforgeability"
     ] == []
+
+
+def test_init_scaffolds_each_supported_stack_with_verifiable_config(tmp_path, capsys) -> None:
+    for stack in available_stacks():
+        output_dir = tmp_path / stack
+        init_exit = main(["init", "--stack", stack, "--output-dir", str(output_dir), "--name", f"{stack}-demo"])
+        init_output = capsys.readouterr()
+
+        assert init_exit == 0
+        assert f"wrote PromptABI {stack} scaffold" in init_output.out
+        config_path = output_dir / "promptabi.json"
+        assert config_path.is_file()
+
+        verify_exit = main(["verify", "--config", str(config_path), "--format", "json", "--fail-on", "never"])
+        verify_output = capsys.readouterr()
+        payload = json.loads(verify_output.out)
+
+        assert verify_exit == 0
+        assert payload["config"]["name"] == f"{stack}-demo"
+        assert payload["config"]["artifact_bundle"]["artifacts"]
+        assert {
+            diagnostic["rule_id"]
+            for diagnostic in payload["diagnostics"]
+            if diagnostic["rule_id"] in {"artifact-missing", "artifact-load-failed", "check-unknown", "check-failed"}
+        } == set()
+
+
+def test_init_refuses_to_overwrite_without_force(tmp_path, capsys) -> None:
+    config = tmp_path / "promptabi.json"
+    config.write_text("{}", encoding="utf-8")
+
+    exit_code = main(["init", "--output-dir", str(tmp_path)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "refusing to overwrite" in captured.err

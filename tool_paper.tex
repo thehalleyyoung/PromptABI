@@ -43,6 +43,10 @@ hashes, BOS/EOS flags and IDs, and generation stop-policy deltas,
 deterministic PromptABI lockfiles that pin verified artifact hashes, upstream
 revisions, library versions, provider fixture versions, supported-fragment
 metadata, and expected diagnostic fingerprints for CI enforcement,
+a \texttt{promptabi init} workflow that writes verifiable starter contracts and
+local fixture stubs for OpenAI tools, Hugging Face local models, vLLM
+OpenAI-compatible servers, llama.cpp, LangChain RAG, LlamaIndex agents, and
+custom JSON Schema outputs,
 a \texttt{promptabi diff} workflow that compares two full model/provider/framework
 configurations and emits contract-breaking tokenizer, provider, framework,
 artifact-set, check-surface, and context-budget changes with structured
@@ -250,6 +254,9 @@ compares baseline and current PromptABI configs with \texttt{promptabi diff},
 emitting text, JSON, or SARIF diagnostics for removed checks, missing artifacts,
 tokenizer/config drift, provider-contract regressions, framework truncation
 regressions, and top-level context-budget reductions,
+scaffolds common stacks with \texttt{promptabi init} and verifies every generated
+config through the same loader, provider replay, tool-schema, parser, budget,
+RAG, stop, and role-boundary checks used elsewhere in the test suite,
 and runs a CPU-only smoke benchmark against an example bundle.
 
 The repository layout is designed to scale:
@@ -766,6 +773,7 @@ promptabi verify
 promptabi verify --config examples/minimal/promptabi.json
 promptabi verify --config examples/role-boundary/unsafe.promptabi.json
 promptabi verify --config examples/role-boundary/safe.promptabi.json
+promptabi init --stack openai-tools --output-dir .promptabi-demo
 promptabi verify --artifact schema=schemas/answer.json --fail-on warning
 promptabi verify --config examples/minimal/promptabi.json --format json
 promptabi verify --config examples/minimal/promptabi.json --format sarif
@@ -783,6 +791,15 @@ cache directory selected by \texttt{--cache-dir},
 \texttt{PROMPTABI\_CACHE\_DIR}, \texttt{XDG\_CACHE\_HOME}, or a user cache
 fallback. It provides quiet and verbose text modes while keeping JSON and SARIF
 stable for machines.
+
+\texttt{promptabi init} is deliberately not a static README snippet. Each stack
+template writes a \texttt{promptabi.json} plus minimal local artifacts that the
+real loader can ingest: tool schemas, provider replay packs, stop policies,
+Hugging Face \texttt{tokenizer\_config.json} templates, prompt segments,
+truncation budgets, or JSON Schemas as appropriate. The focused init regression
+test generates every supported stack and verifies the resulting config through
+the public CLI, which makes the quickstart path an exercised benchline rather
+than a hand-maintained example.
 
 The exit-code policy is configurable. The default fails only on error-level
 diagnostics. CI can instead fail on warnings, fail on any diagnostic, or never
