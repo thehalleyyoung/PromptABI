@@ -295,16 +295,28 @@ class SchemaArtifact(BaseArtifact):
 @dataclass(frozen=True, slots=True)
 class GrammarArtifact(BaseArtifact):
     grammar_type: str = "promptabi"
+    start_symbol: str | None = None
+    rule_names: tuple[str, ...] = ()
+    supported_fragment: bool | None = None
 
     def __post_init__(self) -> None:
         BaseArtifact.__post_init__(self)
         _require_kind(self.kind, ArtifactKind.GRAMMAR)
         if not self.grammar_type:
             raise ValueError("grammar type must be non-empty")
+        if self.start_symbol is not None and not self.start_symbol:
+            raise ValueError("grammar start_symbol must be non-empty")
+        object.__setattr__(self, "rule_names", tuple(sorted(dict.fromkeys(self.rule_names))))
 
     def to_dict(self) -> dict[str, object]:
         data = super().to_dict()
         data["grammar_type"] = self.grammar_type
+        if self.start_symbol is not None:
+            data["start_symbol"] = self.start_symbol
+        if self.rule_names:
+            data["rule_names"] = list(self.rule_names)
+        if self.supported_fragment is not None:
+            data["supported_fragment"] = self.supported_fragment
         return data
 
 
@@ -514,7 +526,13 @@ def artifact_from_config(
     if kind is ArtifactKind.SCHEMA:
         return SchemaArtifact(**common, dialect=_str(spec, "dialect", default="json-schema"))
     if kind is ArtifactKind.GRAMMAR:
-        return GrammarArtifact(**common, grammar_type=_str(spec, "grammar_type", default="promptabi"))
+        return GrammarArtifact(
+            **common,
+            grammar_type=_str(spec, "grammar_type", default="promptabi"),
+            start_symbol=_optional_str(spec, "start_symbol"),
+            rule_names=_tuple_of_str(spec, "rule_names"),
+            supported_fragment=_optional_bool(spec, "supported_fragment"),
+        )
     if kind is ArtifactKind.TOOL_DEFINITION:
         return ToolDefinitionArtifact(
             **common,

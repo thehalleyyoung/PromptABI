@@ -12,9 +12,10 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from .artifacts import Artifact, ArtifactKind, StopPolicyArtifact
+from .artifacts import Artifact, ArtifactKind, GrammarArtifact, SchemaArtifact, StopPolicyArtifact
 from .chat_templates import ChatTemplateParseError, parse_hf_tokenizer_config_chat_template, symbolically_execute_chat_template
 from .diagnostics import SourceSpan
+from .grammars import GrammarIngestionError, ingest_grammar_file, ingest_json_schema_mapping
 from .role_boundaries import build_role_boundary_model
 from .source import build_json_source_map
 from .stop_policies import StopPolicyParseError, parse_stop_policy_config
@@ -140,6 +141,10 @@ class ArtifactLoader:
             return self._load_chat_template(artifact, path)
         if artifact.kind is ArtifactKind.STOP_POLICY:
             return self._load_stop_policy(artifact, path)
+        if artifact.kind is ArtifactKind.SCHEMA:
+            return self._load_schema(artifact, path)
+        if artifact.kind is ArtifactKind.GRAMMAR:
+            return self._load_grammar(artifact, path)
         if artifact.kind is ArtifactKind.PROVIDER_CONFIG:
             return self._load_provider_snapshot(artifact, path)
         return self._load_file(artifact, path, source_type="local-file")
@@ -420,6 +425,86 @@ class ArtifactLoader:
             size_bytes=loaded.size_bytes,
             metadata=(*parsed.to_metadata(), *source_metadata),
             source_spans=loaded.source_spans,
+            warnings=loaded.warnings,
+        )
+
+    def _load_schema(self, artifact: Artifact, path: Path) -> LoadedArtifact:
+        if path.suffix.lower() != ".json":
+            return self._load_file(artifact, path, source_type="schema-file")
+        try:
+            text = path.read_text(encoding="utf-8")
+            raw = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"schema artifact '{artifact.name}' is not valid JSON",
+                suggestion="Store JSON Schema artifacts as deterministic JSON objects.",
+                steps=(("parse JSON Schema", str(path), exc.msg),),
+                span=SourceSpan(path=str(path), start_line=exc.lineno, start_column=exc.colno),
+            ) from exc
+        if not isinstance(raw, dict):
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"schema artifact '{artifact.name}' must be a JSON object",
+                suggestion="Use a JSON Schema object with type, properties, required, enum, const, or constraints.",
+                steps=(("parse JSON Schema root", str(path), type(raw).__name__),),
+            )
+        try:
+            source_map = build_json_source_map(text, path)
+            declared_type = artifact.dialect if isinstance(artifact, SchemaArtifact) else "json-schema"
+            parsed = ingest_json_schema_mapping(raw, declared_type=declared_type, source_map=source_map)
+        except GrammarIngestionError as exc:
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"schema artifact '{artifact.name}' could not be ingested",
+                suggestion="Use the supported JSON Schema subset or keep unsupported keywords explicit for later normalization.",
+                steps=(("ingest JSON Schema", str(path), str(exc)),),
+                span=exc.span,
+            ) from exc
+        loaded = self._load_file(artifact, path, source_type="json-schema")
+        return LoadedArtifact(
+            artifact=loaded.artifact,
+            source_type="json-schema",
+            pinned=loaded.pinned,
+            resolved=loaded.resolved,
+            actual_sha256=loaded.actual_sha256,
+            size_bytes=loaded.size_bytes,
+            metadata=parsed.to_metadata(),
+            source_spans=parsed.source_spans or loaded.source_spans,
+            warnings=loaded.warnings,
+        )
+
+    def _load_grammar(self, artifact: Artifact, path: Path) -> LoadedArtifact:
+        declared_type = artifact.grammar_type if isinstance(artifact, GrammarArtifact) else "promptabi"
+        try:
+            parsed = ingest_grammar_file(path, declared_type=declared_type)
+        except GrammarIngestionError as exc:
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"grammar artifact '{artifact.name}' could not be ingested",
+                suggestion="Use a supported JSON Schema, regex, EBNF, Outlines, xgrammar, llguidance, or PromptABI grammar shape.",
+                steps=(("ingest grammar", str(path), str(exc)),),
+                span=exc.span,
+            ) from exc
+        loaded = self._load_file(artifact, path, source_type=f"grammar-{parsed.dialect.value}")
+        parsed_artifact = artifact
+        if isinstance(artifact, GrammarArtifact):
+            parsed_artifact = replace(
+                artifact,
+                grammar_type=parsed.dialect.value,
+                start_symbol=artifact.start_symbol or parsed.start_symbol,
+                rule_names=parsed.rule_names,
+                supported_fragment=parsed.supported_fragment,
+            )
+        return LoadedArtifact(
+            artifact=parsed_artifact,
+            source_type=f"grammar-{parsed.dialect.value}",
+            pinned=loaded.pinned,
+            resolved=loaded.resolved,
+            actual_sha256=loaded.actual_sha256,
+            size_bytes=loaded.size_bytes,
+            metadata=parsed.to_metadata(),
+            source_spans=parsed.source_spans or loaded.source_spans,
             warnings=loaded.warnings,
         )
 

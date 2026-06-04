@@ -63,7 +63,9 @@ that pinpoint the firing line/column, parser state, valid prefix, and malformed 
 prematurely accepted result. A new real-world bug corpus reduces public
 llama.cpp and vLLM reports into synthetic, offline fixtures and proves the
 current role-boundary and stop-overreachability checkers catch the same failure
-classes without copying upstream code. The repository
+classes without copying upstream code. Grammar ingestion now normalizes JSON
+Schema, regex, EBNF, Outlines, xgrammar, llguidance, and PromptABI grammars into
+typed rules, terminals, source spans, and explicit abstentions. The repository
 already has the typed Python package,
 core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,
 snapshot-locked output stability, discoverable `promptabi verify` workflow,

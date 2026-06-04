@@ -89,6 +89,18 @@ from .formal import (
     Value,
     Var,
 )
+from .grammars import (
+    GrammarDialect,
+    GrammarIngestionError,
+    GrammarIngestionIssue,
+    GrammarIngestionResult,
+    GrammarRule,
+    GrammarTerminal,
+    ingest_grammar_file,
+    ingest_grammar_mapping,
+    ingest_grammar_text,
+    ingest_json_schema_mapping,
+)
 from .loaders import ArtifactLoadError, ArtifactLoader, ArtifactLoadWarning, LoadedArtifact, load_artifact
 from .role_boundaries import (
     DEFAULT_STRUCTURAL_ROLES,
@@ -220,6 +232,12 @@ __all__ = [
     "FiniteStateTransducer",
     "FrameworkTruncationConfigArtifact",
     "GrammarArtifact",
+    "GrammarDialect",
+    "GrammarIngestionError",
+    "GrammarIngestionIssue",
+    "GrammarIngestionResult",
+    "GrammarRule",
+    "GrammarTerminal",
     "HuggingFaceTokenizerAdapter",
     "Implies",
     "InSet",
@@ -300,6 +318,10 @@ __all__ = [
     "create_session",
     "discover_config",
     "build_json_source_map",
+    "ingest_grammar_file",
+    "ingest_grammar_mapping",
+    "ingest_grammar_text",
+    "ingest_json_schema_mapping",
     "analyze_role_boundary_nonforgeability",
     "build_role_boundary_model",
     "build_seed_corpus_manifest",
