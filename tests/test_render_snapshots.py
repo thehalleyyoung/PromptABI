@@ -3,6 +3,7 @@ import json
 from promptabi.artifacts import ArtifactBundle, ArtifactKind, ArtifactLocation, ArtifactProvenance, SchemaArtifact
 from promptabi.config import VerificationConfig
 from promptabi.diagnostics import (
+    ArtifactRef,
     CheckMode,
     Diagnostic,
     DiagnosticSeverity,
@@ -10,7 +11,7 @@ from promptabi.diagnostics import (
     WitnessStep,
     WitnessTrace,
 )
-from promptabi.render import render_json, render_sarif, render_text
+from promptabi.render import SarifRenderOptions, render_github_annotations, render_json, render_sarif, render_text
 from promptabi.session import VerificationResult
 
 
@@ -405,3 +406,103 @@ def test_sarif_diagnostic_output_matches_structured_snapshot() -> None:
         ],
         "version": "2.1.0",
     }
+
+
+def test_sarif_github_code_scanning_options_rewrite_locations_and_suppressions(tmp_path) -> None:
+    repo = tmp_path / "repo"
+    artifact_path = repo / "schemas" / "answer.schema.json"
+    artifact_path.parent.mkdir(parents=True)
+    artifact_path.write_text("{}", encoding="utf-8")
+    artifact_ref = ArtifactRef(
+        kind="schema",
+        name="answer-schema",
+        path=str(artifact_path),
+        sha256="0123456789abcdef",
+    )
+    result = VerificationResult(
+        config=VerificationConfig(name="github-code-scanning", checks=("artifact-unpinned",)),
+        diagnostics=(
+            Diagnostic(
+                rule_id="artifact-unpinned",
+                severity=DiagnosticSeverity.WARNING,
+                message="artifact 'answer-schema' is not pinned by sha256",
+                artifact=artifact_ref,
+                span=SourceSpan(
+                    path=str(artifact_path),
+                    start_line=2,
+                    start_column=3,
+                    end_line=2,
+                    end_column=9,
+                ),
+                suggestions=("Add a sha256 pin for reproducible verification.",),
+                check_modes=(CheckMode.SOUND, CheckMode.COMPLETE),
+                properties=(
+                    ("owner", "platform"),
+                    ("sarif_suppression_justification", "accepted test fixture risk"),
+                ),
+            ),
+        ),
+    )
+
+    payload = json.loads(
+        render_sarif(
+            result,
+            options=SarifRenderOptions(
+                category="pull-request",
+                checkout_uri_base=repo,
+                include_invocation=True,
+                command_line="promptabi verify --format sarif",
+                working_directory=repo,
+            ),
+        )
+    )
+
+    run = payload["runs"][0]
+    assert run["automationDetails"]["id"] == "pull-request/"
+    assert run["originalUriBaseIds"]["PROJECTROOT"]["uri"].startswith("file://")
+    assert run["invocations"] == [
+        {
+            "commandLine": "promptabi verify --format sarif",
+            "executionSuccessful": True,
+            "workingDirectory": {"uri": repo.resolve().as_uri() + "/"},
+        }
+    ]
+    result_payload = run["results"][0]
+    artifact_location = result_payload["locations"][0]["physicalLocation"]["artifactLocation"]
+    assert artifact_location == {"uri": "schemas/answer.schema.json", "uriBaseId": "PROJECTROOT"}
+    assert result_payload["suppressions"] == [
+        {"kind": "external", "justification": "accepted test fixture risk"}
+    ]
+    assert result_payload["properties"]["owner"] == "platform"
+    assert "sarif_suppression_justification" not in result_payload["properties"]
+    assert "promptabiLocationFingerprint" in result_payload["partialFingerprints"]
+    assert "primaryLocationLineHash" not in result_payload["partialFingerprints"]
+
+
+def test_github_annotations_escape_messages_and_rewrite_locations(tmp_path) -> None:
+    repo = tmp_path / "repo"
+    artifact_path = repo / "schemas" / "answer.schema.json"
+    artifact_path.parent.mkdir(parents=True)
+    artifact_path.write_text("{}", encoding="utf-8")
+    result = VerificationResult(
+        config=VerificationConfig(name="github-annotations", checks=("schema-warning",)),
+        diagnostics=(
+            Diagnostic(
+                rule_id="schema-warning",
+                severity=DiagnosticSeverity.ERROR,
+                message="bad schema\nneeds escaping, urgently",
+                span=SourceSpan(
+                    path=str(artifact_path),
+                    start_line=7,
+                    start_column=5,
+                    end_line=8,
+                    end_column=2,
+                ),
+            ),
+        ),
+    )
+
+    assert render_github_annotations(result, checkout_uri_base=repo) == (
+        "::error title=schema-warning,file=schemas/answer.schema.json,line=7,col=5,"
+        "endLine=8,endColumn=2::bad schema%0Aneeds escaping, urgently\n"
+    )

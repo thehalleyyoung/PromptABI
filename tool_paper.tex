@@ -803,9 +803,16 @@ their supported fragments require.
 The SARIF renderer maps PromptABI severities to SARIF levels, emits a rule table,
 attaches artifact locations and source regions when available, stores the
 PromptABI fingerprint in \texttt{partialFingerprints}, and includes the same
-check-mode metadata as JSON and text output. This makes the first CLI workflow
-immediately compatible with GitHub code scanning while keeping the diagnostic
-source of truth in Python types rather than renderer-specific structures.
+check-mode metadata as JSON and text output. GitHub-specific options now add
+stable analysis categories, repository-root \texttt{uriBaseId} rewriting for
+absolute local paths, deterministic invocation metadata, PromptABI-owned
+location fingerprints, and schema-correct SARIF suppressions when diagnostics
+carry external suppression metadata. A separate \texttt{github-annotations}
+renderer emits escaped GitHub Actions workflow commands, so pull requests can
+receive inline annotations even before a full SARIF-upload Action is installed.
+This makes the first CLI workflow immediately compatible with GitHub code
+scanning while keeping the diagnostic source of truth in Python types rather
+than renderer-specific structures.
 
 The source-region layer is executable rather than aspirational. PromptABI now
 builds a small recursive JSON source map over the exact text that is later

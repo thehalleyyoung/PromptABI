@@ -152,6 +152,73 @@ def test_verify_sarif_output_is_code_scanning_compatible(capsys) -> None:
     assert "promptabiFingerprint" in result["partialFingerprints"]
 
 
+def test_verify_sarif_can_emit_github_code_scanning_metadata(tmp_path, capsys) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    config = repo / "promptabi.json"
+    config.write_text(
+        '{"name": "github-sarif", "artifacts": {"schema": "missing.schema.json"}}',
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "verify",
+            "--config",
+            str(config),
+            "--format",
+            "sarif",
+            "--sarif-category",
+            "pull-request",
+            "--sarif-checkout-uri-base",
+            str(repo),
+            "--sarif-include-invocation",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    run = payload["runs"][0]
+    result = run["results"][0]
+    assert exit_code == 1
+    assert run["automationDetails"]["id"] == "pull-request/"
+    assert "originalUriBaseIds" in run
+    assert run["invocations"][0]["commandLine"].startswith("promptabi verify --config")
+    location = result["locations"][0]["physicalLocation"]["artifactLocation"]
+    assert location == {"uri": "promptabi.json", "uriBaseId": "PROJECTROOT"}
+    assert result["level"] == "error"
+    assert "promptabiLocationFingerprint" in result["partialFingerprints"]
+    assert captured.err == ""
+
+
+def test_verify_github_annotations_output_uses_workflow_commands(tmp_path, capsys) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    config = repo / "promptabi.json"
+    config.write_text(
+        '{"name": "github-annotations", "artifacts": {"schema": "missing.schema.json"}}',
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "verify",
+            "--config",
+            str(config),
+            "--format",
+            "github-annotations",
+            "--sarif-checkout-uri-base",
+            str(repo),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out.startswith("::error title=artifact-missing,file=promptabi.json,line=1,col=")
+    assert "artifact 'schema' does not exist" in captured.out
+    assert captured.err == ""
+
+
 def test_verify_role_boundary_nonforgeability_reports_real_fixture(tmp_path, capsys) -> None:
     fixture = Path("fixtures/seed_corpus/llama/tokenizer_config.json").resolve()
     config = tmp_path / "promptabi.json"

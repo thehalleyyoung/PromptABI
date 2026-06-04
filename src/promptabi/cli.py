@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -29,7 +30,7 @@ from .lockfiles import (
     write_lockfile,
 )
 from .plugins import PluginError, PluginRegistry, load_plugin_modules
-from .render import render_json, render_sarif, render_text
+from .render import SarifRenderOptions, render_github_annotations, render_json, render_sarif, render_text
 from .seed_corpus import SeedCorpusError, build_seed_corpus_manifest, write_seed_corpus_manifest
 from .session import VerificationSession
 from .structured_schema_corpus import (
@@ -79,8 +80,9 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument(
         "--format",
         default="text",
-        help="output format: text, json, sarif, or a plugin renderer (default: text)",
+        help="output format: text, json, sarif, github-annotations, or a plugin renderer (default: text)",
     )
+    _add_github_output_arguments(verify)
     verify.add_argument(
         "--plugin",
         action="append",
@@ -144,8 +146,9 @@ def build_parser() -> argparse.ArgumentParser:
     diff.add_argument(
         "--format",
         default="text",
-        help="output format: text, json, sarif, or a plugin renderer (default: text)",
+        help="output format: text, json, sarif, github-annotations, or a plugin renderer (default: text)",
     )
+    _add_github_output_arguments(diff)
     diff.add_argument(
         "--plugin",
         action="append",
@@ -310,6 +313,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "config_path": config_path,
                     "cache_dir": cache_dir,
                 },
+                sarif_options=_sarif_options(args, argv),
             )
         except PluginError as exc:
             print(f"promptabi: {exc}", file=sys.stderr)
@@ -369,6 +373,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "config_path": current_path if args.verbose else None,
                     "heading": "PromptABI diff",
                 },
+                sarif_options=_sarif_options(args, argv),
             )
         except PluginError as exc:
             print(f"promptabi: {exc}", file=sys.stderr)
@@ -482,6 +487,46 @@ def _parse_artifact_overrides(values: Sequence[str], parser: argparse.ArgumentPa
     return overrides
 
 
+def _add_github_output_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--sarif-category",
+        help="stable GitHub code-scanning SARIF category for this analysis run",
+    )
+    parser.add_argument(
+        "--sarif-checkout-uri-base",
+        help="repository checkout root for SARIF uriBaseId locations; defaults to GITHUB_WORKSPACE when set",
+    )
+    parser.add_argument(
+        "--sarif-include-invocation",
+        action="store_true",
+        help="include deterministic invocation metadata in SARIF output",
+    )
+
+
+def _sarif_options(args, argv: Sequence[str] | None) -> SarifRenderOptions:
+    checkout_base = _resolve_checkout_uri_base(args.sarif_checkout_uri_base)
+    command_line = None
+    if args.sarif_include_invocation:
+        words = ["promptabi", *(argv if argv is not None else sys.argv[1:])]
+        command_line = " ".join(shlex.quote(str(word)) for word in words)
+    return SarifRenderOptions(
+        category=args.sarif_category,
+        checkout_uri_base=checkout_base,
+        include_invocation=args.sarif_include_invocation,
+        command_line=command_line,
+        working_directory=checkout_base if checkout_base is not None else None,
+    )
+
+
+def _resolve_checkout_uri_base(value: str | None) -> Path | None:
+    if value:
+        return Path(value).expanduser().resolve()
+    env_value = os.environ.get("GITHUB_WORKSPACE")
+    if env_value:
+        return Path(env_value).expanduser().resolve()
+    return None
+
+
 def _resolve_cache_dir(value: str | None) -> Path:
     if value:
         return Path(value).expanduser().resolve()
@@ -513,13 +558,17 @@ def _render_verification_output(
     *,
     plugin_registry: PluginRegistry,
     text_kwargs: dict[str, object],
+    sarif_options: SarifRenderOptions | None = None,
 ) -> str:
     if output_format == "text":
         return render_text(result, **text_kwargs)
     if output_format == "json":
         return render_json(result)
     if output_format == "sarif":
-        return render_sarif(result)
+        return render_sarif(result, options=sarif_options)
+    if output_format == "github-annotations":
+        checkout_base = sarif_options.checkout_uri_base if sarif_options is not None else None
+        return render_github_annotations(result, checkout_uri_base=checkout_base)
     return plugin_registry.render(output_format, result)
 
 
