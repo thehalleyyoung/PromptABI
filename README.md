@@ -54,11 +54,13 @@ requests, Hugging Face generation configs, llama.cpp/Ollama options, vLLM sampli
 params, LiteLLM params, and common wrapper kwargs, then checked against real
 tokenizer adapters for byte/string/token alignments, multi-token stops,
 unreachable token IDs, normalization ambiguity, prefix/suffix collisions, and
-special/added-token interactions. A bounded stop-overreachability checker now
-proves when raw substring stops can fire inside schema/tool string fields or
-before JSON, markdown-fence, XML-like tool-call, and provider-envelope structures
-are parser-complete, with witnesses that pinpoint the firing line/column, parser
-state, valid prefix, and malformed or prematurely accepted result. The repository
+special/added-token interactions. Fixture-backed stop simulators replay
+OpenAI-compatible, Hugging Face, llama.cpp-style, and vLLM-compatible traces, while
+a bounded stop-overreachability checker proves when raw substring stops can fire
+inside schema/tool string fields or before JSON, markdown-fence, XML-like
+tool-call, and provider-envelope structures are parser-complete, with witnesses
+that pinpoint the firing line/column, parser state, valid prefix, and malformed or
+prematurely accepted result. The repository
 already has the typed Python package,
 core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,
 snapshot-locked output stability, discoverable `promptabi verify` workflow,

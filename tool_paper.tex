@@ -43,10 +43,12 @@ LiteLLM passthrough params, and common framework wrapper kwargs into one typed
 artifact model with source spans, a stop-tokenizer analyzer that records
 byte/string/token alignments, multi-token stops, invalid stop-token IDs,
 normalization-sensitive stops, prefix/suffix collisions, and special or added
-token interactions against real tokenizer adapters, and a bounded
-stop-overreachability checker that constructs serialized witnesses for supported
-schema/tool string fields, nested JSON, markdown code fences, XML-like tool
-calls, and provider tool-call envelopes,
+token interactions against real tokenizer adapters, a fixture-backed stop
+differential harness that replays OpenAI-compatible, Hugging Face,
+llama.cpp-style, and vLLM-compatible stop traces through small CPU-only
+simulators, and a bounded stop-overreachability checker that constructs
+serialized witnesses for supported schema/tool string fields, nested JSON,
+markdown code fences, XML-like tool calls, and provider tool-call envelopes,
 including exact line/column firing points, parser states at truncation, and the
 malformed or prematurely accepted structures delivered to downstream parsers,
 a bounded symbolic executor for the supported Jinja chat-template fragment, a
@@ -331,7 +333,7 @@ Tokenizer directories & Stable manifest over sorted relative file names, file si
 \hline
 GGUF stubs & Header-level GGUF magic, version, tensor count, metadata-key count, and streamed file hash without loading weights. \\
 \hline
-Provider snapshots & Deterministic JSON validation for provider name and captured request, response, or streaming shape metadata, with parse-error line and column diagnostics. \\
+Provider snapshots & Deterministic JSON validation for provider name, captured request/response or streaming shape metadata, and optional stop-trace fixtures for offline differential replay, with parse-error line and column diagnostics. \\
 \hline
 Stop-policy configs & Deterministic extraction of stop strings, stop token IDs, EOS behavior, source family, ignored empty stops, and source paths from OpenAI-compatible, Hugging Face, llama.cpp/Ollama, vLLM, LiteLLM, and wrapper shapes. \\
 \hline
@@ -725,8 +727,9 @@ same visible text. It can overreach because the string appears inside a valid
 JSON string, tool argument, markdown fence, or XML-like field before the
 structured object is complete.
 
-PromptABI now implements three concrete layers for this family:
-stop-policy parsing, tokenizer-backed stop alignment, and bounded
+PromptABI now implements four concrete layers for this family:
+stop-policy parsing, tokenizer-backed stop alignment, fixture-backed stop
+differential replay, and bounded
 stop-overreachability. A dedicated parser accepts the shapes developers actually check into
 repositories or capture from serving stacks: OpenAI-compatible \texttt{stop}
 request fields, Hugging Face \texttt{generation\_config} objects with
@@ -752,6 +755,21 @@ cannot decode. The checker is intentionally careful not to claim that a string
 stop is unreachable merely because it does not round-trip through an encoder:
 many serving stacks match stop strings against decoded text streams. Those cases
 are reported as tokenizer-sensitive ambiguity instead, with heuristic modes.
+
+The differential layer checks those static interpretations against recorded
+runtime traces without calling live providers. A provider-config fixture can store
+one or more \texttt{stop\_trace} entries: generated text chunks, optional token
+IDs, the provider or framework family, and the expected stopped flag, matched
+stop, output text, finish reason, and whether the runtime retains the delimiter in
+the emitted output. PromptABI replays each trace through a small CPU-only
+simulator. OpenAI-compatible, vLLM, llama.cpp, Ollama, and LiteLLM-style families
+match raw substring stops on the cumulative decoded stream and exclude the stop
+delimiter from returned text; the Hugging Face stopping-criteria model records the
+common generated-text behavior where the stop string remains in the sequence that
+triggered stopping. Mismatches become deterministic diagnostics with replay
+witnesses, while agreement cases form an executable benchline. The repository
+ships both focused unit tests and a \texttt{examples/stop-policies} fixture that
+proves a vLLM-style trace agrees with the configured stop policy.
 
 The overreachability layer separates structural delimiter collisions from
 supported content witnesses. Structural checks cover nested JSON delimiters,
@@ -838,7 +856,7 @@ The testing strategy has three tiers:
 \item tokenizer abstraction tests against real Hugging Face \texttt{tokenizers}, \texttt{tiktoken}, SentencePiece, and byte-level adapters;
 \item chat-template parser, symbolic-executor, concrete-renderer, role-region, and role-boundary non-forgeability tests across real \texttt{tokenizer\_config.json} fixtures and known delimiter-collision regressions, including ChatML, Llama header tokens, Mistral instruction tags, XML-ish tool tags, markdown fences, fine-tune hash headers, generation-prompt extraction, dynamic role headers, content-control delimiter collisions, role assumptions, field references, special tokens, bounded message/tool loops, filters, whitespace controls, path budgets, empty tool lists, tool-role messages, and unsupported constructs, with concrete outputs differentially checked against Hugging Face's renderer;
 \item loader and parser tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, stop-policy configs spanning OpenAI-compatible, Hugging Face, llama.cpp/Ollama, vLLM, LiteLLM, wrapper kwargs, fixture archives, and source-mapped JSON fields;
-\item stop-tokenizer and stop-overreachability tests that exercise byte/string/token alignments, multi-token stops, invalid stop-token IDs, normalization collisions, prefix/suffix collisions, added/special-token interactions, serialized stop offsets, parser-state truncation witnesses, supported schema/tool string witnesses, structural delimiter collisions, CLI diagnostics, and a real Hugging Face \texttt{tokenizers} BPE fixture;
+\item stop-tokenizer, stop-differential, and stop-overreachability tests that exercise byte/string/token alignments, multi-token stops, invalid stop-token IDs, normalization collisions, prefix/suffix collisions, added/special-token interactions, OpenAI-compatible and Hugging Face delimiter-retention semantics, provider fixture replay, CLI mismatch diagnostics, serialized stop offsets, parser-state truncation witnesses, supported schema/tool string witnesses, structural delimiter collisions, and a real Hugging Face \texttt{tokenizers} BPE fixture;
 \item fixture and corpus tests for minimized tokenizer/chat-template bundles, expected behaviors, sentinel consistency, artifact materialization, and deterministic manifest generation;
 \item future corpus tests for popular model and framework configurations pinned by immutable upstream revisions.
 \end{itemize}
@@ -846,7 +864,10 @@ The testing strategy has three tiers:
 Differential tests are especially valuable for version drift. A tokenizer or
 provider SDK update can change behavior without changing application code.
 PromptABI should make that drift visible as an artifact contract change rather
-than a mysterious downstream parsing failure.
+than a mysterious downstream parsing failure. The deployed stop differential
+harness is the first provider-fixture replay line: it is intentionally small, but
+it already distinguishes runtime families that remove a stop delimiter from those
+whose generated sequence still contains it.
 
 \clearpage
 \section{Fixture Corpus}
@@ -911,7 +932,7 @@ Automata and transducers & Completion, union, intersection, difference, emptines
 \hline
 Finite-contract solving & Z3 and exhaustive finite-domain solving over booleans, enums, integer ranges, bounded strings, length, membership, and containment constraints. \\
 \hline
-Stop analysis & Stop-policy parsing, tokenizer alignment, invalid token-ID detection, prefix/suffix collisions, special-token interactions, and bounded overreachability across JSON, markdown, XML-like tool-call, provider-envelope, and supported schema/tool string regions. \\
+Stop analysis & Stop-policy parsing, tokenizer alignment, invalid token-ID detection, prefix/suffix collisions, special-token interactions, fixture-backed differential replay, and bounded overreachability across JSON, markdown, XML-like tool-call, provider-envelope, and supported schema/tool string regions. \\
 \hline
 Budget verification & Segment accounting and truncation simulation for framework policies. \\
 \hline
@@ -1038,10 +1059,11 @@ whether their composed contract remains valid as artifacts evolve.
 The roadmap is best understood as a progression from stable surfaces to formal
 checks to ecosystem integration. The skeleton, core artifact model, loader layer,
 diagnostic contract, CLI, tokenizer abstraction, finite automata layer,
-finite-state transducer layer, finite-contract solver, source-span tracking, and
-differential tokenizer harnesses, the curated seed corpus, the manifest pipeline,
-and the first sanitizer-aware role-boundary checker have begun the experimental
-layer. The next phase should deepen stop-reachability, grammar-emptiness, and
+finite-state transducer layer, finite-contract solver, source-span tracking,
+differential tokenizer and stop-policy harnesses, the curated seed corpus, the
+manifest pipeline, and the first sanitizer-aware role-boundary checker have begun
+the experimental layer. The next phase should deepen stop-reachability,
+grammar-emptiness, and
 budget-survival checkers. Corpus growth, lockfiles, drift
 detection, SARIF, GitHub Actions, pre-commit hooks, HTML reports, suppression
 policies, and plugin APIs turn the verifier from a library into an everyday CI
@@ -1080,6 +1102,11 @@ unsat cores, and the installed Z3 backend. The new corpus tests validate require
 family coverage, sentinel/template consistency, metadata hashes, reproducibility
 metadata, artifact materialization through the real offline loader, manifest
 generation, manifest writing, and the \texttt{promptabi corpus manifest} CLI.
+Stop differential tests replay recorded provider-style chunks through CPU-only
+OpenAI-compatible and Hugging Face simulators, assert delimiter-retention behavior,
+exercise mismatch diagnostics through the real CLI, and the
+\texttt{examples/stop-policies} workflow emits a concrete
+\texttt{stop-differential-agreement} diagnostic for a vLLM-compatible fixture.
 The CLI was also run against the minimal typed-artifact example
 configuration, producing a passing informational diagnostic. The smoke benchmark
 runs the skeleton verifier repeatedly on the example config and reports a
@@ -1102,6 +1129,8 @@ Tokenizer differential tests & Byte-level normalization and added-token behavior
 Chat-template symbolic tests & Hugging Face \texttt{tokenizer\_config.json} templates across ten seed families expose template source, special tokens, generation prompts, roles, fields, tools, filters, whitespace controls, bounded symbolic paths, and unsupported constructs. \\
 \hline
 Role-boundary checker tests & Bounded non-forgeability diagnostics catch dynamic role-header forgery and user-content delimiter forgery across ChatML, Llama, Mistral, XML tool tags, markdown fences, and fine-tune hash headers; witnesses include minimized inputs, rendered excerpts, centered token evidence, and exact offsets, while sanitizer tests prove JSON/escape filters plus sanitizer-preserving bindings suppress only protected-expression false positives. \\
+\hline
+Stop differential tests & Recorded provider/framework chunks replay through CPU-only stop simulators; OpenAI-compatible/vLLM traces exclude delimiters, Hugging Face traces retain them, and CLI diagnostics flag mismatches with witness steps. \\
 \hline
 CLI smoke & \texttt{promptabi verify --config examples/minimal/promptabi.json} returns pass, and \texttt{--fail-on}, \texttt{--artifact}, \texttt{--cache-dir}, \texttt{--quiet}, and \texttt{--verbose} are covered. \\
 \hline

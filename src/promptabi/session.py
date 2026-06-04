@@ -19,6 +19,12 @@ from .stop_analysis import (
     StopTokenIdAnalysis,
     analyze_stop_policy_tokenizer,
 )
+from .stop_differential import (
+    StopDifferentialAbstention,
+    StopDifferentialMismatch,
+    StopDifferentialReport,
+    analyze_stop_differential,
+)
 from .stop_overreachability import (
     StopOverreachabilityAbstention,
     StopOverreachabilityFinding,
@@ -44,6 +50,9 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "stop-tokenizer-collision": (CheckMode.HEURISTIC,),
     "stop-tokenizer-special-interaction": (CheckMode.HEURISTIC,),
     "stop-tokenizer-unreachable": (CheckMode.SOUND,),
+    "stop-differential-abstained": (CheckMode.ABSTAINING, CheckMode.HEURISTIC,),
+    "stop-differential-agreement": (CheckMode.HEURISTIC,),
+    "stop-differential-mismatch": (CheckMode.HEURISTIC,),
     "stop-overreach-abstained": (CheckMode.ABSTAINING, CheckMode.BOUNDED),
     "stop-overreach-content": (CheckMode.SOUND, CheckMode.BOUNDED),
     "stop-overreach-structural": (CheckMode.SOUND, CheckMode.BOUNDED),
@@ -103,6 +112,7 @@ class VerificationSession:
         self.checks: dict[str, CheckCallable] = {
             "repository-skeleton": self._repository_skeleton_check,
             "role-boundary-nonforgeability": self._role_boundary_nonforgeability_check,
+            "stop-differential": self._stop_differential_check,
             "stop-overreachability": self._stop_overreachability_check,
             "stop-tokenizer-analysis": self._stop_tokenizer_analysis_check,
         }
@@ -275,6 +285,30 @@ class VerificationSession:
                 _stop_overreachability_abstention_diagnostic(stop_loaded, report, abstention)
                 for abstention in report.abstentions
             )
+        return tuple(diagnostics)
+
+    def _stop_differential_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        diagnostics: list[Diagnostic] = []
+        stop_policies = [
+            loaded for loaded in context.loaded_artifacts if loaded.artifact.kind is ArtifactKind.STOP_POLICY
+        ]
+        provider_configs = [
+            loaded.artifact
+            for loaded in context.loaded_artifacts
+            if loaded.artifact.kind is ArtifactKind.PROVIDER_CONFIG
+        ]
+        for stop_loaded in stop_policies:
+            report = analyze_stop_differential(stop_loaded.artifact, provider_configs)
+            diagnostics.extend(
+                _stop_differential_mismatch_diagnostic(stop_loaded, report, mismatch)
+                for mismatch in report.mismatches
+            )
+            diagnostics.extend(
+                _stop_differential_abstention_diagnostic(stop_loaded, report, abstention)
+                for abstention in report.abstentions
+            )
+            if report.matches:
+                diagnostics.append(_stop_differential_agreement_diagnostic(stop_loaded, report))
         return tuple(diagnostics)
 
     def _missing_local_paths(self) -> set[str]:
@@ -704,6 +738,103 @@ def _stop_overreachability_abstention_diagnostic(
             steps=(
                 WitnessStep(action="select stop policy", input=report.stop_policy_name, output=report.bound),
                 WitnessStep(action="abstain on structured artifact", input=abstention.artifact_name, output=abstention.reason),
+            ),
+            artifacts=(stop_loaded.artifact.to_ref(),),
+        ),
+    )
+
+
+def _stop_differential_mismatch_diagnostic(
+    stop_loaded: LoadedArtifact,
+    report: StopDifferentialReport,
+    mismatch: StopDifferentialMismatch,
+) -> Diagnostic:
+    expected = mismatch.expected
+    actual = mismatch.actual
+    return Diagnostic(
+        rule_id="stop-differential-mismatch",
+        severity=DiagnosticSeverity.ERROR,
+        message=(
+            f"recorded stop trace '{mismatch.case.name}' disagrees with PromptABI's "
+            f"{mismatch.case.family} stop simulator on {', '.join(mismatch.fields)}"
+        ),
+        artifact=stop_loaded.artifact.to_ref(),
+        span=_artifact_span(stop_loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG["stop-differential-mismatch"],
+        suggestions=(
+            "Inspect whether the configured stop policy matches the runtime family captured by the fixture.",
+            "Keep provider fixture traces version-pinned when stop matching behavior changes.",
+        ),
+        witness=WitnessTrace(
+            summary="A recorded CPU-only provider/framework stop trace diverges from the local stop simulator.",
+            steps=(
+                WitnessStep(action="select stop policy", input=report.stop_policy_name, output=mismatch.case.family),
+                WitnessStep(action="replay text chunks", input=mismatch.case.name, output=repr(mismatch.case.chunks)),
+                WitnessStep(
+                    action="compare stopped flag",
+                    input=str(expected.stopped),
+                    output=str(actual.stopped),
+                ),
+                WitnessStep(action="compare output text", input=repr(expected.output), output=repr(actual.output)),
+                WitnessStep(
+                    action="compare matched stop",
+                    input=str(expected.matched_stop),
+                    output=str(actual.matched_stop),
+                ),
+                WitnessStep(
+                    action="compare stop inclusion",
+                    input=str(expected.include_stop_in_output),
+                    output=str(actual.include_stop_in_output),
+                ),
+            ),
+            artifacts=(stop_loaded.artifact.to_ref(),),
+        ),
+    )
+
+
+def _stop_differential_abstention_diagnostic(
+    stop_loaded: LoadedArtifact,
+    report: StopDifferentialReport,
+    abstention: StopDifferentialAbstention,
+) -> Diagnostic:
+    return Diagnostic(
+        rule_id="stop-differential-abstained",
+        severity=DiagnosticSeverity.WARNING,
+        message=f"provider fixture '{abstention.artifact_name}' cannot be replayed for stop differential testing",
+        artifact=stop_loaded.artifact.to_ref(),
+        span=_artifact_span(stop_loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG["stop-differential-abstained"],
+        suggestions=("Add a local provider-config JSON fixture with stop_trace or stop_traces entries.",),
+        witness=WitnessTrace(
+            summary="PromptABI abstained instead of guessing provider stop behavior without a supported trace.",
+            steps=(
+                WitnessStep(action="select stop policy", input=report.stop_policy_name),
+                WitnessStep(action="load provider fixture", input=abstention.artifact_name, output=abstention.reason),
+            ),
+            artifacts=(stop_loaded.artifact.to_ref(),),
+        ),
+    )
+
+
+def _stop_differential_agreement_diagnostic(
+    stop_loaded: LoadedArtifact,
+    report: StopDifferentialReport,
+) -> Diagnostic:
+    return Diagnostic(
+        rule_id="stop-differential-agreement",
+        severity=DiagnosticSeverity.INFO,
+        message=(
+            f"stop policy '{stop_loaded.artifact.name}' matches {len(report.matches)} "
+            f"recorded stop trace(s)"
+        ),
+        artifact=stop_loaded.artifact.to_ref(),
+        span=_artifact_span(stop_loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG["stop-differential-agreement"],
+        witness=WitnessTrace(
+            summary="Recorded provider/framework traces agreed with the bounded local stop simulator.",
+            steps=(
+                WitnessStep(action="select stop policy", input=report.stop_policy_name),
+                WitnessStep(action="replay stop traces", output=f"{len(report.matches)} matched"),
             ),
             artifacts=(stop_loaded.artifact.to_ref(),),
         ),

@@ -1,0 +1,21 @@
+{
+  "provider": "vllm",
+  "request_shape": {
+    "messages": "array",
+    "sampling_params": "object"
+  },
+  "stop_traces": [
+    {
+      "name": "vllm-substring-stop-excludes-delimiter",
+      "family": "vllm",
+      "chunks": ["{\"arguments\":\"ok", "</tool_call>", " ignored"],
+      "expected": {
+        "stopped": true,
+        "output": "{\"arguments\":\"ok",
+        "matched_stop": "</tool_call>",
+        "finish_reason": "stop",
+        "include_stop_in_output": false
+      }
+    }
+  ]
+}

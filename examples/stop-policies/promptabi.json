@@ -1,7 +1,12 @@
 {
   "name": "stop-policy-vllm",
-  "checks": ["repository-skeleton"],
+  "checks": ["repository-skeleton", "stop-differential"],
   "artifacts": {
+    "vllm-provider-traces": {
+      "kind": "provider-config",
+      "path": "vllm-stop-traces.json",
+      "provider": "vllm"
+    },
     "vllm-stops": {
       "kind": "stop-policy",
       "path": "vllm-sampling-params.json",
