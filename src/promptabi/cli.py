@@ -8,7 +8,7 @@ from collections.abc import Sequence
 
 from ._version import __version__
 from .config import ConfigError
-from .render import render_json, render_text
+from .render import render_json, render_sarif, render_text
 from .session import VerificationSession
 
 
@@ -24,7 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--config", required=True, help="path to a PromptABI JSON config")
     verify.add_argument(
         "--format",
-        choices=("text", "json"),
+        choices=("text", "json", "sarif"),
         default="text",
         help="output format (default: text)",
     )
@@ -41,7 +41,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         except ConfigError as exc:
             print(f"promptabi: {exc}", file=sys.stderr)
             return 2
-        output = render_json(result) if args.format == "json" else render_text(result)
+        if args.format == "json":
+            output = render_json(result)
+        elif args.format == "sarif":
+            output = render_sarif(result)
+        else:
+            output = render_text(result)
         print(output, end="")
         return 0 if result.ok else 1
 
@@ -51,4 +56,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

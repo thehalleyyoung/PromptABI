@@ -5,4 +5,6 @@ into `promptabi verify` using the typed artifact config shape.
 
 ```bash
 promptabi verify --config examples/minimal/promptabi.json
+promptabi verify --config examples/minimal/promptabi.json --format json
+promptabi verify --config examples/minimal/promptabi.json --format sarif
 ```

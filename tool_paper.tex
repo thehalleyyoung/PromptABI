@@ -28,12 +28,12 @@ artifacts that will be used in production.
 This paper presents the repository as it now stands and the research system it
 is designed to become. The implementation already contains a typed Python
 package, a deterministic command line entrypoint, a public embedding API, a
-typed artifact model, diagnostic data structures, a minimal verification
-session, focused tests, examples, a fixture corpus layout, a CPU-only benchmark,
-documentation, and contribution guidance. The remaining checkers fit into that
-surface rather than requiring a rewrite. We describe the transducer-oriented
-formalism, the artifact model, the diagnostic contract, the first benchmark
-line, and the planned evaluation against real tokenizer, template,
+typed artifact model, a stable diagnostic contract with text, JSON, and SARIF
+renderers, a minimal verification session, focused tests, examples, a fixture
+corpus layout, a CPU-only benchmark, documentation, and contribution guidance.
+The remaining checkers fit into that surface rather than requiring a rewrite. We
+describe the transducer-oriented formalism, the artifact model, the diagnostic
+contract, the first benchmark line, and the planned evaluation against real tokenizer, template,
 structured-output, provider, and budget failures. The result is a path toward a
 tool that is useful in CI and credible as a systems paper: it catches failures
 that arise before any model logit is relevant.
@@ -80,11 +80,12 @@ The current repository milestone establishes the skeleton needed for serious
 verification work. It uses a Python \texttt{src/} layout, declares package
 metadata in \texttt{pyproject.toml}, exposes the \texttt{promptabi} console
 entrypoint, ships \texttt{py.typed}, and includes focused tests for the public
-API, artifact model, configuration loader, and CLI behavior. The implementation
-is intentionally small, but it is not a paper mockup: it loads real JSON
-configuration, normalizes artifact paths, builds typed artifact bundles, emits
-deterministic typed diagnostics, returns a stable process exit code, and runs a
-CPU-only smoke benchmark against an example bundle.
+API, artifact model, diagnostic contract, configuration loader, and CLI behavior.
+The implementation is intentionally small, but it is not a paper mockup: it
+loads real JSON configuration, normalizes artifact paths, builds typed artifact
+bundles, emits deterministic typed diagnostics in text, JSON, and SARIF, returns
+a stable process exit code, and runs a CPU-only smoke benchmark against an
+example bundle.
 
 The repository layout is designed to scale:
 
@@ -190,28 +191,43 @@ command is launched from.
 \clearpage
 \section{Diagnostic Contract}
 
-PromptABI's diagnostic contract is designed for CI and later SARIF integration.
-A useful finding is not merely a line of text. It needs a stable rule ID, a
-severity, a precise artifact reference, a source span when available, a witness
-that reproduces the failure, and a suggested remediation. If two releases emit
+PromptABI's diagnostic contract is designed for CI, code scanning, embeddings,
+and regression snapshots. A useful finding is not merely a line of text. It
+needs a stable rule ID, a severity, a precise artifact reference with
+provenance, a source span when available, a witness that reproduces the failure,
+a deterministic fingerprint, and a suggested remediation. If two releases emit
 different diagnostics for the same artifact bundle, that difference should be
 intentional, reviewable, and testable.
 
-The repository currently renders diagnostics in text and JSON. The JSON path is
-important because it fixes ordering, key names, and optional-field behavior
-before high-volume checkers are introduced. A future role-forgery finding can
-reuse the same shape:
+The repository now renders the same diagnostic object in human text,
+deterministic JSON, and SARIF 2.1.0. This matters early: once a verifier has many
+rules, unstable output becomes a tax on CI, pull-request review, and paper
+reproducibility. PromptABI therefore fixes ordering, key names, optional-field
+behavior, and code-scanning fingerprints before high-volume checkers are
+introduced. A future role-forgery finding can reuse the same shape:
 
 \begin{verbatim}
 {
   "rule_id": "role-boundary-nonforgeability",
   "severity": "error",
+  "fingerprint": "stable-sha256-prefix",
   "message": "user.content can render an assistant delimiter",
-  "artifact": {"kind": "chat-template", "name": "tokenizer_config"},
+  "artifact": {
+    "kind": "chat-template",
+    "name": "tokenizer_config",
+    "revision": "pinned-upstream-revision",
+    "sha256": "artifact-hash"
+  },
+  "span": {"path": "tokenizer_config.json", "start_line": 12, "start_column": 3},
   "witness": {
     "summary": "malicious user content reaches assistant header",
-    "steps": ["render template", "tokenize prompt", "locate forged boundary"]
-  }
+    "steps": [
+      {"action": "render template", "input": "user.content", "output": "..."},
+      {"action": "tokenize prompt"},
+      {"action": "locate forged boundary"}
+    ]
+  },
+  "suggestions": ["Escape user content before inserting role delimiters."]
 }
 \end{verbatim}
 
@@ -221,6 +237,13 @@ compatibility property that has not yet been implemented. That restraint is
 important for trust: checkers should only claim properties that the code has
 actually proved.
 
+The SARIF renderer maps PromptABI severities to SARIF levels, emits a rule table,
+attaches artifact locations and source regions when available, and stores the
+PromptABI fingerprint in \texttt{partialFingerprints}. This makes the first CLI
+workflow immediately compatible with GitHub code scanning while keeping the
+diagnostic source of truth in Python types rather than renderer-specific
+structures.
+
 \clearpage
 \section{CLI and Embedding API}
 
@@ -228,6 +251,8 @@ The command line entrypoint is:
 
 \begin{verbatim}
 promptabi verify --config examples/minimal/promptabi.json
+promptabi verify --config examples/minimal/promptabi.json --format json
+promptabi verify --config examples/minimal/promptabi.json --format sarif
 \end{verbatim}
 
 In the current milestone the workflow validates repository wiring and artifact

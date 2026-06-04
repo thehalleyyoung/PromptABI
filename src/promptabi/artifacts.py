@@ -165,8 +165,13 @@ class BaseArtifact:
         return ArtifactRef(
             kind=self.kind.value,
             name=self.name,
-            path=self.location.ref_path,
-            version=self.provenance.ref_version,
+            path=self.location.path,
+            uri=self.location.uri,
+            version=self.provenance.version,
+            revision=self.provenance.revision,
+            sha256=self.provenance.sha256,
+            license=self.provenance.license,
+            source=self.provenance.source,
         )
 
     def to_dict(self) -> dict[str, object]:

@@ -21,6 +21,8 @@ def test_verify_json_output_is_stable(capsys) -> None:
     assert exit_code == 0
     assert payload["ok"] is True
     assert payload["diagnostics"][0]["rule_id"] == "repository-skeleton"
+    assert "fingerprint" in payload["diagnostics"][0]
+    assert payload["diagnostics"][0]["witness"]["steps"][0]["action"] == "load JSON config"
     assert list(payload) == ["config", "diagnostics", "ok"]
 
 
@@ -38,4 +40,18 @@ def test_verify_missing_artifact_fails_with_error(tmp_path, capsys) -> None:
     assert exit_code == 1
     assert payload["ok"] is False
     assert payload["diagnostics"][0]["rule_id"] == "artifact-missing"
+    assert payload["diagnostics"][0]["witness"]["steps"][1]["output"] == "missing"
 
+
+def test_verify_sarif_output_is_code_scanning_compatible(capsys) -> None:
+    exit_code = main(["verify", "--config", "examples/minimal/promptabi.json", "--format", "sarif"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    result = payload["runs"][0]["results"][0]
+    assert exit_code == 0
+    assert payload["version"] == "2.1.0"
+    assert payload["runs"][0]["tool"]["driver"]["name"] == "PromptABI"
+    assert result["ruleId"] == "repository-skeleton"
+    assert result["level"] == "note"
+    assert "promptabiFingerprint" in result["partialFingerprints"]

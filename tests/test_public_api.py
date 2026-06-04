@@ -9,6 +9,8 @@ from promptabi import (
     SourceSpan,
     VerificationConfig,
     VerificationSession,
+    WitnessStep,
+    WitnessTrace,
 )
 
 
@@ -47,7 +49,63 @@ def test_diagnostic_to_dict_omits_absent_optional_fields() -> None:
         "rule_id": "demo",
         "severity": "warning",
         "message": "example",
+        "fingerprint": diagnostic.fingerprint,
         "suggestions": [],
         "artifact": {"kind": "config", "name": "promptabi"},
         "span": {"path": "promptabi.json", "start_line": 1, "start_column": 1},
     }
+
+
+def test_diagnostic_model_preserves_provenance_witness_steps_and_stable_fingerprint() -> None:
+    artifact = ArtifactRef(
+        kind="chat-template",
+        name="llama-template",
+        uri="hf://meta-llama/example",
+        revision="abc123",
+        sha256="deadbeef",
+        license="llama",
+        source="huggingface",
+    )
+    witness = WitnessTrace(
+        summary="user content reaches a role delimiter",
+        steps=(
+            WitnessStep(action="render template", input="user.content", output="<|assistant|>"),
+            "tokenize rendered prompt",
+        ),
+        artifacts=(artifact,),
+    )
+    first = Diagnostic(
+        rule_id="role-boundary-nonforgeability",
+        severity=DiagnosticSeverity.ERROR,
+        message="user content can render an assistant delimiter",
+        artifact=artifact,
+        span=SourceSpan(path="tokenizer_config.json", start_line=12, start_column=3),
+        witness=witness,
+        suggestions=("Escape user content before inserting role delimiters.",),
+    )
+    second = Diagnostic(
+        rule_id=first.rule_id,
+        severity=first.severity,
+        message=first.message,
+        artifact=artifact,
+        span=SourceSpan(path="tokenizer_config.json", start_line=12, start_column=3),
+        witness=witness,
+        suggestions=first.suggestions,
+    )
+
+    payload = first.to_dict()
+
+    assert first.fingerprint == second.fingerprint
+    assert payload["artifact"] == {
+        "kind": "chat-template",
+        "name": "llama-template",
+        "uri": "hf://meta-llama/example",
+        "revision": "abc123",
+        "sha256": "deadbeef",
+        "license": "llama",
+        "source": "huggingface",
+    }
+    assert payload["witness"]["steps"] == [
+        {"action": "render template", "input": "user.content", "output": "<|assistant|>"},
+        {"action": "tokenize rendered prompt"},
+    ]

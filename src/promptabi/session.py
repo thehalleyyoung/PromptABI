@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import VerificationConfig, load_config
-from .diagnostics import ArtifactRef, Diagnostic, DiagnosticSeverity, SourceSpan, WitnessTrace
+from .diagnostics import Diagnostic, DiagnosticSeverity, SourceSpan, WitnessStep, WitnessTrace, diagnostic_sort_key
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,7 +41,7 @@ class VerificationSession:
     def run(self) -> VerificationResult:
         diagnostics = [self._repository_skeleton_diagnostic()]
         diagnostics.extend(self._artifact_existence_diagnostics())
-        diagnostics.sort(key=lambda item: (item.severity.value, item.rule_id, item.message))
+        diagnostics.sort(key=diagnostic_sort_key)
         return VerificationResult(config=self.config, diagnostics=tuple(diagnostics))
 
     def _repository_skeleton_diagnostic(self) -> Diagnostic:
@@ -52,9 +52,13 @@ class VerificationSession:
             witness=WitnessTrace(
                 summary="The verification session constructed a typed config and produced deterministic output.",
                 steps=(
-                    "load JSON config",
-                    "normalize artifact paths",
-                    "render stable diagnostics",
+                    WitnessStep(
+                        action="load JSON config",
+                        input=self.config.name,
+                        output=f"{len(self.config.artifact_bundle.artifacts)} artifacts",
+                    ),
+                    WitnessStep(action="normalize artifact paths"),
+                    WitnessStep(action="render stable diagnostics"),
                 ),
             ),
         )
@@ -75,6 +79,14 @@ class VerificationSession:
                         artifact=artifact,
                         span=SourceSpan(path=path),
                         suggestions=("Check the path relative to the PromptABI config file.",),
+                        witness=WitnessTrace(
+                            summary="The configured local artifact path was resolved but was absent on disk.",
+                            steps=(
+                                WitnessStep(action="resolve artifact path", output=path),
+                                WitnessStep(action="check local filesystem", output="missing"),
+                            ),
+                            artifacts=(artifact,),
+                        ),
                     )
                 )
         return tuple(diagnostics)

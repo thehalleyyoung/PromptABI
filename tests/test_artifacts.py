@@ -111,6 +111,7 @@ def test_core_artifact_model_serializes_every_kind_deterministically() -> None:
         "name": "tok",
         "path": "/tmp/promptabi-artifact.json",
         "version": "v1",
+        "sha256": "abc123",
     }
     assert bundle.by_name("tok").to_dict()["added_tokens"] == ["<bos>", "<eos>"]
     assert bundle.by_name("segments").required_segments == (

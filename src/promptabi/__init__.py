@@ -32,6 +32,7 @@ from .diagnostics import (
     Diagnostic,
     DiagnosticSeverity,
     SourceSpan,
+    WitnessStep,
     WitnessTrace,
 )
 from .session import VerificationResult, VerificationSession
@@ -63,6 +64,7 @@ __all__ = [
     "VerificationConfig",
     "VerificationResult",
     "VerificationSession",
+    "WitnessStep",
     "WitnessTrace",
     "load_config",
 ]

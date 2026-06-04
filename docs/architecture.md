@@ -7,9 +7,9 @@ PromptABI is organized around four stable layers.
    configs, and framework truncation configs with stable provenance.
 2. **Sessions** collect artifacts into a reproducible verification run.
 3. **Diagnostics** provide stable rule IDs, severities, source spans,
-   provenance, witnesses, and suggestions.
-4. **Renderers** produce CLI text now and leave room for JSON, SARIF, HTML, and
-   editor protocols.
+   provenance, witness steps, suggestions, and fingerprints.
+4. **Renderers** produce CLI text, JSON, and SARIF now while leaving room for
+   HTML and editor protocols.
 
 The package uses a `src/` layout and ships `py.typed` so downstream tools can
 depend on the public API without guessing at types.

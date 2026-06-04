@@ -9,5 +9,5 @@ loaded.
 The public artifact model stores kind, name, local path or URI, provenance,
 version/hash metadata, and kind-specific fields such as stop strings, tool names,
 prompt segment survival requirements, and truncation strategy. `ArtifactBundle`
-keeps those inputs sorted and serializable so CLI JSON, tests, future SARIF, and
+keeps those inputs sorted and serializable so CLI text, JSON, SARIF, tests, and
 embedding APIs share one deterministic contract.

@@ -14,7 +14,11 @@ PromptABI verification: minimal-chat-template
 checks: repository-skeleton
 status: PASS
 INFO repository-skeleton: PromptABI package, CLI, docs, examples, fixtures, and benchmarks are wired.
+  fingerprint: 9344d195f04b768d
   witness: The verification session constructed a typed config and produced deterministic output.
+    1. load JSON config | input: minimal-chat-template | output: 3 artifacts
+    2. normalize artifact paths
+    3. render stable diagnostics
 ```
 
 PromptABI is CPU-only because its claims are structural. It models the exact
@@ -30,10 +34,10 @@ messages -> chat template -> byte/string prompt -> tokenizer -> token stream
 
 The roadmap targets three high-value checks first: role-boundary
 non-forgeability, stop/grammar/tokenizer reachability, and must-survive
-token-budget verification. The repository now has the typed Python package, core
-artifact model, CLI entrypoint, docs, examples, fixture layout, benchmarks, and
-contribution path needed to grow those checks without changing the public
-surface.
+token-budget verification. The repository already has the typed Python package,
+core artifact model, stable diagnostic contract, text/JSON/SARIF renderers, CLI
+entrypoint, docs, examples, fixture layout, benchmarks, and contribution path
+needed to grow those checks without changing the public surface.
 
 ## Why this is clearly distinct from TensorGuard
 
