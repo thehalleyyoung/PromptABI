@@ -37,6 +37,7 @@ from .provider_fixture_replay import ProviderFixtureReplayCase, ProviderFixtureR
 from .provider_migration import ProviderMigrationFinding, analyze_provider_migration
 from .loaders import ArtifactLoadError, ArtifactLoadWarning, ArtifactLoader, LoadedArtifact
 from .role_boundaries import RoleBoundaryForgeryFinding, analyze_role_boundary_nonforgeability
+from .static_contracts import StaticContractFinding, StaticContractReport, analyze_static_contracts
 from .stop_analysis import (
     StopCollision,
     StopPolicyTokenizerAnalysisReport,
@@ -109,6 +110,10 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "token-budget-segment-overflow": (CheckMode.SOUND, CheckMode.BOUNDED),
     "token-budget-total-overflow": (CheckMode.SOUND, CheckMode.BOUNDED),
     "token-budget-truncation-abstained": (CheckMode.ABSTAINING, CheckMode.BOUNDED),
+    "static-contract-abstained": (CheckMode.ABSTAINING, CheckMode.BOUNDED, CheckMode.Z3_BACKED_SMT),
+    "static-contract-proved": (CheckMode.SOUND, CheckMode.BOUNDED, CheckMode.Z3_BACKED_SMT),
+    "static-contract-unknown": (CheckMode.ABSTAINING, CheckMode.BOUNDED, CheckMode.Z3_BACKED_SMT),
+    "static-contract-violation": (CheckMode.SOUND, CheckMode.BOUNDED, CheckMode.Z3_BACKED_SMT),
     "check-unknown": (CheckMode.SOUND, CheckMode.COMPLETE),
     "check-failed": (CheckMode.HEURISTIC,),
 }
@@ -174,6 +179,7 @@ class VerificationSession:
             "parser-compatibility": self._parser_compatibility_check,
             "provider-fixture-replay": self._provider_fixture_replay_check,
             "provider-migration": self._provider_migration_check,
+            "static-contracts": self._static_contracts_check,
             "token-budget-model": self._token_budget_model_check,
             "tool-schema-ingestion": self._tool_schema_ingestion_check,
             "tool-serialization": self._tool_serialization_check,
@@ -515,6 +521,10 @@ class VerificationSession:
         if report.reservation is not None:
             diagnostics.append(_token_budget_summary_diagnostic(report))
         return tuple(diagnostics)
+
+    def _static_contracts_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        report = analyze_static_contracts(context.config, context.loaded_artifacts)
+        return tuple(_static_contract_finding_diagnostic(report, finding) for finding in report.findings)
 
     def _missing_local_paths(self) -> set[str]:
         return {
@@ -1070,6 +1080,60 @@ def _tool_schema_ingestion_diagnostic(loaded: LoadedArtifact) -> Diagnostic:
             ),
             artifacts=(loaded.artifact.to_ref(),),
         ),
+    )
+
+
+def _static_contract_finding_diagnostic(report: StaticContractReport, finding: StaticContractFinding) -> Diagnostic:
+    del report
+    if finding.severity == "error":
+        rule_id = "static-contract-violation"
+        severity = DiagnosticSeverity.ERROR
+        summary = "PromptABI found a satisfiable bad state in a finite static contract."
+    elif finding.status.value == "unknown" or finding.result is None:
+        rule_id = "static-contract-abstained" if finding.name == "static-contract-abstained" else "static-contract-unknown"
+        severity = DiagnosticSeverity.WARNING
+        summary = "PromptABI abstained instead of solving a static contract outside the available finite fragment."
+    else:
+        rule_id = "static-contract-proved"
+        severity = DiagnosticSeverity.INFO
+        summary = "PromptABI discharged a finite static contract over discrete artifact facts."
+
+    steps: list[WitnessStep] = []
+    if finding.problem is not None:
+        steps.append(
+            WitnessStep(
+                action="lower finite contract",
+                input=finding.name,
+                output=f"{len(finding.problem.variables)} variables, {len(finding.problem.constraints)} constraints",
+            )
+        )
+    if finding.result is not None:
+        steps.append(
+            WitnessStep(
+                action="solve finite contract",
+                input=finding.result.backend.value,
+                output=finding.result.status.value,
+            )
+        )
+        if finding.result.assignment:
+            assignment = ", ".join(f"{key}={value!r}" for key, value in sorted(finding.result.assignment.items()))
+            steps.append(WitnessStep(action="extract SMT model", output=assignment))
+        if finding.result.unsat_core:
+            steps.append(WitnessStep(action="extract unsat core", output=", ".join(finding.result.unsat_core)))
+    steps.extend(
+        WitnessStep(action="record contract evidence", input=key, output=value)
+        for key, value in finding.evidence
+    )
+    if not steps:
+        steps.append(WitnessStep(action="inspect artifacts", output="no finite cross-artifact obligation"))
+
+    return Diagnostic(
+        rule_id=rule_id,
+        severity=severity,
+        message=finding.message,
+        check_modes=CHECK_MODE_CATALOG[rule_id],
+        suggestions=(finding.suggestion,),
+        witness=WitnessTrace(summary=summary, steps=tuple(steps)),
     )
 
 

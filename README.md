@@ -36,11 +36,13 @@ messages -> chat template -> byte/string prompt -> tokenizer -> token stream
 ```
 
 PromptABI now includes the first formal core: deterministic finite automata,
-finite-state transducers, and a finite contract solver over booleans, enums,
-integer ranges, and bounded strings. Each diagnostic declares whether it is
-sound, complete, bounded, Z3-backed, heuristic, or abstaining; the solver uses Z3
-when available and otherwise exhaustively enumerates finite domains, emitting
-concrete counterexamples without logits, GPUs, inference, or network calls.
+finite-state transducers, and a Z3-backed finite contract layer over booleans,
+enums, integer ranges, membership, lengths, and bounded strings. It derives real
+cross-artifact SMT obligations for prompt-budget survival, stop/control-token
+exclusion, provider/tool compatibility, and training target role alignment; when
+Z3 is absent, tightly bounded contracts fall back to exhaustive finite
+enumeration, still emitting concrete counterexamples without logits, GPUs,
+inference, or network calls.
 
 PromptABI now ships a bounded, sanitizer-aware role-boundary non-forgeability check:
 unsanitized user/tool/function content and dynamic role fields are checked against

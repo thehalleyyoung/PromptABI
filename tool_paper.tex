@@ -1,5 +1,5 @@
-\documentclass[11pt]{article}
-\usepackage[margin=0.9in]{geometry}
+\documentclass[10pt]{article}
+\usepackage[margin=0.8in]{geometry}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
 \usepackage{hyperref}
@@ -110,7 +110,13 @@ a context-window budget model that combines named prompt segments, must-survive
 flags, declared or tokenizer-derived token counts, output reserves, tool-token
 reserves, generation-prompt tokens, and model-specific special-token overhead into
 bounded survival proofs against real framework truncation policies, including
-minimized counterexamples when required regions can be dropped,
+minimized counterexamples when required regions can be dropped, and a
+Z3-backed static-contract layer that derives finite SMT obligations from real
+templates, tokenizers, special-token maps, stop policies, tools, provider
+configs, truncation configs, prompt segments, and training/fine-tuning manifests,
+proving or refuting prompt-budget survival, stop/control-token exclusion,
+tool/provider compatibility, and supervised target-role alignment with concrete
+models or unsat cores,
 a CPU-only benchmark, documentation, and contribution guidance.
 The remaining checkers fit into that surface rather than requiring a rewrite. We
 describe the transducer-oriented formalism, the artifact model, the diagnostic
@@ -209,6 +215,10 @@ models context-window budgets from named prompt segments, must-survive flags,
 declared or real-tokenizer token counts, output reservations, reserved tool
 tokens, generation-prompt tokens, model-specific special-token overhead, and
 bounded truncation-policy survival proofs with minimized failing segment sets,
+derives Z3-backed finite static contracts over cross-artifact obligations such as
+required-prompt-token budget survival, stop strings colliding with special or
+added control tokens, tool-provider family mismatches, and training target roles
+outside the serving chat-template role universe,
 returns stable policy-controlled process exit codes,
 and runs a CPU-only smoke benchmark against an example bundle.
 
@@ -301,15 +311,15 @@ particular loader.
 The public API now provides \texttt{ArtifactKind}, \texttt{ArtifactLocation},
 \texttt{ArtifactProvenance}, \texttt{ArtifactBundle}, and typed artifacts for
 tokenizers, chat templates, special-token maps, stop policies, schemas,
-grammars, tool definitions, prompt segments, provider configs, and framework
-truncation configs. It also provides \texttt{ArtifactRef},
+grammars, tool definitions, prompt segments, provider configs, framework
+truncation configs, and training/fine-tuning manifests. It also provides \texttt{ArtifactRef},
 \texttt{SourceSpan}, \texttt{WitnessTrace}, \texttt{Diagnostic},
 \texttt{VerificationConfig}, \texttt{VerificationSession}, and
 \texttt{VerificationResult}. These types establish the compatibility contract:
 
 \begin{itemize}
 \item artifacts have stable kinds, names, local paths or URIs, provenance, and optional versions, revisions, hashes, licenses, and sources;
-\item kind-specific fields capture stop strings, schema dialects, grammar types, tool names, prompt segment requirements, provider families, and truncation strategies;
+\item kind-specific fields capture stop strings, schema dialects, grammar types, tool names, prompt segment requirements, provider families, truncation strategies, and training message/target roles;
 \item spans are one-based, validated at construction time, and source-mapped from PromptABI configs plus tokenizer, schema, tool, provider, and fixture JSON artifacts;
 \item witnesses are explicit traces, not prose hidden in the message string;
 \item diagnostics have rule IDs, severities, artifacts, spans, witnesses, suggestions, and explicit verification modes;
@@ -341,8 +351,8 @@ forbidden control strings leaves any accepted user language.
 
 The second piece is a finite contract solver. A contract declares variables over
 Boolean, enum, integer-range, and bounded-string domains, then composes named
-constraints with equality, disequality, conjunction, disjunction, negation,
-implication, membership, string length, and substring containment. When
+constraints with equality, disequality, integer comparisons, conjunction,
+disjunction, negation, implication, membership, string length, and substring containment. When
 \texttt{z3-solver} is available the adapter lowers those finite domains and
 constraints to Z3, including explicit domain restrictions for bounded strings.
 When Z3 is absent, the same contract runs through deterministic exhaustive
@@ -350,6 +360,21 @@ finite-domain enumeration. Both backends return a stable result object with
 \texttt{sat}, \texttt{unsat}, or \texttt{unknown} status, backend provenance,
 counterexample assignments for satisfiable bad states, checked-assignment counts,
 and minimal enumerated unsat cores when no assignment exists.
+
+The repository now uses that core as a real static-verification layer, not just
+as a toy solver. The \texttt{static-contracts} check derives independent
+cross-artifact obligations from loaded PromptABI artifacts. Required prompt
+segments and framework truncation configs become an integer SMT query asking
+whether required tokens can exceed the finite input budget. Stop policies,
+special-token maps, and tokenizer added-token metadata become a bounded
+string/enum query asking whether an application stop is also a model control
+token. Tool definitions and provider configs become a provider-family
+compatibility query. Training manifests and chat-template role declarations
+become a target-role alignment query for supervised data pipelines. Satisfiable
+bad-state queries produce concrete assignments; unsatisfiable queries produce
+proof diagnostics with the solver backend and unsat core. Unsupported or
+insufficiently finite inputs abstain explicitly rather than widening into a
+claim the implementation cannot justify.
 
 The core now adds the missing relational layer: finite-state transducers over
 explicit input and output alphabets. A transducer transition carries an input

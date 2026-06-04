@@ -19,6 +19,7 @@ from promptabi.artifacts import (
     StopPolicyArtifact,
     TokenizerArtifact,
     ToolDefinitionArtifact,
+    TrainingManifestArtifact,
     TruncationStrategy,
     artifact_from_config,
 )
@@ -102,6 +103,15 @@ def test_core_artifact_model_serializes_every_kind_deterministically() -> None:
             max_context_tokens=8192,
             reserve_output_tokens=512,
         ),
+        TrainingManifestArtifact(
+            kind=ArtifactKind.TRAINING_MANIFEST,
+            name="train",
+            location=location,
+            dataset_format="chat-jsonl",
+            message_roles=("system", "user", "assistant"),
+            target_roles=("assistant",),
+            example_count=12,
+        ),
     )
 
     bundle = ArtifactBundle(artifacts)
@@ -145,6 +155,12 @@ def test_config_artifact_parser_accepts_the_same_kinds_as_the_model(tmp_path: Pa
             "framework": "langchain",
             "strategy": "oldest-message",
             "max_context_tokens": 4096,
+        },
+        ArtifactKind.TRAINING_MANIFEST: {
+            "dataset_format": "chat-jsonl",
+            "message_roles": ["system", "user", "assistant"],
+            "target_roles": ["assistant"],
+            "example_count": 12,
         },
     }
 

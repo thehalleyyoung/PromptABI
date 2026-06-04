@@ -25,6 +25,7 @@ from .artifacts import (
     StopPolicyArtifact,
     TokenizerArtifact,
     ToolDefinitionArtifact,
+    TrainingManifestArtifact,
     TruncationStrategy,
 )
 from .budgets import (
@@ -85,7 +86,11 @@ from .formal import (
     Implies,
     InSet,
     IntRangeDomain,
+    Ge,
+    Gt,
     Length,
+    Le,
+    Lt,
     NamedConstraint,
     Ne,
     Not,
@@ -99,6 +104,7 @@ from .formal import (
     Value,
     Var,
 )
+from .static_contracts import StaticContractFinding, StaticContractReport, analyze_static_contracts
 from .grammars import (
     GrammarDialect,
     GrammarIngestionError,

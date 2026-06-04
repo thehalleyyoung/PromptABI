@@ -809,6 +809,66 @@ class Ne:
 
 
 @dataclass(frozen=True, slots=True)
+class Le:
+    left: Expression
+    right: Expression
+
+    def evaluate(self, assignment: Assignment) -> bool:
+        return int(self.left.evaluate(assignment)) <= int(self.right.evaluate(assignment))
+
+    def to_z3(self, context: "_Z3Context") -> Any:
+        return self.left.to_z3(context) <= self.right.to_z3(context)
+
+    def to_dict(self) -> dict[str, object]:
+        return {"le": [self.left.to_dict(), self.right.to_dict()]}
+
+
+@dataclass(frozen=True, slots=True)
+class Lt:
+    left: Expression
+    right: Expression
+
+    def evaluate(self, assignment: Assignment) -> bool:
+        return int(self.left.evaluate(assignment)) < int(self.right.evaluate(assignment))
+
+    def to_z3(self, context: "_Z3Context") -> Any:
+        return self.left.to_z3(context) < self.right.to_z3(context)
+
+    def to_dict(self) -> dict[str, object]:
+        return {"lt": [self.left.to_dict(), self.right.to_dict()]}
+
+
+@dataclass(frozen=True, slots=True)
+class Ge:
+    left: Expression
+    right: Expression
+
+    def evaluate(self, assignment: Assignment) -> bool:
+        return int(self.left.evaluate(assignment)) >= int(self.right.evaluate(assignment))
+
+    def to_z3(self, context: "_Z3Context") -> Any:
+        return self.left.to_z3(context) >= self.right.to_z3(context)
+
+    def to_dict(self) -> dict[str, object]:
+        return {"ge": [self.left.to_dict(), self.right.to_dict()]}
+
+
+@dataclass(frozen=True, slots=True)
+class Gt:
+    left: Expression
+    right: Expression
+
+    def evaluate(self, assignment: Assignment) -> bool:
+        return int(self.left.evaluate(assignment)) > int(self.right.evaluate(assignment))
+
+    def to_z3(self, context: "_Z3Context") -> Any:
+        return self.left.to_z3(context) > self.right.to_z3(context)
+
+    def to_dict(self) -> dict[str, object]:
+        return {"gt": [self.left.to_dict(), self.right.to_dict()]}
+
+
+@dataclass(frozen=True, slots=True)
 class And:
     terms: tuple[Expression, ...]
 

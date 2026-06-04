@@ -23,6 +23,7 @@ class ArtifactKind(StrEnum):
     PROMPT_SEGMENT = "prompt-segment"
     PROVIDER_CONFIG = "provider-config"
     FRAMEWORK_TRUNCATION_CONFIG = "framework-truncation-config"
+    TRAINING_MANIFEST = "training-manifest"
 
 
 class TruncationStrategy(StrEnum):
@@ -456,6 +457,40 @@ class FrameworkTruncationConfigArtifact(BaseArtifact):
         return data
 
 
+@dataclass(frozen=True, slots=True)
+class TrainingManifestArtifact(BaseArtifact):
+    """A finite summary of supervised/preference data interface contracts."""
+
+    dataset_format: str = "jsonl"
+    message_roles: tuple[str, ...] = ()
+    target_roles: tuple[str, ...] = ()
+    example_count: int | None = None
+    packed: bool = False
+
+    def __post_init__(self) -> None:
+        BaseArtifact.__post_init__(self)
+        _require_kind(self.kind, ArtifactKind.TRAINING_MANIFEST)
+        if not self.dataset_format:
+            raise ValueError("training manifest dataset_format must be non-empty")
+        if self.example_count is not None and self.example_count < 0:
+            raise ValueError("training manifest example_count must be non-negative")
+        object.__setattr__(self, "message_roles", tuple(sorted(dict.fromkeys(self.message_roles))))
+        object.__setattr__(self, "target_roles", tuple(sorted(dict.fromkeys(self.target_roles))))
+
+    def to_dict(self) -> dict[str, object]:
+        data = BaseArtifact.to_dict(self)
+        data["dataset_format"] = self.dataset_format
+        if self.message_roles:
+            data["message_roles"] = list(self.message_roles)
+        if self.target_roles:
+            data["target_roles"] = list(self.target_roles)
+        if self.example_count is not None:
+            data["example_count"] = self.example_count
+        if self.packed:
+            data["packed"] = self.packed
+        return data
+
+
 Artifact = (
     TokenizerArtifact
     | ChatTemplateArtifact
@@ -467,6 +502,7 @@ Artifact = (
     | PromptSegmentArtifact
     | ProviderConfigArtifact
     | FrameworkTruncationConfigArtifact
+    | TrainingManifestArtifact
 )
 
 
@@ -610,6 +646,15 @@ def artifact_from_config(
             preserve_system=_bool(spec, "preserve_system", default=False),
             preserve_tools=_bool(spec, "preserve_tools", default=False),
             drop_roles=_tuple_of_str(spec, "drop_roles"),
+        )
+    if kind is ArtifactKind.TRAINING_MANIFEST:
+        return TrainingManifestArtifact(
+            **common,
+            dataset_format=_str(spec, "dataset_format", default="jsonl"),
+            message_roles=_tuple_of_str(spec, "message_roles"),
+            target_roles=_tuple_of_str(spec, "target_roles"),
+            example_count=_optional_int(spec, "example_count"),
+            packed=_bool(spec, "packed", default=False),
         )
     raise AssertionError(f"unhandled artifact kind: {kind}")
 
