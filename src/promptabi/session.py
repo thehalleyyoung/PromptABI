@@ -25,6 +25,13 @@ from .grammar_differential import (
     GrammarDifferentialCaseReport,
     analyze_grammar_differential_corpus,
 )
+from .parser_compatibility import (
+    ParserCompatibilityDirection,
+    ParserCompatibilityObservation,
+    ParserCompatibilityReport,
+    ParserCompatibilityStatus,
+    analyze_parser_compatibility,
+)
 from .loaders import ArtifactLoadError, ArtifactLoadWarning, ArtifactLoader, LoadedArtifact
 from .role_boundaries import RoleBoundaryForgeryFinding, analyze_role_boundary_nonforgeability
 from .stop_analysis import (
@@ -79,6 +86,9 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "grammar-differential-abstained": (CheckMode.ABSTAINING, CheckMode.HEURISTIC),
     "grammar-differential-agreement": (CheckMode.HEURISTIC,),
     "grammar-differential-mismatch": (CheckMode.HEURISTIC,),
+    "parser-compatibility-abstained": (CheckMode.ABSTAINING, CheckMode.HEURISTIC),
+    "parser-compatibility-agreement": (CheckMode.HEURISTIC,),
+    "parser-compatibility-mismatch": (CheckMode.HEURISTIC,),
     "check-unknown": (CheckMode.SOUND, CheckMode.COMPLETE),
     "check-failed": (CheckMode.HEURISTIC,),
 }
@@ -141,6 +151,7 @@ class VerificationSession:
             "grammar-differential": self._grammar_differential_check,
             "grammar-tokenizer-ambiguity": self._grammar_tokenizer_ambiguity_check,
             "grammar-tokenizer-emptiness": self._grammar_tokenizer_emptiness_check,
+            "parser-compatibility": self._parser_compatibility_check,
         }
         if checks:
             self.checks.update(checks)
@@ -415,6 +426,27 @@ class VerificationSession:
             )
             if report.agreements and not report.mismatches and not report.abstentions:
                 diagnostics.append(_grammar_differential_agreement_diagnostic(loaded, report.agreements))
+        return tuple(diagnostics)
+
+    def _parser_compatibility_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        diagnostics: list[Diagnostic] = []
+        structured_artifacts = [
+            loaded
+            for loaded in context.loaded_artifacts
+            if loaded.artifact.kind in {ArtifactKind.SCHEMA, ArtifactKind.GRAMMAR}
+            and loaded.source_type != "grammar-differential"
+        ]
+        for loaded in structured_artifacts:
+            report = analyze_parser_compatibility(loaded.artifact)
+            if report.status is ParserCompatibilityStatus.MISMATCH:
+                diagnostics.extend(
+                    _parser_compatibility_mismatch_diagnostic(loaded, report, mismatch)
+                    for mismatch in report.mismatches
+                )
+            elif report.status is ParserCompatibilityStatus.ABSTAINED:
+                diagnostics.append(_parser_compatibility_abstained_diagnostic(loaded, report))
+            else:
+                diagnostics.append(_parser_compatibility_agreement_diagnostic(loaded, report))
         return tuple(diagnostics)
 
     def _missing_local_paths(self) -> set[str]:
@@ -847,6 +879,95 @@ def _grammar_differential_agreement_diagnostic(
             steps=(
                 WitnessStep(action="load fixture families", output=families),
                 WitnessStep(action="compare accepted and rejected samples", output=f"{len(agreements)} cases"),
+            ),
+            artifacts=(loaded.artifact.to_ref(),),
+        ),
+    )
+
+
+def _parser_compatibility_mismatch_diagnostic(
+    loaded: LoadedArtifact,
+    report: ParserCompatibilityReport,
+    mismatch: ParserCompatibilityObservation,
+) -> Diagnostic:
+    direction = mismatch.direction or ParserCompatibilityDirection.PARSER_BROADER
+    if direction is ParserCompatibilityDirection.PARSER_BROADER:
+        suggestion = "Tighten the application parser or make the grammar/schema accept exactly the parser-admitted envelope."
+    else:
+        suggestion = "Tighten the grammar or update the application parser so generated outputs are parseable at runtime."
+    return Diagnostic(
+        rule_id="parser-compatibility-mismatch",
+        severity=DiagnosticSeverity.ERROR,
+        message=(
+            f"structured-output artifact '{loaded.artifact.name}' has {direction.value} "
+            f"parser compatibility for {report.parser_format}"
+        ),
+        artifact=loaded.artifact.to_ref(),
+        span=_artifact_span(loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG["parser-compatibility-mismatch"],
+        suggestions=(
+            suggestion,
+            "Add representative parser_compatibility samples for both accepted and rejected runtime strings.",
+        ),
+        witness=WitnessTrace(
+            summary="PromptABI replayed a concrete structured-output string through both grammar membership and the declared parser model.",
+            steps=(
+                WitnessStep(action="select parser model", input=report.parser_format, output=", ".join(report.assumptions)),
+                WitnessStep(action="select bounded sample", input=mismatch.sample.source, output=mismatch.sample.text),
+                WitnessStep(action="evaluate grammar membership", input=report.grammar_kind, output=str(mismatch.grammar_accepts)),
+                WitnessStep(action="evaluate parser acceptance", input=report.parser_format, output=str(mismatch.parser_accepts)),
+                WitnessStep(action="classify disagreement", output=direction.value),
+            ),
+            artifacts=(loaded.artifact.to_ref(),),
+        ),
+    )
+
+
+def _parser_compatibility_abstained_diagnostic(
+    loaded: LoadedArtifact,
+    report: ParserCompatibilityReport,
+) -> Diagnostic:
+    return Diagnostic(
+        rule_id="parser-compatibility-abstained",
+        severity=DiagnosticSeverity.WARNING,
+        message=f"structured-output artifact '{loaded.artifact.name}' is outside parser compatibility replay",
+        artifact=loaded.artifact.to_ref(),
+        span=_artifact_span(loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG["parser-compatibility-abstained"],
+        suggestions=(
+            "Declare metadata.parser_format for non-schema artifacts and provide parser_compatibility samples.",
+            "Use JSON Schema, regex, finite literal grammar, markdown-fence, XML tool-call, or custom-delimited parser fixtures.",
+        ),
+        witness=WitnessTrace(
+            summary="PromptABI abstained instead of guessing application-parser equivalence.",
+            steps=(
+                WitnessStep(action="select structured artifact", input=loaded.artifact.name, output=report.grammar_kind),
+                WitnessStep(action="select parser model", input=report.parser_format, output=report.reason),
+            ),
+            artifacts=(loaded.artifact.to_ref(),),
+        ),
+    )
+
+
+def _parser_compatibility_agreement_diagnostic(
+    loaded: LoadedArtifact,
+    report: ParserCompatibilityReport,
+) -> Diagnostic:
+    return Diagnostic(
+        rule_id="parser-compatibility-agreement",
+        severity=DiagnosticSeverity.INFO,
+        message=(
+            f"structured-output artifact '{loaded.artifact.name}' agrees with declared "
+            f"{report.parser_format} parser on {len(report.observations)} bounded sample(s)"
+        ),
+        artifact=loaded.artifact.to_ref(),
+        span=_artifact_span(loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG["parser-compatibility-agreement"],
+        witness=WitnessTrace(
+            summary="Concrete grammar witnesses and declared parser samples agreed under heuristic replay.",
+            steps=(
+                WitnessStep(action="select parser model", input=report.parser_format, output=", ".join(report.assumptions)),
+                WitnessStep(action="compare bounded samples", output=f"{len(report.observations)} agreement(s)"),
             ),
             artifacts=(loaded.artifact.to_ref(),),
         ),

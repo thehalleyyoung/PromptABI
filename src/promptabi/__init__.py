@@ -138,6 +138,14 @@ from .json_schema import (
     normalize_json_schema_mapping,
 )
 from .loaders import ArtifactLoadError, ArtifactLoader, ArtifactLoadWarning, LoadedArtifact, load_artifact
+from .parser_compatibility import (
+    ParserCompatibilityDirection,
+    ParserCompatibilityObservation,
+    ParserCompatibilityReport,
+    ParserCompatibilitySample,
+    ParserCompatibilityStatus,
+    analyze_parser_compatibility,
+)
 from .role_boundaries import (
     DEFAULT_STRUCTURAL_ROLES,
     RoleBoundaryForgeryFinding,
@@ -309,6 +317,11 @@ __all__ = [
     "NormalizationRule",
     "Not",
     "Or",
+    "ParserCompatibilityDirection",
+    "ParserCompatibilityObservation",
+    "ParserCompatibilityReport",
+    "ParserCompatibilitySample",
+    "ParserCompatibilityStatus",
     "PromptSegment",
     "PromptSegmentArtifact",
     "ProviderConfigArtifact",
@@ -385,6 +398,7 @@ __all__ = [
     "analyze_role_boundary_nonforgeability",
     "analyze_grammar_differential_corpus",
     "analyze_grammar_differential_mapping",
+    "analyze_parser_compatibility",
     "analyze_tokenizer_grammar_ambiguity",
     "analyze_tokenizer_grammar_emptiness",
     "build_role_boundary_model",

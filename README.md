@@ -76,7 +76,11 @@ values or hiding multiple token paths. A fixture-backed grammar differential
 corpus now replays hand-labeled Outlines, xgrammar, llguidance,
 lm-format-enforcer, Guidance, Instructor, and Pydantic-derived semantics through
 the real CLI, reporting agreement, mismatch, or abstention without heavyweight
-backend installs. The repository
+backend installs. Structured-output parser compatibility checks now replay
+bounded grammar/schema witnesses plus declared runtime samples against JSON,
+JSON Schema, XML-ish tool-call, markdown-fence, and custom-delimiter parser
+models, reporting parser-broader and grammar-broader disagreements without
+claiming full language equivalence. The repository
 already has the typed Python package,
 core artifact model, stable diagnostic contract, text/JSON/SARIF renderers,
 snapshot-locked output stability, discoverable `promptabi verify` workflow,

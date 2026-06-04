@@ -77,7 +77,12 @@ then compiles the supported subset into grammar IR, parser states, DFA witnesses
 source maps, and real \texttt{jsonschema} validator round-trips, replays a
 CPU-only grammar differential corpus with hand-labeled Outlines, xgrammar,
 llguidance, lm-format-enforcer, Guidance, Instructor, and Pydantic-derived
-semantics through the CLI as agreement, mismatch, or abstention diagnostics, and
+semantics through the CLI as agreement, mismatch, or abstention diagnostics,
+a structured-output parser compatibility checker that replays bounded
+grammar/schema witnesses and declared runtime samples against JSON, JSON Schema,
+XML-ish tool-call, markdown-fence, and custom-delimiter parser models while
+separating parser-broader from grammar-broader disagreements and explicitly
+marking the result as heuristic evidence rather than language equivalence, and
 now takes the bounded tokenizer x grammar product to prove whether compiled
 witnesses survive real tokenizer encode-normalize-decode assumptions, plus a
 bounded tokenizer x grammar ambiguity check that validates JSON lexical variants
@@ -159,6 +164,11 @@ checks grammar-backend differential fixtures against hand-authored accepted and
 rejected strings for Outlines, xgrammar, llguidance, lm-format-enforcer,
 Guidance, Instructor-style, and Pydantic-derived schemas, abstaining rather than
 overclaiming for fragments outside local replay semantics,
+compares structured-output grammar/schema artifacts with declared application
+parser models for JSON, JSON Schema, XML-ish tool calls, markdown fences, and
+custom delimiters using bounded witnesses and runtime samples, distinguishing
+parser-broader acceptance that can admit invalid application states from
+grammar-broader acceptance that can generate runtime-parse failures,
 checks tokenizer x grammar ambiguity by pairing schema-valid JSON lexical
 variants with real tokenizer encode/decode behavior to find conflicting token
 paths, decoded-text collapses, Unicode or whitespace byte aliases, and added-token
