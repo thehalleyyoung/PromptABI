@@ -89,6 +89,7 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "parser-compatibility-abstained": (CheckMode.ABSTAINING, CheckMode.HEURISTIC),
     "parser-compatibility-agreement": (CheckMode.HEURISTIC,),
     "parser-compatibility-mismatch": (CheckMode.HEURISTIC,),
+    "tool-schema-ingestion": (CheckMode.SOUND, CheckMode.COMPLETE),
     "check-unknown": (CheckMode.SOUND, CheckMode.COMPLETE),
     "check-failed": (CheckMode.HEURISTIC,),
 }
@@ -152,6 +153,7 @@ class VerificationSession:
             "grammar-tokenizer-ambiguity": self._grammar_tokenizer_ambiguity_check,
             "grammar-tokenizer-emptiness": self._grammar_tokenizer_emptiness_check,
             "parser-compatibility": self._parser_compatibility_check,
+            "tool-schema-ingestion": self._tool_schema_ingestion_check,
         }
         if checks:
             self.checks.update(checks)
@@ -448,6 +450,14 @@ class VerificationSession:
             else:
                 diagnostics.append(_parser_compatibility_agreement_diagnostic(loaded, report))
         return tuple(diagnostics)
+
+    def _tool_schema_ingestion_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        return tuple(
+            _tool_schema_ingestion_diagnostic(loaded)
+            for loaded in context.loaded_artifacts
+            if loaded.artifact.kind is ArtifactKind.TOOL_DEFINITION
+            and loaded.source_type == "tool-definition-schema"
+        )
 
     def _missing_local_paths(self) -> set[str]:
         return {
@@ -968,6 +978,38 @@ def _parser_compatibility_agreement_diagnostic(
             steps=(
                 WitnessStep(action="select parser model", input=report.parser_format, output=", ".join(report.assumptions)),
                 WitnessStep(action="compare bounded samples", output=f"{len(report.observations)} agreement(s)"),
+            ),
+            artifacts=(loaded.artifact.to_ref(),),
+        ),
+    )
+
+
+def _tool_schema_ingestion_diagnostic(loaded: LoadedArtifact) -> Diagnostic:
+    metadata = dict(loaded.metadata)
+    provider = str(metadata.get("provider_family", "unknown"))
+    tool_count = int(metadata.get("tool_count", 0))
+    tool_names = tuple(metadata.get("tool_names", ()))
+    closed = tuple(metadata.get("closed_tool_names", ()))
+    encodings = tuple(metadata.get("argument_encodings", ()))
+    issue_count = int(metadata.get("issue_count", 0))
+    return Diagnostic(
+        rule_id="tool-schema-ingestion",
+        severity=DiagnosticSeverity.INFO,
+        message=(
+            f"tool-definition artifact '{loaded.artifact.name}' ingested {tool_count} "
+            f"{provider} tool schema(s)"
+        ),
+        artifact=loaded.artifact.to_ref(),
+        span=_artifact_span(loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG["tool-schema-ingestion"],
+        witness=WitnessTrace(
+            summary="PromptABI normalized provider/framework tool definitions into typed function schemas.",
+            steps=(
+                WitnessStep(action="select tool envelope family", output=provider),
+                WitnessStep(action="extract tool names", output=", ".join(tool_names) or "<none>"),
+                WitnessStep(action="classify argument encodings", output=", ".join(encodings) or "<none>"),
+                WitnessStep(action="identify closed parameter schemas", output=", ".join(closed) or "<none>"),
+                WitnessStep(action="record ingestion issues", output=str(issue_count)),
             ),
             artifacts=(loaded.artifact.to_ref(),),
         ),

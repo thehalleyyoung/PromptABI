@@ -187,6 +187,16 @@ from .stop_policies import (
     StopPolicySource,
     parse_stop_policy_config,
 )
+from .tool_schemas import (
+    ToolDefinition,
+    ToolParameterSummary,
+    ToolSchemaIngestionError,
+    ToolSchemaIngestionResult,
+    ToolSchemaIssue,
+    ToolSchemaIssueKind,
+    ToolSchemaProvider,
+    ingest_tool_schema_mapping,
+)
 from .stop_analysis import (
     StopCollision,
     StopPolicyTokenizerAnalysisReport,
@@ -391,6 +401,13 @@ __all__ = [
     "TokenizerBackend",
     "TokenizerError",
     "ToolDefinitionArtifact",
+    "ToolDefinition",
+    "ToolParameterSummary",
+    "ToolSchemaIngestionError",
+    "ToolSchemaIngestionResult",
+    "ToolSchemaIssue",
+    "ToolSchemaIssueKind",
+    "ToolSchemaProvider",
     "TransducerLabel",
     "TransducerTransition",
     "TransducerWitness",
@@ -434,6 +451,7 @@ __all__ = [
     "parse_hf_chat_template_config",
     "parse_hf_tokenizer_config_chat_template",
     "parse_stop_policy_config",
+    "ingest_tool_schema_mapping",
     "analyze_stop_policy_tokenizer",
     "analyze_stop_overreachability",
     "load_stop_trace_cases",

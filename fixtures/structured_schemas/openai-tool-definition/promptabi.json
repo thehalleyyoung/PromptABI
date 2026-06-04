@@ -1,6 +1,6 @@
 {
   "name": "structured-schema-openai-tool-definition",
-  "checks": ["repository-skeleton"],
+  "checks": ["repository-skeleton", "tool-schema-ingestion"],
   "artifacts": {
     "openai-tool-bundle": {
       "kind": "tool-definition",

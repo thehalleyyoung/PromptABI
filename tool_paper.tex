@@ -85,7 +85,11 @@ separating parser-broader from grammar-broader disagreements and explicitly
 marking the result as heuristic evidence rather than language equivalence, a
 labeled structured-schema corpus with open-source-agent reductions, anonymized
 production-style contracts, synthetic stress cases, tool-definition bundles,
-per-entry PromptABI configs, deterministic hashes, and manifest generation, and
+per-entry PromptABI configs, deterministic hashes, and manifest generation, a
+tool/function schema ingestion layer that normalizes OpenAI tools, Anthropic
+tools, LangChain tools, Pydantic model schemas, TypeScript-style functions, MCP
+tools, and provider tool-call envelopes into source-mapped typed function schemas,
+and
 now takes the bounded tokenizer x grammar product to prove whether compiled
 witnesses survive real tokenizer encode-normalize-decode assumptions, plus a
 bounded tokenizer x grammar ambiguity check that validates JSON lexical variants
@@ -381,6 +385,8 @@ Tokenizer directories & Stable manifest over sorted relative file names, file si
 GGUF stubs & Header-level GGUF magic, version, tensor count, metadata-key count, and streamed file hash without loading weights. \\
 \hline
 Provider snapshots & Deterministic JSON validation for provider name, captured request/response or streaming shape metadata, and optional stop-trace fixtures for offline differential replay, with parse-error line and column diagnostics. \\
+\hline
+Tool definitions & Source-mapped ingestion for OpenAI function tools, Anthropic \texttt{input\_schema} tools, LangChain \texttt{args\_schema} tools, Pydantic model JSON Schemas, TypeScript-style function arrays, MCP \texttt{inputSchema} tools, and provider tool-call response envelopes, recording tool names, argument encodings, closed parameter schemas, enum/constraint paths, IDs, streaming chunks, and ingestion issues. \\
 \hline
 Stop-policy configs & Deterministic extraction of stop strings, stop token IDs, EOS behavior, source family, ignored empty stops, and source paths from OpenAI-compatible, Hugging Face, llama.cpp/Ollama, vLLM, LiteLLM, and wrapper shapes. \\
 \hline
@@ -851,6 +857,17 @@ specific backend. A grammar may accept strings the application parser rejects. A
 tokenizer may expose Unicode, escaping, whitespace, or added-token behavior that
 creates ambiguous structured outputs.
 
+Tool schemas are now first-class inputs rather than opaque side files. PromptABI
+normalizes OpenAI \texttt{\{type:function,function:\{...\}\}} bundles, Anthropic
+\texttt{input\_schema} tools, LangChain \texttt{args\_schema} tools, Pydantic
+model JSON Schemas, TypeScript-style function arrays, MCP \texttt{inputSchema}
+tools, and provider response envelopes containing \texttt{tool\_calls}. The
+result records the provider family, tool names, JSON-object versus JSON-string
+argument encodings, closed parameter schemas, required properties, enum and
+constraint paths, tool-call IDs, streaming chunk evidence, source spans, and
+ingestion issues such as open parameter objects. This gives later serialization,
+provider-migration, stop-overreach, and budget checks a typed schema substrate.
+
 PromptABI now normalizes the supported JSON Schema subset into a typed tree that
 preserves objects, arrays, required fields, enum and const terminals, string and
 numeric constraints, type and composition unions, local reference expansion,
@@ -931,7 +948,7 @@ The testing strategy has three tiers:
 \item unit and structured snapshot tests for public API and deterministic text, JSON, and SARIF rendering;
 \item tokenizer abstraction tests against real Hugging Face \texttt{tokenizers}, \texttt{tiktoken}, SentencePiece, and byte-level adapters;
 \item chat-template parser, symbolic-executor, concrete-renderer, role-region, and role-boundary non-forgeability tests across real \texttt{tokenizer\_config.json} fixtures and known delimiter-collision regressions, including ChatML, Llama header tokens, Mistral instruction tags, XML-ish tool tags, markdown fences, fine-tune hash headers, generation-prompt extraction, dynamic role headers, content-control delimiter collisions, role assumptions, field references, special tokens, bounded message/tool loops, filters, whitespace controls, path budgets, empty tool lists, tool-role messages, and unsupported constructs, with concrete outputs differentially checked against Hugging Face's renderer;
-\item loader and parser tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, stop-policy configs spanning OpenAI-compatible, Hugging Face, llama.cpp/Ollama, vLLM, LiteLLM, wrapper kwargs, fixture archives, and source-mapped JSON fields;
+\item loader and parser tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, tool-definition schemas spanning OpenAI, Anthropic, LangChain, Pydantic, TypeScript-style, MCP, and provider tool-call envelopes, stop-policy configs spanning OpenAI-compatible, Hugging Face, llama.cpp/Ollama, vLLM, LiteLLM, wrapper kwargs, fixture archives, and source-mapped JSON fields;
 \item stop-tokenizer, stop-differential, and stop-overreachability tests that exercise byte/string/token alignments, multi-token stops, invalid stop-token IDs, normalization collisions, prefix/suffix collisions, added/special-token interactions, OpenAI-compatible and Hugging Face delimiter-retention semantics, provider fixture replay, CLI mismatch diagnostics, serialized stop offsets, parser-state truncation witnesses, supported schema/tool string witnesses, structural delimiter collisions, real-world Qwen/Gemma/llama.cpp stop bug reductions, and a real Hugging Face \texttt{tokenizers} BPE fixture;
 \item fixture and corpus tests for minimized tokenizer/chat-template bundles, public real-bug provenance, expected behaviors, sentinel consistency, artifact materialization, deterministic manifest generation, labeled structured-schema reductions, anonymized contracts, synthetic parser stress cases, tool-definition bundles, and real CLI replay of every included structured-schema config;
 \item future corpus tests for popular model and framework configurations pinned by immutable upstream revisions.
@@ -990,7 +1007,8 @@ CI and paper artifacts.
 The structured-schema layer is executable as well. It includes a reduced
 open-source-agent ticket-routing schema, an anonymized markdown-fence response
 contract, a synthetic XML tool-call parser-broader stress case, and an
-OpenAI-style tool-definition bundle. \texttt{load\_structured\_schema\_corpus()}
+OpenAI-style tool-definition bundle that now runs through the real
+tool-schema-ingestion CLI check. \texttt{load\_structured\_schema\_corpus()}
 validates required source-category coverage, schema/grammar/tool entry types,
 labels, expected parser-compatibility status, per-entry artifact hashes, and
 runnable PromptABI configs. \texttt{promptabi corpus structured-schema-manifest}
@@ -1221,9 +1239,9 @@ family coverage, sentinel/template consistency, metadata hashes, reproducibility
 metadata, artifact materialization through the real offline loader, manifest
 generation, manifest writing, and the \texttt{promptabi corpus manifest} CLI.
 The structured-schema corpus tests validate required source categories,
-schema/grammar/tool-definition artifact materialization, labeled
-parser-compatibility replay, per-fixture CLI diagnostics, manifest writing, and
-the \texttt{promptabi corpus structured-schema-manifest} CLI.
+schema/grammar/tool-definition artifact materialization, tool-schema ingestion,
+labeled parser-compatibility replay, per-fixture CLI diagnostics, manifest
+writing, and the \texttt{promptabi corpus structured-schema-manifest} CLI.
 Stop differential tests replay recorded provider-style chunks through CPU-only
 OpenAI-compatible and Hugging Face simulators, assert delimiter-retention behavior,
 exercise mismatch diagnostics through the real CLI, and the

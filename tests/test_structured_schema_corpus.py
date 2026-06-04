@@ -36,7 +36,7 @@ def test_structured_schema_corpus_entries_materialize_loadable_artifacts() -> No
 
     assert len(loaded) == len(corpus.entries)
     assert {item.artifact.kind.value for item in loaded} == {"grammar", "schema", "tool-definition"}
-    assert {item.source_type for item in loaded} >= {"json-schema", "local-file"}
+    assert {item.source_type for item in loaded} >= {"json-schema", "tool-definition-schema"}
     assert all(item.resolved for item in loaded)
 
 

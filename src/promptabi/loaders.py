@@ -12,7 +12,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from .artifacts import Artifact, ArtifactKind, GrammarArtifact, SchemaArtifact, StopPolicyArtifact
+from .artifacts import Artifact, ArtifactKind, GrammarArtifact, SchemaArtifact, StopPolicyArtifact, ToolDefinitionArtifact
 from .chat_templates import ChatTemplateParseError, parse_hf_tokenizer_config_chat_template, symbolically_execute_chat_template
 from .diagnostics import SourceSpan
 from .grammar_differential import analyze_grammar_differential_corpus
@@ -21,6 +21,7 @@ from .json_schema import compile_json_schema_mapping, normalize_json_schema_mapp
 from .role_boundaries import build_role_boundary_model
 from .source import build_json_source_map
 from .stop_policies import StopPolicyParseError, parse_stop_policy_config
+from .tool_schemas import ToolSchemaIngestionError, ingest_tool_schema_mapping
 
 
 _SHA256_RE = re.compile(r"^[0-9a-fA-F]{64}$")
@@ -147,6 +148,8 @@ class ArtifactLoader:
             return self._load_schema(artifact, path)
         if artifact.kind is ArtifactKind.GRAMMAR:
             return self._load_grammar(artifact, path)
+        if artifact.kind is ArtifactKind.TOOL_DEFINITION:
+            return self._load_tool_definition(artifact, path)
         if artifact.kind is ArtifactKind.PROVIDER_CONFIG:
             return self._load_provider_snapshot(artifact, path)
         return self._load_file(artifact, path, source_type="local-file")
@@ -475,6 +478,55 @@ class ArtifactLoader:
             size_bytes=loaded.size_bytes,
             metadata=_merge_metadata(parsed.to_metadata(), normalized.to_metadata(), compiled.to_metadata()),
             source_spans=normalized.source_spans or parsed.source_spans or loaded.source_spans,
+            warnings=loaded.warnings,
+        )
+
+    def _load_tool_definition(self, artifact: Artifact, path: Path) -> LoadedArtifact:
+        if path.suffix.lower() != ".json":
+            return self._load_file(artifact, path, source_type="tool-definition-file")
+        try:
+            text = path.read_text(encoding="utf-8")
+            raw = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"tool-definition artifact '{artifact.name}' is not valid JSON",
+                suggestion="Store tool definitions as deterministic JSON objects or arrays.",
+                steps=(("parse tool-definition JSON", str(path), exc.msg),),
+                span=SourceSpan(path=str(path), start_line=exc.lineno, start_column=exc.colno),
+            ) from exc
+        try:
+            source_map = build_json_source_map(text, path)
+            parsed = ingest_tool_schema_mapping(
+                raw,
+                declared_provider=artifact.provider if isinstance(artifact, ToolDefinitionArtifact) else None,
+                source_map=source_map,
+            )
+        except ToolSchemaIngestionError as exc:
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"tool-definition artifact '{artifact.name}' could not be ingested",
+                suggestion="Use OpenAI, Anthropic, LangChain, Pydantic JSON Schema, TypeScript-style, MCP, or provider tool-call envelopes.",
+                steps=(("ingest tool definitions", ".".join(exc.path) or "<root>", str(exc)),),
+                span=exc.span,
+            ) from exc
+        loaded = self._load_file(artifact, path, source_type="tool-definition-schema")
+        parsed_artifact = artifact
+        if isinstance(artifact, ToolDefinitionArtifact):
+            parsed_artifact = replace(
+                artifact,
+                provider=artifact.provider or parsed.provider_family.value,
+                tool_names=parsed.tool_names,
+            )
+        return LoadedArtifact(
+            artifact=parsed_artifact,
+            source_type="tool-definition-schema",
+            pinned=loaded.pinned,
+            resolved=loaded.resolved,
+            actual_sha256=loaded.actual_sha256,
+            size_bytes=loaded.size_bytes,
+            metadata=parsed.to_metadata(),
+            source_spans=parsed.source_spans or loaded.source_spans,
             warnings=loaded.warnings,
         )
 

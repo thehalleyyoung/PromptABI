@@ -25,6 +25,7 @@
   ],
   "expected_parser_compatibility_status": "agreement",
   "expected_rule_ids": [
-    "repository-skeleton"
+    "repository-skeleton",
+    "tool-schema-ingestion"
   ]
 }
