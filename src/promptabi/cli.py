@@ -2150,6 +2150,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="truncate the corpus to this many cases (default: full >=10k corpus)",
     )
+    devex = subparsers.add_parser(
+        "devex",
+        help="run the developer-experience + ecosystem surfaces (LSP, SDKs, plugins, profiles; steps 346-360)",
+    )
+    devex.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
     soundness_audit = subparsers.add_parser(
         "soundness-audit",
         help="review each built-in check family's soundness boundary, evidence, and blind spots",
@@ -5221,6 +5231,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             else render_scaled_evaluation_text(report)
         )
         print(output, end="")
+        return 0 if report.passed else 1
+
+    if args.command == "devex":
+        from .devex_ecosystem import (
+            render_devex_ecosystem_json,
+            render_devex_ecosystem_text,
+            run_devex_ecosystem,
+        )
+
+        report = run_devex_ecosystem()
+        output = (
+            render_devex_ecosystem_json(report)
+            if args.format == "json"
+            else render_devex_ecosystem_text(report)
+        )
+        print(output, end="" if output.endswith("\n") else "\n")
         return 0 if report.passed else 1
 
     if args.command == "soundness-audit":

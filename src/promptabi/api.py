@@ -290,6 +290,12 @@ from .live_provider_ci import (
     render_live_provider_ci_text,
     run_live_provider_ci,
 )
+from .devex_ecosystem import (
+    DevexEcosystemReport,
+    render_devex_ecosystem_json,
+    render_devex_ecosystem_text,
+    run_devex_ecosystem,
+)
 from .soundness_audits import (
     SoundnessAuditReport,
     build_soundness_audit_report,
@@ -633,6 +639,25 @@ def live_provider_ci(*, output_format: str | None = None) -> LiveProviderCiRepor
         return render_live_provider_ci_json(report)
     if output_format == "text":
         return render_live_provider_ci_text(report)
+    raise ValueError("output_format must be 'json' or 'text'")
+
+
+def devex_ecosystem(*, output_format: str | None = None) -> DevexEcosystemReport | str:
+    """Run the developer-experience and ecosystem surfaces (roadmap steps
+    346-360): a language server, VS Code extension, four-language SDK readers,
+    rich explanations, ranked autofixes, stable JSON Schemas, a WASM playground,
+    a sub-five-minute quickstart, a third-party plugin executed through the real
+    scheduler, framework integration shims, typed stubs, internationalized
+    messages, a runnable tutorial notebook, org policy profiles, and a coverage
+    badge. Every surface is built from real ``run_verification`` output."""
+
+    report = run_devex_ecosystem()
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_devex_ecosystem_json(report)
+    if output_format == "text":
+        return render_devex_ecosystem_text(report)
     raise ValueError("output_format must be 'json' or 'text'")
 
 

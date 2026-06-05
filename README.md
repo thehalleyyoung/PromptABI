@@ -147,6 +147,9 @@ promptabi scaled-eval --format text
 # Signed, replayable continuous-conformance gate over offline provider fixture
 # packs: drift dashboard, regression bisection, SARIF for code scanning.
 promptabi ci --format sarif --output conformance.sarif
+# Project results onto the full developer ecosystem from one real run: LSP
+# diagnostics, four-language SDK readers, plugins, org policy profiles, badge.
+promptabi devex --format text
 promptabi maintain health --format text
 promptabi graph --config examples/rag-chunking/promptabi.json --all-checks --format mermaid
 promptabi contract format examples/static-contract-language/app.pabi --check

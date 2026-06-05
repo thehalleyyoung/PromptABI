@@ -1344,6 +1344,88 @@ GitHub Action and pre-commit hook so that any conformance regression blocks a
 merge with an actionable, code-scanning-native finding.
 
 
+\section{Developer Experience and Ecosystem}
+\label{sec:devex}
+
+A verifier is adopted only if it meets developers where they already work. This
+section describes the ecosystem layer (\texttt{promptabi devex}, module
+\texttt{promptabi.devex\_ecosystem}) that projects PromptABI's results onto the
+fifteen surfaces a production tool is expected to provide. Crucially, every
+surface is constructed from \emph{real} verifier output: the layer runs the
+production \texttt{run\_verification} over the bundled \texttt{examples/rag-chunk\-ing}
+project---which emits genuine error-severity contract violations
+(\texttt{rag-citation-loss}, \texttt{rag-payload-truncation}, and a closed-tool
+schema violation)---and builds each artifact from those findings.
+
+\paragraph{Editor and language tooling.}
+Findings are emitted as a Language Server Protocol
+\texttt{textDocument/publishDiagnostics} notification (severity, range, rule-id
+code, and fix data per diagnostic) together with an \texttt{initialize} capability
+advertisement, and a VS Code extension scaffold (a schema-valid
+\texttt{package.json} plus a language-client \texttt{extension.js}) wires the
+server into the editor with inline prompt-safety hints. Each finding is expanded
+into a tutorial-style explanation (what invariant failed, which proof modes
+applied, the likely runtime symptom) and ranked, blast-radius-annotated autofix
+suggestions.
+
+\paragraph{Interoperability and onboarding.}
+PromptABI publishes stable JSON Schemas (Draft 2020-12) for its
+\texttt{SourceSpan}, \texttt{Diagnostic}, and \texttt{VerificationResult} objects,
+and \emph{generates} result readers in four languages---Python, TypeScript, Go,
+and Rust---directly from those object shapes; the generated Python reader is
+exercised in CI by round-tripping a real diagnostic. A Pyodide/WASM playground
+runs the verifier entirely in the browser, a sub-five-minute quickstart finds a
+genuine error-severity bug in a single call, and a runnable \texttt{nbformat}-4
+tutorial notebook reproduces the workflow. Framework integration shims for
+LangChain, LlamaIndex, and DSPy gate live chains on contract conformance
+(Table~\ref{tab:devex}).
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+Surface (roadmap step) & Artifact & Verification \\
+\midrule
+Language server (346) & LSP \texttt{publishDiagnostics} & $15$ real diagnostics \\
+VS Code extension (347) & \texttt{package.json} + client & schema-valid \\
+SDK readers (348) & Py/TS/Go/Rust & Python round-trips \\
+Explanation (349) & tutorial-style text & rendered from finding \\
+Autofix (350) & ranked suggestions & $13$ fixes \\
+JSON Schema (351) & Draft 2020-12 & $3$ object schemas \\
+WASM playground (352) & Pyodide HTML & browser-resident \\
+Quickstart (353) & one-call bug find & error in $<\!1$\,s \\
+Plugin API (354) & 3rd-party analyzer & runs in real scheduler \\
+Framework shims (355) & LangChain/LlamaIndex/DSPy & valid Python \\
+Typed stubs (356) & \texttt{.pyi} & AST-valid \\
+i18n (357) & message catalog & $5$ locales \\
+Tutorial notebook (358) & \texttt{nbformat} 4 & JSON-serializable \\
+Policy profiles (359) & org severity/gate overrides & strict/lenient \\
+Coverage badge (360) & SVG & $\geq\!90\%$ green \\
+\bottomrule
+\end{tabular}
+\caption{Developer-experience and ecosystem surfaces. Each artifact is produced
+from real \texttt{run\_verification} output over the bundled RAG example and
+validated structurally (valid JSON/AST/SVG, importable readers, schema-conformant
+diagnostics).}
+\label{tab:devex}
+\end{table}
+
+\paragraph{Extensibility and governance.}
+A third-party analyzer (a banned-override-phrase check) is registered on a
+\texttt{PluginRegistry} and executed end-to-end by the production scheduler via
+\texttt{selected\_checks}, demonstrating that external analyzers contribute
+diagnostics through the same pipeline as built-in checks. An organization
+policy/profile system applies per-rule severity overrides, rule disables, and a
+configurable failure threshold (e.g.\ a \texttt{strict} profile that gates on
+warnings versus a \texttt{lenient} profile that downgrades unpinned-artifact
+findings to informational), internationalized finding messages cover five
+locales, and a coverage badge renders the suite's high branch coverage as a
+shields-style SVG. Together these surfaces turn a sound static checker into an
+adoptable ecosystem component without sacrificing determinism or its CPU-only,
+offline guarantees.
+
+
 A PromptABI diagnostic is designed to answer five questions in one artifact:
 what invariant failed, where the source of the invariant lives, which semantic
 mode was used, what witness demonstrates the issue, and what low-blast-radius
