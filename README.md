@@ -80,7 +80,7 @@ best-effort evidence.
 # Small deterministic smoke check.
 promptabi verify --config examples/minimal/promptabi.json
 
-# HTML report with witnesses, budgets, diff tables, and corpus summaries.
+# HTML report with interactive witness overlays, budgets, diffs, and corpus summaries.
 promptabi verify --config examples/token-budget/promptabi.json --format html --fail-on never > promptabi-report.html
 
 # Scaffold a real stack contract.

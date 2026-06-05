@@ -134,6 +134,11 @@ def render_html(result: VerificationResult) -> str:
             diagnostic_details,
             "</section>",
             _specialized_section(
+                "Interactive witness explorer",
+                "Open each self-contained witness to inspect role-region overlays, token-boundary views, and solver-assignment tables without network assets or JavaScript.",
+                _interactive_witness_explorer(result),
+            ),
+            _specialized_section(
                 "Prompt and parser visualizations",
                 "Rendered prompt, tokenizer, role-boundary, parser, and template observations extracted from witnesses.",
                 _prompt_visualization_cards(result),
@@ -481,6 +486,18 @@ summary { cursor: pointer; font-weight: 700; }
 .bar.kept { background: #2da44e; }
 .bar.unknown { background: repeating-linear-gradient(45deg, #8c959f, #8c959f 4px, #afb8c1 4px, #afb8c1 8px); }
 .empty { background: #fff; border: 1px dashed #afb8c1; border-radius: 12px; padding: 12px; color: #57606a; }
+.explorer-grid { display: grid; gap: 12px; }
+.explorer-card[open] { border-color: #0969da; }
+.explorer-panel { margin-top: 12px; border-top: 1px solid #d8dee4; padding-top: 12px; }
+.role-overlay { white-space: pre-wrap; overflow-wrap: anywhere; background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 8px; padding: 10px; }
+.role-region { border: 2px solid #0969da; background: #ddf4ff; border-radius: 5px; padding: 0 2px; }
+.role-region.assistant { border-color: #8250df; background: #fbefff; }
+.role-region.system { border-color: #bf8700; background: #fff8c5; }
+.role-region.user { border-color: #1a7f37; background: #dafbe1; }
+.token-boundaries { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.token-boundary { border: 1px solid #8c959f; border-radius: 8px; background: #fff; padding: 4px 7px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+.token-boundary::before { content: "|"; color: #cf222e; margin-right: 4px; font-weight: 800; }
+.assignment-table th:first-child { width: 35%; }
 """.strip()
 
 
@@ -646,6 +663,157 @@ def _witness_details_html(witness) -> str:
         fixes = "".join(f"<li>{_escape(fix)}</li>" for fix in witness.minimal_fixes)
         sections.append(f"<h3>Minimal fixes</h3><ul>{fixes}</ul>")
     return "".join(sections)
+
+
+def _interactive_witness_explorer(result: VerificationResult) -> str:
+    cards = []
+    for index, diagnostic in enumerate(result.diagnostics, start=1):
+        if diagnostic.witness is None:
+            continue
+        card = _witness_explorer_card(diagnostic, index)
+        if card:
+            cards.append(card)
+    return f'<div class="explorer-grid">{"".join(cards)}</div>' if cards else ""
+
+
+def _witness_explorer_card(diagnostic, index: int) -> str:
+    witness = diagnostic.witness
+    panels = "".join(
+        panel
+        for panel in (
+            _role_region_overlay_panel(witness),
+            _token_boundary_panel(witness),
+            _solver_assignment_panel(witness),
+        )
+        if panel
+    )
+    if not panels:
+        return ""
+    return (
+        '<details class="explorer-card">'
+        f"<summary>#{index} {_severity_badge(diagnostic.severity.value)} <code>{_escape(diagnostic.rule_id)}</code> "
+        f"{_escape(diagnostic.message)}</summary>"
+        f"<p class=\"muted\">{_escape(witness.summary)}</p>"
+        f"{panels}"
+        "</details>"
+    )
+
+
+def _role_region_overlay_panel(witness) -> str:
+    if not witness.rendered_strings and not witness.role_regions:
+        return ""
+    overlays = []
+    regions = list(witness.role_regions)
+    for path_index, rendered in enumerate(witness.rendered_strings):
+        matching_regions = [
+            region for region in regions if _region_int(region, "path_index", default=path_index) == path_index
+        ]
+        overlays.append(
+            "<details open>"
+            f"<summary>Rendered path {path_index} role-region overlay</summary>"
+            f"{_render_role_overlay(rendered, matching_regions)}"
+            "</details>"
+        )
+    if regions:
+        overlays.append("<h3>Role-region table</h3>" + _role_region_table(regions))
+    return '<div class="explorer-panel"><h3>Role-region overlays</h3>' + "".join(overlays) + "</div>"
+
+
+def _render_role_overlay(rendered: str, regions: list[dict[str, Any]]) -> str:
+    spans: list[tuple[int, int, dict[str, Any]]] = []
+    last_end = 0
+    for region in sorted(regions, key=lambda item: (_region_int(item, "start_offset"), _region_int(item, "end_offset"))):
+        start = _region_int(region, "start_offset")
+        end = _region_int(region, "end_offset")
+        if start < last_end or start < 0 or end <= start or end > len(rendered):
+            continue
+        spans.append((start, end, region))
+        last_end = end
+    if not spans:
+        return f'<pre class="role-overlay">{_escape(rendered)}</pre>'
+    parts: list[str] = []
+    cursor = 0
+    for start, end, region in spans:
+        if start > cursor:
+            parts.append(_escape(rendered[cursor:start]))
+        role = str(region.get("role", "unknown"))
+        label = (
+            f"role={role}; source={region.get('role_source', 'unknown')}; "
+            f"region={region.get('region_index', '?')}; chars={start}:{end}"
+        )
+        parts.append(
+            f'<span class="role-region {_css_identifier(role)}" title="{_escape(label)}">'
+            f"{_escape(rendered[start:end])}</span>"
+        )
+        cursor = end
+    if cursor < len(rendered):
+        parts.append(_escape(rendered[cursor:]))
+    return f'<pre class="role-overlay">{"".join(parts)}</pre>'
+
+
+def _role_region_table(regions: list[dict[str, Any]]) -> str:
+    rows = []
+    for region in sorted(regions, key=lambda item: (_region_int(item, "path_index"), _region_int(item, "region_index"))):
+        rows.append(
+            "<tr>"
+            f"<td>{_escape(region.get('path_index', '?'))}</td>"
+            f"<td>{_escape(region.get('region_index', '?'))}</td>"
+            f"<td>{_escape(region.get('role', 'unknown'))}</td>"
+            f"<td>{_escape(region.get('role_source', 'unknown'))}</td>"
+            f"<td>{_escape(region.get('start_offset', '?'))}:{_escape(region.get('end_offset', '?'))}</td>"
+            f"<td>{_render_value(region.get('content_expressions', []))}</td>"
+            "</tr>"
+        )
+    return (
+        "<table><thead><tr><th>Path</th><th>Region</th><th>Role</th><th>Source</th><th>Chars</th><th>Inputs</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
+def _token_boundary_panel(witness) -> str:
+    if not witness.token_ids:
+        return ""
+    tokens = "".join(
+        f'<span class="token-boundary" title="token index {index}">{_escape(token_id)}</span>'
+        for index, token_id in enumerate(witness.token_ids)
+    )
+    return (
+        '<div class="explorer-panel">'
+        "<h3>Token-boundary view</h3>"
+        f'<div class="token-boundaries">{tokens}</div>'
+        "</div>"
+    )
+
+
+def _solver_assignment_panel(witness) -> str:
+    if not witness.solver_assignments:
+        return ""
+    tables = []
+    for index, assignment in enumerate(witness.solver_assignments, start=1):
+        rows = "".join(
+            "<tr>"
+            f"<th>{_escape(key)}</th>"
+            f"<td>{_render_value(assignment[key])}</td>"
+            "</tr>"
+            for key in sorted(assignment, key=str)
+        )
+        tables.append(
+            "<details open>"
+            f"<summary>Solver assignment {index}</summary>"
+            f'<table class="assignment-table">{rows}</table>'
+            "</details>"
+        )
+    return '<div class="explorer-panel"><h3>Solver-assignment tables</h3>' + "".join(tables) + "</div>"
+
+
+def _region_int(region: dict[str, Any], key: str, *, default: int = 0) -> int:
+    value = region.get(key, default)
+    return value if isinstance(value, int) else default
+
+
+def _css_identifier(value: str) -> str:
+    identifier = "".join(character.lower() if character.isalnum() else "-" for character in value)
+    return identifier.strip("-") or "unknown"
 
 
 def _compact_text(value: str, *, limit: int = 240) -> str:

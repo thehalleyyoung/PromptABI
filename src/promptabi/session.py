@@ -2431,6 +2431,10 @@ def _static_contract_finding_diagnostic(report: StaticContractReport, finding: S
     if not steps:
         steps.append(WitnessStep(action="inspect artifacts", output="no finite cross-artifact obligation"))
 
+    solver_assignments = ()
+    if finding.result is not None and finding.result.assignment:
+        solver_assignments = (finding.result.assignment,)
+
     return Diagnostic(
         rule_id=rule_id,
         severity=severity,
@@ -2438,7 +2442,11 @@ def _static_contract_finding_diagnostic(report: StaticContractReport, finding: S
         span=finding.source_span,
         check_modes=CHECK_MODE_CATALOG[rule_id],
         suggestions=(finding.suggestion,),
-        witness=WitnessTrace(summary=summary, steps=tuple(steps)),
+        witness=WitnessTrace(
+            summary=summary,
+            steps=tuple(steps),
+            solver_assignments=solver_assignments,
+        ),
         properties=_static_contract_properties(finding),
     )
 

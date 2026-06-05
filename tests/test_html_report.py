@@ -99,6 +99,61 @@ def test_static_contract_html_report_renders_smt_witnesses(tmp_path: Path, capsy
     assert "unsat core" in html
 
 
+def test_role_boundary_html_report_has_interactive_witness_explorer(capsys) -> None:
+    exit_code = main(["verify", "--config", "examples/role-boundary/unsafe.promptabi.json", "--format", "html"])
+
+    html = capsys.readouterr().out
+    assert exit_code == 1
+    assert "Interactive witness explorer" in html
+    assert "Role-region overlays" in html
+    assert "Token-boundary view" in html
+    assert 'class="token-boundary"' in html
+    assert "role-boundary-nonforgeability" in html
+    assert "<script" not in html
+
+
+def test_static_contract_html_report_renders_solver_assignment_table(tmp_path: Path, capsys) -> None:
+    segments = tmp_path / "segments.json"
+    budget = tmp_path / "budget.json"
+    segments.write_text(
+        json.dumps({"segments": [{"name": "system", "role": "system", "required": True, "token_count": 24}]}),
+        encoding="utf-8",
+    )
+    budget.write_text("{}", encoding="utf-8")
+    config = tmp_path / "promptabi.json"
+    config.write_text(
+        json.dumps(
+            {
+                "name": "static-contract-assignment-html",
+                "checks": ["static-contracts"],
+                "artifacts": {
+                    "segments": {
+                        "kind": "prompt-segment",
+                        "path": segments.name,
+                        "segments": [{"name": "system", "role": "system", "required": True, "token_count": 24}],
+                    },
+                    "budget": {
+                        "kind": "framework-truncation-config",
+                        "path": budget.name,
+                        "framework": "vllm",
+                        "strategy": "left",
+                        "max_context_tokens": 16,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["verify", "--config", str(config), "--format", "html"])
+
+    html = capsys.readouterr().out
+    assert exit_code == 1
+    assert "Solver-assignment tables" in html
+    assert "required_prompt_tokens" in html
+    assert "input_budget_tokens" in html
+
+
 def test_diff_html_report_renders_artifact_diff_section(tmp_path: Path, capsys) -> None:
     baseline = tmp_path / "baseline.promptabi.json"
     current = tmp_path / "current.promptabi.json"
