@@ -26,6 +26,14 @@ from promptabi.loaders import ArtifactLoader
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONCEPT_DOCS = {
+    "formal-methods.md": (
+        "DeterministicFiniteAutomaton",
+        "FiniteStateTransducer",
+        "FiniteContractProblem",
+        "promptabi solver replay",
+        "promptabi soundness-audit",
+        "abstention",
+    ),
     "concepts/formalism.md": (
         "DeterministicFiniteAutomaton",
         "FiniteStateTransducer",
@@ -78,6 +86,7 @@ def test_concept_docs_are_linked_from_mkdocs_nav_and_check_families() -> None:
             assert phrase.lower() in doc_text.lower()
 
     for link in (
+        "formal-methods.md",
         "concepts/formalism.md",
         "concepts/static-contracts.md",
         "concepts/stop-reachability.md",

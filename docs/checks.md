@@ -65,6 +65,7 @@ must-survive guarantee. The same structured `token_budget_visualization` payload
 is available in JSON output and SARIF properties.
 
 For the shared machinery behind these families, read
+[Formal methods decision guide](formal-methods.md),
 [Formalism](concepts/formalism.md),
 [Proof sketches](concepts/proof-sketches.md),
 [Tokenizer/template composition](concepts/tokenizer-template-composition.md),

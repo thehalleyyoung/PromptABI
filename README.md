@@ -74,6 +74,8 @@ diagnostic states its guarantee mode--`sound`, `complete`, `bounded`,
 `z3-backed-smt`, `heuristic`, or `abstaining`--and formal counterexamples can be
 shrunk to minimal strings, token paths, and solver assignments, so CI can
 distinguish proof from best-effort evidence.
+The [formal methods guide](docs/formal-methods.md) explains exactly when these
+claims use automata, Z3, composed products, or principled abstention.
 
 ## Daily workflows
 

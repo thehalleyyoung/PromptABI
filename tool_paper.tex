@@ -192,10 +192,10 @@ and local JSONL trend deltas across configs without exposing prompt contents, a 
 model that documents structural prompt-interface risks, non-goals,
 secret-handling behavior, artifact privacy, solver-input privacy, provider
 fixture safety, suppressions, and a responsible disclosure workflow,
-deep conceptual documentation for the transducer formalism,
-tokenizer/template composition, Z3/SMT-backed finite contracts,
-role-boundary non-forgeability, stop reachability, grammar emptiness, and
-must-survive budget proofs, with tests that tie the documented examples and
+deep conceptual documentation for the formal-methods decision boundary,
+transducer formalism, tokenizer/template composition, Z3/SMT-backed finite
+contracts, role-boundary non-forgeability, stop reachability, grammar emptiness,
+and must-survive budget proofs, with tests that tie the documented examples and
 API names back to executable code,
 stack integration guides for LangChain RAG, LlamaIndex agents, vLLM
 OpenAI-compatible servers, llama.cpp/Ollama local servers, Hugging Face
@@ -954,6 +954,12 @@ ensuring UNKNOWN results carry no counterexample or proof object. These
 specifications are deliberately slower and simpler than the optimized algorithms;
 their purpose is to make the paper's central claims executable against real
 objects produced by the repository.
+
+The documentation now exposes the same decision boundary used by the code:
+automata for finite language reachability, transducers for replayable interface
+relations, Z3 or finite enumeration for bounded symbolic contracts, composed
+products for cross-artifact checks, and explicit abstention when no finite,
+privacy-preserving model can honestly support the claim.
 
 The automata layer now optimizes the exact same properties rather than adding a
 separate approximate engine. It can find intersection witnesses lazily without

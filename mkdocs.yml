@@ -12,6 +12,7 @@ nav:
   - Architecture: architecture.md
   - Security model: security-model.md
   - Check families: checks.md
+  - Formal methods guide: formal-methods.md
   - Concepts:
       - Artifact model: concepts/artifact-model.md
       - Formalism: concepts/formalism.md
