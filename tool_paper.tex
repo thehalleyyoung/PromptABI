@@ -266,8 +266,10 @@ templates, tokenizers, special-token maps, stop policies, tools, provider
 configs, truncation configs, prompt segments, and training/fine-tuning manifests,
 proving or refuting prompt-budget survival, stop/control-token exclusion,
 role-region non-forgeability, tool-schema required-parameter satisfiability,
-tool/provider compatibility, and supervised target-role alignment with concrete
-models, explicit proof classifications, or minimized unsat cores,
+tool/provider compatibility, supervised target-role alignment, and observed
+supervised-span containment across rendered role regions, tokenized bounds,
+preserved packing boundaries, and loss-mask selection with concrete models,
+explicit proof classifications, or minimized unsat cores,
 a \texttt{promptabi solver replay} maintainer path that verifies such reduced
 solver obligations from portable JSON and treats solver backends, query hashes,
 and Z3 versions as provenance rather than brittle equality requirements, a
@@ -466,8 +468,10 @@ required-prompt-token budget survival, stop strings colliding with special or
 added control tokens, controlled prompt regions containing role/control boundary
 markers, tool schemas requiring parameters absent from their declared properties,
 tool-provider family mismatches, and training target roles outside the serving
-chat-template role universe, and lets maintainers replay those obligations from
-fixture JSON while validating stored SAT witnesses directly against the
+chat-template role universe, plus supervised training spans that no longer align
+with the observed rendered role region, token bounds, packing boundary, or loss
+mask, and lets maintainers replay those obligations from fixture JSON while
+validating stored SAT witnesses directly against the
 deserialized formula,
 returns stable policy-controlled process exit codes, writes and enforces
 deterministic verification lockfiles that fail closed on artifact, config,
@@ -639,7 +643,8 @@ check rows from scheduler dependencies and per-rule diagnostic modes, so, for
 example, stop-tokenizer analysis is shown as a mixture of sound unreachable-stop
 results, heuristic collision evidence, and abstentions, while static contracts
 are shown as bounded Z3-backed SMT over all artifact kinds, including finite
-supervised target-role alignment for training manifests.
+supervised target-role alignment and rendered/tokenized/loss-masked span
+containment for training manifests.
 The central proof obligations also have an executable specification layer:
 automata witnesses are replayed transition-by-transition, product automata are
 checked by bounded language equivalence rather than by trusting product state
@@ -1758,9 +1763,9 @@ then replays each entry through the same public analyzers used by the CLI:
 role-boundary non-forgeability, stop-overreachability, tokenizer differential
 comparison, provider migration diagnostics, structured-schema parser
 compatibility, RAG chunking verification, and finite static contracts with the
-solver-independent enumeration backend for training target-role alignment. The
-suite therefore measures whether PromptABI still detects a diverse labeled bug
-set, not merely whether a fixture parses.
+solver-independent enumeration backend for training target-role and supervised
+span-region alignment. The suite therefore measures whether PromptABI still
+detects a diverse labeled bug set, not merely whether a fixture parses.
 
 The corpus should avoid secrets and network requirements. Provider fixtures
 should be recorded request and response shapes, not live API calls. Model

@@ -109,6 +109,7 @@ from .artifacts import (
     TrainingDatasetKind,
     TrainingDatasetSpec,
     TrainingManifestArtifact,
+    TrainingSpanContract,
     TruncationStrategy,
 )
 from .budgets import (
@@ -928,6 +929,7 @@ __all__ = [
     "TrainingDatasetKind",
     "TrainingDatasetSpec",
     "TrainingManifestArtifact",
+    "TrainingSpanContract",
     "TransducerLabel",
     "TransducerTransition",
     "TransducerWitness",

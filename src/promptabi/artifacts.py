@@ -356,6 +356,53 @@ class RoleLabel:
 
 
 @dataclass(frozen=True, slots=True)
+class TrainingSpanContract:
+    """Observed finite span facts from a rendered/tokenized supervised example."""
+
+    span_id: str
+    target_role: str
+    rendered_region_role: str
+    start_token: int
+    end_token: int
+    region_start_token: int
+    region_end_token: int
+    supervised_target: bool = True
+    loss_masked: bool = True
+    packed_example_id: str | None = None
+    crosses_packing_boundary: bool = False
+
+    def __post_init__(self) -> None:
+        _require_non_empty("training span id", self.span_id)
+        _require_non_empty("training span target_role", self.target_role)
+        _require_non_empty("training span rendered_region_role", self.rendered_region_role)
+        for field_name in ("start_token", "end_token", "region_start_token", "region_end_token"):
+            _optional_non_negative(f"training span {field_name}", getattr(self, field_name))
+        if self.end_token < self.start_token:
+            raise ValueError("training span end_token must be greater than or equal to start_token")
+        if self.region_end_token < self.region_start_token:
+            raise ValueError("training span region_end_token must be greater than or equal to region_start_token")
+        _optional_non_empty("training span packed_example_id", self.packed_example_id)
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {
+            "span_id": self.span_id,
+            "target_role": self.target_role,
+            "rendered_region_role": self.rendered_region_role,
+            "start_token": self.start_token,
+            "end_token": self.end_token,
+            "region_start_token": self.region_start_token,
+            "region_end_token": self.region_end_token,
+            "supervised_target": self.supervised_target,
+            "loss_masked": self.loss_masked,
+        }
+        if self.packed_example_id is not None:
+            data["packed_example_id"] = self.packed_example_id
+        if self.crosses_packing_boundary:
+            data["crosses_packing_boundary"] = self.crosses_packing_boundary
+        return data
+
+
+@dataclass(frozen=True, slots=True)
 class LossMaskPolicy:
     """Finite loss-mask contract for supervised target construction."""
 
@@ -760,6 +807,7 @@ class TrainingManifestArtifact(BaseArtifact):
     datasets: tuple[TrainingDatasetSpec, ...] = ()
     system_message_policy: SystemMessagePolicy | None = None
     role_labels: tuple[RoleLabel, ...] = ()
+    supervised_spans: tuple[TrainingSpanContract, ...] = ()
     loss_mask_policy: LossMaskPolicy | None = None
     packing_window: PackingWindow | None = None
     chat_template_version: ChatTemplateVersion | None = None
@@ -775,6 +823,10 @@ class TrainingManifestArtifact(BaseArtifact):
         object.__setattr__(self, "target_roles", _unique_strings(self.target_roles, field_name="training manifest target_roles"))
         object.__setattr__(self, "datasets", tuple(self.datasets))
         object.__setattr__(self, "role_labels", tuple(sorted(self.role_labels, key=lambda label: (label.source_role, label.canonical_role))))
+        supervised_spans = tuple(sorted(self.supervised_spans, key=lambda span: span.span_id))
+        if len({span.span_id for span in supervised_spans}) != len(supervised_spans):
+            raise ValueError("training manifest supervised span IDs must be unique")
+        object.__setattr__(self, "supervised_spans", supervised_spans)
         if not self.target_roles and self.loss_mask_policy is not None and self.loss_mask_policy.target_roles:
             object.__setattr__(self, "target_roles", self.loss_mask_policy.target_roles)
         if not self.message_roles and self.role_labels:
@@ -804,6 +856,8 @@ class TrainingManifestArtifact(BaseArtifact):
             data["system_message_policy"] = self.system_message_policy.to_dict()
         if self.role_labels:
             data["role_labels"] = [label.to_dict() for label in self.role_labels]
+        if self.supervised_spans:
+            data["supervised_spans"] = [span.to_dict() for span in self.supervised_spans]
         if self.loss_mask_policy is not None:
             data["loss_mask_policy"] = self.loss_mask_policy.to_dict()
         if self.packing_window is not None:
@@ -980,6 +1034,7 @@ def artifact_from_config(
             datasets=_training_datasets(spec),
             system_message_policy=_system_message_policy(spec),
             role_labels=_role_labels(spec),
+            supervised_spans=_training_span_contracts(spec),
             loss_mask_policy=_loss_mask_policy(spec),
             packing_window=_packing_window(spec),
             chat_template_version=_chat_template_version(spec),
@@ -1266,6 +1321,32 @@ def _role_labels(spec: dict[str, Any]) -> tuple[RoleLabel, ...]:
             )
         )
     return tuple(labels)
+
+
+def _training_span_contracts(spec: dict[str, Any]) -> tuple[TrainingSpanContract, ...]:
+    raw_spans = spec.get("supervised_spans", spec.get("target_spans", []))
+    if not isinstance(raw_spans, list):
+        raise ValueError("artifact field 'supervised_spans' must be a list")
+    spans: list[TrainingSpanContract] = []
+    for item in raw_spans:
+        if not isinstance(item, dict):
+            raise ValueError("supervised span entries must be objects")
+        spans.append(
+            TrainingSpanContract(
+                span_id=_str(item, "span_id", default=_str(item, "name") if "name" in item else None),
+                target_role=_str(item, "target_role"),
+                rendered_region_role=_str(item, "rendered_region_role"),
+                start_token=_int(item, "start_token", default=0),
+                end_token=_int(item, "end_token", default=0),
+                region_start_token=_int(item, "region_start_token", default=0),
+                region_end_token=_int(item, "region_end_token", default=0),
+                supervised_target=_bool(item, "supervised_target", default=True),
+                loss_masked=_bool(item, "loss_masked", default=True),
+                packed_example_id=_optional_str(item, "packed_example_id"),
+                crosses_packing_boundary=_bool(item, "crosses_packing_boundary", default=False),
+            )
+        )
+    return tuple(spans)
 
 
 def _loss_mask_policy(spec: dict[str, Any]) -> LossMaskPolicy | None:

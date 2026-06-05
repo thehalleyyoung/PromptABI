@@ -8,6 +8,8 @@ from promptabi.artifacts import (
     ArtifactLocation,
     ChatTemplateArtifact,
     FrameworkTruncationConfigArtifact,
+    LossMaskPolicy,
+    PackingWindow,
     PromptSegment,
     PromptSegmentArtifact,
     SpecialToken,
@@ -15,6 +17,7 @@ from promptabi.artifacts import (
     StopPolicyArtifact,
     ToolDefinitionArtifact,
     TrainingManifestArtifact,
+    TrainingSpanContract,
     TruncationStrategy,
 )
 from promptabi.cli import main
@@ -178,6 +181,102 @@ def test_static_contracts_extract_counterexamples_for_real_conflicts() -> None:
     }
     assert violations["stop-control-token-collision"].result.assignment["stop_sequence"] == "</s>"
     assert violations["training-target-role-alignment"].result.assignment == {"target_role": "critic"}
+
+
+def test_static_contracts_prove_supervised_spans_stay_inside_rendered_tokenized_masked_regions() -> None:
+    location = ArtifactLocation(uri="memory://static-contract")
+    loaded = (
+        _loaded(
+            TrainingManifestArtifact(
+                kind=ArtifactKind.TRAINING_MANIFEST,
+                name="train",
+                location=location,
+                target_roles=("assistant",),
+                loss_mask_policy=LossMaskPolicy(target_roles=("assistant",), ignored_roles=("system", "user")),
+                packing_window=PackingWindow(strategy="sample-packing", max_tokens=128, preserve_example_boundaries=True),
+                supervised_spans=(
+                    TrainingSpanContract(
+                        span_id="example-1.assistant-0",
+                        target_role="assistant",
+                        rendered_region_role="assistant",
+                        start_token=12,
+                        end_token=24,
+                        region_start_token=10,
+                        region_end_token=26,
+                        loss_masked=True,
+                        packed_example_id="example-1",
+                    ),
+                ),
+            )
+        ),
+        _loaded(
+            ChatTemplateArtifact(
+                kind=ArtifactKind.CHAT_TEMPLATE,
+                name="template",
+                location=location,
+                roles=("system", "user", "assistant"),
+            )
+        ),
+    )
+
+    report = analyze_static_contracts(VerificationConfig(name="static"), loaded, prefer_z3=False)
+
+    finding = next(item for item in report.findings if item.name == "training-supervised-span-region-alignment")
+    assert finding.severity == "info"
+    assert finding.result is not None
+    assert finding.result.unsat_core == ("supervised-span-violates-render-token-pack-mask-contract",)
+    assert not report.violations
+
+
+def test_static_contracts_find_supervised_span_render_token_pack_and_loss_mask_defects() -> None:
+    location = ArtifactLocation(uri="memory://static-contract")
+    loaded = (
+        _loaded(
+            TrainingManifestArtifact(
+                kind=ArtifactKind.TRAINING_MANIFEST,
+                name="train",
+                location=location,
+                target_roles=("assistant",),
+                loss_mask_policy=LossMaskPolicy(target_roles=("assistant",), ignored_roles=("user",)),
+                packing_window=PackingWindow(strategy="sample-packing", max_tokens=64, preserve_example_boundaries=True),
+                supervised_spans=(
+                    TrainingSpanContract(
+                        span_id="example-2.user-leak",
+                        target_role="assistant",
+                        rendered_region_role="user",
+                        start_token=4,
+                        end_token=12,
+                        region_start_token=5,
+                        region_end_token=10,
+                        loss_masked=False,
+                        packed_example_id="example-2",
+                        crosses_packing_boundary=True,
+                    ),
+                ),
+            )
+        ),
+        _loaded(
+            ChatTemplateArtifact(
+                kind=ArtifactKind.CHAT_TEMPLATE,
+                name="template",
+                location=location,
+                roles=("system", "user", "assistant"),
+            )
+        ),
+    )
+
+    report = analyze_static_contracts(VerificationConfig(name="static"), loaded, prefer_z3=False)
+
+    violation = {finding.name: finding for finding in report.violations}["training-supervised-span-region-alignment"]
+    assert violation.result is not None
+    assert violation.result.assignment == {"span_id": "example-2.user-leak"}
+    evidence = dict(violation.evidence)
+    assert evidence["rendered_region_role"] == "user"
+    assert evidence["token_span"] == "4:12"
+    assert "target-span-outside-intended-rendered-role" in evidence["reasons"]
+    assert "tokenized-span-outside-rendered-region-bounds" in evidence["reasons"]
+    assert "supervised-target-not-selected-by-loss-mask" in evidence["reasons"]
+    assert "packed-span-crosses-example-boundary" in evidence["reasons"]
 
 
 def test_static_contracts_encode_role_region_nonforgeability() -> None:

@@ -106,6 +106,7 @@ def analyze_static_contracts(
     findings.extend(_tool_provider_obligation(tools, loaded_artifacts, prefer_z3=prefer_z3))
     findings.extend(_tool_schema_precondition_obligation(loaded_artifacts, prefer_z3=prefer_z3))
     findings.extend(_training_target_obligation(training_manifests, templates, prefer_z3=prefer_z3))
+    findings.extend(_training_span_region_obligation(training_manifests, templates, prefer_z3=prefer_z3))
 
     if not findings:
         findings.append(
@@ -567,6 +568,118 @@ def _training_target_obligation(
             artifacts=tuple(artifact.name for artifact in (*manifests, *templates)),
         ),
     )
+
+
+def _training_span_region_obligation(
+    manifests: tuple[TrainingManifestArtifact, ...],
+    templates: tuple[ChatTemplateArtifact, ...],
+    *,
+    prefer_z3: bool,
+) -> tuple[StaticContractFinding, ...]:
+    supervised_spans = tuple(
+        (manifest, span)
+        for manifest in manifests
+        for span in manifest.supervised_spans
+        if span.supervised_target
+    )
+    if not supervised_spans:
+        return ()
+
+    template_roles = tuple(sorted({role for template in templates for role in template.roles}))
+    bad_reasons: dict[str, tuple[str, ...]] = {}
+    for manifest, span in supervised_spans:
+        intended_roles = _training_intended_target_roles(manifest)
+        ignored_roles = set(manifest.loss_mask_policy.ignored_roles) if manifest.loss_mask_policy is not None else set()
+        reasons: list[str] = []
+        if span.target_role not in intended_roles:
+            reasons.append("target-role-not-supervised")
+        if span.target_role in ignored_roles:
+            reasons.append("target-role-loss-ignored")
+        if template_roles and span.rendered_region_role not in template_roles:
+            reasons.append("rendered-region-role-not-in-template")
+        if span.rendered_region_role != span.target_role:
+            reasons.append("target-span-outside-intended-rendered-role")
+        if not (span.region_start_token <= span.start_token <= span.end_token <= span.region_end_token):
+            reasons.append("tokenized-span-outside-rendered-region-bounds")
+        if not span.loss_masked:
+            reasons.append("supervised-target-not-selected-by-loss-mask")
+        if (
+            manifest.packing_window is not None
+            and manifest.packing_window.preserve_example_boundaries
+            and span.crosses_packing_boundary
+        ):
+            reasons.append("packed-span-crosses-example-boundary")
+        if reasons:
+            bad_reasons[span.span_id] = tuple(reasons)
+
+    span_ids = tuple(span.span_id for _manifest, span in supervised_spans)
+    problem = FiniteContractProblem(
+        name="training-supervised-span-region-alignment",
+        variables=(EnumDomain("span_id", span_ids),),
+        constraints=(
+            NamedConstraint("supervised-span-violates-render-token-pack-mask-contract", InSet(Var("span_id"), bad_reasons)),
+        ),
+    )
+    result = problem.solve(prefer_z3=prefer_z3)
+    severity = "error" if result.sat else "info"
+    selected_id = str(result.assignment.get("span_id")) if result.assignment else None
+    selected_manifest = None
+    selected_span = None
+    if selected_id is not None:
+        for manifest, span in supervised_spans:
+            if span.span_id == selected_id:
+                selected_manifest = manifest
+                selected_span = span
+                break
+    evidence: list[tuple[str, str]] = [
+        ("span_count", str(len(supervised_spans))),
+        ("intended_target_roles", ", ".join(sorted({role for manifest in manifests for role in _training_intended_target_roles(manifest)}))),
+        ("template_roles", ", ".join(template_roles)),
+        ("render", "compare target_role with observed rendered_region_role"),
+        ("tokenize", "require target token bounds to be inside rendered region bounds"),
+        ("pack", "reject supervised spans crossing preserved example boundaries"),
+        ("loss_mask", "require supervised spans to be selected by the loss mask"),
+    ]
+    if selected_manifest is not None and selected_span is not None:
+        evidence.extend(
+            (
+                ("span_id", selected_span.span_id),
+                ("manifest", selected_manifest.name),
+                ("target_role", selected_span.target_role),
+                ("rendered_region_role", selected_span.rendered_region_role),
+                ("token_span", f"{selected_span.start_token}:{selected_span.end_token}"),
+                ("rendered_region_bounds", f"{selected_span.region_start_token}:{selected_span.region_end_token}"),
+                ("loss_masked", str(selected_span.loss_masked)),
+                ("reasons", ", ".join(bad_reasons[selected_span.span_id])),
+            )
+        )
+    return (
+        StaticContractFinding(
+            name=problem.name,
+            status=result.status,
+            result=result,
+            problem=problem,
+            severity=severity,
+            message=(
+                "a supervised target span can fall outside its intended rendered assistant region, token bounds, packing boundary, or loss mask"
+                if result.sat
+                else "all declared supervised target spans stay inside their intended rendered role regions, token bounds, packing boundaries, and loss masks"
+            ),
+            suggestion=(
+                "Regenerate the dataset span manifest from the same renderer, tokenizer, packer, and loss-mask builder used for fine-tuning."
+                if result.sat
+                else "Keep supervised span manifests emitted by the training data builder and checked before fine-tuning."
+            ),
+            evidence=tuple(evidence),
+            artifacts=tuple(manifest.name for manifest in manifests),
+        ),
+    )
+
+
+def _training_intended_target_roles(manifest: TrainingManifestArtifact) -> tuple[str, ...]:
+    if manifest.loss_mask_policy is not None and manifest.loss_mask_policy.target_roles:
+        return manifest.loss_mask_policy.target_roles
+    return manifest.target_roles
 
 
 def _role_boundary_markers(

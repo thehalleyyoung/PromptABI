@@ -75,6 +75,20 @@ def _write_manifest(path: Path) -> None:
                     "ignored_roles": ["system", "user"],
                     "label_pad_token_id": -100,
                 },
+                "supervised_spans": [
+                    {
+                        "span_id": "train-0001.assistant-0",
+                        "target_role": "assistant",
+                        "rendered_region_role": "assistant",
+                        "start_token": 18,
+                        "end_token": 36,
+                        "region_start_token": 16,
+                        "region_end_token": 38,
+                        "supervised_target": True,
+                        "loss_masked": True,
+                        "packed_example_id": "train-0001",
+                    }
+                ],
                 "packing_window": {
                     "strategy": "sample-packing",
                     "max_tokens": 4096,
@@ -120,6 +134,17 @@ def test_training_manifest_config_model_covers_training_pipeline_contracts(tmp_p
                 {"source_role": "human", "canonical_role": "user", "trainable": False},
             ],
             "loss_mask_policy": {"strategy": "assistant-only", "target_roles": ["assistant"]},
+            "supervised_spans": [
+                {
+                    "span_id": "target",
+                    "target_role": "assistant",
+                    "rendered_region_role": "assistant",
+                    "start_token": 2,
+                    "end_token": 4,
+                    "region_start_token": 1,
+                    "region_end_token": 5,
+                }
+            ],
             "packing_window": {"strategy": "sample-packing", "max_tokens": 2048},
             "chat_template_version": {"name": "chatml", "sha256": "a" * 64},
         },
@@ -132,6 +157,8 @@ def test_training_manifest_config_model_covers_training_pipeline_contracts(tmp_p
     assert artifact.target_roles == ("assistant",)
     assert artifact.loss_mask_policy is not None
     assert artifact.loss_mask_policy.strategy is LossMaskStrategy.ASSISTANT_ONLY
+    assert artifact.supervised_spans[0].span_id == "target"
+    assert artifact.supervised_spans[0].rendered_region_role == "assistant"
     assert artifact.packing_window is not None
     assert artifact.packing_window.strategy is PackingStrategy.SAMPLE_PACKING
     assert artifact.chat_template_version == ChatTemplateVersion(name="chatml", sha256="a" * 64)
@@ -154,6 +181,8 @@ def test_loader_parses_training_manifest_json_and_reports_metadata(tmp_path: Pat
     assert isinstance(loaded.artifact, TrainingManifestArtifact)
     assert loaded.artifact.message_roles == ("assistant", "system", "user")
     assert loaded.artifact.target_roles == ("assistant",)
+    assert loaded.artifact.supervised_spans[0].span_id == "train-0001.assistant-0"
+    assert loaded.artifact.supervised_spans[0].loss_masked is True
     assert loaded.artifact.datasets[1].kind is TrainingDatasetKind.PREFERENCE
     assert loaded.artifact.packing_window is not None
     assert loaded.artifact.packing_window.max_tokens == 4096
@@ -162,6 +191,7 @@ def test_loader_parses_training_manifest_json_and_reports_metadata(tmp_path: Pat
     assert metadata["supervised_dataset_count"] == 1
     assert metadata["preference_dataset_count"] == 1
     assert metadata["example_count"] == 192
+    assert metadata["supervised_span_count"] == 1
     assert metadata["loss_mask_strategy"] == "assistant-only"
     assert metadata["packing_max_tokens"] == 4096
     assert metadata["chat_template_pinned"] is True
@@ -191,4 +221,3 @@ def test_loader_rejects_malformed_training_manifests_with_guidance(tmp_path: Pat
 
     assert exc_info.value.rule_id == "artifact-load-failed"
     assert "supervised/preference datasets" in exc_info.value.suggestion
-

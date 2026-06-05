@@ -34,6 +34,7 @@ artifacts are present:
 | Tool/provider compatibility | tool definitions + provider configs | required provider capability is absent or incompatible |
 | Tool-schema preconditions | tool schemas/provider fixtures | required parameters cannot be satisfied by the declared calling contract |
 | Training target alignment | training manifest + chat template | a supervised target role is not renderable by the template |
+| Training supervised-span alignment | training manifest + chat template | an observed supervised span is outside its rendered role region, token bounds, preserved packing boundary, or loss mask |
 
 Each obligation produces a `StaticContractFinding` with severity, evidence,
 affected artifacts, and the underlying `SolverResult` when one exists.

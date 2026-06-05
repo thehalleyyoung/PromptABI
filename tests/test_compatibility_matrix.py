@@ -46,8 +46,10 @@ def test_compatibility_matrix_documents_training_static_contract_coverage() -> N
 
     assert static_surfaces["training:supervised-jsonl"].artifact_kind is ArtifactKind.TRAINING_MANIFEST
     assert "target-role alignment" in static_surfaces["training:supervised-jsonl"].notes
-    assert uncovered["training:loss-masks"].status == "planned-abstaining"
-    assert uncovered["training:packed-datasets"].status == "planned-abstaining"
+    assert static_surfaces["training:loss-masks"].status == "covered"
+    assert "loss-mask contract" in static_surfaces["training:loss-masks"].notes
+    assert static_surfaces["training:packed-datasets"].status == "bounded"
+    assert "preserved packing boundaries" in static_surfaces["training:packed-datasets"].notes
     assert uncovered["training:preference-pairs"].status == "planned-abstaining"
 
 
