@@ -133,6 +133,7 @@ promptabi diagnostics cluster --config examples/minimal/promptabi.json --strateg
 promptabi diagnostics catalog --config examples/minimal/promptabi.json --format json
 promptabi diagnostics lsp --config examples/minimal/promptabi.json --format json
 # Clusters rank fixes by safety, compatibility, blast radius, and prompt-behavior impact.
+promptabi fix --config examples/minimal/promptabi.json --kind lockfile --write
 
 # Run labeled benchmarks, mutation fuzzing, and paper artifact regeneration.
 promptabi corpus verify --format text

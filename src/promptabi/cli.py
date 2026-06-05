@@ -17,6 +17,13 @@ from .api_stability import (
     render_public_api_manifest_json,
     render_public_api_manifest_markdown,
 )
+from .autofix import (
+    AutoFixError,
+    AutoFixKind,
+    render_autofix_json,
+    render_autofix_text,
+    run_low_risk_autofix,
+)
 from .bug_reports import BugReportError, generate_bug_report, render_bug_report
 from .bundles import (
     VerificationBundleError,
@@ -329,6 +336,47 @@ def build_parser() -> argparse.ArgumentParser:
         help="run incrementally from paths changed since this git ref, including untracked files",
     )
     _add_local_summary_argument(verify)
+
+    fix = subparsers.add_parser(
+        "fix",
+        help="preview or apply low-risk PromptABI fixes such as lockfiles and metadata stubs",
+    )
+    fix.add_argument(
+        "--config",
+        help="path to a PromptABI JSON config; defaults to discovering promptabi.json upward from cwd",
+    )
+    fix.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        metavar="NAME=PATH_OR_URI",
+        help="override or add an artifact location for this run; may be repeated",
+    )
+    fix.add_argument(
+        "--kind",
+        action="append",
+        choices=tuple(kind.value for kind in AutoFixKind),
+        help="limit fixes to one low-risk kind; may be repeated",
+    )
+    fix.add_argument(
+        "--lockfile",
+        help="path to a PromptABI lockfile when applying lockfile fixes (default: promptabi.lock.json beside the config)",
+    )
+    fix.add_argument("--write", action="store_true", help="apply fixes; without --write, print a dry-run preview")
+    fix.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    fix.add_argument(
+        "--plugin",
+        action="append",
+        default=[],
+        metavar="MODULE[:OBJECT]",
+        help="import a PromptABI plugin module for this run; may be repeated",
+    )
+    _add_local_summary_argument(fix)
 
     verify_training = subparsers.add_parser(
         "verify-training",
@@ -1773,6 +1821,50 @@ def main(argv: Sequence[str] | None = None) -> int:
             exit_code=exit_code,
             started_at=started_at,
             metadata=_verification_summary_metadata(result, output_format=args.format, fail_on=args.fail_on),
+        ):
+            return 2
+        print(output, end="")
+        return exit_code
+
+    if args.command == "fix":
+        started_at = time.perf_counter()
+        try:
+            config_path = Path(args.config).resolve() if args.config else discover_config()
+            plugin_registry = _load_cli_plugins(args.plugin)
+            overrides = _parse_artifact_overrides(args.artifact, parser)
+            config = load_config(config_path).with_artifact_overrides(overrides, base_dir=Path.cwd())
+            if args.local_summary is not None and policy_forbids_local_summary(config.policy):
+                print("promptabi: organization policy pack forbids --local-summary writes", file=sys.stderr)
+                return 2
+            report = run_low_risk_autofix(
+                config_path,
+                kinds=args.kind,
+                write=args.write,
+                lockfile_path=args.lockfile,
+                artifact_overrides=overrides,
+                override_base_dir=Path.cwd(),
+                plugin_registry=plugin_registry,
+            )
+        except (AutoFixError, ConfigError, PluginError, ValueError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot apply low-risk fixes: {exc}", file=sys.stderr)
+            return 2
+        output = render_autofix_json(report) if args.format == "json" else render_autofix_text(report)
+        exit_code = 0 if report.ok else 1
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="fix",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={
+                "applied": report.applied,
+                "changes_total": len(report.changes),
+                "applied_count": report.applied_count,
+                "planned_count": report.planned_count,
+                "format": args.format,
+            },
         ):
             return 2
         print(output, end="")

@@ -93,6 +93,12 @@ from .api_stability import (
     render_public_api_manifest_json,
     render_public_api_manifest_markdown,
 )
+from .autofix import (
+    AutoFixReport,
+    render_autofix_json,
+    render_autofix_text,
+    run_low_risk_autofix,
+)
 from .localization import (
     DiagnosticCatalogEntry,
     build_diagnostic_catalog,
@@ -268,6 +274,35 @@ def run_verification(
         plugin_registry=plugin_registry,
     )
     return session.run(checks=selected_checks)
+
+
+def low_risk_autofix(
+    config_path: str | Path,
+    *,
+    kinds: Sequence[str] | None = None,
+    write: bool = False,
+    lockfile_path: str | Path | None = None,
+    artifact_overrides: Mapping[str, str] | None = None,
+    output_format: str | None = None,
+    plugin_registry: PluginRegistry | None = None,
+) -> AutoFixReport | str:
+    """Preview or apply low-risk fixes that do not alter prompt rendering behavior."""
+
+    report = run_low_risk_autofix(
+        config_path,
+        kinds=kinds,
+        write=write,
+        lockfile_path=lockfile_path,
+        artifact_overrides=artifact_overrides,
+        plugin_registry=plugin_registry,
+    )
+    if output_format is None:
+        return report
+    if output_format == "text":
+        return render_autofix_text(report)
+    if output_format == "json":
+        return render_autofix_json(report)
+    raise ValueError("output_format must be one of: text, json")
 
 
 def render_result(
