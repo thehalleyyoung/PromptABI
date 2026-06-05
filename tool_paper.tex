@@ -6,6 +6,9 @@
 \usepackage{array}
 \usepackage{longtable}
 \usepackage{verbatim}
+\usepackage{amsthm}
+
+\newtheorem{theorem}{Theorem}
 
 \title{PromptABI: Static Verification for the Discrete Interface Layer of LLM Systems}
 \author{PromptABI Contributors}
@@ -250,6 +253,28 @@ abstention, making each claim explicit about its proof obligations. The result i
 a path toward a tool that is useful in CI and credible as a systems paper: it
 catches failures that arise before any model logit is relevant.
 \end{abstract}
+
+\clearpage
+\section{Introduction}
+
+PromptABI is a static verifier for the discrete application binary interface of
+LLM systems: the files and adapters that translate application state into model
+visible bytes, tokens, structured-output languages, tool calls, and parser
+inputs. This interface is now complex enough to fail independently of model
+quality. A template can let user text forge a role header, a stop sequence can
+truncate a valid tool argument, a tokenizer revision can reinterpret a sentinel,
+or a framework budget policy can drop a required system segment while ordinary
+unit tests still pass.
+
+The contribution is to make those failures reproducible, local, and explicit.
+PromptABI models supported fragments of templates, tokenizers, grammars, stop
+policies, provider fixtures, and budget policies as finite automata,
+finite-state transducers, differential replays, and bounded SMT obligations. It
+reports concrete witnesses when a bad state is reachable, proof metadata when a
+finite contract excludes one, and abstentions when an artifact escapes the
+modeled fragment. The paper therefore argues for a deliberately narrow systems
+claim: many high-impact LLM application bugs are structural interface bugs, and
+they can be found before inference.
 
 \clearpage
 \section{Motivation}
@@ -510,6 +535,18 @@ example, stop-tokenizer analysis is shown as a mixture of sound unreachable-stop
 results, heuristic collision evidence, and abstentions, while static contracts
 are shown as bounded Z3-backed SMT over all artifact kinds, including finite
 supervised target-role alignment for training manifests.
+
+\begin{theorem}[Bounded counterexample soundness]
+For any check classified as sound and bounded, if PromptABI emits a concrete
+witness for a modeled violation, replaying the witness through the same loaded
+artifacts and bounds reaches the reported unsafe state.
+\end{theorem}
+
+\begin{theorem}[Honest supported-fragment boundary]
+For template, grammar, provider, solver, and parser behavior outside the
+declared supported fragment, PromptABI must emit an abstention or a heuristic
+diagnostic rather than a proof-labeled safety or unsafety result.
+\end{theorem}
 
 \clearpage
 \section{Artifact Model}
@@ -1711,7 +1748,7 @@ the real unsafe ChatML role-boundary fixture, so upstream reporting is an
 exercised workflow rather than a paper-only plan.
 
 \clearpage
-\section{Threat Model and Non-Goals}
+\section{Threat Model, Limitations, and Non-Goals}
 
 PromptABI's threat model is structural. Attacker-controlled content may enter
 user messages, tool outputs, retrieval chunks, metadata, or provider-compatible
