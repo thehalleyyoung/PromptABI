@@ -1307,6 +1307,16 @@ from .prompt_pack_capability import (
     render_capability_json,
     render_capability_match_text,
 )
+from .prompt_pack_upgrade_certificate import (
+    PROMPT_PACK_UPGRADE_VERSION,
+    UpgradeCertificate,
+    UpgradeFinding,
+    UpgradeFindingKind,
+    UpgradeImpact,
+    certify_upgrade,
+    render_upgrade_json,
+    render_upgrade_text,
+)
 from .provider_fixture_replay import (
     ProviderFixtureReplayCase,
     ProviderFixtureReplayFinding,
@@ -2358,6 +2368,14 @@ __all__ = [
     "match_capability",
     "render_capability_json",
     "render_capability_match_text",
+    "PROMPT_PACK_UPGRADE_VERSION",
+    "UpgradeCertificate",
+    "UpgradeFinding",
+    "UpgradeFindingKind",
+    "UpgradeImpact",
+    "certify_upgrade",
+    "render_upgrade_json",
+    "render_upgrade_text",
     "analyze_parser_compatibility",
     "analyze_tokenizer_grammar_ambiguity",
     "analyze_tokenizer_grammar_emptiness",
