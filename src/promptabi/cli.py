@@ -372,6 +372,12 @@ from .solver_lemma_cache import (
     token_budget_lemma_suite,
     verify_solver_lemma_cache,
 )
+from .solver_portfolio_replay import (
+    render_solver_portfolio_json,
+    render_solver_portfolio_text,
+    token_budget_portfolio_problems,
+    verify_solver_portfolio,
+)
 from .loaders import ArtifactLoader
 from .lockfiles import (
     LockfileError,
@@ -992,6 +998,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     _add_local_summary_argument(solver_cache)
+
+    solver_portfolio = subparsers.add_parser(
+        "solver-portfolio",
+        help="run finite-contract lemmas through a solver portfolio and prove cross-strategy agreement + replay determinism",
+    )
+    solver_portfolio.add_argument(
+        "--contract",
+        required=True,
+        help="path to a token-budget contract JSON document whose guarantees become portfolio lemmas",
+    )
+    solver_portfolio.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    _add_local_summary_argument(solver_portfolio)
 
     explain = subparsers.add_parser("explain", help="expand one diagnostic into a tutorial-style explanation")
     explain.add_argument(
@@ -4038,6 +4061,36 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "hits": report.hits,
                 "misses": report.misses,
                 "soundness_ok": report.soundness_ok,
+                "ok": report.ok,
+            },
+        ):
+            return 2
+        print(output, end="")
+        return exit_code
+
+    if args.command == "solver-portfolio":
+        started_at = time.perf_counter()
+        try:
+            contract = load_token_budget_contract(str(Path(args.contract).resolve()))
+            problems = token_budget_portfolio_problems(contract)
+            report = verify_solver_portfolio(problems)
+        except (OSError, ValueError, KeyError) as exc:
+            print(f"promptabi: cannot verify solver portfolio: {exc}", file=sys.stderr)
+            return 2
+        output = (
+            render_solver_portfolio_json(report)
+            if args.format == "json"
+            else render_solver_portfolio_text(report)
+        )
+        exit_code = 0 if report.ok else 1
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="solver-portfolio",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={
+                "format": args.format,
+                "lemmas": len(report.records),
                 "ok": report.ok,
             },
         ):
