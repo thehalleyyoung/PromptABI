@@ -148,6 +148,7 @@ promptabi diagnostics lsp --config examples/minimal/promptabi.json --format json
 promptabi fix --config examples/minimal/promptabi.json --kind lockfile --write
 promptabi fix --config examples/role-boundary/unsafe.promptabi.json --preview-risk high
 promptabi plugins certify --format text
+promptabi plugins marketplace --format json > examples/plugin-marketplace/index.json
 
 # Run labeled benchmarks, release leaderboards, mutation fuzzing, and paper artifacts.
 promptabi corpus verify --format text

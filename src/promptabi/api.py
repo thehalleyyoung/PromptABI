@@ -194,6 +194,12 @@ from .plugin_certification import (
     render_plugin_certification_json,
     render_plugin_certification_text,
 )
+from .plugin_marketplace import (
+    PluginMarketplaceIndex,
+    build_plugin_marketplace_index,
+    render_plugin_marketplace_json,
+    render_plugin_marketplace_text,
+)
 from .policies import (
     OrgPolicyPack,
     Suppression,
@@ -534,6 +540,25 @@ def plugin_certification(
         return render_plugin_certification_json(report)
     if output_format == "text":
         return render_plugin_certification_text(report)
+    raise ValueError("output_format must be 'json' or 'text'")
+
+
+def plugin_marketplace_index(
+    plugin_registry: PluginRegistry | None = None,
+    *,
+    output_format: str | None = None,
+) -> PluginMarketplaceIndex | str:
+    """Build or render a marketplace-style index for registered PromptABI plugins."""
+
+    registry = plugin_registry or create_first_party_plugin_registry()
+    report = certify_plugin_registry(registry)
+    index = build_plugin_marketplace_index(registry, certification_report=report)
+    if output_format is None:
+        return index
+    if output_format == "json":
+        return render_plugin_marketplace_json(index)
+    if output_format == "text":
+        return render_plugin_marketplace_text(index)
     raise ValueError("output_format must be 'json' or 'text'")
 
 

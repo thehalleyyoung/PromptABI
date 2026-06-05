@@ -1,0 +1,855 @@
+{
+  "certification_ok": true,
+  "ok": true,
+  "packages": [
+    {
+      "capabilities": [
+        {
+          "kind": "artifact-loader",
+          "name": "first-party-reference-loader",
+          "plugin": "promptabi.first_party",
+          "properties": {
+            "artifact_kinds": [
+              "tokenizer",
+              "chat-template",
+              "special-token-map",
+              "stop-policy",
+              "schema",
+              "grammar",
+              "tool-definition",
+              "prompt-segment",
+              "provider-config",
+              "framework-truncation-config",
+              "training-manifest",
+              "evaluation-harness",
+              "prompt-pack",
+              "static-contract"
+            ],
+            "uri_schemes": [
+              "openai",
+              "vllm",
+              "llamacpp",
+              "langchain",
+              "llamaindex",
+              "outlines",
+              "xgrammar",
+              "llguidance",
+              "pydantic",
+              "mcp",
+              "z3"
+            ]
+          },
+          "version": "1.0.0"
+        },
+        {
+          "kind": "check",
+          "modes": [
+            "heuristic"
+          ],
+          "name": "first-party-plugin-coverage",
+          "plugin": "promptabi.first_party",
+          "version": "1.0.0"
+        },
+        {
+          "kind": "diagnostic-renderer",
+          "name": "plugins-json",
+          "plugin": "promptabi.first_party",
+          "properties": {
+            "media_type": "application/json"
+          },
+          "version": "1.0.0"
+        }
+      ],
+      "compatibility": {
+        "plugin_versions": [
+          "1.0.0"
+        ],
+        "promptabi": {
+          "max_version": "1.x",
+          "min_version": "1.0.0"
+        },
+        "python": ">=3.11"
+      },
+      "guarantee_modes": [
+        "heuristic"
+      ],
+      "name": "promptabi.first_party",
+      "privacy": {
+        "certification_findings": [
+          "pass:check:first-party-plugin-coverage:check emitted 1 privacy-safe diagnostics",
+          "pass:renderer:plugins-json:renderer preserved witness privacy"
+        ],
+        "network_access": "unknown",
+        "sensitive_metadata": "metadata-only-or-unknown",
+        "witness_privacy": "hash-only-certified"
+      },
+      "supported_fragments": [
+        "artifact_kinds:chat-template",
+        "artifact_kinds:evaluation-harness",
+        "artifact_kinds:framework-truncation-config",
+        "artifact_kinds:grammar",
+        "artifact_kinds:prompt-pack",
+        "artifact_kinds:prompt-segment",
+        "artifact_kinds:provider-config",
+        "artifact_kinds:schema",
+        "artifact_kinds:special-token-map",
+        "artifact_kinds:static-contract",
+        "artifact_kinds:stop-policy",
+        "artifact_kinds:tokenizer",
+        "artifact_kinds:tool-definition",
+        "artifact_kinds:training-manifest",
+        "capability:artifact-loader",
+        "capability:check",
+        "capability:diagnostic-renderer",
+        "uri_schemes:langchain",
+        "uri_schemes:llamacpp",
+        "uri_schemes:llamaindex",
+        "uri_schemes:llguidance",
+        "uri_schemes:mcp",
+        "uri_schemes:openai",
+        "uri_schemes:outlines",
+        "uri_schemes:pydantic",
+        "uri_schemes:vllm",
+        "uri_schemes:xgrammar",
+        "uri_schemes:z3"
+      ],
+      "verification": {
+        "status": "pass",
+        "summary": {
+          "failed": 0,
+          "passed": 3,
+          "warned": 0
+        }
+      }
+    },
+    {
+      "capabilities": [
+        {
+          "kind": "artifact-loader",
+          "modes": [
+            "complete",
+            "sound"
+          ],
+          "name": "huggingface-artifact-reference",
+          "plugin": "promptabi.first_party.huggingface",
+          "properties": {
+            "artifact_kinds": [
+              "tokenizer",
+              "chat-template",
+              "special-token-map"
+            ],
+            "network": "never",
+            "uri_schemes": [
+              "hf"
+            ]
+          },
+          "version": "1.0.0"
+        },
+        {
+          "kind": "template-dialect",
+          "modes": [
+            "bounded",
+            "heuristic"
+          ],
+          "name": "huggingface-tokenizer-config-chat-template",
+          "plugin": "promptabi.first_party.huggingface",
+          "properties": {
+            "artifact": "tokenizer_config.json",
+            "template_format": "jinja"
+          },
+          "version": "1.0.0"
+        }
+      ],
+      "compatibility": {
+        "plugin_versions": [
+          "1.0.0"
+        ],
+        "promptabi": {
+          "max_version": "1.x",
+          "min_version": "1.0.0"
+        },
+        "python": ">=3.11"
+      },
+      "guarantee_modes": [
+        "bounded",
+        "complete",
+        "heuristic",
+        "sound"
+      ],
+      "name": "promptabi.first_party.huggingface",
+      "privacy": {
+        "certification_findings": [],
+        "network_access": "never",
+        "sensitive_metadata": "metadata-only-or-unknown",
+        "witness_privacy": "hash-only-certified"
+      },
+      "supported_fragments": [
+        "artifact_kinds:chat-template",
+        "artifact_kinds:special-token-map",
+        "artifact_kinds:tokenizer",
+        "capability:artifact-loader",
+        "capability:template-dialect",
+        "template_format:jinja",
+        "uri_schemes:hf"
+      ],
+      "verification": {
+        "status": "pass",
+        "summary": {
+          "failed": 0,
+          "passed": 0,
+          "warned": 0
+        }
+      }
+    },
+    {
+      "capabilities": [
+        {
+          "kind": "truncation-policy",
+          "modes": [
+            "bounded",
+            "heuristic"
+          ],
+          "name": "langchain-rag-truncation-policy",
+          "plugin": "promptabi.first_party.langchain",
+          "properties": {
+            "checks": [
+              "rag-chunking-compatibility",
+              "token-budget-model"
+            ],
+            "framework": "langchain"
+          },
+          "version": "1.0.0"
+        }
+      ],
+      "compatibility": {
+        "plugin_versions": [
+          "1.0.0"
+        ],
+        "promptabi": {
+          "max_version": "1.x",
+          "min_version": "1.0.0"
+        },
+        "python": ">=3.11"
+      },
+      "guarantee_modes": [
+        "bounded",
+        "heuristic"
+      ],
+      "name": "promptabi.first_party.langchain",
+      "privacy": {
+        "certification_findings": [],
+        "network_access": "unknown",
+        "sensitive_metadata": "metadata-only-or-unknown",
+        "witness_privacy": "hash-only-certified"
+      },
+      "supported_fragments": [
+        "capability:truncation-policy",
+        "checks:rag-chunking-compatibility",
+        "checks:token-budget-model",
+        "framework:langchain"
+      ],
+      "verification": {
+        "status": "pass",
+        "summary": {
+          "failed": 0,
+          "passed": 0,
+          "warned": 0
+        }
+      }
+    },
+    {
+      "capabilities": [
+        {
+          "kind": "provider-adapter",
+          "modes": [
+            "bounded",
+            "heuristic"
+          ],
+          "name": "llamacpp-server-contract",
+          "plugin": "promptabi.first_party.llama.cpp",
+          "properties": {
+            "api_family": "openai-compatible",
+            "local_artifacts": [
+              "gguf",
+              "server-options"
+            ]
+          },
+          "version": "1.0.0"
+        }
+      ],
+      "compatibility": {
+        "plugin_versions": [
+          "1.0.0"
+        ],
+        "promptabi": {
+          "max_version": "1.x",
+          "min_version": "1.0.0"
+        },
+        "python": ">=3.11"
+      },
+      "guarantee_modes": [
+        "bounded",
+        "heuristic"
+      ],
+      "name": "promptabi.first_party.llama.cpp",
+      "privacy": {
+        "certification_findings": [],
+        "network_access": "unknown",
+        "sensitive_metadata": "metadata-only-or-unknown",
+        "witness_privacy": "hash-only-certified"
+      },
+      "supported_fragments": [
+        "api_family:openai-compatible",
+        "capability:provider-adapter"
+      ],
+      "verification": {
+        "status": "pass",
+        "summary": {
+          "failed": 0,
+          "passed": 0,
+          "warned": 0
+        }
+      }
+    },
+    {
+      "capabilities": [
+        {
+          "kind": "truncation-policy",
+          "modes": [
+            "bounded",
+            "heuristic"
+          ],
+          "name": "llamaindex-agent-truncation-policy",
+          "plugin": "promptabi.first_party.llamaindex",
+          "properties": {
+            "checks": [
+              "rag-chunking-compatibility",
+              "token-budget-model"
+            ],
+            "framework": "llamaindex"
+          },
+          "version": "1.0.0"
+        }
+      ],
+      "compatibility": {
+        "plugin_versions": [
+          "1.0.0"
+        ],
+        "promptabi": {
+          "max_version": "1.x",
+          "min_version": "1.0.0"
+        },
+        "python": ">=3.11"
+      },
+      "guarantee_modes": [
+        "bounded",
+        "heuristic"
+      ],
+      "name": "promptabi.first_party.llamaindex",
+      "privacy": {
+        "certification_findings": [],
+        "network_access": "unknown",
+        "sensitive_metadata": "metadata-only-or-unknown",
+        "witness_privacy": "hash-only-certified"
+      },
+      "supported_fragments": [
+        "capability:truncation-policy",
+        "checks:rag-chunking-compatibility",
+        "checks:token-budget-model",
+        "framework:llamaindex"
+      ],
+      "verification": {
+        "status": "pass",
+        "summary": {
+          "failed": 0,
+          "passed": 0,
+          "warned": 0
+        }
+      }
+    },
+    {
+      "capabilities": [
+        {
+          "kind": "grammar-backend",
+          "modes": [
+            "bounded",
+            "heuristic"
+          ],
+          "name": "llguidance-backend",
+          "plugin": "promptabi.first_party.llguidance",
+          "properties": {
+            "checks": [
+              "grammar-differential",
+              "parser-compatibility"
+            ],
+            "grammar_type": "llguidance"
+          },
+          "version": "1.0.0"
+        }
+      ],
+      "compatibility": {
+        "plugin_versions": [
+          "1.0.0"
+        ],
+        "promptabi": {
+          "max_version": "1.x",
+          "min_version": "1.0.0"
+        },
+        "python": ">=3.11"
+      },
+      "guarantee_modes": [
+        "bounded",
+        "heuristic"
+      ],
+      "name": "promptabi.first_party.llguidance",
+      "privacy": {
+        "certification_findings": [],
+        "network_access": "unknown",
+        "sensitive_metadata": "metadata-only-or-unknown",
+        "witness_privacy": "hash-only-certified"
+      },
+      "supported_fragments": [
+        "capability:grammar-backend",
+        "checks:grammar-differential",
+        "checks:parser-compatibility",
+        "grammar_type:llguidance"
+      ],
+      "verification": {
+        "status": "pass",
+        "summary": {
+          "failed": 0,
+          "passed": 0,
+          "warned": 0
+        }
+      }
+    },
+    {
+      "capabilities": [
+        {
+          "kind": "provider-adapter",
+          "modes": [
+            "bounded",
+            "sound"
+          ],
+          "name": "mcp-tool-contract",
+          "plugin": "promptabi.first_party.mcp",
+          "properties": {
+            "checks": [
+              "tool-schema-ingestion",
+              "tool-serialization"
+            ],
+            "tool_provider": "mcp"
+          },
+          "version": "1.0.0"
+        }
+      ],
+      "compatibility": {
+        "plugin_versions": [
+          "1.0.0"
+        ],
+        "promptabi": {
+          "max_version": "1.x",
+          "min_version": "1.0.0"
+        },
+        "python": ">=3.11"
+      },
+      "guarantee_modes": [
+        "bounded",
+        "sound"
+      ],
+      "name": "promptabi.first_party.mcp",
+      "privacy": {
+        "certification_findings": [],
+        "network_access": "unknown",
+        "sensitive_metadata": "metadata-only-or-unknown",
+        "witness_privacy": "hash-only-certified"
+      },
+      "supported_fragments": [
+        "capability:provider-adapter",
+        "checks:tool-schema-ingestion",
+        "checks:tool-serialization",
+        "tool_provider:mcp"
+      ],
+      "verification": {
+        "status": "pass",
+        "summary": {
+          "failed": 0,
+          "passed": 0,
+          "warned": 0
+        }
+      }
+    },
+    {
+      "capabilities": [
+        {
+          "kind": "provider-adapter",
+          "modes": [
+            "bounded",
+            "heuristic"
+          ],
+          "name": "openai-compatible-provider-contract",
+          "plugin": "promptabi.first_party.openai-compatible",
+          "properties": {
+            "providers": [
+              "openai",
+              "azure-openai",
+              "litellm"
+            ],
+            "tool_envelope": "request.tools"
+          },
+          "version": "1.0.0"
+        }
+      ],
+      "compatibility": {
+        "plugin_versions": [
+          "1.0.0"
+        ],
+        "promptabi": {
+          "max_version": "1.x",
+          "min_version": "1.0.0"
+        },
+        "python": ">=3.11"
+      },
+      "guarantee_modes": [
+        "bounded",
+        "heuristic"
+      ],
+      "name": "promptabi.first_party.openai-compatible",
+      "privacy": {
+        "certification_findings": [],
+        "network_access": "unknown",
+        "sensitive_metadata": "metadata-only-or-unknown",
+        "witness_privacy": "hash-only-certified"
+      },
+      "supported_fragments": [
+        "capability:provider-adapter",
+        "providers:azure-openai",
+        "providers:litellm",
+        "providers:openai"
+      ],
+      "verification": {
+        "status": "pass",
+        "summary": {
+          "failed": 0,
+          "passed": 0,
+          "warned": 0
+        }
+      }
+    },
+    {
+      "capabilities": [
+        {
+          "kind": "grammar-backend",
+          "modes": [
+            "bounded",
+            "heuristic"
+          ],
+          "name": "outlines-grammar-backend",
+          "plugin": "promptabi.first_party.outlines",
+          "properties": {
+            "checks": [
+              "grammar-differential",
+              "parser-compatibility"
+            ],
+            "grammar_type": "outlines"
+          },
+          "version": "1.0.0"
+        }
+      ],
+      "compatibility": {
+        "plugin_versions": [
+          "1.0.0"
+        ],
+        "promptabi": {
+          "max_version": "1.x",
+          "min_version": "1.0.0"
+        },
+        "python": ">=3.11"
+      },
+      "guarantee_modes": [
+        "bounded",
+        "heuristic"
+      ],
+      "name": "promptabi.first_party.outlines",
+      "privacy": {
+        "certification_findings": [],
+        "network_access": "unknown",
+        "sensitive_metadata": "metadata-only-or-unknown",
+        "witness_privacy": "hash-only-certified"
+      },
+      "supported_fragments": [
+        "capability:grammar-backend",
+        "checks:grammar-differential",
+        "checks:parser-compatibility",
+        "grammar_type:outlines"
+      ],
+      "verification": {
+        "status": "pass",
+        "summary": {
+          "failed": 0,
+          "passed": 0,
+          "warned": 0
+        }
+      }
+    },
+    {
+      "capabilities": [
+        {
+          "kind": "check",
+          "modes": [
+            "complete",
+            "sound"
+          ],
+          "name": "pydantic-tool-schema-ingestion",
+          "plugin": "promptabi.first_party.pydantic",
+          "properties": {
+            "check": "tool-schema-ingestion",
+            "tool_provider": "pydantic"
+          },
+          "version": "1.0.0"
+        },
+        {
+          "kind": "grammar-backend",
+          "modes": [
+            "bounded",
+            "sound"
+          ],
+          "name": "pydantic-json-schema-backend",
+          "plugin": "promptabi.first_party.pydantic",
+          "properties": {
+            "normalizes_to": "json-schema",
+            "schema_source": "pydantic"
+          },
+          "version": "1.0.0"
+        }
+      ],
+      "compatibility": {
+        "plugin_versions": [
+          "1.0.0"
+        ],
+        "promptabi": {
+          "max_version": "1.x",
+          "min_version": "1.0.0"
+        },
+        "python": ">=3.11"
+      },
+      "guarantee_modes": [
+        "bounded",
+        "complete",
+        "sound"
+      ],
+      "name": "promptabi.first_party.pydantic",
+      "privacy": {
+        "certification_findings": [],
+        "network_access": "unknown",
+        "sensitive_metadata": "metadata-only-or-unknown",
+        "witness_privacy": "hash-only-certified"
+      },
+      "supported_fragments": [
+        "capability:check",
+        "capability:grammar-backend",
+        "check:tool-schema-ingestion",
+        "schema_source:pydantic",
+        "tool_provider:pydantic"
+      ],
+      "verification": {
+        "status": "pass",
+        "summary": {
+          "failed": 0,
+          "passed": 0,
+          "warned": 0
+        }
+      }
+    },
+    {
+      "capabilities": [
+        {
+          "kind": "provider-adapter",
+          "modes": [
+            "bounded",
+            "heuristic"
+          ],
+          "name": "vllm-openai-server-contract",
+          "plugin": "promptabi.first_party.vllm",
+          "properties": {
+            "api_family": "openai-compatible",
+            "stop_policy_source": "vllm_sampling_params"
+          },
+          "version": "1.0.0"
+        }
+      ],
+      "compatibility": {
+        "plugin_versions": [
+          "1.0.0"
+        ],
+        "promptabi": {
+          "max_version": "1.x",
+          "min_version": "1.0.0"
+        },
+        "python": ">=3.11"
+      },
+      "guarantee_modes": [
+        "bounded",
+        "heuristic"
+      ],
+      "name": "promptabi.first_party.vllm",
+      "privacy": {
+        "certification_findings": [],
+        "network_access": "unknown",
+        "sensitive_metadata": "metadata-only-or-unknown",
+        "witness_privacy": "hash-only-certified"
+      },
+      "supported_fragments": [
+        "api_family:openai-compatible",
+        "capability:provider-adapter"
+      ],
+      "verification": {
+        "status": "pass",
+        "summary": {
+          "failed": 0,
+          "passed": 0,
+          "warned": 0
+        }
+      }
+    },
+    {
+      "capabilities": [
+        {
+          "kind": "grammar-backend",
+          "modes": [
+            "bounded",
+            "heuristic"
+          ],
+          "name": "xgrammar-backend",
+          "plugin": "promptabi.first_party.xgrammar",
+          "properties": {
+            "checks": [
+              "grammar-tokenizer-emptiness",
+              "grammar-tokenizer-ambiguity"
+            ],
+            "grammar_type": "xgrammar"
+          },
+          "version": "1.0.0"
+        }
+      ],
+      "compatibility": {
+        "plugin_versions": [
+          "1.0.0"
+        ],
+        "promptabi": {
+          "max_version": "1.x",
+          "min_version": "1.0.0"
+        },
+        "python": ">=3.11"
+      },
+      "guarantee_modes": [
+        "bounded",
+        "heuristic"
+      ],
+      "name": "promptabi.first_party.xgrammar",
+      "privacy": {
+        "certification_findings": [],
+        "network_access": "unknown",
+        "sensitive_metadata": "metadata-only-or-unknown",
+        "witness_privacy": "hash-only-certified"
+      },
+      "supported_fragments": [
+        "capability:grammar-backend",
+        "checks:grammar-tokenizer-ambiguity",
+        "checks:grammar-tokenizer-emptiness",
+        "grammar_type:xgrammar"
+      ],
+      "verification": {
+        "status": "pass",
+        "summary": {
+          "failed": 0,
+          "passed": 0,
+          "warned": 0
+        }
+      }
+    },
+    {
+      "capabilities": [
+        {
+          "kind": "solver-encoding",
+          "modes": [
+            "bounded",
+            "sound",
+            "z3-backed-smt"
+          ],
+          "name": "z3-finite-contract-encoding",
+          "plugin": "promptabi.first_party.z3",
+          "properties": {
+            "check": "static-contracts",
+            "fallback": "finite-enumeration"
+          },
+          "version": "1.0.0"
+        }
+      ],
+      "compatibility": {
+        "plugin_versions": [
+          "1.0.0"
+        ],
+        "promptabi": {
+          "max_version": "1.x",
+          "min_version": "1.0.0"
+        },
+        "python": ">=3.11"
+      },
+      "guarantee_modes": [
+        "bounded",
+        "sound",
+        "z3-backed-smt"
+      ],
+      "name": "promptabi.first_party.z3",
+      "privacy": {
+        "certification_findings": [],
+        "network_access": "unknown",
+        "sensitive_metadata": "metadata-only-or-unknown",
+        "witness_privacy": "hash-only-certified"
+      },
+      "supported_fragments": [
+        "capability:solver-encoding",
+        "check:static-contracts"
+      ],
+      "verification": {
+        "status": "pass",
+        "summary": {
+          "failed": 0,
+          "passed": 0,
+          "warned": 0
+        }
+      }
+    },
+    {
+      "capabilities": [],
+      "compatibility": {
+        "plugin_versions": [],
+        "promptabi": {
+          "max_version": "1.x",
+          "min_version": "1.0.0"
+        },
+        "python": ">=3.11"
+      },
+      "guarantee_modes": [],
+      "name": "promptabi.marketplace.global",
+      "privacy": {
+        "certification_findings": [],
+        "network_access": "unknown",
+        "sensitive_metadata": "metadata-only-or-unknown",
+        "witness_privacy": "hash-only-certified"
+      },
+      "supported_fragments": [],
+      "verification": {
+        "status": "pass",
+        "summary": {
+          "failed": 0,
+          "passed": 1,
+          "warned": 0
+        }
+      }
+    }
+  ],
+  "promptabi_version": "1.0.0",
+  "version": "1.0"
+}

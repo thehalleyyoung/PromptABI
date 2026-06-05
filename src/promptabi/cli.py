@@ -265,6 +265,11 @@ from .mutation_fuzzing import (
     run_mutation_fuzzing,
 )
 from .plugin_certification import certify_plugin_registry, render_plugin_certification_json, render_plugin_certification_text
+from .plugin_marketplace import (
+    build_plugin_marketplace_index,
+    render_plugin_marketplace_json,
+    render_plugin_marketplace_text,
+)
 from .plugins import PluginError, PluginRegistry, load_plugin_modules
 from .policies import policy_forbids_local_summary
 from .prompt_packs import (
@@ -1477,6 +1482,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="import an additional PromptABI plugin module before certification; may be repeated",
     )
     plugins_certify.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    plugins_marketplace = plugins_subparsers.add_parser(
+        "marketplace",
+        help="emit a marketplace-style plugin index with capabilities, privacy, compatibility, and certification status",
+    )
+    plugins_marketplace.add_argument(
+        "--plugin",
+        action="append",
+        default=[],
+        metavar="MODULE[:OBJECT]",
+        help="import an additional PromptABI plugin module before indexing; may be repeated",
+    )
+    plugins_marketplace.add_argument(
         "--format",
         choices=("text", "json"),
         default="text",
@@ -3672,6 +3694,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                     else render_plugin_certification_text(report)
                 )
                 exit_code = 0 if report.ok else 1
+            elif args.plugins_command == "marketplace":
+                report = certify_plugin_registry(registry)
+                index = build_plugin_marketplace_index(registry, certification_report=report)
+                output = (
+                    render_plugin_marketplace_json(index)
+                    if args.format == "json"
+                    else render_plugin_marketplace_text(index)
+                )
+                exit_code = 0 if report.ok and index.ok else 1
             else:
                 output = render_plugin_capabilities(registry, output_format=args.format)
                 exit_code = 0
