@@ -302,6 +302,12 @@ from .red_team_research import (
     render_red_team_research_text,
     run_red_team_research,
 )
+from .artifact_reproducibility import (
+    ArtifactReproducibilityReport,
+    render_artifact_reproducibility_json,
+    render_artifact_reproducibility_text,
+    run_artifact_reproducibility_suite,
+)
 from .soundness_audits import (
     SoundnessAuditReport,
     build_soundness_audit_report,
@@ -684,6 +690,29 @@ def red_team_research(*, output_format: str | None = None) -> RedTeamReport | st
         return render_red_team_research_json(report)
     if output_format == "text":
         return render_red_team_research_text(report)
+    raise ValueError("output_format must be 'json' or 'text'")
+
+
+def artifact_reproducibility(
+    *, output_format: str | None = None
+) -> ArtifactReproducibilityReport | str:
+    """Run the reproducibility and artifact-quality suite (roadmap steps 376-390):
+    a hermetic zero-dependency environment proof, AE-style reproducibility badges,
+    bit-for-bit golden-digest replay of every shipped experiment, Zenodo archival
+    metadata, a self-contained property-based proof of role-boundary soundness,
+    mutation testing of the soundness oracle, continuous benchmark regression
+    alarms, a one-command ``make reproduce`` target, cross-environment digest
+    agreement, a data/ethics statement, a signed release record, CITATION.cff and
+    BibTeX, a CI Python matrix, a flakiness detector, and an artifact checklist.
+    Each experiment runs the real analyzers and is digested deterministically."""
+
+    report = run_artifact_reproducibility_suite()
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_artifact_reproducibility_json(report)
+    if output_format == "text":
+        return render_artifact_reproducibility_text(report)
     raise ValueError("output_format must be 'json' or 'text'")
 
 

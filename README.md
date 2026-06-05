@@ -153,6 +153,9 @@ promptabi devex --format text
 # Offensive-security research from real analyzers: attack taxonomy, CTF, proven
 # hardened prompt-assembly library, homoglyph/smuggling detection, attestation.
 promptabi red-team --format text
+# Self-certifying artifact suite: golden-digest replay, property-based soundness,
+# mutation testing, badges, CITATION.cff/Zenodo, flakiness + CI matrix.
+promptabi reproduce --format text
 promptabi maintain health --format text
 promptabi graph --config examples/rag-chunking/promptabi.json --all-checks --format mermaid
 promptabi contract format examples/static-contract-language/app.pabi --check

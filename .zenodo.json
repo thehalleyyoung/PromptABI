@@ -1,0 +1,25 @@
+{
+  "access_right": "open",
+  "creators": [
+    {
+      "name": "PromptABI Authors"
+    }
+  ],
+  "keywords": [
+    "prompt-injection",
+    "static-analysis",
+    "tokenizers",
+    "tool-calling"
+  ],
+  "license": "Apache-2.0",
+  "related_identifiers": [
+    {
+      "identifier": "10.5281/zenodo.0000000",
+      "relation": "isSupplementTo",
+      "scheme": "doi"
+    }
+  ],
+  "title": "PromptABI: Static Verification of LLM Prompt-Interface Contracts",
+  "upload_type": "software",
+  "version": "2026.06"
+}

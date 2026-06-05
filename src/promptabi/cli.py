@@ -2170,6 +2170,21 @@ def build_parser() -> argparse.ArgumentParser:
         default="text",
         help="output format (default: text)",
     )
+    reproduce = subparsers.add_parser(
+        "reproduce",
+        help="run the reproducibility + artifact-quality suite (golden digests, mutation, badges; steps 376-390)",
+    )
+    reproduce.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    reproduce.add_argument(
+        "--write-artifacts",
+        action="store_true",
+        help="also write CITATION.cff and .zenodo.json to the repository root",
+    )
     soundness_audit = subparsers.add_parser(
         "soundness-audit",
         help="review each built-in check family's soundness boundary, evidence, and blind spots",
@@ -5273,6 +5288,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             else render_red_team_research_text(report)
         )
         print(output, end="" if output.endswith("\n") else "\n")
+        return 0 if report.passed else 1
+
+    if args.command == "reproduce":
+        from .artifact_reproducibility import (
+            render_artifact_reproducibility_json,
+            render_artifact_reproducibility_text,
+            run_artifact_reproducibility_suite,
+            write_reproducibility_artifacts,
+        )
+
+        report = run_artifact_reproducibility_suite()
+        output = (
+            render_artifact_reproducibility_json(report)
+            if args.format == "json"
+            else render_artifact_reproducibility_text(report)
+        )
+        print(output, end="" if output.endswith("\n") else "\n")
+        if getattr(args, "write_artifacts", False):
+            written = write_reproducibility_artifacts()
+            for name in sorted(written):
+                print(f"wrote {name}", file=sys.stderr)
         return 0 if report.passed else 1
 
     if args.command == "soundness-audit":
