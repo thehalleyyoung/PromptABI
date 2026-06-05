@@ -268,7 +268,8 @@ proving or refuting prompt-budget survival, stop/control-token exclusion,
 role-region non-forgeability, tool-schema required-parameter satisfiability,
 tool/provider compatibility, supervised target-role alignment, and observed
 supervised-span containment across rendered role regions, tokenized bounds,
-preserved packing boundaries, and loss-mask selection with concrete models,
+preserved packing boundaries, loss-mask selection, and exclusion of declared
+user, tool, retrieval, or preference source ranges from supervised targets with concrete models,
 explicit proof classifications, or minimized unsat cores,
 a \texttt{promptabi solver replay} maintainer path that verifies such reduced
 solver obligations from portable JSON and treats solver backends, query hashes,
@@ -448,8 +449,8 @@ packs that capture secret-free request/response shapes, tool-call encodings, sto
 behavior, streaming deltas, error envelopes, and edge-case limits for offline
 replay,
 ships paired end-to-end buggy/fixed mini applications for tool calling, JSON
-structured output, RAG truncation, provider migration, and supervised
-training-data alignment, with each pair verified by the exact checker that
+structured output, RAG truncation, provider migration, supervised
+training-data alignment, and transform-attributed training source leakage, with each pair verified by the exact checker that
 catches the bug and by the fixed contract that removes it,
 models context-window budgets from named prompt segments, must-survive flags,
 declared or real-tokenizer token counts, output reservations, reserved tool

@@ -17,7 +17,9 @@ from promptabi.artifacts import (
     StopPolicyArtifact,
     ToolDefinitionArtifact,
     TrainingManifestArtifact,
+    TrainingSourceContribution,
     TrainingSpanContract,
+    TrainingTextSourceKind,
     TruncationStrategy,
 )
 from promptabi.cli import main
@@ -277,6 +279,110 @@ def test_static_contracts_find_supervised_span_render_token_pack_and_loss_mask_d
     assert "tokenized-span-outside-rendered-region-bounds" in evidence["reasons"]
     assert "supervised-target-not-selected-by-loss-mask" in evidence["reasons"]
     assert "packed-span-crosses-example-boundary" in evidence["reasons"]
+
+
+def test_static_contracts_prove_declared_training_sources_do_not_leak_into_targets() -> None:
+    location = ArtifactLocation(uri="memory://static-contract")
+    loaded = (
+        _loaded(
+            TrainingManifestArtifact(
+                kind=ArtifactKind.TRAINING_MANIFEST,
+                name="train",
+                location=location,
+                target_roles=("assistant",),
+                loss_mask_policy=LossMaskPolicy(target_roles=("assistant",), ignored_roles=("user", "tool")),
+                supervised_spans=(
+                    TrainingSpanContract(
+                        span_id="example-3.assistant-0",
+                        target_role="assistant",
+                        rendered_region_role="assistant",
+                        start_token=20,
+                        end_token=30,
+                        region_start_token=18,
+                        region_end_token=32,
+                        source_contributions=(
+                            TrainingSourceContribution(
+                                source_id="assistant-completion",
+                                source_kind=TrainingTextSourceKind.ASSISTANT,
+                                start_token=20,
+                                end_token=30,
+                                transform="chat-template-render",
+                            ),
+                            TrainingSourceContribution(
+                                source_id="retrieved-context",
+                                source_kind=TrainingTextSourceKind.RETRIEVAL,
+                                source_field="context",
+                                start_token=2,
+                                end_token=10,
+                                transform="rag-prefix-transform",
+                                text_sha256="sha256:redacted-context",
+                            ),
+                        ),
+                    ),
+                ),
+            )
+        ),
+    )
+
+    report = analyze_static_contracts(VerificationConfig(name="static"), loaded, prefer_z3=False)
+
+    finding = next(item for item in report.findings if item.name == "training-supervised-source-leakage")
+    assert finding.severity == "info"
+    assert finding.result is not None
+    assert finding.result.unsat_core == ("non-target-source-overlaps-supervised-target",)
+    assert not report.violations
+
+
+def test_static_contracts_find_user_tool_retrieval_or_preference_leaking_into_targets() -> None:
+    location = ArtifactLocation(uri="memory://static-contract")
+    loaded = (
+        _loaded(
+            TrainingManifestArtifact(
+                kind=ArtifactKind.TRAINING_MANIFEST,
+                name="train",
+                location=location,
+                target_roles=("assistant",),
+                loss_mask_policy=LossMaskPolicy(target_roles=("assistant",), ignored_roles=("user", "tool")),
+                supervised_spans=(
+                    TrainingSpanContract(
+                        span_id="example-4.assistant-0",
+                        target_role="assistant",
+                        rendered_region_role="assistant",
+                        start_token=40,
+                        end_token=52,
+                        region_start_token=38,
+                        region_end_token=54,
+                        source_contributions=(
+                            TrainingSourceContribution(
+                                source_id="preference-rejected-text",
+                                source_kind=TrainingTextSourceKind.PREFERENCE,
+                                source_field="rejected",
+                                start_token=45,
+                                end_token=49,
+                                transform="dpo-to-sft-flatten",
+                                text_sha256="sha256:redacted-rejected",
+                            ),
+                        ),
+                    ),
+                ),
+            )
+        ),
+    )
+
+    report = analyze_static_contracts(VerificationConfig(name="static"), loaded, prefer_z3=False)
+
+    violation = {finding.name: finding for finding in report.violations}["training-supervised-source-leakage"]
+    assert violation.result is not None
+    assert violation.result.assignment == {"source_contribution": "example-4.assistant-0:0:preference-rejected-text"}
+    evidence = dict(violation.evidence)
+    assert evidence["source_kind"] == "preference"
+    assert evidence["source_field"] == "rejected"
+    assert evidence["source_token_span"] == "45:49"
+    assert evidence["target_token_span"] == "40:52"
+    assert evidence["transform"] == "dpo-to-sft-flatten"
+    assert evidence["text_sha256"] == "sha256:redacted-rejected"
+    assert "preference-text-overlaps-supervised-target" in evidence["reasons"]
+    assert "rejected-field-overlaps-supervised-target" in evidence["reasons"]
 
 
 def test_static_contracts_encode_role_region_nonforgeability() -> None:

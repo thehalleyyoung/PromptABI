@@ -64,6 +64,19 @@ class PackingStrategy(StrEnum):
     PACKED_SEQUENCE = "packed-sequence"
 
 
+class TrainingTextSourceKind(StrEnum):
+    """Source categories that can contribute text to supervised target spans."""
+
+    ASSISTANT = "assistant"
+    USER = "user"
+    TOOL = "tool"
+    RETRIEVAL = "retrieval"
+    PREFERENCE = "preference"
+    SYSTEM = "system"
+    DEVELOPER = "developer"
+    UNKNOWN = "unknown"
+
+
 @dataclass(frozen=True, slots=True)
 class ArtifactLocation:
     """Where an artifact came from.
@@ -356,6 +369,45 @@ class RoleLabel:
 
 
 @dataclass(frozen=True, slots=True)
+class TrainingSourceContribution:
+    """A token range inside a supervised span attributed to an upstream text source."""
+
+    source_id: str
+    source_kind: TrainingTextSourceKind
+    start_token: int
+    end_token: int
+    transform: str
+    source_field: str | None = None
+    text_sha256: str | None = None
+
+    def __post_init__(self) -> None:
+        if isinstance(self.source_kind, str):
+            object.__setattr__(self, "source_kind", TrainingTextSourceKind(self.source_kind))
+        _require_non_empty("training source contribution source_id", self.source_id)
+        _require_non_empty("training source contribution transform", self.transform)
+        _optional_non_empty("training source contribution source_field", self.source_field)
+        _optional_non_empty("training source contribution text_sha256", self.text_sha256)
+        for field_name in ("start_token", "end_token"):
+            _optional_non_negative(f"training source contribution {field_name}", getattr(self, field_name))
+        if self.end_token < self.start_token:
+            raise ValueError("training source contribution end_token must be greater than or equal to start_token")
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {
+            "source_id": self.source_id,
+            "source_kind": self.source_kind.value,
+            "start_token": self.start_token,
+            "end_token": self.end_token,
+            "transform": self.transform,
+        }
+        if self.source_field is not None:
+            data["source_field"] = self.source_field
+        if self.text_sha256 is not None:
+            data["text_sha256"] = self.text_sha256
+        return data
+
+
+@dataclass(frozen=True, slots=True)
 class TrainingSpanContract:
     """Observed finite span facts from a rendered/tokenized supervised example."""
 
@@ -370,6 +422,7 @@ class TrainingSpanContract:
     loss_masked: bool = True
     packed_example_id: str | None = None
     crosses_packing_boundary: bool = False
+    source_contributions: tuple[TrainingSourceContribution, ...] = ()
 
     def __post_init__(self) -> None:
         _require_non_empty("training span id", self.span_id)
@@ -382,6 +435,7 @@ class TrainingSpanContract:
         if self.region_end_token < self.region_start_token:
             raise ValueError("training span region_end_token must be greater than or equal to region_start_token")
         _optional_non_empty("training span packed_example_id", self.packed_example_id)
+        object.__setattr__(self, "source_contributions", tuple(sorted(self.source_contributions, key=lambda item: item.source_id)))
 
     def to_dict(self) -> dict[str, object]:
         data: dict[str, object] = {
@@ -399,6 +453,8 @@ class TrainingSpanContract:
             data["packed_example_id"] = self.packed_example_id
         if self.crosses_packing_boundary:
             data["crosses_packing_boundary"] = self.crosses_packing_boundary
+        if self.source_contributions:
+            data["source_contributions"] = [contribution.to_dict() for contribution in self.source_contributions]
         return data
 
 
@@ -1344,9 +1400,32 @@ def _training_span_contracts(spec: dict[str, Any]) -> tuple[TrainingSpanContract
                 loss_masked=_bool(item, "loss_masked", default=True),
                 packed_example_id=_optional_str(item, "packed_example_id"),
                 crosses_packing_boundary=_bool(item, "crosses_packing_boundary", default=False),
+                source_contributions=_training_source_contributions(item),
             )
         )
     return tuple(spans)
+
+
+def _training_source_contributions(spec: dict[str, Any]) -> tuple[TrainingSourceContribution, ...]:
+    raw_contributions = spec.get("source_contributions", spec.get("source_segments", []))
+    if not isinstance(raw_contributions, list):
+        raise ValueError("training span field 'source_contributions' must be a list")
+    contributions: list[TrainingSourceContribution] = []
+    for item in raw_contributions:
+        if not isinstance(item, dict):
+            raise ValueError("training source contribution entries must be objects")
+        contributions.append(
+            TrainingSourceContribution(
+                source_id=_str(item, "source_id", default=_str(item, "id") if "id" in item else None),
+                source_kind=TrainingTextSourceKind(_str(item, "source_kind", default=_str(item, "kind") if "kind" in item else None)),
+                start_token=_int(item, "start_token", default=0),
+                end_token=_int(item, "end_token", default=0),
+                transform=_str(item, "transform", default=_str(item, "transform_name") if "transform_name" in item else "unknown-transform"),
+                source_field=_optional_str(item, "source_field"),
+                text_sha256=_optional_str(item, "text_sha256"),
+            )
+        )
+    return tuple(contributions)
 
 
 def _loss_mask_policy(spec: dict[str, Any]) -> LossMaskPolicy | None:

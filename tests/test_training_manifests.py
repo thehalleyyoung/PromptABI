@@ -13,6 +13,8 @@ from promptabi import (
     PackingStrategy,
     TrainingDatasetKind,
     TrainingManifestArtifact,
+    TrainingSourceContribution,
+    TrainingTextSourceKind,
 )
 from promptabi.artifacts import artifact_from_config
 from promptabi.loaders import ArtifactLoadError, ArtifactLoader
@@ -87,6 +89,17 @@ def _write_manifest(path: Path) -> None:
                         "supervised_target": True,
                         "loss_masked": True,
                         "packed_example_id": "train-0001",
+                        "source_contributions": [
+                            {
+                                "source_id": "assistant-answer",
+                                "source_kind": "assistant",
+                                "source_field": "messages.content",
+                                "start_token": 18,
+                                "end_token": 36,
+                                "transform": "chat-template-render",
+                                "text_sha256": "sha256:assistant-answer",
+                            }
+                        ],
                     }
                 ],
                 "packing_window": {
@@ -159,6 +172,7 @@ def test_training_manifest_config_model_covers_training_pipeline_contracts(tmp_p
     assert artifact.loss_mask_policy.strategy is LossMaskStrategy.ASSISTANT_ONLY
     assert artifact.supervised_spans[0].span_id == "target"
     assert artifact.supervised_spans[0].rendered_region_role == "assistant"
+    assert artifact.supervised_spans[0].source_contributions == ()
     assert artifact.packing_window is not None
     assert artifact.packing_window.strategy is PackingStrategy.SAMPLE_PACKING
     assert artifact.chat_template_version == ChatTemplateVersion(name="chatml", sha256="a" * 64)
@@ -183,6 +197,17 @@ def test_loader_parses_training_manifest_json_and_reports_metadata(tmp_path: Pat
     assert loaded.artifact.target_roles == ("assistant",)
     assert loaded.artifact.supervised_spans[0].span_id == "train-0001.assistant-0"
     assert loaded.artifact.supervised_spans[0].loss_masked is True
+    assert loaded.artifact.supervised_spans[0].source_contributions == (
+        TrainingSourceContribution(
+            source_id="assistant-answer",
+            source_kind=TrainingTextSourceKind.ASSISTANT,
+            source_field="messages.content",
+            start_token=18,
+            end_token=36,
+            transform="chat-template-render",
+            text_sha256="sha256:assistant-answer",
+        ),
+    )
     assert loaded.artifact.datasets[1].kind is TrainingDatasetKind.PREFERENCE
     assert loaded.artifact.packing_window is not None
     assert loaded.artifact.packing_window.max_tokens == 4096
@@ -192,6 +217,7 @@ def test_loader_parses_training_manifest_json_and_reports_metadata(tmp_path: Pat
     assert metadata["preference_dataset_count"] == 1
     assert metadata["example_count"] == 192
     assert metadata["supervised_span_count"] == 1
+    assert metadata["source_contribution_count"] == 1
     assert metadata["loss_mask_strategy"] == "assistant-only"
     assert metadata["packing_max_tokens"] == 4096
     assert metadata["chat_template_pinned"] is True

@@ -14,6 +14,7 @@ from .artifacts import (
     TokenizerArtifact,
     ToolDefinitionArtifact,
     TrainingManifestArtifact,
+    TrainingTextSourceKind,
 )
 from .config import VerificationConfig
 from .formal import (
@@ -107,6 +108,7 @@ def analyze_static_contracts(
     findings.extend(_tool_schema_precondition_obligation(loaded_artifacts, prefer_z3=prefer_z3))
     findings.extend(_training_target_obligation(training_manifests, templates, prefer_z3=prefer_z3))
     findings.extend(_training_span_region_obligation(training_manifests, templates, prefer_z3=prefer_z3))
+    findings.extend(_training_source_leakage_obligation(training_manifests, prefer_z3=prefer_z3))
 
     if not findings:
         findings.append(
@@ -680,6 +682,103 @@ def _training_intended_target_roles(manifest: TrainingManifestArtifact) -> tuple
     if manifest.loss_mask_policy is not None and manifest.loss_mask_policy.target_roles:
         return manifest.loss_mask_policy.target_roles
     return manifest.target_roles
+
+
+def _training_source_leakage_obligation(
+    manifests: tuple[TrainingManifestArtifact, ...],
+    *,
+    prefer_z3: bool,
+) -> tuple[StaticContractFinding, ...]:
+    source_facts = tuple(
+        (manifest, span, index, contribution)
+        for manifest in manifests
+        for span in manifest.supervised_spans
+        if span.supervised_target and span.loss_masked
+        for index, contribution in enumerate(span.source_contributions)
+    )
+    if not source_facts:
+        return ()
+
+    leaking_kinds = {
+        TrainingTextSourceKind.USER,
+        TrainingTextSourceKind.TOOL,
+        TrainingTextSourceKind.RETRIEVAL,
+        TrainingTextSourceKind.PREFERENCE,
+    }
+    leaking_fields = {"user", "tool", "retrieval", "context", "document", "preference", "prompt", "chosen", "rejected"}
+    leak_reasons: dict[str, tuple[str, ...]] = {}
+    source_details: dict[str, tuple[TrainingManifestArtifact, object, object]] = {}
+    for manifest, span, index, contribution in source_facts:
+        leak_id = f"{span.span_id}:{index}:{contribution.source_id}"
+        source_details[leak_id] = (manifest, span, contribution)
+        reasons: list[str] = []
+        if contribution.source_kind in leaking_kinds:
+            reasons.append(f"{contribution.source_kind.value}-text-overlaps-supervised-target")
+        if contribution.source_field is not None and contribution.source_field.lower() in leaking_fields:
+            reasons.append(f"{contribution.source_field.lower()}-field-overlaps-supervised-target")
+        overlaps_target = contribution.start_token <= span.end_token and span.start_token <= contribution.end_token
+        if not overlaps_target:
+            reasons.clear()
+        if reasons:
+            leak_reasons[leak_id] = tuple(reasons)
+
+    leak_ids = tuple(source_details)
+    problem = FiniteContractProblem(
+        name="training-supervised-source-leakage",
+        variables=(EnumDomain("source_contribution", leak_ids),),
+        constraints=(
+            NamedConstraint("non-target-source-overlaps-supervised-target", InSet(Var("source_contribution"), leak_reasons)),
+        ),
+    )
+    result = problem.solve(prefer_z3=prefer_z3)
+    severity = "error" if result.sat else "info"
+    selected_id = str(result.assignment.get("source_contribution")) if result.assignment else None
+    evidence: list[tuple[str, str]] = [
+        ("source_contribution_count", str(len(source_facts))),
+        ("leaking_source_kinds", ", ".join(kind.value for kind in sorted(leaking_kinds, key=lambda item: item.value))),
+        ("range_model", "closed token intervals must not overlap supervised/loss-masked target spans"),
+    ]
+    if selected_id is not None:
+        manifest, span, contribution = source_details[selected_id]
+        evidence.extend(
+            (
+                ("manifest", manifest.name),
+                ("span_id", span.span_id),
+                ("target_role", span.target_role),
+                ("target_token_span", f"{span.start_token}:{span.end_token}"),
+                ("source_id", contribution.source_id),
+                ("source_kind", contribution.source_kind.value),
+                ("source_token_span", f"{contribution.start_token}:{contribution.end_token}"),
+                ("transform", contribution.transform),
+                ("reasons", ", ".join(leak_reasons[selected_id])),
+            )
+        )
+        if contribution.source_field is not None:
+            evidence.append(("source_field", contribution.source_field))
+        if contribution.text_sha256 is not None:
+            evidence.append(("text_sha256", contribution.text_sha256))
+
+    return (
+        StaticContractFinding(
+            name=problem.name,
+            status=result.status,
+            result=result,
+            problem=problem,
+            severity=severity,
+            message=(
+                "user, tool, retrieval, or preference text can overlap a supervised/loss-masked target span after a dataset transform"
+                if result.sat
+                else "declared source contributions do not place user, tool, retrieval, or preference text inside supervised target spans"
+            ),
+            suggestion=(
+                "Regenerate target spans after transforms, keep non-assistant source ranges loss-masked, and store only hashes for leaked text witnesses."
+                if result.sat
+                else "Keep transform source-contribution manifests emitted by the dataset builder and verify them before fine-tuning."
+            ),
+            evidence=tuple(evidence),
+            artifacts=tuple(manifest.name for manifest in manifests),
+        ),
+    )
 
 
 def _role_boundary_markers(
