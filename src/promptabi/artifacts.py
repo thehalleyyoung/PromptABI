@@ -459,6 +459,99 @@ class TrainingSpanContract:
 
 
 @dataclass(frozen=True, slots=True)
+class PreferencePairContract:
+    """Finite DPO/RLHF preference-pair facts emitted by a data-preparation job."""
+
+    pair_id: str
+    prompt_sha256: str
+    chosen_sha256: str
+    rejected_sha256: str
+    chosen_role_layout: tuple[str, ...]
+    rejected_role_layout: tuple[str, ...]
+    chosen_tokenizer: str
+    rejected_tokenizer: str
+    chosen_mask_policy: str
+    rejected_mask_policy: str
+    chosen_prompt_tokens: int
+    rejected_prompt_tokens: int
+    chosen_response_start_token: int
+    rejected_response_start_token: int
+    chosen_response_end_token: int
+    rejected_response_end_token: int
+    chosen_truncated: bool = False
+    rejected_truncated: bool = False
+    chosen_packed_example_id: str | None = None
+    rejected_packed_example_id: str | None = None
+
+    def __post_init__(self) -> None:
+        for field_name in (
+            "pair_id",
+            "prompt_sha256",
+            "chosen_sha256",
+            "rejected_sha256",
+            "chosen_tokenizer",
+            "rejected_tokenizer",
+            "chosen_mask_policy",
+            "rejected_mask_policy",
+        ):
+            _require_non_empty(f"preference pair {field_name}", getattr(self, field_name))
+        object.__setattr__(
+            self,
+            "chosen_role_layout",
+            _strings_preserve_order(self.chosen_role_layout, field_name="preference pair chosen_role_layout"),
+        )
+        object.__setattr__(
+            self,
+            "rejected_role_layout",
+            _strings_preserve_order(self.rejected_role_layout, field_name="preference pair rejected_role_layout"),
+        )
+        if not self.chosen_role_layout or not self.rejected_role_layout:
+            raise ValueError("preference pair role layouts must be non-empty")
+        for field_name in (
+            "chosen_prompt_tokens",
+            "rejected_prompt_tokens",
+            "chosen_response_start_token",
+            "rejected_response_start_token",
+            "chosen_response_end_token",
+            "rejected_response_end_token",
+        ):
+            _optional_non_negative(f"preference pair {field_name}", getattr(self, field_name))
+        if self.chosen_response_end_token < self.chosen_response_start_token:
+            raise ValueError("preference pair chosen_response_end_token must be greater than or equal to chosen_response_start_token")
+        if self.rejected_response_end_token < self.rejected_response_start_token:
+            raise ValueError("preference pair rejected_response_end_token must be greater than or equal to rejected_response_start_token")
+        for field_name in ("chosen_packed_example_id", "rejected_packed_example_id"):
+            _optional_non_empty(f"preference pair {field_name}", getattr(self, field_name))
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {
+            "pair_id": self.pair_id,
+            "prompt_sha256": self.prompt_sha256,
+            "chosen_sha256": self.chosen_sha256,
+            "rejected_sha256": self.rejected_sha256,
+            "chosen_role_layout": list(self.chosen_role_layout),
+            "rejected_role_layout": list(self.rejected_role_layout),
+            "chosen_tokenizer": self.chosen_tokenizer,
+            "rejected_tokenizer": self.rejected_tokenizer,
+            "chosen_mask_policy": self.chosen_mask_policy,
+            "rejected_mask_policy": self.rejected_mask_policy,
+            "chosen_prompt_tokens": self.chosen_prompt_tokens,
+            "rejected_prompt_tokens": self.rejected_prompt_tokens,
+            "chosen_response_start_token": self.chosen_response_start_token,
+            "rejected_response_start_token": self.rejected_response_start_token,
+            "chosen_response_end_token": self.chosen_response_end_token,
+            "rejected_response_end_token": self.rejected_response_end_token,
+            "chosen_truncated": self.chosen_truncated,
+            "rejected_truncated": self.rejected_truncated,
+        }
+        if self.chosen_packed_example_id is not None:
+            data["chosen_packed_example_id"] = self.chosen_packed_example_id
+        if self.rejected_packed_example_id is not None:
+            data["rejected_packed_example_id"] = self.rejected_packed_example_id
+        return data
+
+
+@dataclass(frozen=True, slots=True)
 class LossMaskPolicy:
     """Finite loss-mask contract for supervised target construction."""
 
@@ -938,6 +1031,7 @@ class TrainingManifestArtifact(BaseArtifact):
     system_message_policy: SystemMessagePolicy | None = None
     role_labels: tuple[RoleLabel, ...] = ()
     supervised_spans: tuple[TrainingSpanContract, ...] = ()
+    preference_pairs: tuple[PreferencePairContract, ...] = ()
     loss_mask_policy: LossMaskPolicy | None = None
     packing_window: PackingWindow | None = None
     chat_template_version: ChatTemplateVersion | None = None
@@ -958,6 +1052,10 @@ class TrainingManifestArtifact(BaseArtifact):
         if len({span.span_id for span in supervised_spans}) != len(supervised_spans):
             raise ValueError("training manifest supervised span IDs must be unique")
         object.__setattr__(self, "supervised_spans", supervised_spans)
+        preference_pairs = tuple(sorted(self.preference_pairs, key=lambda pair: pair.pair_id))
+        if len({pair.pair_id for pair in preference_pairs}) != len(preference_pairs):
+            raise ValueError("training manifest preference pair IDs must be unique")
+        object.__setattr__(self, "preference_pairs", preference_pairs)
         pipeline_stages = tuple(sorted(self.pipeline_stages, key=lambda stage: stage.stage))
         if len({stage.stage for stage in pipeline_stages}) != len(pipeline_stages):
             raise ValueError("training manifest pipeline stage names must be unique")
@@ -993,6 +1091,8 @@ class TrainingManifestArtifact(BaseArtifact):
             data["role_labels"] = [label.to_dict() for label in self.role_labels]
         if self.supervised_spans:
             data["supervised_spans"] = [span.to_dict() for span in self.supervised_spans]
+        if self.preference_pairs:
+            data["preference_pairs"] = [pair.to_dict() for pair in self.preference_pairs]
         if self.loss_mask_policy is not None:
             data["loss_mask_policy"] = self.loss_mask_policy.to_dict()
         if self.packing_window is not None:
@@ -1172,6 +1272,7 @@ def artifact_from_config(
             system_message_policy=_system_message_policy(spec),
             role_labels=_role_labels(spec),
             supervised_spans=_training_span_contracts(spec),
+            preference_pairs=_preference_pair_contracts(spec),
             loss_mask_policy=_loss_mask_policy(spec),
             packing_window=_packing_window(spec),
             chat_template_version=_chat_template_version(spec),
@@ -1234,6 +1335,15 @@ def _unique_strings(values, *, field_name: str) -> tuple[str, ...]:
             raise ValueError(f"{field_name} values must be non-empty strings")
         result.append(value)
     return tuple(sorted(dict.fromkeys(result)))
+
+
+def _strings_preserve_order(values, *, field_name: str) -> tuple[str, ...]:
+    result: list[str] = []
+    for value in values:
+        if not isinstance(value, str) or not value:
+            raise ValueError(f"{field_name} values must be non-empty strings")
+        result.append(value)
+    return tuple(result)
 
 
 def _location_from_spec(name: str, spec: dict[str, Any], base_dir: Path) -> ArtifactLocation:
@@ -1508,6 +1618,41 @@ def _training_source_contributions(spec: dict[str, Any]) -> tuple[TrainingSource
             )
         )
     return tuple(contributions)
+
+
+def _preference_pair_contracts(spec: dict[str, Any]) -> tuple[PreferencePairContract, ...]:
+    raw_pairs = spec.get("preference_pairs", spec.get("preference_pair_contracts", []))
+    if not isinstance(raw_pairs, list):
+        raise ValueError("artifact field 'preference_pairs' must be a list")
+    pairs: list[PreferencePairContract] = []
+    for item in raw_pairs:
+        if not isinstance(item, dict):
+            raise ValueError("preference pair entries must be objects")
+        pairs.append(
+            PreferencePairContract(
+                pair_id=_str(item, "pair_id", default=_str(item, "id") if "id" in item else None),
+                prompt_sha256=_str(item, "prompt_sha256"),
+                chosen_sha256=_str(item, "chosen_sha256"),
+                rejected_sha256=_str(item, "rejected_sha256"),
+                chosen_role_layout=_tuple_of_str(item, "chosen_role_layout"),
+                rejected_role_layout=_tuple_of_str(item, "rejected_role_layout"),
+                chosen_tokenizer=_str(item, "chosen_tokenizer"),
+                rejected_tokenizer=_str(item, "rejected_tokenizer"),
+                chosen_mask_policy=_str(item, "chosen_mask_policy"),
+                rejected_mask_policy=_str(item, "rejected_mask_policy"),
+                chosen_prompt_tokens=_int(item, "chosen_prompt_tokens", default=0),
+                rejected_prompt_tokens=_int(item, "rejected_prompt_tokens", default=0),
+                chosen_response_start_token=_int(item, "chosen_response_start_token", default=0),
+                rejected_response_start_token=_int(item, "rejected_response_start_token", default=0),
+                chosen_response_end_token=_int(item, "chosen_response_end_token", default=0),
+                rejected_response_end_token=_int(item, "rejected_response_end_token", default=0),
+                chosen_truncated=_bool(item, "chosen_truncated", default=False),
+                rejected_truncated=_bool(item, "rejected_truncated", default=False),
+                chosen_packed_example_id=_optional_str(item, "chosen_packed_example_id"),
+                rejected_packed_example_id=_optional_str(item, "rejected_packed_example_id"),
+            )
+        )
+    return tuple(pairs)
 
 
 def _loss_mask_policy(spec: dict[str, Any]) -> LossMaskPolicy | None:

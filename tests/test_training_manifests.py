@@ -11,6 +11,7 @@ from promptabi import (
     ChatTemplateVersion,
     LossMaskStrategy,
     PackingStrategy,
+    PreferencePairContract,
     TrainingDatasetKind,
     TrainingManifestArtifact,
     TrainingPipelineStageVersion,
@@ -105,6 +106,28 @@ def _write_manifest(path: Path) -> None:
                         ],
                     }
                 ],
+                "preference_pairs": [
+                    {
+                        "pair_id": "prefs-0001",
+                        "prompt_sha256": "sha256:prompt",
+                        "chosen_sha256": "sha256:chosen",
+                        "rejected_sha256": "sha256:rejected",
+                        "chosen_role_layout": ["system", "user", "assistant"],
+                        "rejected_role_layout": ["system", "user", "assistant"],
+                        "chosen_tokenizer": "llama-tokenizer@sha256:tok",
+                        "rejected_tokenizer": "llama-tokenizer@sha256:tok",
+                        "chosen_mask_policy": "dpo-response-only",
+                        "rejected_mask_policy": "dpo-response-only",
+                        "chosen_prompt_tokens": 18,
+                        "rejected_prompt_tokens": 18,
+                        "chosen_response_start_token": 18,
+                        "rejected_response_start_token": 18,
+                        "chosen_response_end_token": 36,
+                        "rejected_response_end_token": 34,
+                        "chosen_packed_example_id": "prefs-0001",
+                        "rejected_packed_example_id": "prefs-0001",
+                    }
+                ],
                 "packing_window": {
                     "strategy": "sample-packing",
                     "max_tokens": 4096,
@@ -184,6 +207,26 @@ def test_training_manifest_config_model_covers_training_pipeline_contracts(tmp_p
                 {"source_role": "human", "canonical_role": "user", "trainable": False},
             ],
             "loss_mask_policy": {"strategy": "assistant-only", "target_roles": ["assistant"]},
+            "preference_pairs": [
+                {
+                    "pair_id": "prefs-1",
+                    "prompt_sha256": "sha256:prompt",
+                    "chosen_sha256": "sha256:chosen",
+                    "rejected_sha256": "sha256:rejected",
+                    "chosen_role_layout": ["user", "assistant"],
+                    "rejected_role_layout": ["user", "assistant"],
+                    "chosen_tokenizer": "chatml-tokenizer@rev1",
+                    "rejected_tokenizer": "chatml-tokenizer@rev1",
+                    "chosen_mask_policy": "dpo-response-only",
+                    "rejected_mask_policy": "dpo-response-only",
+                    "chosen_prompt_tokens": 2,
+                    "rejected_prompt_tokens": 2,
+                    "chosen_response_start_token": 2,
+                    "rejected_response_start_token": 2,
+                    "chosen_response_end_token": 4,
+                    "rejected_response_end_token": 5,
+                }
+            ],
             "supervised_spans": [
                 {
                     "span_id": "target",
@@ -223,6 +266,26 @@ def test_training_manifest_config_model_covers_training_pipeline_contracts(tmp_p
     assert artifact.target_roles == ("assistant",)
     assert artifact.loss_mask_policy is not None
     assert artifact.loss_mask_policy.strategy is LossMaskStrategy.ASSISTANT_ONLY
+    assert artifact.preference_pairs == (
+        PreferencePairContract(
+            pair_id="prefs-1",
+            prompt_sha256="sha256:prompt",
+            chosen_sha256="sha256:chosen",
+            rejected_sha256="sha256:rejected",
+            chosen_role_layout=("user", "assistant"),
+            rejected_role_layout=("user", "assistant"),
+            chosen_tokenizer="chatml-tokenizer@rev1",
+            rejected_tokenizer="chatml-tokenizer@rev1",
+            chosen_mask_policy="dpo-response-only",
+            rejected_mask_policy="dpo-response-only",
+            chosen_prompt_tokens=2,
+            rejected_prompt_tokens=2,
+            chosen_response_start_token=2,
+            rejected_response_start_token=2,
+            chosen_response_end_token=4,
+            rejected_response_end_token=5,
+        ),
+    )
     assert artifact.supervised_spans[0].span_id == "target"
     assert artifact.supervised_spans[0].rendered_region_role == "assistant"
     assert artifact.supervised_spans[0].source_contributions == ()
@@ -246,6 +309,7 @@ def test_training_manifest_config_model_covers_training_pipeline_contracts(tmp_p
         ),
     )
     assert artifact.to_dict()["datasets"][0]["preference_fields"] == ["chosen", "rejected"]
+    assert artifact.to_dict()["preference_pairs"][0]["chosen_tokenizer"] == "chatml-tokenizer@rev1"
     assert artifact.to_dict()["pipeline_stages"][0]["tokenizer_revision"] == "rev1"
 
 
@@ -279,6 +343,9 @@ def test_loader_parses_training_manifest_json_and_reports_metadata(tmp_path: Pat
         ),
     )
     assert loaded.artifact.datasets[1].kind is TrainingDatasetKind.PREFERENCE
+    assert loaded.artifact.preference_pairs[0].pair_id == "prefs-0001"
+    assert loaded.artifact.preference_pairs[0].chosen_role_layout == ("system", "user", "assistant")
+    assert loaded.artifact.preference_pairs[0].chosen_prompt_tokens == loaded.artifact.preference_pairs[0].rejected_prompt_tokens
     assert loaded.artifact.packing_window is not None
     assert loaded.artifact.packing_window.max_tokens == 4096
     serving_stage = next(stage for stage in loaded.artifact.pipeline_stages if stage.stage == "serving")
@@ -289,6 +356,7 @@ def test_loader_parses_training_manifest_json_and_reports_metadata(tmp_path: Pat
     assert metadata["preference_dataset_count"] == 1
     assert metadata["example_count"] == 192
     assert metadata["supervised_span_count"] == 1
+    assert metadata["preference_pair_count"] == 1
     assert metadata["source_contribution_count"] == 1
     assert metadata["loss_mask_strategy"] == "assistant-only"
     assert metadata["packing_max_tokens"] == 4096

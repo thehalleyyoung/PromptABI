@@ -36,6 +36,7 @@ artifacts are present:
 | Training target alignment | training manifest + chat template | a supervised target role is not renderable by the template |
 | Training supervised-span alignment | training manifest + chat template | an observed supervised span is outside its rendered role region, token bounds, preserved packing boundary, or loss mask |
 | Training source-leakage exclusion | training manifest | declared user/tool/retrieval/preference source ranges overlap a supervised loss-masked target span after a dataset transform |
+| Training preference-pair contract | training manifest | chosen and rejected branches diverge in prompt prefix, role layout, tokenizer pin, mask policy, truncation, response start, or preserved packing boundary before the compared response |
 
 Each obligation produces a `StaticContractFinding` with severity, evidence,
 affected artifacts, and the underlying `SolverResult` when one exists.

@@ -8,6 +8,7 @@ from .artifacts import (
     ArtifactKind,
     ChatTemplateArtifact,
     FrameworkTruncationConfigArtifact,
+    PreferencePairContract,
     PromptSegmentArtifact,
     SpecialTokenMapArtifact,
     StopPolicyArtifact,
@@ -110,6 +111,7 @@ def analyze_static_contracts(
     findings.extend(_training_span_region_obligation(training_manifests, templates, prefer_z3=prefer_z3))
     findings.extend(_training_source_leakage_obligation(training_manifests, prefer_z3=prefer_z3))
     findings.extend(_training_stage_consistency_obligation(training_manifests, prefer_z3=prefer_z3))
+    findings.extend(_preference_pair_contract_obligation(training_manifests, prefer_z3=prefer_z3))
 
     if not findings:
         findings.append(
@@ -940,6 +942,115 @@ def _training_stage_fingerprint(stage: object, component: str) -> str | None:
     if not populated:
         return None
     return ",".join(f"{name}={value}" for name, value in populated)
+
+
+def _preference_pair_contract_obligation(
+    manifests: tuple[TrainingManifestArtifact, ...],
+    *,
+    prefer_z3: bool,
+) -> tuple[StaticContractFinding, ...]:
+    pair_facts = tuple(
+        (manifest, pair)
+        for manifest in manifests
+        for pair in manifest.preference_pairs
+    )
+    if not pair_facts:
+        return ()
+
+    bad_reasons: dict[str, tuple[str, ...]] = {}
+    pair_details: dict[str, tuple[TrainingManifestArtifact, PreferencePairContract]] = {}
+    for manifest, pair in pair_facts:
+        pair_key = f"{manifest.name}:{pair.pair_id}"
+        pair_details[pair_key] = (manifest, pair)
+        reasons: list[str] = []
+        if pair.chosen_role_layout != pair.rejected_role_layout:
+            reasons.append("role-layout-mismatch")
+        if pair.chosen_tokenizer != pair.rejected_tokenizer:
+            reasons.append("tokenizer-version-mismatch")
+        if pair.chosen_mask_policy != pair.rejected_mask_policy:
+            reasons.append("mask-policy-mismatch")
+        if pair.chosen_prompt_tokens != pair.rejected_prompt_tokens:
+            reasons.append("prompt-prefix-token-length-mismatch")
+        if pair.chosen_response_start_token != pair.rejected_response_start_token:
+            reasons.append("response-start-token-mismatch")
+        if pair.chosen_truncated or pair.rejected_truncated:
+            reasons.append("preference-branch-truncated")
+        if (
+            manifest.packing_window is not None
+            and manifest.packing_window.preserve_example_boundaries
+            and pair.chosen_packed_example_id is not None
+            and pair.rejected_packed_example_id is not None
+            and pair.chosen_packed_example_id != pair.rejected_packed_example_id
+        ):
+            reasons.append("packed-example-boundary-mismatch")
+        if reasons:
+            bad_reasons[pair_key] = tuple(reasons)
+
+    problem = FiniteContractProblem(
+        name="training-preference-pair-contract",
+        variables=(EnumDomain("preference_pair", tuple(pair_details)),),
+        constraints=(
+            NamedConstraint("preference-pair-branches-diverge-before-compared-response", InSet(Var("preference_pair"), bad_reasons)),
+        ),
+    )
+    result = problem.solve(prefer_z3=prefer_z3)
+    selected_id = str(result.assignment.get("preference_pair")) if result.assignment else None
+    evidence: list[tuple[str, str]] = [
+        ("preference_pair_count", str(len(pair_facts))),
+        ("checked_invariants", "prompt prefix hash/length, role layout, tokenizer, mask policy, response start, truncation, packing boundary"),
+    ]
+    artifacts = tuple(manifest.name for manifest in manifests if manifest.preference_pairs)
+    if selected_id is not None:
+        manifest, pair = pair_details[selected_id]
+        evidence.extend(
+            (
+                ("manifest", manifest.name),
+                ("pair_id", pair.pair_id),
+                ("prompt_sha256", pair.prompt_sha256),
+                ("chosen_sha256", pair.chosen_sha256),
+                ("rejected_sha256", pair.rejected_sha256),
+                ("chosen_role_layout", " > ".join(pair.chosen_role_layout)),
+                ("rejected_role_layout", " > ".join(pair.rejected_role_layout)),
+                ("chosen_tokenizer", pair.chosen_tokenizer),
+                ("rejected_tokenizer", pair.rejected_tokenizer),
+                ("chosen_mask_policy", pair.chosen_mask_policy),
+                ("rejected_mask_policy", pair.rejected_mask_policy),
+                ("chosen_prompt_tokens", str(pair.chosen_prompt_tokens)),
+                ("rejected_prompt_tokens", str(pair.rejected_prompt_tokens)),
+                ("chosen_response_start_token", str(pair.chosen_response_start_token)),
+                ("rejected_response_start_token", str(pair.rejected_response_start_token)),
+                ("chosen_response_token_span", f"{pair.chosen_response_start_token}:{pair.chosen_response_end_token}"),
+                ("rejected_response_token_span", f"{pair.rejected_response_start_token}:{pair.rejected_response_end_token}"),
+                ("reasons", ", ".join(bad_reasons[selected_id])),
+            )
+        )
+        if pair.chosen_packed_example_id is not None:
+            evidence.append(("chosen_packed_example_id", pair.chosen_packed_example_id))
+        if pair.rejected_packed_example_id is not None:
+            evidence.append(("rejected_packed_example_id", pair.rejected_packed_example_id))
+        artifacts = (manifest.name,)
+
+    return (
+        StaticContractFinding(
+            name=problem.name,
+            status=result.status,
+            result=result,
+            problem=problem,
+            severity="error" if result.sat else "info",
+            message=(
+                "a chosen/rejected preference pair can diverge in prompt prefix, role layout, tokenizer, masking, truncation, or packing before the compared response"
+                if result.sat
+                else "all declared chosen/rejected preference pairs share prompt prefix, role layout, tokenizer version, masking policy, and finite packing/truncation invariants"
+            ),
+            suggestion=(
+                "Regenerate preference-pair manifests from the DPO/RLHF data builder and require shared prompt hashes, layout fingerprints, tokenizer pins, mask policy, response starts, and packing boundaries."
+                if result.sat
+                else "Keep preference-pair contracts emitted by the data-preparation job and verify them before DPO/RLHF training."
+            ),
+            evidence=tuple(evidence),
+            artifacts=artifacts,
+        ),
+    )
 
 
 def _role_boundary_markers(

@@ -42,7 +42,6 @@ def test_compatibility_matrix_documents_training_static_contract_coverage() -> N
     matrix = compatibility_matrix(include_plugins=False)
     by_check = {entry.check: entry for entry in matrix.entries}
     static_surfaces = {surface.key: surface for surface in by_check["static-contracts"].surfaces}
-    uncovered = {surface.key: surface for surface in matrix.uncovered_surfaces}
 
     assert static_surfaces["training:supervised-jsonl"].artifact_kind is ArtifactKind.TRAINING_MANIFEST
     assert "target-role alignment" in static_surfaces["training:supervised-jsonl"].notes
@@ -50,7 +49,8 @@ def test_compatibility_matrix_documents_training_static_contract_coverage() -> N
     assert "loss-mask contract" in static_surfaces["training:loss-masks"].notes
     assert static_surfaces["training:packed-datasets"].status == "bounded"
     assert "preserved packing boundaries" in static_surfaces["training:packed-datasets"].notes
-    assert uncovered["training:preference-pairs"].status == "planned-abstaining"
+    assert static_surfaces["training:preference-pairs"].status == "bounded"
+    assert "chosen/rejected pairs" in static_surfaces["training:preference-pairs"].notes
 
 
 def test_compatibility_matrix_includes_plugin_checks_and_can_exclude_them() -> None:

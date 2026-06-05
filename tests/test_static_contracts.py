@@ -10,6 +10,7 @@ from promptabi.artifacts import (
     FrameworkTruncationConfigArtifact,
     LossMaskPolicy,
     PackingWindow,
+    PreferencePairContract,
     PromptSegment,
     PromptSegmentArtifact,
     SpecialToken,
@@ -480,6 +481,107 @@ def test_static_contracts_find_training_stage_tokenizer_or_template_drift() -> N
     assert "dataset-preparation=" in evidence["stage_fingerprints"]
     assert "serving=" in evidence["stage_fingerprints"]
     assert "differs-across-dataset-preparation-training-evaluation-serving" in evidence["reasons"]
+
+
+def test_static_contracts_prove_preference_pair_branches_share_contract_prefixes() -> None:
+    location = ArtifactLocation(uri="memory://static-contract")
+    loaded = (
+        _loaded(
+            TrainingManifestArtifact(
+                kind=ArtifactKind.TRAINING_MANIFEST,
+                name="prefs",
+                location=location,
+                packing_window=PackingWindow(strategy="sample-packing", max_tokens=128, preserve_example_boundaries=True),
+                preference_pairs=(
+                    PreferencePairContract(
+                        pair_id="prefs-1",
+                        prompt_sha256="sha256:prompt",
+                        chosen_sha256="sha256:chosen",
+                        rejected_sha256="sha256:rejected",
+                        chosen_role_layout=("system", "user", "assistant"),
+                        rejected_role_layout=("system", "user", "assistant"),
+                        chosen_tokenizer="llama-tokenizer@sha256:tok",
+                        rejected_tokenizer="llama-tokenizer@sha256:tok",
+                        chosen_mask_policy="dpo-response-only",
+                        rejected_mask_policy="dpo-response-only",
+                        chosen_prompt_tokens=24,
+                        rejected_prompt_tokens=24,
+                        chosen_response_start_token=24,
+                        rejected_response_start_token=24,
+                        chosen_response_end_token=40,
+                        rejected_response_end_token=38,
+                        chosen_packed_example_id="prefs-1",
+                        rejected_packed_example_id="prefs-1",
+                    ),
+                ),
+            )
+        ),
+    )
+
+    report = analyze_static_contracts(VerificationConfig(name="static"), loaded, prefer_z3=False)
+
+    finding = next(item for item in report.findings if item.name == "training-preference-pair-contract")
+    assert finding.severity == "info"
+    assert finding.result is not None
+    assert finding.result.unsat_core == ("preference-pair-branches-diverge-before-compared-response",)
+    assert dict(finding.evidence)["preference_pair_count"] == "1"
+    assert not report.violations
+
+
+def test_static_contracts_find_preference_pair_prefix_layout_tokenizer_mask_and_packing_defects() -> None:
+    location = ArtifactLocation(uri="memory://static-contract")
+    loaded = (
+        _loaded(
+            TrainingManifestArtifact(
+                kind=ArtifactKind.TRAINING_MANIFEST,
+                name="prefs",
+                location=location,
+                packing_window=PackingWindow(strategy="sample-packing", max_tokens=128, preserve_example_boundaries=True),
+                preference_pairs=(
+                    PreferencePairContract(
+                        pair_id="prefs-bad",
+                        prompt_sha256="sha256:prompt",
+                        chosen_sha256="sha256:chosen",
+                        rejected_sha256="sha256:rejected",
+                        chosen_role_layout=("system", "user", "assistant"),
+                        rejected_role_layout=("user", "assistant"),
+                        chosen_tokenizer="llama-tokenizer@sha256:old",
+                        rejected_tokenizer="llama-tokenizer@sha256:new",
+                        chosen_mask_policy="dpo-response-only",
+                        rejected_mask_policy="completion-only",
+                        chosen_prompt_tokens=24,
+                        rejected_prompt_tokens=21,
+                        chosen_response_start_token=24,
+                        rejected_response_start_token=21,
+                        chosen_response_end_token=40,
+                        rejected_response_end_token=37,
+                        rejected_truncated=True,
+                        chosen_packed_example_id="packed-a",
+                        rejected_packed_example_id="packed-b",
+                    ),
+                ),
+            )
+        ),
+    )
+
+    report = analyze_static_contracts(VerificationConfig(name="static"), loaded, prefer_z3=False)
+
+    violation = {finding.name: finding for finding in report.violations}["training-preference-pair-contract"]
+    assert violation.result is not None
+    assert violation.result.assignment == {"preference_pair": "prefs:prefs-bad"}
+    evidence = dict(violation.evidence)
+    assert evidence["pair_id"] == "prefs-bad"
+    assert evidence["chosen_tokenizer"] == "llama-tokenizer@sha256:old"
+    assert evidence["rejected_tokenizer"] == "llama-tokenizer@sha256:new"
+    assert evidence["chosen_response_start_token"] == "24"
+    assert evidence["rejected_response_start_token"] == "21"
+    assert "role-layout-mismatch" in evidence["reasons"]
+    assert "tokenizer-version-mismatch" in evidence["reasons"]
+    assert "mask-policy-mismatch" in evidence["reasons"]
+    assert "prompt-prefix-token-length-mismatch" in evidence["reasons"]
+    assert "response-start-token-mismatch" in evidence["reasons"]
+    assert "preference-branch-truncated" in evidence["reasons"]
+    assert "packed-example-boundary-mismatch" in evidence["reasons"]
 
 
 def test_static_contracts_encode_role_region_nonforgeability() -> None:

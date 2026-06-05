@@ -102,6 +102,7 @@ from .artifacts import (
     LossMaskStrategy,
     PackingStrategy,
     PackingWindow,
+    PreferencePairContract,
     RoleLabel,
     SystemMessagePolicy,
     TokenizerArtifact,

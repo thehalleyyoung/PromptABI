@@ -326,6 +326,7 @@ def _surfaces_for_check(check_name: str, artifact_kinds: tuple[ArtifactKind, ...
             _surface("training", "packed-datasets", ArtifactKind.TRAINING_MANIFEST, "bounded", "observed supervised spans are checked against declared preserved packing boundaries"),
             _surface("training", "source-leakage", ArtifactKind.TRAINING_MANIFEST, "bounded", "declared transform source ranges cannot place user, tool, retrieval, or preference text into supervised targets"),
             _surface("training", "tokenizer-template-stage-consistency", ArtifactKind.TRAINING_MANIFEST, "covered", "fine-tuning preparation, training, evaluation, and serving tokenizer/template pins are compared by static-contracts"),
+            _surface("training", "preference-pairs", ArtifactKind.TRAINING_MANIFEST, "bounded", "chosen/rejected pairs must share prompt prefix, role layout, tokenizer version, masking policy, and packing/truncation invariants"),
         ),
         "token-budget-model": (*_tokenizer_surfaces(), *_framework_surfaces()),
         "tool-schema-ingestion": (_surface("provider", "mcp", ArtifactKind.TOOL_DEFINITION),),
@@ -369,7 +370,7 @@ def _surfaces_from_plugin_spec(spec) -> tuple[CompatibilitySurface, ...]:
 def _notes_for_check(check_name: str) -> str:
     return {
         "enterprise-readiness": "declarative enterprise posture check for offline mirrors, private indexes, internal fixtures, policy packs, severity overrides, solver limits, and strict no-network operation",
-        "static-contracts": "includes finite SMT obligations for supervised target/message role alignment and observed rendered/tokenized/loss-masked span contracts; richer preference-pair artifacts remain future surfaces",
+        "static-contracts": "includes finite SMT obligations for supervised target/message role alignment, observed rendered/tokenized/loss-masked span contracts, source leakage, stage consistency, and preference-pair prefix/layout/tokenizer/mask invariants",
         "tokenizer-config-drift": "alias retained for configs that select tokenizer drift under the older check name",
         "tokenizer-drift": "alias of tokenizer-config-drift for user-facing compatibility",
     }.get(check_name, "")

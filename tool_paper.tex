@@ -269,8 +269,10 @@ role-region non-forgeability, tool-schema required-parameter satisfiability,
 tool/provider compatibility, supervised target-role alignment, and observed
 supervised-span containment across rendered role regions, tokenized bounds,
 preserved dataset-packing boundaries, BOS/EOS delimiters, loss-mask selection, and exclusion of declared
-user, tool, retrieval, or preference source ranges from supervised targets, plus
-tokenizer and chat-template stage consistency across dataset preparation,
+user, tool, retrieval, or preference source ranges from supervised targets,
+chosen/rejected preference-pair agreement over prompt prefixes, role layouts,
+tokenizer pins, mask policies, response starts, truncation, and preserved packing
+boundaries, plus tokenizer and chat-template stage consistency across dataset preparation,
 training, evaluation, and serving, with concrete models,
 explicit proof classifications, or minimized unsat cores,
 a \texttt{promptabi solver replay} maintainer path that verifies such reduced
@@ -473,7 +475,8 @@ markers, tool schemas requiring parameters absent from their declared properties
 tool-provider family mismatches, and training target roles outside the serving
 chat-template role universe, plus supervised training spans that no longer align
 with the observed rendered role region, token bounds, packed example boundary, or loss
-mask, source-contribution leakage into target spans, and tokenizer/template drift
+mask, source-contribution leakage into target spans, chosen/rejected
+preference-pair divergence before the compared response, and tokenizer/template drift
 between fine-tuning preparation, training, evaluation, and serving pins, and lets
 maintainers replay those obligations from fixture JSON while
 validating stored SAT witnesses directly against the
