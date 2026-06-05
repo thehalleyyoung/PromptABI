@@ -119,6 +119,7 @@ promptabi diagnostics lsp --config examples/minimal/promptabi.json --format json
 promptabi corpus verify --format text
 promptabi corpus beta-report --format text
 promptabi corpus evaluation --format text
+promptabi corpus evaluation-reproducibility --config examples/evaluation-harness/safe.promptabi.json --format json
 promptabi verify --config examples/evaluation-harness/safe.promptabi.json
 promptabi corpus smt-benchmark --format text
 promptabi solver replay fixtures/solver_replays/role-region-forgery.solver-replay.json

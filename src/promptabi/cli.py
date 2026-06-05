@@ -73,6 +73,12 @@ from .editor_protocol import (
 )
 from .explain import ExplainError, explain_diagnostic, render_explanation_json, render_explanation_text
 from .evaluation import EvaluationError, render_evaluation_json, render_evaluation_text, run_evaluation
+from .evaluation_reproducibility import (
+    EvaluationReproducibilityError,
+    build_evaluation_reproducibility_report,
+    render_evaluation_reproducibility_json,
+    render_evaluation_reproducibility_text,
+)
 from .evaluation_fixture_packs import (
     EvaluationFixturePackError,
     build_evaluation_fixture_pack_manifest,
@@ -594,6 +600,26 @@ def build_parser() -> argparse.ArgumentParser:
     evaluation.add_argument(
         "--output",
         help="write evaluation report to this path instead of stdout",
+    )
+    evaluation_reproducibility = corpus_subparsers.add_parser(
+        "evaluation-reproducibility",
+        help="pin evaluation-harness prompt, tokenizer, provider, stop, and parser contracts",
+    )
+    evaluation_reproducibility.add_argument(
+        "--config",
+        action="append",
+        default=[],
+        help="evaluation-harness PromptABI config to pin; may be repeated (default: examples/evaluation-harness/safe.promptabi.json)",
+    )
+    evaluation_reproducibility.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="json",
+        help="output format (default: json)",
+    )
+    evaluation_reproducibility.add_argument(
+        "--output",
+        help="write evaluation reproducibility report to this path instead of stdout",
     )
     corpus_verify = corpus_subparsers.add_parser(
         "verify",
@@ -1711,6 +1737,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"promptabi: cannot write evaluation report: {exc}", file=sys.stderr)
             return 2
         return 0 if all(result.passed for result in report.results) else 1
+
+    if args.command == "corpus" and args.corpus_command == "evaluation-reproducibility":
+        try:
+            configs = args.config or None
+            report = build_evaluation_reproducibility_report(configs)
+            output = (
+                render_evaluation_reproducibility_text(report)
+                if args.format == "text"
+                else render_evaluation_reproducibility_json(report)
+            )
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                print(f"wrote evaluation reproducibility report: {args.output} ({len(report.configs)} configs)")
+            else:
+                print(output, end="")
+        except EvaluationReproducibilityError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write evaluation reproducibility report: {exc}", file=sys.stderr)
+            return 2
+        return 0 if all(config["reproducibility_status"] == "complete" for config in report.configs) else 1
 
     if args.command == "corpus" and args.corpus_command == "smt-benchmark":
         try:

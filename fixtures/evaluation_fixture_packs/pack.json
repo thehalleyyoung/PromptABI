@@ -15,11 +15,11 @@
     {
       "id": "eval-parser-schema-drift",
       "bug_class": "parser",
-      "display_name": "Evaluation answer parser points at the wrong schema contract",
+      "display_name": "Evaluation grading parser is broader than the application schema contract",
       "config": "examples/evaluation-harness/unsafe.promptabi.json",
-      "evidence": "The unsafe harness declares an answer schema name that cannot be matched to the JSON Schema artifact used by the grader.",
+      "evidence": "The unsafe harness grading path accepts bounded samples outside the JSON Schema contract used by the application parser.",
       "labels": ["evaluation-harness", "parser", "json-schema"],
-      "expected_rule_ids": ["evaluation-harness-answer-parser-mismatch"],
+      "expected_rule_ids": ["evaluation-harness-grading-parser-mismatch"],
       "expected_absent_rule_ids": ["evaluation-harness-verified"]
     },
     {

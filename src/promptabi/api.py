@@ -63,6 +63,12 @@ from .evaluation import (
     render_evaluation_text,
     run_evaluation,
 )
+from .evaluation_reproducibility import (
+    EvaluationReproducibilityReport,
+    build_evaluation_reproducibility_report,
+    render_evaluation_reproducibility_json,
+    render_evaluation_reproducibility_text,
+)
 from .bug_reports import BugReport, generate_bug_report, render_bug_report
 from .bundles import (
     VerificationBundle,
@@ -593,6 +599,23 @@ def evaluate_corpus(
         return render_evaluation_json(report)
     if output_format == "text":
         return render_evaluation_text(report)
+    raise ValueError("output_format must be one of: text, json")
+
+
+def evaluation_reproducibility(
+    configs: Sequence[str | Path] | None = None,
+    *,
+    output_format: str | None = None,
+) -> EvaluationReproducibilityReport | str:
+    """Pin benchmark-interface surfaces for evaluation harness reproducibility."""
+
+    report = build_evaluation_reproducibility_report(configs)
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_evaluation_reproducibility_json(report)
+    if output_format == "text":
+        return render_evaluation_reproducibility_text(report)
     raise ValueError("output_format must be one of: text, json")
 
 

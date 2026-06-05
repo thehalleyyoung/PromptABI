@@ -1961,6 +1961,19 @@ leakage diagnostics against real source-mapped JSON. The same
 report measures abstentions, runtime, memory, witness completeness, Z3-backed
 solver decisiveness, and differential agreement against recorded real-library
 semantics.
+Published eval scores also need a replayable contract freeze rather than only a
+metrics table. PromptABI now includes \texttt{promptabi corpus
+evaluation-reproducibility}, a harness-driven mode that loads real
+\texttt{evaluation-harness} configs and emits stable hashes for exactly the
+surfaces that determine a benchmark run: prompt-rendering fields plus the
+chat-template artifact hash, benchmark-tokenizer snapshots plus serving tokenizer
+pins, provider fixture metadata and hashes, stop-policy sequences and token IDs,
+and parser/schema contracts. The manifest fails incomplete when any of those five
+surface families is missing, and a real stop-policy mutation changes the
+surface hash in tests. This gives paper tables, release notes, and downstream eval
+dashboards a compact artifact that says not only ``these metrics passed'', but
+``these prompt, tokenizer, provider, stop, and parser contracts were the ones
+actually pinned.''
 The companion \texttt{promptabi corpus beta-report} command answers a different
 question: whether beta evidence is maintainable. It replays open-source-style
 case studies, keeps upstream issue records beside the configs that reproduce

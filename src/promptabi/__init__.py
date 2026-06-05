@@ -22,6 +22,7 @@ from .api import (
     editor_diagnostics,
     enterprise_readiness,
     evaluate_corpus,
+    evaluation_reproducibility,
     explain_result,
     fuzz_mutations,
     load_artifacts,
@@ -282,6 +283,15 @@ from .evaluation import (
     render_evaluation_json,
     render_evaluation_text,
     run_evaluation,
+)
+from .evaluation_reproducibility import (
+    DEFAULT_EVALUATION_REPRODUCIBILITY_CONFIGS,
+    EVALUATION_REPRODUCIBILITY_VERSION,
+    EvaluationReproducibilityError,
+    EvaluationReproducibilityReport,
+    build_evaluation_reproducibility_report,
+    render_evaluation_reproducibility_json,
+    render_evaluation_reproducibility_text,
 )
 from .evaluation_fixture_packs import (
     DEFAULT_EVALUATION_FIXTURE_PACK_PATH,

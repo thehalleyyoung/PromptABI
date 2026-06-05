@@ -24,7 +24,7 @@ def test_evaluation_fixture_pack_replays_required_bug_classes() -> None:
     assert set(pack.bug_classes) == set(REQUIRED_EVALUATION_BUG_CLASSES)
     assert all(result.passed for result in results)
     assert by_id["eval-stop-string-drift"].observed_rule_ids.count("evaluation-harness-stop-policy-mismatch") == 1
-    assert "evaluation-harness-answer-parser-mismatch" in by_id["eval-parser-schema-drift"].observed_rule_ids
+    assert "evaluation-harness-grading-parser-mismatch" in by_id["eval-parser-schema-drift"].observed_rule_ids
     assert "rag-payload-truncation" in by_id["eval-truncation-rag-loss"].observed_rule_ids
     assert "role-boundary-nonforgeability" in by_id["eval-role-boundary-forgery"].observed_rule_ids
     assert "evaluation-harness-tokenizer-mismatch" in by_id["eval-tokenizer-mismatch"].observed_rule_ids
