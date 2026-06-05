@@ -479,6 +479,7 @@ from .scaled_evaluation import (
     render_scaled_evaluation_text,
     run_scaled_evaluation,
 )
+from .live_provider_ci import run_ci as run_live_provider_ci_command
 from .soundness_audits import (
     build_soundness_audit_report,
     render_soundness_audit_json,
@@ -2118,6 +2119,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--appendix",
         action="store_true",
         help="render the standalone formal appendix (Markdown) instead of the theorem report",
+    )
+    ci = subparsers.add_parser(
+        "ci",
+        help="run the offline live-provider conformance CI gate and emit text/json/SARIF (steps 331-345)",
+    )
+    ci.add_argument(
+        "--format",
+        choices=("text", "json", "sarif"),
+        default="text",
+        help="output format (default: text)",
+    )
+    ci.add_argument(
+        "--output",
+        help="write the rendered output to this file instead of stdout",
     )
     scaled_eval = subparsers.add_parser(
         "scaled-eval",
@@ -5187,6 +5202,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         output = render_metatheory_json(report) if args.format == "json" else render_metatheory_text(report)
         print(output, end="")
         return 0 if report.passed else 1
+
+    if args.command == "ci":
+        from pathlib import Path as _Path
+
+        output, exit_code = run_live_provider_ci_command(output_format=args.format)
+        if args.output:
+            _Path(args.output).write_text(output if output.endswith("\n") else output + "\n")
+        else:
+            print(output, end="" if output.endswith("\n") else "\n")
+        return exit_code
 
     if args.command == "scaled-eval":
         report = run_scaled_evaluation(corpus_limit=args.corpus_limit)

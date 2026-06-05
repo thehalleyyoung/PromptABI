@@ -1270,6 +1270,80 @@ tuned to a flattering aggregate. The same harness that prints these numbers gate
 regressions against the committed golden summary.
 
 
+\section{Live Provider Integration and Continuous Conformance}
+\label{sec:live-ci}
+
+Static soundness is necessary but not sufficient for a tool that must track a
+\emph{moving} ecosystem of provider APIs. This section describes the continuous
+conformance layer (\texttt{promptabi ci}, module
+\texttt{promptabi.live\_provider\_ci}) that turns PromptABI's checks into a
+signed, replayable, drift-tracking CI gate. As with everything else in the
+artifact it is CPU-only and network-free: ``live'' providers are modeled by the
+checked-in provider fixture packs (Anthropic, Bedrock, Gemini, LiteLLM, OpenAI,
+and a vLLM OpenAI-compatible server), so every run is bit-for-bit reproducible
+and yet exercises the same request/response/tool-call surfaces a real adapter
+would.
+
+\paragraph{Replayable adapters and signed snapshots.}
+Three provider adapters (an OpenAI surface, an Anthropic surface, and an
+OSS vLLM surface) are reconstructed from their fixture packs and executed
+deterministically; each adapter is tool-call-aware, so issuing a request with a
+tool list flips the modeled finish reason and changes the response hash. A run
+captures a \emph{snapshot}---provider families, per-surface pass map, manifest
+and replay hashes---that is signed with a SHA-256 keyed digest over its canonical
+JSON. Tampering with any field invalidates the signature, giving a tamper-evident
+audit record suitable for supply-chain attestation.
+
+\paragraph{Longitudinal dashboard, bisection, and alarms.}
+Twelve monthly revisions are tracked on a drift dashboard. We inject a synthetic
+regression at revision \texttt{2025-06} (one surface flag flipped and re-signed)
+and confirm the full incident-response chain fires end to end: the dashboard
+flags the month with a maximum drift of $0.143$, a snapshot bisector pinpoints
+\texttt{2025-06} as the first bad revision, a PR-comment diff renders the exact
+regressed surfaces, and a webhook alarm emits a
+\texttt{promptabi.conformance.regression} payload (Table~\ref{tab:live-ci}). A
+clean latest snapshot exits $0$; a regressed snapshot produces SARIF findings and
+a non-zero gate.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+Capability (roadmap step) & Mechanism & Result \\
+\midrule
+Provider adapters (331) & fixture-pack replay & $3$ families, deterministic \\
+Signed snapshots (332) & keyed SHA-256 digest & tamper-evident \\
+GH Action / pre-commit (333,336) & emitted CI assets & SARIF upload wired \\
+Drift dashboard (334) & $12$ monthly revisions & regression @ \texttt{2025-06} \\
+SARIF gate (335) & SARIF 2.1.0 & exit $0$ clean / $\neq 0$ regressed \\
+Grammar backend bench (337) & real feature checker & coverage $0.50$, $8$ rows \\
+HTTP cassettes (338) & deterministic replay & $6$ cassettes, stable hashes \\
+OTel export (339) & spans + attributes & schema-valid \\
+Regression bisector (342) & snapshot bisection & first-bad \texttt{2025-06} \\
+Cost-aware sampling (343) & budgeted selection & budget honored \\
+Webhook alarm (344) & regression event & triggered \\
+Gateway certification (345) & request/response replays & $3/3$ certified \\
+\bottomrule
+\end{tabular}
+\caption{Continuous conformance layer. Each row is produced by a real run of
+\texttt{promptabi ci} over the offline provider fixture packs; the synthetic
+\texttt{2025-06} regression exercises the detection, bisection, and alarm paths.}
+\label{tab:live-ci}
+\end{table}
+
+\paragraph{Backend feature benchmarking and third-party gateways.}
+The grammar-backend bench runs the real feature checker against the vLLM and TGI
+backends over eight constrained-decoding features; unsupported features (e.g.\
+unbounded recursion) are reported rather than silently accepted, yielding a
+coverage of $0.50$. Six HTTP cassettes record and deterministically replay the
+provider surfaces, and three third-party gateways are certified by replaying
+their request/response pairs ($3/3$). The same report renders to text, JSON, and
+OpenTelemetry spans, and the SARIF output integrates directly with the emitted
+GitHub Action and pre-commit hook so that any conformance regression blocks a
+merge with an actionable, code-scanning-native finding.
+
+
 A PromptABI diagnostic is designed to answer five questions in one artifact:
 what invariant failed, where the source of the invariant lives, which semantic
 mode was used, what witness demonstrates the issue, and what low-blast-radius

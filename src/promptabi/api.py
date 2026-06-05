@@ -284,6 +284,12 @@ from .scaled_evaluation import (
     render_scaled_evaluation_text,
     run_scaled_evaluation,
 )
+from .live_provider_ci import (
+    LiveProviderCiReport,
+    render_live_provider_ci_json,
+    render_live_provider_ci_text,
+    run_live_provider_ci,
+)
 from .soundness_audits import (
     SoundnessAuditReport,
     build_soundness_audit_report,
@@ -610,6 +616,23 @@ def scaled_empirical_evaluation(
         return render_scaled_evaluation_json(report)
     if output_format == "text":
         return render_scaled_evaluation_text(report)
+    raise ValueError("output_format must be 'json' or 'text'")
+
+
+def live_provider_ci(*, output_format: str | None = None) -> LiveProviderCiReport | str:
+    """Run the offline live-provider integration and CI layer (roadmap steps
+    331-345): replayable OpenAI/Anthropic/OSS adapters, signed nightly
+    conformance snapshots, a drift dashboard, a vLLM/TGI grammar-backend bench,
+    HTTP cassettes, a regression bisector, cost-aware sampling, webhook alarms,
+    and third-party gateway certification."""
+
+    report = run_live_provider_ci()
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_live_provider_ci_json(report)
+    if output_format == "text":
+        return render_live_provider_ci_text(report)
     raise ValueError("output_format must be 'json' or 'text'")
 
 

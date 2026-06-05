@@ -144,6 +144,9 @@ promptabi metatheory --appendix
 # Replay the production analyzers over a >=10k-case labeled prompt corpus:
 # sound (recall 1.0, zero false negatives), F1 0.90, ablation, drift, leaderboard, CVEs.
 promptabi scaled-eval --format text
+# Signed, replayable continuous-conformance gate over offline provider fixture
+# packs: drift dashboard, regression bisection, SARIF for code scanning.
+promptabi ci --format sarif --output conformance.sarif
 promptabi maintain health --format text
 promptabi graph --config examples/rag-chunking/promptabi.json --all-checks --format mermaid
 promptabi contract format examples/static-contract-language/app.pabi --check
