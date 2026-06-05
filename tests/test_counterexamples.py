@@ -1,7 +1,11 @@
 from promptabi import (
+    ArtifactRef,
     BoundedStringDomain,
     Contains,
     CounterexampleMetric,
+    CounterexampleProduct,
+    CounterexampleProductArtifact,
+    CounterexampleShrinkError,
     DeterministicFiniteAutomaton,
     EnumDomain,
     Eq,
@@ -14,6 +18,7 @@ from promptabi import (
     SolverStatus,
     Value,
     Var,
+    slice_counterexample_product,
     shrink_automaton_counterexample,
     shrink_finite_contract_counterexample,
     shrink_transducer_counterexample,
@@ -102,3 +107,70 @@ def test_finite_contract_counterexample_shrinker_enumerates_minimal_assignment()
     assert report.minimized_cost < report.original_cost
     assert report.certificate["satisfies_constraints"] is True
     assert report.certificate["minimality"] == "exhaustive finite-domain enumeration"
+
+
+def test_counterexample_product_slicer_keeps_minimal_artifact_cover() -> None:
+    template = CounterexampleProductArtifact(
+        ArtifactRef(kind="template", name="chatml", path="tokenizer_config.json"),
+        facts=("renders-user-region", "emits-im-start"),
+        cost=3,
+    )
+    tokenizer = CounterexampleProductArtifact(
+        ArtifactRef(kind="tokenizer", name="byte-level", path="tokenizer.json"),
+        facts=("emits-im-start", "special-token-boundary"),
+        cost=2,
+    )
+    provider = CounterexampleProductArtifact(
+        ArtifactRef(kind="provider", name="openai-compatible", path="provider.json"),
+        facts=("accepts-assistant-prefix",),
+        cost=1,
+    )
+    redundant_policy = CounterexampleProductArtifact(
+        ArtifactRef(kind="policy", name="org-baseline", path="policy.pabi"),
+        facts=("renders-user-region",),
+        cost=1,
+    )
+    product = CounterexampleProduct(
+        name="chat-template-tokenizer-provider-forgery",
+        artifacts=(template, tokenizer, provider, redundant_policy),
+        failing_facts=("emits-im-start", "accepts-assistant-prefix"),
+        edges=(
+            (template.key, tokenizer.key),
+            (tokenizer.key, provider.key),
+            (redundant_policy.key, template.key),
+        ),
+    )
+
+    report = slice_counterexample_product(product)
+
+    assert report.artifact_keys == (tokenizer.key, provider.key)
+    assert report.omitted_artifacts == (template.ref, redundant_policy.ref)
+    assert report.cut_edges == ((template.key, tokenizer.key),)
+    assert report.certificate["covers_required_facts"] is True
+    assert report.certificate["minimality"] == "exhaustive minimum-cost artifact cover"
+    assert report.certificate["candidate_slices_examined"] == 15
+    assert report.to_dict()["required_facts"] == ["emits-im-start", "accepts-assistant-prefix"]
+
+    witness = report.witness()
+    assert witness.artifacts == (provider.ref, tokenizer.ref)
+    assert witness.steps[-1].action == "certify sliced counterexample"
+
+
+def test_counterexample_product_slicer_rejects_uncovered_required_fact() -> None:
+    product = CounterexampleProduct(
+        name="schema-tool-product",
+        artifacts=(
+            CounterexampleProductArtifact(
+                ArtifactRef(kind="schema", name="tool", path="schema.json"),
+                facts=("json-string-field",),
+            ),
+        ),
+        failing_facts=("json-string-field",),
+    )
+
+    try:
+        slice_counterexample_product(product, required_facts=("missing-provider-envelope",))
+    except CounterexampleShrinkError as error:
+        assert "missing-provider-envelope" in str(error)
+    else:  # pragma: no cover
+        raise AssertionError("expected uncovered product fact to be rejected")

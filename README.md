@@ -73,8 +73,8 @@ bounded strings. Solver queries are cacheable by normalized formulas, artifact
 hashes, supported-fragment metadata, and solver-version fingerprints. Every
 diagnostic states its guarantee mode--`sound`, `complete`, `bounded`,
 `z3-backed-smt`, `heuristic`, or `abstaining`--and formal counterexamples can be
-shrunk to minimal strings, token paths, and solver assignments, so CI can
-distinguish proof from best-effort evidence.
+shrunk or sliced to minimal strings, token paths, solver assignments, and
+cross-artifact products, so CI can distinguish proof from best-effort evidence.
 The [formal methods guide](docs/formal-methods.md) explains exactly when these
 claims use automata, Z3, composed products, or principled abstention.
 For disconnected deployments, the [air-gapped installation guide](docs/air-gapped.md)

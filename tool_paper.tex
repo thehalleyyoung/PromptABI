@@ -263,8 +263,8 @@ Context-budget, mask, role, and private-field obligations &
 Survival proof, dropped-region witness, finite assignment \\
 \addlinespace
 Maintain reproducible CI &
-Lockfiles, signed bundles, replayable solver certificates &
-Artifact hash, diagnostic fingerprint, replay hash \\
+Lockfiles, signed bundles, replayable solver certificates, sliced products &
+Artifact hash, diagnostic fingerprint, replay hash, minimal artifact cover \\
 \addlinespace
 Block stale deploys &
 Kubernetes, Terraform, GitHub Environment, and release-system gates &
@@ -295,6 +295,14 @@ user-controlled expression is in a region whose control markers are known.
 Tokenizers, grammars, and parser fragments are compiled to finite relations for
 the witnesses under consideration. Products and projections answer emptiness,
 ambiguity, and reachability questions with concrete paths.
+
+\paragraph{Counterexample slicing.}
+For composed products that span templates, tokenizers, providers, policies, and
+parsers, PromptABI can compute the minimum-cost artifact slice that still covers
+the failing product facts. The slicer exhaustively searches the bounded product,
+records omitted artifacts and cut dependency edges, and emits a witness whose
+certificate distinguishes a necessary cross-artifact explanation from incidental
+configuration noise.
 
 \paragraph{SMT-backed finite contracts.}
 Static contracts that combine budgets, roles, stops, masks, and provider facts
@@ -713,10 +721,12 @@ and dropped required segments. An SMT witness contains a finite assignment or
 unsat evidence. This makes diagnostics actionable for engineers and replayable
 for maintainers.
 
-PromptABI also includes witness validation and shrinking. Counterexamples can be
-minimized by string length, token count, message count, schema size, or rule
-complexity. The upstream bug-report generator then turns the minimized repro
-into a sanitized issue with artifact versions, reproduction commands,
+PromptABI also includes witness validation, shrinking, and slicing.
+Counterexamples can be minimized by string length, token count, message count,
+schema size, or rule complexity; multi-artifact products can be sliced to the
+cheapest set of template/tokenizer/provider/policy artifacts that still explains
+the failed facts. The upstream bug-report generator then turns the minimized
+repro into a sanitized issue with artifact versions, reproduction commands,
 expected/actual behavior, and non-sensitive traces.
 
 \newpage

@@ -1,14 +1,14 @@
-"""Counterexample shrinking for formal PromptABI witnesses."""
+"""Counterexample shrinking and slicing for formal PromptABI witnesses."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from heapq import heappop, heappush
 from typing import Any
 
-from .diagnostics import WitnessStep, WitnessTrace
+from .diagnostics import ArtifactRef, WitnessStep, WitnessTrace
 from .formal import (
     AutomatonWitness,
     DeterministicFiniteAutomaton,
@@ -52,6 +52,145 @@ class CounterexampleShrinkStep:
             "after_cost": self.after_cost,
             "detail": self.detail,
         }
+
+
+@dataclass(frozen=True, slots=True)
+class CounterexampleProductArtifact:
+    """One artifact participating in a composed counterexample product."""
+
+    ref: ArtifactRef
+    facts: tuple[str, ...]
+    cost: int = 1
+
+    def __post_init__(self) -> None:
+        facts = tuple(dict.fromkeys(str(fact) for fact in self.facts))
+        if not facts:
+            raise ValueError("product artifact facts must be non-empty")
+        if any(not fact for fact in facts):
+            raise ValueError("product artifact facts must be non-empty")
+        if self.cost < 1:
+            raise ValueError("product artifact cost must be positive")
+        object.__setattr__(self, "facts", facts)
+
+    @property
+    def key(self) -> str:
+        return _artifact_key(self.ref)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "artifact": self.ref.to_dict(),
+            "facts": list(self.facts),
+            "cost": self.cost,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class CounterexampleProduct:
+    """A bounded product of artifacts, facts, and failing obligations."""
+
+    name: str
+    artifacts: tuple[CounterexampleProductArtifact, ...]
+    failing_facts: tuple[str, ...]
+    edges: tuple[tuple[str, str], ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise ValueError("counterexample product name must be non-empty")
+        artifacts = tuple(self.artifacts)
+        if not artifacts:
+            raise ValueError("counterexample product must include at least one artifact")
+        failing_facts = tuple(dict.fromkeys(str(fact) for fact in self.failing_facts))
+        if not failing_facts:
+            raise ValueError("counterexample product failing facts must be non-empty")
+        if any(not fact for fact in failing_facts):
+            raise ValueError("counterexample product failing facts must be non-empty")
+
+        artifact_keys = [artifact.key for artifact in artifacts]
+        if len(set(artifact_keys)) != len(artifact_keys):
+            raise ValueError("counterexample product artifact keys must be unique")
+        known_keys = set(artifact_keys)
+        normalized_edges: list[tuple[str, str]] = []
+        for source, target in self.edges:
+            source_key = str(source)
+            target_key = str(target)
+            if source_key not in known_keys or target_key not in known_keys:
+                raise ValueError("product edges must reference known artifacts")
+            normalized_edges.append((source_key, target_key))
+
+        provided_facts = set().union(*(set(artifact.facts) for artifact in artifacts))
+        missing = set(failing_facts) - provided_facts
+        if missing:
+            missing_list = ", ".join(sorted(missing))
+            raise ValueError(f"failing facts are not produced by any artifact: {missing_list}")
+
+        object.__setattr__(self, "artifacts", artifacts)
+        object.__setattr__(self, "failing_facts", failing_facts)
+        object.__setattr__(self, "edges", tuple(dict.fromkeys(normalized_edges)))
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "name": self.name,
+            "artifacts": [artifact.to_dict() for artifact in self.artifacts],
+            "failing_facts": list(self.failing_facts),
+            "edges": [{"source": source, "target": target} for source, target in self.edges],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class CounterexampleSliceReport:
+    """A minimal artifact slice that still explains a composed counterexample."""
+
+    product_name: str
+    required_facts: tuple[str, ...]
+    artifacts: tuple[CounterexampleProductArtifact, ...]
+    omitted_artifacts: tuple[ArtifactRef, ...]
+    cut_edges: tuple[tuple[str, str], ...]
+    certificate: Mapping[str, object]
+
+    @property
+    def artifact_refs(self) -> tuple[ArtifactRef, ...]:
+        return tuple(artifact.ref for artifact in self.artifacts)
+
+    @property
+    def artifact_keys(self) -> tuple[str, ...]:
+        return tuple(artifact.key for artifact in self.artifacts)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "product_name": self.product_name,
+            "required_facts": list(self.required_facts),
+            "artifacts": [artifact.to_dict() for artifact in self.artifacts],
+            "omitted_artifacts": [artifact.to_dict() for artifact in self.omitted_artifacts],
+            "cut_edges": [{"source": source, "target": target} for source, target in self.cut_edges],
+            "certificate": dict(self.certificate),
+        }
+
+    def witness(self) -> WitnessTrace:
+        steps = (
+            WitnessStep(
+                action="identify failing product facts",
+                input=self.product_name,
+                output=", ".join(self.required_facts),
+            ),
+            WitnessStep(
+                action="solve minimum artifact cover",
+                input=f"{len(self.artifacts) + len(self.omitted_artifacts)} artifacts",
+                output=f"{len(self.artifacts)} artifacts",
+            ),
+            WitnessStep(
+                action="certify sliced counterexample",
+                input=", ".join(self.artifact_keys),
+                output=str(self.certificate.get("minimality", "minimal artifact cover")),
+            ),
+        )
+        return WitnessTrace(
+            summary=(
+                f"{self.product_name} counterexample slice keeps {len(self.artifacts)} "
+                f"of {len(self.artifacts) + len(self.omitted_artifacts)} artifacts"
+            ),
+            steps=steps,
+            artifacts=self.artifact_refs,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -248,6 +387,75 @@ def shrink_finite_contract_counterexample(
             "satisfying_assignments": satisfying_count,
             "variables": len(problem.variables),
             "constraints": len(problem.constraints),
+        },
+    )
+
+
+def slice_counterexample_product(
+    product: CounterexampleProduct,
+    *,
+    required_facts: Iterable[str] | None = None,
+) -> CounterexampleSliceReport:
+    """Find the cheapest artifact subset that still covers the failing product facts.
+
+    The search is exhaustive over the explicit bounded product, making the result
+    a real minimality certificate rather than a greedy explanation. Ties are
+    resolved deterministically by fewer artifacts and stable artifact keys.
+    """
+
+    facts = tuple(dict.fromkeys(str(fact) for fact in (required_facts or product.failing_facts)))
+    if not facts:
+        raise CounterexampleShrinkError("counterexample slice requires at least one failing fact")
+    available = set().union(*(set(artifact.facts) for artifact in product.artifacts))
+    missing = set(facts) - available
+    if missing:
+        missing_list = ", ".join(sorted(missing))
+        raise CounterexampleShrinkError(f"required facts are not produced by any artifact: {missing_list}")
+
+    best_indexes: tuple[int, ...] | None = None
+    best_key: tuple[int, int, tuple[str, ...]] | None = None
+    candidates_examined = 0
+    artifact_count = len(product.artifacts)
+    for mask in range(1, 1 << artifact_count):
+        indexes = tuple(index for index in range(artifact_count) if mask & (1 << index))
+        covered = set().union(*(set(product.artifacts[index].facts) for index in indexes))
+        candidates_examined += 1
+        if not set(facts).issubset(covered):
+            continue
+        selected = tuple(product.artifacts[index] for index in indexes)
+        key = (
+            sum(artifact.cost for artifact in selected),
+            len(selected),
+            tuple(artifact.key for artifact in selected),
+        )
+        if best_key is None or key < best_key:
+            best_key = key
+            best_indexes = indexes
+
+    if best_indexes is None:
+        raise CounterexampleShrinkError("counterexample product has no slice covering required facts")
+
+    selected = tuple(product.artifacts[index] for index in best_indexes)
+    selected_keys = {artifact.key for artifact in selected}
+    omitted = tuple(artifact.ref for artifact in product.artifacts if artifact.key not in selected_keys)
+    cut_edges = tuple(
+        (source, target)
+        for source, target in product.edges
+        if (source in selected_keys) != (target in selected_keys)
+    )
+    covered_facts = sorted(set().union(*(set(artifact.facts) for artifact in selected)))
+    return CounterexampleSliceReport(
+        product_name=product.name,
+        required_facts=facts,
+        artifacts=selected,
+        omitted_artifacts=omitted,
+        cut_edges=cut_edges,
+        certificate={
+            "covers_required_facts": set(facts).issubset(covered_facts),
+            "minimality": "exhaustive minimum-cost artifact cover",
+            "candidate_slices_examined": candidates_examined,
+            "selected_cost": sum(artifact.cost for artifact in selected),
+            "covered_facts": covered_facts,
         },
     )
 
@@ -462,3 +670,9 @@ def _transitions_by_source(transducer: FiniteStateTransducer) -> dict[str, tuple
     for transition in transducer.transitions:
         grouped.setdefault(transition.source, []).append(transition)
     return {state: tuple(items) for state, items in grouped.items()}
+
+
+def _artifact_key(ref: ArtifactRef) -> str:
+    location = ref.location_uri or ref.name
+    version = ref.revision or ref.version or ""
+    return f"{ref.kind}:{location}:{version}"
