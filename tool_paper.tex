@@ -312,6 +312,10 @@ structured-output, error, and routing compatibility, validates provider fixture
 packs that capture secret-free request/response shapes, tool-call encodings, stop
 behavior, streaming deltas, error envelopes, and edge-case limits for offline
 replay,
+ships paired end-to-end buggy/fixed mini applications for tool calling, JSON
+structured output, RAG truncation, provider migration, and supervised
+training-data alignment, with each pair verified by the exact checker that
+catches the bug and by the fixed contract that removes it,
 models context-window budgets from named prompt segments, must-survive flags,
 declared or real-tokenizer token counts, output reservations, reserved tool
 tokens, generation-prompt tokens, model-specific special-token overhead, bounded
@@ -397,6 +401,8 @@ The repository layout is designed to scale:
 \texttt{examples/role-boundary} & Paired unsafe and sanitized ChatML-style \texttt{tokenizer\_config.json} artifacts that exercise the real role-boundary non-forgeability CLI check. \\
 \hline
 \texttt{examples/stop-policies} & A vLLM sampling-parameter fixture that exercises real stop-policy artifact loading and normalization. \\
+\hline
+\texttt{examples/end-to-end} & Paired buggy and fixed mini apps for tool-calling serialization, JSON structured-output parsers, citation-preserving RAG packing, provider migration shims, and training target-role alignment. \\
 \hline
 \texttt{fixtures} and \texttt{paper\_artifact} & Curated seed corpus, real-world bug reductions, grammar differential cases, labeled structured-schema/tool-calling fixtures, secret-free provider packs, and a generated paper artifact containing fixture hashes, expected tables, solver pins, and regeneration commands. \\
 \hline

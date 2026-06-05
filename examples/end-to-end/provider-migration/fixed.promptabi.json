@@ -1,0 +1,19 @@
+{
+  "name": "end-to-end-provider-migration-fixed",
+  "checks": ["provider-migration"],
+  "artifacts": {
+    "openai-source": {
+      "kind": "provider-config",
+      "path": "source-openai.json",
+      "provider": "openai",
+      "source": "end-to-end-provider-migration"
+    },
+    "target-provider": {
+      "kind": "provider-config",
+      "path": "fixed-target-openai-compatible.json",
+      "provider": "azure-openai",
+      "source": "end-to-end-provider-migration"
+    }
+  }
+}
+

@@ -1,0 +1,8 @@
+{
+  "framework": "custom-rag",
+  "strategy": "priority",
+  "drop_roles": [],
+  "preserve_system": true,
+  "max_context_tokens": 128
+}
+

@@ -1,0 +1,19 @@
+{
+  "name": "end-to-end-provider-migration-buggy",
+  "checks": ["provider-migration"],
+  "artifacts": {
+    "openai-source": {
+      "kind": "provider-config",
+      "path": "source-openai.json",
+      "provider": "openai",
+      "source": "end-to-end-provider-migration"
+    },
+    "target-provider": {
+      "kind": "provider-config",
+      "path": "buggy-target-anthropic.json",
+      "provider": "anthropic",
+      "source": "end-to-end-provider-migration"
+    }
+  }
+}
+

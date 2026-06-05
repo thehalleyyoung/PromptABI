@@ -1,0 +1,8 @@
+{
+  "segments": [
+    {"name": "system-policy", "role": "system", "content": "Always answer with citations."},
+    {"name": "refund-chunk", "role": "retrieval", "content": "Refunds require an order id and cited policy."},
+    {"name": "user-question", "role": "user", "content": "Can I refund this order?"}
+  ]
+}
+

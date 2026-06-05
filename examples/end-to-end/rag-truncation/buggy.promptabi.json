@@ -1,0 +1,46 @@
+{
+  "name": "end-to-end-rag-truncation-buggy",
+  "checks": ["rag-chunking-compatibility"],
+  "artifacts": {
+    "rag-segments": {
+      "kind": "prompt-segment",
+      "path": "segments.json",
+      "segments": [
+        {"name": "system-policy", "role": "system", "required": true, "token_count": 8},
+        {
+          "name": "refund-chunk",
+          "role": "retrieval",
+          "token_count": 30,
+          "max_tokens": 40,
+          "chunk_id": "refund-0",
+          "document_id": "refund-policy",
+          "chunk_tokenizer": "embedder-v1",
+          "source_start": 0,
+          "source_end": 30,
+          "chunk_start": 1,
+          "chunk_end": 30,
+          "citation_required": true,
+          "metadata_tokens": 18,
+          "template_overhead_tokens": 6,
+          "retrieval_payload_limit_tokens": 40
+        },
+        {"name": "user-question", "role": "user", "required": true, "token_count": 8}
+      ]
+    },
+    "rag-budget": {
+      "kind": "framework-truncation-config",
+      "path": "buggy-budget.json",
+      "framework": "custom-rag",
+      "strategy": "priority",
+      "drop_roles": ["retrieval"],
+      "preserve_system": true,
+      "max_context_tokens": 64
+    },
+    "serving-tokenizer": {
+      "kind": "tokenizer",
+      "uri": "memory://serving-tokenizer",
+      "family": "byte-level"
+    }
+  }
+}
+

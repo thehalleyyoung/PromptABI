@@ -1,0 +1,23 @@
+{
+  "name": "end-to-end-training-alignment-buggy",
+  "checks": ["static-contracts"],
+  "artifacts": {
+    "serving-template": {
+      "kind": "chat-template",
+      "path": "tokenizer_config.json",
+      "roles": ["system", "user", "assistant"],
+      "source": "end-to-end-training-alignment"
+    },
+    "training-manifest": {
+      "kind": "training-manifest",
+      "uri": "memory://end-to-end-training-manifest-buggy",
+      "dataset_format": "chat-jsonl",
+      "message_roles": ["system", "user", "assistant", "critic"],
+      "target_roles": ["assistant", "critic"],
+      "example_count": 128,
+      "packed": true,
+      "source": "end-to-end-training-alignment"
+    }
+  }
+}
+

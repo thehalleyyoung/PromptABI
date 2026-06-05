@@ -1,0 +1,23 @@
+{
+  "name": "end-to-end-training-alignment-fixed",
+  "checks": ["static-contracts"],
+  "artifacts": {
+    "serving-template": {
+      "kind": "chat-template",
+      "path": "tokenizer_config.json",
+      "roles": ["system", "user", "assistant"],
+      "source": "end-to-end-training-alignment"
+    },
+    "training-manifest": {
+      "kind": "training-manifest",
+      "uri": "memory://end-to-end-training-manifest-fixed",
+      "dataset_format": "chat-jsonl",
+      "message_roles": ["system", "user", "assistant"],
+      "target_roles": ["assistant"],
+      "example_count": 128,
+      "packed": true,
+      "source": "end-to-end-training-alignment"
+    }
+  }
+}
+

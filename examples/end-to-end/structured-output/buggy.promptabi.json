@@ -1,0 +1,20 @@
+{
+  "name": "end-to-end-structured-output-buggy",
+  "checks": ["parser-compatibility"],
+  "artifacts": {
+    "answer-schema": {
+      "kind": "schema",
+      "path": "answer.schema.json",
+      "dialect": "json-schema",
+      "source": "end-to-end-structured-output",
+      "metadata": {
+        "parser_format": "json",
+        "parser_compatibility": {
+          "accepts": ["{\"answer\":\"ok\",\"confidence\":\"high\"}"],
+          "rejects": ["{}", "{\"answer\":\"ok\"}"]
+        }
+      }
+    }
+  }
+}
+

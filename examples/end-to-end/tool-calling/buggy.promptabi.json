@@ -1,0 +1,20 @@
+{
+  "name": "end-to-end-tool-calling-buggy",
+  "checks": ["tool-serialization"],
+  "artifacts": {
+    "order-tools": {
+      "kind": "tool-definition",
+      "path": "tools.json",
+      "provider": "openai",
+      "tool_names": ["lookup_order", "refund_order"],
+      "source": "end-to-end-tool-calling"
+    },
+    "buggy-provider": {
+      "kind": "provider-config",
+      "path": "buggy-provider.json",
+      "provider": "openai-compatible",
+      "source": "end-to-end-tool-calling"
+    }
+  }
+}
+

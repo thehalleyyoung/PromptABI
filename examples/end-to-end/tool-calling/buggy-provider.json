@@ -1,0 +1,31 @@
+{
+  "provider": "openai-compatible",
+  "request_shape": {"messages": "array", "tools": "array"},
+  "response_shape": {"tool_calls": "array"},
+  "streaming_deltas": {"tool_calls": "array"},
+  "tool_serialization": {
+    "request": {
+      "tool_names": ["lookup_order", "refund_order"],
+      "argument_encoding": "json-object",
+      "supports_parallel_tool_calls": true
+    },
+    "response": {
+      "tool_names": ["lookup_order", "refund_order", "cancel_order"],
+      "argument_encoding": "json-string",
+      "argument_escaping": "raw",
+      "observed_parallel_tool_calls": true
+    },
+    "parser": {
+      "accepted_tool_names": ["lookup_order"],
+      "argument_encoding": "json-object",
+      "require_tool_call_id": true,
+      "allow_parallel_tool_calls": false,
+      "streaming_mode": "parse-each-delta"
+    },
+    "streaming": {
+      "emits_argument_fragments": true,
+      "index_path": "choices[].delta.tool_calls[].index"
+    }
+  }
+}
+
