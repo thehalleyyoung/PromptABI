@@ -1091,7 +1091,7 @@ Tokenizer directories & Stable manifest over sorted relative file names, file si
 \hline
 GGUF stubs & Header-level GGUF magic, version, tensor count, metadata-key count, and streamed file hash without loading weights. \\
 \hline
-Provider snapshots & Deterministic JSON validation for provider name, captured request/response or streaming shape metadata, provider fixture pack sections, and optional stop-trace fixtures for offline differential replay, with parse-error line and column diagnostics. \\
+Provider snapshots & Deterministic JSON validation for provider name, request/response, tool-call streaming, parallel calls, JSON mode, response formats, stops, errors, limits, fixture pack sections, and offline replay, with parse-error line and column diagnostics. \\
 \hline
 Tool definitions & Source-mapped ingestion for OpenAI function tools, Anthropic \texttt{input\_schema} tools, LangChain \texttt{args\_schema} tools, Pydantic model JSON Schemas, TypeScript-style function arrays, MCP \texttt{inputSchema} tools, and provider tool-call response envelopes, recording tool names, argument encodings, closed parameter schemas, enum/constraint paths, IDs, streaming chunks, and ingestion issues. \\
 \hline
@@ -1544,7 +1544,7 @@ hashes, expected behaviors, license notes, upstream references, pinned fixture
 revisions, and reproducibility notes, and fail deterministically if a required
 family or sentinel contract is missing. The maintainer refresh command extends
 that idea to the full release surface: it refreshes model-artifact manifests,
-structured-schema and provider-fixture manifests, the real-bug benchmark manifest,
+structured-schema, provider-fixture, and provider-conformance manifests, the real-bug benchmark manifest,
 portable expected diagnostics with repository-relative spans, corpus diffs against
 a previous snapshot, and concise release notes. That turns the corpus from a
 collection of files into an auditable experimental input and release artifact.
@@ -1985,13 +1985,13 @@ Z3 static contracts & Declarative interface rules for allowed roles, required re
 \hline
 Budget checks & Segment accounting, tokenizer-derived content counts, vLLM-style reservations, truncation simulation, required-token overflow, and finding counts. \\
 \hline
-Corpus verification & \texttt{promptabi corpus verify} release-gates the seed corpus, structured-schema corpus, provider fixture packs, real-bug benchmark, eval fixture pack, labeled evaluation, minimized SMT benchmark, and optional runtime/Python-heap thresholds with explicit nonzero coverage checks. \\
+Corpus verification & \texttt{promptabi corpus verify} release-gates seed, structured-schema, provider fixture and provider-conformance suites, real-bug, eval, adversarial, tokenizer/grammar conformance, labeled evaluation, minimized SMT, and optional runtime/Python-heap thresholds with explicit nonzero coverage checks. \\
 \hline
 Benchmark leaderboard & \texttt{promptabi corpus leaderboard} combines labeled-evaluation precision/recall/F1 and abstentions, deterministic CPU benchmark runtime, Python heap peaks, serialized diagnostic witness-byte summaries, and minimized-SMT replay pass rates into a version-labeled release leaderboard. \\
 \hline
 Minimized SMT benchmark & \texttt{promptabi corpus smt-benchmark} replays satisfiable, unsatisfiable, timeout-prone, and unsupported reduced prompt-interface formulas against the real finite/Z3 solver and emits stable query hashes, checked-assignment counts, conclusions, and manifest hashes. \\
 \hline
-Compatibility audit & \texttt{promptabi release compatibility-audit} composes the real corpus gate, provider fixture replay, grammar differential replay, and parser/framework compatibility fixtures for tokenizer, template, provider, grammar, and framework candidate-version surfaces, returning pass/fail/abstained evidence instead of treating an unpinned version label as proof. \\
+Provider conformance & \texttt{promptabi corpus provider-conformance} proves the recorded provider packs exercise tool-call streaming, true parallel tool calls, JSON-mode fields, response formats, stop handling, error envelopes, and context-window limits across OpenAI, Anthropic, Gemini, Bedrock, LiteLLM, and vLLM-compatible fixtures. \\
 \hline
 Maintainer refresh & \texttt{promptabi maintain refresh} regenerates model/corpus/provider manifests, expected diagnostic baselines with portable fingerprints, corpus diffs, and release notes from real repository configs. \\
 \hline

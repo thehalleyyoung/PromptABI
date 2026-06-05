@@ -94,6 +94,12 @@ from .grammar_conformance import (
     render_grammar_conformance_json,
     render_grammar_conformance_text,
 )
+from .provider_conformance import (
+    ProviderConformanceReport,
+    build_provider_conformance_report,
+    render_provider_conformance_json,
+    render_provider_conformance_text,
+)
 from .tokenizer_conformance import (
     TokenizerConformanceReport,
     build_tokenizer_conformance_report,
@@ -365,6 +371,23 @@ def tokenizer_conformance_suite(
         return render_tokenizer_conformance_json(report)
     if output_format == "text":
         return render_tokenizer_conformance_text(report)
+    raise ValueError("output_format must be 'json' or 'text'")
+
+
+def provider_conformance_suite(
+    root: str | Path | None = None,
+    *,
+    output_format: str | None = None,
+) -> ProviderConformanceReport | str:
+    """Replay maintained provider-fixture conformance suites."""
+
+    report = build_provider_conformance_report(root)
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_provider_conformance_json(report)
+    if output_format == "text":
+        return render_provider_conformance_text(report)
     raise ValueError("output_format must be 'json' or 'text'")
 
 

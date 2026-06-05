@@ -14,6 +14,7 @@ from .evaluation import EvaluationError, EvaluationReport, run_evaluation
 from .evaluation_fixture_packs import build_evaluation_fixture_pack_manifest
 from .grammar_conformance import build_grammar_conformance_report
 from .loaders import ArtifactLoader
+from .provider_conformance import build_provider_conformance_report
 from .provider_fixture_packs import ProviderFixturePackError, load_provider_fixture_pack_corpus
 from .provider_fixture_replay import analyze_provider_fixture_replay
 from .real_bug_benchmarks import RealBugBenchmarkError, build_real_bug_benchmark_manifest
@@ -136,6 +137,7 @@ def run_corpus_verification(
             _verify_seed_corpus(seed_root),
             _verify_structured_schema_corpus(structured_schema_root),
             _verify_provider_fixture_corpus(provider_fixture_root),
+            _verify_provider_conformance(provider_fixture_root),
             _verify_grammar_conformance(grammar_conformance_suite_path),
             _verify_tokenizer_conformance(tokenizer_conformance_suite_path),
             _verify_real_bug_benchmark(real_bug_benchmark_path),
@@ -254,7 +256,17 @@ def _verify_structured_schema_corpus(root: str | Path | None) -> CorpusVerificat
 
 
 def _verify_provider_fixture_corpus(root: str | Path | None) -> CorpusVerificationCheck:
-    corpus = load_provider_fixture_pack_corpus(root)
+    try:
+        corpus = load_provider_fixture_pack_corpus(root)
+    except ValueError as exc:
+        return CorpusVerificationCheck(
+            name="provider-fixture-corpus",
+            passed=False,
+            summary=f"provider fixture corpus could not be replayed: {exc}",
+            coverage_count=0,
+            expected_count=1,
+            failures=(str(exc),),
+        )
     loaded = tuple(ArtifactLoader().load(artifact) for artifact in corpus.artifact_bundle())
     replay = analyze_provider_fixture_replay(loaded)
     failures = []
@@ -274,6 +286,38 @@ def _verify_provider_fixture_corpus(root: str | Path | None) -> CorpusVerificati
         metrics={
             "provider_families": list(replay.provider_families),
             "replay_hash": replay.replay_hash,
+        },
+    )
+
+
+def _verify_provider_conformance(root: str | Path | None) -> CorpusVerificationCheck:
+    try:
+        report = build_provider_conformance_report(root)
+    except ValueError as exc:
+        return CorpusVerificationCheck(
+            name="provider-conformance",
+            passed=False,
+            summary=f"provider fixture conformance suite could not be replayed: {exc}",
+            coverage_count=0,
+            expected_count=1,
+            failures=(str(exc),),
+        )
+    failures = []
+    failures.extend(f"missing provider family: {family}" for family in report.missing_provider_families)
+    failures.extend(f"missing provider surface: {surface}" for surface in report.missing_surfaces)
+    failures.extend(f"{finding.artifact_name}: {finding.message}" for finding in report.replay_findings)
+    return CorpusVerificationCheck(
+        name="provider-conformance",
+        passed=not failures,
+        summary=f"{report.provider_count} provider fixtures across {len(report.surface_coverage)} conformance surfaces",
+        coverage_count=sum(len(coverage.provider_ids) for coverage in report.surface_coverage),
+        expected_count=max(len(report.surface_coverage), len(report.required_provider_families)),
+        failures=tuple(failures),
+        metrics={
+            "manifest_sha256": report.manifest_sha256,
+            "replay_hash": report.replay_hash,
+            "provider_families": list(report.provider_families),
+            "surfaces": [coverage.surface for coverage in report.surface_coverage],
         },
     )
 

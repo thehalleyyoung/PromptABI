@@ -165,6 +165,13 @@ from .grammar_conformance import (
     render_grammar_conformance_text,
     write_grammar_conformance_manifest,
 )
+from .provider_conformance import (
+    ProviderConformanceError,
+    build_provider_conformance_report,
+    render_provider_conformance_json,
+    render_provider_conformance_text,
+    write_provider_conformance_manifest,
+)
 from .tokenizer_conformance import (
     TokenizerConformanceError,
     build_tokenizer_conformance_report,
@@ -1053,6 +1060,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         help="write manifest JSON to this path instead of stdout",
     )
+    provider_conformance = corpus_subparsers.add_parser(
+        "provider-conformance",
+        help="replay maintained provider-fixture conformance suites",
+    )
+    provider_conformance.add_argument(
+        "--root",
+        help="provider fixture pack root (default: repository fixtures/provider_fixture_packs)",
+    )
+    provider_conformance.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="json",
+        help="output format (default: json)",
+    )
+    provider_conformance.add_argument("--output", help="write provider conformance manifest to this path")
     real_bug_benchmark = corpus_subparsers.add_parser(
         "real-bug-benchmark",
         help="validate and replay the real-bug benchmark suite, then emit its manifest",
@@ -3042,6 +3064,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"promptabi: cannot write corpus manifest: {exc}", file=sys.stderr)
             return 2
         return 0
+
+    if args.command == "corpus" and args.corpus_command == "provider-conformance":
+        try:
+            report = build_provider_conformance_report(args.root)
+            output = (
+                render_provider_conformance_json(report)
+                if args.format == "json"
+                else render_provider_conformance_text(report)
+            )
+            if args.output:
+                if args.format == "json":
+                    write_provider_conformance_manifest(args.output, root=args.root)
+                else:
+                    Path(args.output).write_text(output, encoding="utf-8")
+                print(f"wrote provider conformance manifest: {args.output} ({report.provider_count} providers)")
+            else:
+                print(output, end="")
+        except (ProviderConformanceError, ProviderFixturePackError, OSError, ValueError) as exc:
+            print(f"promptabi: cannot build provider conformance suite: {exc}", file=sys.stderr)
+            return 2
+        return 0 if report.all_cases_passed else 1
 
     if args.command == "corpus" and args.corpus_command == "real-bug-benchmark":
         try:
