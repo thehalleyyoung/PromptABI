@@ -188,6 +188,12 @@ from .mutation_fuzzing import (
     run_mutation_fuzzing,
 )
 from .plugins import PluginRegistry
+from .plugin_certification import (
+    PluginCertificationReport,
+    certify_plugin_registry,
+    render_plugin_certification_json,
+    render_plugin_certification_text,
+)
 from .policies import (
     OrgPolicyPack,
     Suppression,
@@ -512,6 +518,23 @@ def run_verification(
         plugin_registry=plugin_registry,
     )
     return session.run(checks=selected_checks)
+
+
+def plugin_certification(
+    plugin_registry: PluginRegistry | None = None,
+    *,
+    output_format: str | None = None,
+) -> PluginCertificationReport | str:
+    """Certify plugin extension points against diagnostic and privacy contracts."""
+
+    report = certify_plugin_registry(plugin_registry or create_first_party_plugin_registry())
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_plugin_certification_json(report)
+    if output_format == "text":
+        return render_plugin_certification_text(report)
+    raise ValueError("output_format must be 'json' or 'text'")
 
 
 def low_risk_autofix(

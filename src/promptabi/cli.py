@@ -264,6 +264,7 @@ from .mutation_fuzzing import (
     render_mutation_fuzz_text,
     run_mutation_fuzzing,
 )
+from .plugin_certification import certify_plugin_registry, render_plugin_certification_json, render_plugin_certification_text
 from .plugins import PluginError, PluginRegistry, load_plugin_modules
 from .policies import policy_forbids_local_summary
 from .prompt_packs import (
@@ -1436,6 +1437,8 @@ def build_parser() -> argparse.ArgumentParser:
     beta_report.add_argument("--output", help="write beta report to this path instead of stdout")
 
     plugins = subparsers.add_parser("plugins", help="inspect PromptABI plugin capabilities")
+    plugins_subparsers = plugins.add_subparsers(dest="plugins_command")
+    plugins_list = plugins_subparsers.add_parser("list", help="list registered plugin capabilities")
     plugins.add_argument(
         "--plugin",
         action="append",
@@ -1444,6 +1447,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="import an additional PromptABI plugin module before listing capabilities; may be repeated",
     )
     plugins.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    plugins_list.add_argument(
+        "--plugin",
+        action="append",
+        default=[],
+        metavar="MODULE[:OBJECT]",
+        help="import an additional PromptABI plugin module before listing capabilities; may be repeated",
+    )
+    plugins_list.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    plugins_certify = plugins_subparsers.add_parser(
+        "certify",
+        help="run certification tests for plugin diagnostics, loaders, renderers, and privacy contracts",
+    )
+    plugins_certify.add_argument(
+        "--plugin",
+        action="append",
+        default=[],
+        metavar="MODULE[:OBJECT]",
+        help="import an additional PromptABI plugin module before certification; may be repeated",
+    )
+    plugins_certify.add_argument(
         "--format",
         choices=("text", "json"),
         default="text",
@@ -3631,12 +3664,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "plugins":
         try:
             registry = _load_cli_plugins(args.plugin)
-            output = render_plugin_capabilities(registry, output_format=args.format)
+            if args.plugins_command == "certify":
+                report = certify_plugin_registry(registry)
+                output = (
+                    render_plugin_certification_json(report)
+                    if args.format == "json"
+                    else render_plugin_certification_text(report)
+                )
+                exit_code = 0 if report.ok else 1
+            else:
+                output = render_plugin_capabilities(registry, output_format=args.format)
+                exit_code = 0
         except (PluginError, ValueError) as exc:
             print(f"promptabi: {exc}", file=sys.stderr)
             return 2
         print(output, end="")
-        return 0
+        return exit_code
 
     if args.command == "contract" and args.contract_command == "compose":
         try:

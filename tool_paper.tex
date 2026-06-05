@@ -58,8 +58,9 @@ a dependency-aware verification-session scheduler with deterministic
 parallel check execution and a per-session analysis cache, a typed plugin
 registry for artifact loaders, checks, provider adapters, grammar backends,
 template dialects, truncation policies, solver encodings, and diagnostic
-renderers, CLI-loadable module plugins, entry-point plugin discovery, and
-mode-aware plugin checks that preserve deterministic scheduling, an incremental
+renderers, CLI-loadable module plugins, entry-point plugin discovery, certification
+tests for loader/check/renderer diagnostic and privacy contracts, and mode-aware
+plugin checks that preserve deterministic scheduling, an incremental
 monorepo verifier that maps changed local artifact paths to check dependencies,
 reuses cached unchanged-check diagnostics, recomputes downstream dependents, and
 fails closed by recomputing cache misses rather than silently dropping findings,
