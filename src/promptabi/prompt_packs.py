@@ -46,6 +46,7 @@ PROMPT_PACK_LOCK_CHECK_MODES = (CheckMode.SOUND, CheckMode.COMPLETE)
 PROMPT_PACK_REGISTRY_VERSION = 1
 PROMPT_PACK_MIRROR_VERSION = 1
 PROMPT_PACK_PROVENANCE_VERSION = 1
+PROMPT_PACK_MONOTONICITY_VERSION = 1
 PROMPT_PACK_SIGNATURE_ALGORITHM = "hmac-sha256"
 
 
@@ -394,6 +395,31 @@ class PromptPackProvenanceVerification:
         if self.reason is not None:
             data["reason"] = self.reason
         return data
+
+
+@dataclass(frozen=True, slots=True)
+class PromptPackMonotonicityCertificate:
+    """Proof summary that a prompt-pack update is a safe append-only extension."""
+
+    diagnostics: tuple[Diagnostic, ...]
+    baseline_count: int
+    current_count: int
+    proof_hash: str
+    certificate_version: int = PROMPT_PACK_MONOTONICITY_VERSION
+
+    @property
+    def ok(self) -> bool:
+        return all(diagnostic.severity is not DiagnosticSeverity.ERROR for diagnostic in self.diagnostics)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "baseline_count": self.baseline_count,
+            "certificate_version": self.certificate_version,
+            "current_count": self.current_count,
+            "diagnostics": [diagnostic.to_dict() for diagnostic in self.diagnostics],
+            "ok": self.ok,
+            "proof_hash": self.proof_hash,
+        }
 
 
 def analyze_prompt_pack_contracts(
@@ -1180,6 +1206,135 @@ def compare_prompt_pack_upgrade(
     )
 
 
+def certify_prompt_pack_monotonicity(
+    baseline: PromptPackLockfile,
+    loaded_artifacts: tuple[LoadedArtifact, ...],
+    diagnostics: tuple[Diagnostic, ...] = (),
+    *,
+    baseline_path: str | Path | None = None,
+) -> PromptPackMonotonicityCertificate:
+    """Certify that current prompt packs are monotone safe extensions of a baseline.
+
+    A certified extension may add packages or optional surface area, but it must
+    not change existing template contracts, introduce new required downstream
+    tools or stop obligations, shrink model-family support, or add non-info
+    diagnostics for existing packages.
+    """
+
+    base_dir = Path(baseline_path).expanduser().resolve().parent if baseline_path is not None else None
+    current = build_prompt_pack_lockfile(loaded_artifacts, diagnostics, base_dir=base_dir)
+    artifacts_by_name = {
+        loaded.artifact.name: loaded.artifact
+        for loaded in loaded_artifacts
+        if isinstance(loaded.artifact, PromptPackArtifact)
+    }
+    baseline_by_name = {entry.name: entry for entry in baseline.entries}
+    current_by_name = {entry.name: entry for entry in current.entries}
+    findings: list[Diagnostic] = []
+
+    for name in sorted(baseline_by_name.keys() - current_by_name.keys()):
+        findings.append(
+            _prompt_pack_monotonicity_diagnostic(
+                "prompt-pack-monotonicity-missing-pack",
+                f"prompt pack '{name}' is missing, so existing consumers cannot be extended monotonically",
+                "prompt_pack",
+                "present",
+                "missing",
+                entry=baseline_by_name[name],
+                baseline_path=baseline_path,
+            )
+        )
+
+    for name in sorted(baseline_by_name.keys() & current_by_name.keys()):
+        expected = baseline_by_name[name]
+        actual = current_by_name[name]
+        artifact = artifacts_by_name.get(name)
+        if expected.package_name != actual.package_name:
+            findings.append(
+                _prompt_pack_monotonicity_diagnostic(
+                    "prompt-pack-monotonicity-package-regression",
+                    f"prompt pack '{name}' resolves to a different package name",
+                    "package_name",
+                    expected.package_name,
+                    actual.package_name,
+                    entry=actual,
+                    baseline_path=baseline_path,
+                )
+            )
+        if expected.expected_roles != actual.expected_roles:
+            findings.append(
+                _prompt_pack_monotonicity_diagnostic(
+                    "prompt-pack-monotonicity-role-contract-changed",
+                    f"prompt pack '{name}' changed the role set required of existing consumers",
+                    "expected_roles",
+                    ", ".join(expected.expected_roles),
+                    ", ".join(actual.expected_roles),
+                    entry=actual,
+                    baseline_path=baseline_path,
+                )
+            )
+        _append_monotone_subset_regression(
+            findings,
+            entry=actual,
+            baseline_path=baseline_path,
+            rule_id="prompt-pack-monotonicity-model-family-regression",
+            field="supported_model_families",
+            expected=expected.supported_model_families,
+            actual=actual.supported_model_families,
+            message=f"prompt pack '{name}' dropped baseline model-family support",
+        )
+        findings.extend(_template_monotonicity_regressions(expected, actual, artifact, baseline_path=baseline_path))
+        findings.extend(_tool_monotonicity_regressions(expected, actual, baseline_path=baseline_path))
+        findings.extend(_stop_monotonicity_regressions(expected, actual, baseline_path=baseline_path))
+        findings.extend(_diagnostic_monotonicity_regressions(expected, actual, baseline_path=baseline_path))
+
+    if not findings:
+        findings.append(
+            _prompt_pack_monotonicity_diagnostic(
+                "prompt-pack-monotonicity-certified",
+                "prompt-pack update is a monotone safe extension of the baseline contract set",
+                "prompt_pack_monotonicity",
+                "baseline guarantees",
+                "preserved plus optional additions",
+                severity=DiagnosticSeverity.INFO,
+                baseline_path=baseline_path,
+                extra_properties=(
+                    ("baseline_prompt_packs", len(baseline.entries)),
+                    ("current_prompt_packs", len(current.entries)),
+                ),
+            )
+        )
+    proof_payload = {
+        "baseline": baseline.to_dict(),
+        "current": current.to_dict(),
+        "diagnostics": [(diagnostic.rule_id, diagnostic.severity.value, diagnostic.fingerprint) for diagnostic in findings],
+    }
+    return PromptPackMonotonicityCertificate(
+        diagnostics=tuple(sorted(findings, key=lambda diagnostic: diagnostic.sort_key)),
+        baseline_count=len(baseline.entries),
+        current_count=len(current.entries),
+        proof_hash=_hash_jsonable(proof_payload),
+    )
+
+
+def render_prompt_pack_monotonicity_json(certificate: PromptPackMonotonicityCertificate) -> str:
+    return json.dumps(certificate.to_dict(), indent=2, sort_keys=True) + "\n"
+
+
+def render_prompt_pack_monotonicity_text(certificate: PromptPackMonotonicityCertificate) -> str:
+    status = "PASS" if certificate.ok else "FAIL"
+    lines = [
+        "PromptABI prompt-pack monotonicity certificate",
+        f"status: {status}",
+        f"baseline_prompt_packs: {certificate.baseline_count}",
+        f"current_prompt_packs: {certificate.current_count}",
+        f"proof_hash: {certificate.proof_hash}",
+    ]
+    for diagnostic in certificate.diagnostics:
+        lines.append(f"{diagnostic.severity.value.upper()} {diagnostic.rule_id}: {diagnostic.message}")
+    return "\n".join(lines) + "\n"
+
+
 def prompt_pack_lock_error_diagnostic(
     exc: PromptPackLockError,
     *,
@@ -1245,6 +1400,195 @@ def _append_subset_regression(
                 extra_properties=(("missing", ", ".join(missing)),),
             )
         )
+
+
+def _append_monotone_subset_regression(
+    findings: list[Diagnostic],
+    *,
+    entry: PromptPackLockEntry,
+    baseline_path: str | Path | None,
+    rule_id: str,
+    field: str,
+    expected: tuple[str, ...],
+    actual: tuple[str, ...],
+    message: str,
+) -> None:
+    missing = tuple(sorted(set(expected) - set(actual)))
+    if missing:
+        findings.append(
+            _prompt_pack_monotonicity_diagnostic(
+                rule_id,
+                message,
+                field,
+                ", ".join(expected),
+                ", ".join(actual) if actual else "(none)",
+                entry=entry,
+                baseline_path=baseline_path,
+                extra_properties=(("missing", ", ".join(missing)),),
+            )
+        )
+
+
+def _template_monotonicity_regressions(
+    expected: PromptPackLockEntry,
+    actual: PromptPackLockEntry,
+    artifact: PromptPackArtifact | None,
+    *,
+    baseline_path: str | Path | None,
+) -> tuple[Diagnostic, ...]:
+    diagnostics = list(_template_upgrade_regressions(expected, actual, baseline_path=baseline_path))
+    expected_names = {name for name, _template_hash, _roles_hash in expected.exported_templates}
+    actual_templates_by_name = {template.name: template for template in artifact.exported_templates} if artifact else {}
+    baseline_required_regions = tuple(
+        sorted(
+            {
+                region
+                for name in expected_names
+                if name in actual_templates_by_name
+                for region in actual_templates_by_name[name].required_regions
+            }
+        )
+    )
+    for name, _template_hash, _roles_hash in actual.exported_templates:
+        if name in expected_names:
+            continue
+        template = actual_templates_by_name.get(name)
+        if template is None:
+            diagnostics.append(
+                _prompt_pack_monotonicity_diagnostic(
+                    "prompt-pack-monotonicity-template-unavailable",
+                    f"new template '{name}' cannot be inspected for monotone extension obligations",
+                    "exported_templates",
+                    "inspectable template",
+                    "missing loaded template",
+                    entry=actual,
+                    baseline_path=baseline_path,
+                )
+            )
+            continue
+        unsafe_roles = tuple(role for role in template.roles if role not in actual.expected_roles)
+        unsafe_regions = tuple(region for region in template.required_regions if region not in baseline_required_regions)
+        if unsafe_roles or unsafe_regions:
+            diagnostics.append(
+                _prompt_pack_monotonicity_diagnostic(
+                    "prompt-pack-monotonicity-template-obligation-added",
+                    f"new template '{name}' adds required role or region obligations for existing consumers",
+                    f"exported_templates.{name}",
+                    (
+                        f"roles within {tuple(actual.expected_roles)}; "
+                        f"required regions within {baseline_required_regions or ('<none>',)}"
+                    ),
+                    f"roles={template.roles}; required_regions={template.required_regions}",
+                    entry=actual,
+                    baseline_path=baseline_path,
+                    extra_properties=(
+                        ("unsafe_roles", ", ".join(unsafe_roles)),
+                        ("unsafe_required_regions", ", ".join(unsafe_regions)),
+                    ),
+                )
+            )
+    return tuple(diagnostics)
+
+
+def _tool_monotonicity_regressions(
+    expected: PromptPackLockEntry,
+    actual: PromptPackLockEntry,
+    *,
+    baseline_path: str | Path | None,
+) -> tuple[Diagnostic, ...]:
+    diagnostics = list(_tool_upgrade_regressions(expected, actual, baseline_path=baseline_path))
+    expected_names = {name for name, _provider, _schema_digest, _required in expected.tool_schemas}
+    for name, provider, schema_digest, required in actual.tool_schemas:
+        if name not in expected_names and required:
+            diagnostics.append(
+                _prompt_pack_monotonicity_diagnostic(
+                    "prompt-pack-monotonicity-required-tool-added",
+                    f"new tool schema '{name}' is required and would break existing consumers that lack it",
+                    f"tool_schemas.{name}",
+                    "new tools optional",
+                    str((provider, schema_digest, required)),
+                    entry=actual,
+                    baseline_path=baseline_path,
+                )
+            )
+    return tuple(diagnostics)
+
+
+def _stop_monotonicity_regressions(
+    expected: PromptPackLockEntry,
+    actual: PromptPackLockEntry,
+    *,
+    baseline_path: str | Path | None,
+) -> tuple[Diagnostic, ...]:
+    diagnostics: list[Diagnostic] = []
+    expected_by_name = {
+        name: (tuple(stop_sequences), tuple(stop_token_ids), include_eos)
+        for name, stop_sequences, stop_token_ids, include_eos in expected.stop_policies
+    }
+    actual_by_name = {
+        name: (tuple(stop_sequences), tuple(stop_token_ids), include_eos)
+        for name, stop_sequences, stop_token_ids, include_eos in actual.stop_policies
+    }
+    for name, expected_policy in expected_by_name.items():
+        observed = actual_by_name.get(name)
+        if observed != expected_policy:
+            diagnostics.append(
+                _prompt_pack_monotonicity_diagnostic(
+                    "prompt-pack-monotonicity-stop-contract-changed",
+                    f"prompt pack '{actual.name}' changed baseline stop policy '{name}'",
+                    f"stop_policies.{name}",
+                    str(expected_policy),
+                    str(observed) if observed is not None else "missing",
+                    entry=actual,
+                    baseline_path=baseline_path,
+                )
+            )
+    for name, (stop_sequences, stop_token_ids, include_eos) in actual_by_name.items():
+        if name not in expected_by_name and (stop_sequences or stop_token_ids or include_eos):
+            diagnostics.append(
+                _prompt_pack_monotonicity_diagnostic(
+                    "prompt-pack-monotonicity-stop-obligation-added",
+                    f"new stop policy '{name}' adds downstream parser obligations for existing consumers",
+                    f"stop_policies.{name}",
+                    "new stop policies empty and non-structural",
+                    str((stop_sequences, stop_token_ids, include_eos)),
+                    entry=actual,
+                    baseline_path=baseline_path,
+                )
+            )
+    return tuple(diagnostics)
+
+
+def _diagnostic_monotonicity_regressions(
+    expected: PromptPackLockEntry,
+    actual: PromptPackLockEntry,
+    *,
+    baseline_path: str | Path | None,
+) -> tuple[Diagnostic, ...]:
+    expected_non_info = {
+        (rule_id, severity)
+        for rule_id, severity, _fingerprint in expected.diagnostic_baseline
+        if severity != DiagnosticSeverity.INFO.value
+    }
+    actual_non_info = {
+        (rule_id, severity)
+        for rule_id, severity, _fingerprint in actual.diagnostic_baseline
+        if severity != DiagnosticSeverity.INFO.value
+    }
+    new_non_info = tuple(sorted(actual_non_info - expected_non_info))
+    if not new_non_info:
+        return ()
+    return (
+        _prompt_pack_monotonicity_diagnostic(
+            "prompt-pack-monotonicity-diagnostic-regression",
+            f"prompt pack '{actual.name}' introduced non-info prompt-pack diagnostics",
+            "diagnostic_baseline",
+            str(tuple(sorted(expected_non_info))),
+            str(tuple(sorted(actual_non_info))),
+            entry=actual,
+            baseline_path=baseline_path,
+        ),
+    )
 
 
 def _template_upgrade_regressions(
@@ -2008,6 +2352,42 @@ def _prompt_pack_upgrade_diagnostic(
             steps=(
                 WitnessStep(action="read baseline prompt-pack lockfile", input=str(baseline_path) if baseline_path is not None else None),
                 WitnessStep(action=f"compare {field}", input=expected, output=actual),
+            ),
+            artifacts=(artifact,),
+        ),
+        properties=(("actual", actual), ("expected", expected), ("field", field), *extra_properties),
+    )
+
+
+def _prompt_pack_monotonicity_diagnostic(
+    rule_id: str,
+    message: str,
+    field: str,
+    expected: str,
+    actual: str,
+    *,
+    entry: PromptPackLockEntry | None = None,
+    severity: DiagnosticSeverity = DiagnosticSeverity.ERROR,
+    baseline_path: str | Path | None,
+    extra_properties: tuple[tuple[str, object], ...] = (),
+) -> Diagnostic:
+    artifact = (
+        ArtifactRef(kind="prompt-pack", name=entry.name, path=entry.location if "://" not in entry.location else None, uri=entry.location if "://" in entry.location else None)
+        if entry is not None
+        else ArtifactRef(kind="prompt-pack-lockfile", name="prompt-pack-monotonicity-baseline", path=str(baseline_path) if baseline_path is not None else None)
+    )
+    return Diagnostic(
+        rule_id=rule_id,
+        severity=severity,
+        message=message,
+        artifact=artifact,
+        check_modes=PROMPT_PACK_LOCK_CHECK_MODES,
+        suggestions=("Keep prompt-pack changes append-only, or publish a new non-monotone major baseline for downstream consumers.",),
+        witness=WitnessTrace(
+            summary="PromptABI certified prompt-pack extension monotonicity against the baseline lockfile.",
+            steps=(
+                WitnessStep(action="read baseline prompt-pack lockfile", input=str(baseline_path) if baseline_path is not None else None),
+                WitnessStep(action=f"prove monotone {field}", input=expected, output=actual),
             ),
             artifacts=(artifact,),
         ),

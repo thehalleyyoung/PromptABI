@@ -423,11 +423,14 @@ Reusable prompts are treated as packages with exported templates, roles, tool
 schemas, stops, supported model families, lockfiles, upgrade checks, signed
 provenance, public registry metadata, and offline mirrors. A consuming
 application can reuse package-level proofs and then add local context, RAG
-chunks, tools, or truncation rules. The newest composition layer also checks the
-exported chat-template markers against the configured tokenizer: a prompt pack
-can now prove that its structural markers have bounded tokenizer evidence, or
-fail with a concrete user-content witness when a downstream tokenizer admits a
-control token that the pack did not reserve.
+chunks, tools, or truncation rules. A monotonicity certificate strengthens
+ordinary upgrade checks: existing templates, role obligations, required tools,
+stop contracts, diagnostics, and model-family support are compared against a
+baseline lockfile, while only append-only optional extensions are accepted. The
+newest composition layer also checks exported chat-template markers against the
+configured tokenizer: a prompt pack can prove that its structural markers have
+bounded tokenizer evidence, or fail with a concrete user-content witness when a
+downstream tokenizer admits a control token that the pack did not reserve.
 
 \paragraph{Debugging and education.}
 \texttt{promptabi explain} expands one diagnostic into artifact snippets,

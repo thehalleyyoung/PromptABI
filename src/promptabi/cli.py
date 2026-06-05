@@ -339,6 +339,7 @@ from .prompt_packs import (
     create_signed_prompt_pack_provenance,
     build_prompt_pack_registry,
     build_prompt_pack_lockfile,
+    certify_prompt_pack_monotonicity,
     compare_prompt_pack_lockfile,
     compare_prompt_pack_upgrade,
     load_signed_prompt_pack_provenance,
@@ -347,6 +348,8 @@ from .prompt_packs import (
     prompt_pack_mirror_error_diagnostic,
     prompt_pack_mirror_to_json,
     prompt_pack_lock_error_diagnostic,
+    render_prompt_pack_monotonicity_json,
+    render_prompt_pack_monotonicity_text,
     render_prompt_pack_provenance_verification_text,
     prompt_pack_registry_to_json,
     render_prompt_pack_mirror_text,
@@ -934,6 +937,48 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_github_output_arguments(prompt_pack_upgrade)
     _add_local_summary_argument(prompt_pack_upgrade)
+    prompt_pack_monotonicity = prompt_pack_subparsers.add_parser(
+        "monotonicity",
+        help="certify that a prompt-pack update is a monotone safe extension",
+    )
+    prompt_pack_monotonicity.add_argument(
+        "--config",
+        help="path to the extension candidate PromptABI config; defaults to discovering promptabi.json",
+    )
+    prompt_pack_monotonicity.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        metavar="NAME=PATH_OR_URI",
+        help="override or add an artifact location for the extension candidate; may be repeated",
+    )
+    prompt_pack_monotonicity.add_argument(
+        "--baseline-lockfile",
+        required=True,
+        help="prompt-pack lockfile for the baseline contract set",
+    )
+    prompt_pack_monotonicity.add_argument(
+        "--fail-on",
+        choices=("error", "warning", "any", "never"),
+        default="error",
+        help="exit with code 1 at this diagnostic threshold (default: error)",
+    )
+    prompt_pack_monotonicity.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format for the monotonicity certificate (default: text)",
+    )
+    prompt_pack_monotonicity.add_argument("-q", "--quiet", action="count", default=0, help="suppress informational text output")
+    prompt_pack_monotonicity.add_argument("-v", "--verbose", action="count", default=0, help="include config and baseline paths")
+    prompt_pack_monotonicity.add_argument(
+        "--plugin",
+        action="append",
+        default=[],
+        metavar="MODULE[:OBJECT]",
+        help="import a PromptABI plugin module for artifact loading extensions; may be repeated",
+    )
+    _add_local_summary_argument(prompt_pack_monotonicity)
     prompt_pack_registry = prompt_pack_subparsers.add_parser(
         "registry",
         help="emit a public verified prompt-pack registry manifest without prompt contents",
@@ -3646,6 +3691,57 @@ def main(argv: Sequence[str] | None = None) -> int:
             exit_code=exit_code,
             started_at=started_at,
             metadata=_verification_summary_metadata(result, output_format=args.format, fail_on=args.fail_on),
+        ):
+            return 2
+        print(output, end="")
+        return exit_code
+
+    if args.command == "prompt-pack" and args.prompt_pack_command == "monotonicity":
+        started_at = time.perf_counter()
+        try:
+            if args.quiet and args.verbose:
+                parser.error("--quiet and --verbose cannot be used together")
+            config_path = Path(args.config).resolve() if args.config else discover_config()
+            baseline_path = Path(args.baseline_lockfile).expanduser().resolve()
+            plugin_registry = _load_cli_plugins(args.plugin)
+            overrides = _parse_artifact_overrides(args.artifact, parser)
+            config = load_config(config_path).with_artifact_overrides(overrides, base_dir=Path.cwd())
+            if args.local_summary is not None and policy_forbids_local_summary(config.policy):
+                print("promptabi: organization policy pack forbids --local-summary writes", file=sys.stderr)
+                return 2
+            session = VerificationSession(config, plugin_registry=plugin_registry)
+            result = session.run()
+            loaded_artifacts, _load_diagnostics = session.load_artifacts_with_diagnostics()
+            certificate = certify_prompt_pack_monotonicity(
+                load_prompt_pack_lockfile(baseline_path),
+                loaded_artifacts,
+                result.diagnostics,
+                baseline_path=baseline_path,
+            )
+            monotonicity_result = VerificationResult(
+                config=result.config,
+                diagnostics=tuple(sorted((*result.diagnostics, *certificate.diagnostics), key=lambda item: item.sort_key)),
+            )
+        except (ConfigError, PromptPackLockError, PluginError, ValueError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot certify prompt-pack monotonicity: {exc}", file=sys.stderr)
+            return 2
+        output = (
+            render_prompt_pack_monotonicity_json(certificate)
+            if args.format == "json"
+            else render_prompt_pack_monotonicity_text(certificate)
+        )
+        if args.format == "text" and args.verbose:
+            output += f"config: {config_path}\nbaseline prompt-pack lockfile: {baseline_path}\n"
+        exit_code = _exit_code(monotonicity_result, fail_on=args.fail_on)
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="prompt-pack monotonicity",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata=_verification_summary_metadata(monotonicity_result, output_format=args.format, fail_on=args.fail_on),
         ):
             return 2
         print(output, end="")

@@ -9,6 +9,7 @@ from promptabi.prompt_packs import (
     create_signed_prompt_pack_provenance,
     build_prompt_pack_lockfile,
     build_prompt_pack_registry,
+    certify_prompt_pack_monotonicity,
     compare_prompt_pack_lockfile,
     compare_prompt_pack_upgrade,
     load_signed_prompt_pack_provenance,
@@ -16,6 +17,7 @@ from promptabi.prompt_packs import (
     verify_signed_prompt_pack_provenance,
     verify_prompt_pack_mirror,
     prompt_pack_registry_to_json,
+    render_prompt_pack_monotonicity_json,
 )
 from promptabi.session import VerificationSession
 
@@ -32,6 +34,10 @@ def _write_prompt_pack(
     supported_model_families=None,
     schema_digest=None,
     include_extra_template=False,
+    extra_template_roles=None,
+    extra_template_required_regions=None,
+    extra_tool_required=False,
+    extra_stop_sequence=None,
 ) -> None:
     template_entries = [
         {
@@ -48,15 +54,21 @@ def _write_prompt_pack(
             {
                 "name": "handoff-chat",
                 "template": "{{ system }}\n{{ transcript }}",
-                "roles": ["system", "user", "assistant", "tool"],
+                "roles": extra_template_roles or ["system", "user", "assistant", "tool"],
                 "variables": ["system", "transcript"],
-                "required_regions": ["system-policy", "tool-result"],
+                "required_regions": extra_template_required_regions or ["system-policy", "tool-result"],
                 "supported_model_families": ["openai-compatible"],
             }
         )
     tool_schema = {"name": tool_name, "provider": "openai"}
     if schema_digest is not None:
         tool_schema["schema_digest"] = schema_digest
+    tool_schemas = [tool_schema]
+    if extra_tool_required:
+        tool_schemas.append({"name": "lookup_order", "provider": "openai", "required": True})
+    stop_policies = [{"name": "tool-json", "stop_sequences": [stop]}]
+    if extra_stop_sequence is not None:
+        stop_policies.append({"name": "handoff-json", "stop_sequences": [extra_stop_sequence]})
     path.write_text(
         json.dumps(
             {
@@ -64,8 +76,8 @@ def _write_prompt_pack(
                 "version": "1.0.0",
                 "exported_templates": template_entries,
                 "expected_roles": expected_roles or ["system", "user", "assistant"],
-                "tool_schemas": [tool_schema],
-                "stop_policies": [{"name": "tool-json", "stop_sequences": [stop]}],
+                "tool_schemas": tool_schemas,
+                "stop_policies": stop_policies,
                 "supported_model_families": supported_model_families or ["openai-compatible"],
             },
             indent=2,
@@ -698,6 +710,84 @@ def test_prompt_pack_upgrade_rejects_role_stop_schema_and_budget_regressions(tmp
     assert "prompt-pack-upgrade-diagnostic-regression" in rule_ids
     assert all(diagnostic.witness is not None for diagnostic in upgrade)
     assert any(dict(diagnostic.properties)["field"] == "stop_policies.tool-json" for diagnostic in upgrade)
+
+
+def test_prompt_pack_monotonicity_certifies_append_only_extensions(tmp_path: Path, capsys) -> None:
+    baseline_pack = tmp_path / "baseline.prompt-pack.json"
+    candidate_pack = tmp_path / "candidate.prompt-pack.json"
+    _write_prompt_pack(baseline_pack)
+    _write_prompt_pack(
+        candidate_pack,
+        include_extra_template=True,
+        extra_template_roles=["system", "user", "assistant"],
+        extra_template_required_regions=["system-policy"],
+        supported_model_families=["openai-compatible", "vllm-openai-compatible"],
+    )
+    baseline_config = tmp_path / "baseline.promptabi.json"
+    candidate_config = tmp_path / "candidate.promptabi.json"
+    _write_safe_config(baseline_config, baseline_pack)
+    _write_safe_config(candidate_config, candidate_pack)
+    baseline_lock, _baseline_result, _baseline_loaded = _prompt_pack_lock_for_config(baseline_config, tmp_path)
+    candidate_session = VerificationSession.from_config_file(candidate_config)
+    candidate_result = candidate_session.run()
+    candidate_loaded, _load_diagnostics = candidate_session.load_artifacts_with_diagnostics()
+
+    certificate = certify_prompt_pack_monotonicity(baseline_lock, candidate_loaded, candidate_result.diagnostics)
+    payload = json.loads(render_prompt_pack_monotonicity_json(certificate))
+
+    assert certificate.ok
+    assert payload["ok"] is True
+    assert [diagnostic.rule_id for diagnostic in certificate.diagnostics] == [
+        "prompt-pack-monotonicity-certified"
+    ]
+
+    lock_path = tmp_path / "prompt-pack.lock.json"
+    lock_path.write_text(json.dumps(baseline_lock.to_dict(), indent=2, sort_keys=True), encoding="utf-8")
+    exit_code = main(
+        [
+            "prompt-pack",
+            "monotonicity",
+            "--config",
+            str(candidate_config),
+            "--baseline-lockfile",
+            str(lock_path),
+            "--format",
+            "json",
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert json.loads(captured.out)["diagnostics"][0]["rule_id"] == "prompt-pack-monotonicity-certified"
+
+
+def test_prompt_pack_monotonicity_rejects_new_required_obligations(tmp_path: Path) -> None:
+    baseline_pack = tmp_path / "baseline.prompt-pack.json"
+    candidate_pack = tmp_path / "candidate.prompt-pack.json"
+    _write_prompt_pack(baseline_pack)
+    _write_prompt_pack(
+        candidate_pack,
+        include_extra_template=True,
+        extra_tool_required=True,
+        extra_stop_sequence="</handoff>",
+    )
+    baseline_config = tmp_path / "baseline.promptabi.json"
+    candidate_config = tmp_path / "candidate.promptabi.json"
+    _write_safe_config(baseline_config, baseline_pack)
+    _write_safe_config(candidate_config, candidate_pack)
+    baseline_lock, _baseline_result, _baseline_loaded = _prompt_pack_lock_for_config(baseline_config, tmp_path)
+    candidate_session = VerificationSession.from_config_file(candidate_config)
+    candidate_result = candidate_session.run()
+    candidate_loaded, _load_diagnostics = candidate_session.load_artifacts_with_diagnostics()
+
+    certificate = certify_prompt_pack_monotonicity(baseline_lock, candidate_loaded, candidate_result.diagnostics)
+
+    assert not certificate.ok
+    assert {
+        "prompt-pack-monotonicity-required-tool-added",
+        "prompt-pack-monotonicity-stop-obligation-added",
+        "prompt-pack-monotonicity-template-obligation-added",
+    }.issubset({diagnostic.rule_id for diagnostic in certificate.diagnostics})
 
 
 def test_cli_prompt_pack_upgrade_gates_real_candidate(tmp_path: Path, capsys) -> None:
