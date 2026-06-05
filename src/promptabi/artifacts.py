@@ -1367,6 +1367,9 @@ class EvaluationHarnessArtifact(BaseArtifact):
     allowed_roles: tuple[str, ...] = ()
     required_prompt_variables: tuple[str, ...] = ()
     prompt_variables: tuple[str, ...] = ()
+    answer_key_variables: tuple[str, ...] = ()
+    grading_rubric_variables: tuple[str, ...] = ()
+    chain_of_thought_variables: tuple[str, ...] = ()
     few_shot_examples: tuple[EvaluationFewShotExample, ...] = ()
     max_prompt_tokens: int | None = None
 
@@ -1385,6 +1388,21 @@ class EvaluationHarnessArtifact(BaseArtifact):
             _unique_strings(self.required_prompt_variables, field_name="evaluation harness required_prompt_variables"),
         )
         object.__setattr__(self, "prompt_variables", _unique_strings(self.prompt_variables, field_name="evaluation harness prompt_variables"))
+        object.__setattr__(
+            self,
+            "answer_key_variables",
+            _unique_strings(self.answer_key_variables, field_name="evaluation harness answer_key_variables"),
+        )
+        object.__setattr__(
+            self,
+            "grading_rubric_variables",
+            _unique_strings(self.grading_rubric_variables, field_name="evaluation harness grading_rubric_variables"),
+        )
+        object.__setattr__(
+            self,
+            "chain_of_thought_variables",
+            _unique_strings(self.chain_of_thought_variables, field_name="evaluation harness chain_of_thought_variables"),
+        )
         examples = tuple(sorted(self.few_shot_examples, key=lambda example: example.example_id))
         if len({example.example_id for example in examples}) != len(examples):
             raise ValueError("evaluation harness few-shot example IDs must be unique")
@@ -1405,6 +1423,12 @@ class EvaluationHarnessArtifact(BaseArtifact):
             data["required_prompt_variables"] = list(self.required_prompt_variables)
         if self.prompt_variables:
             data["prompt_variables"] = list(self.prompt_variables)
+        if self.answer_key_variables:
+            data["answer_key_variables"] = list(self.answer_key_variables)
+        if self.grading_rubric_variables:
+            data["grading_rubric_variables"] = list(self.grading_rubric_variables)
+        if self.chain_of_thought_variables:
+            data["chain_of_thought_variables"] = list(self.chain_of_thought_variables)
         if self.few_shot_examples:
             data["few_shot_examples"] = [example.to_dict() for example in self.few_shot_examples]
         if self.max_prompt_tokens is not None:
@@ -1603,6 +1627,9 @@ def artifact_from_config(
             allowed_roles=_tuple_of_str(spec, "allowed_roles"),
             required_prompt_variables=_tuple_of_str(spec, "required_prompt_variables"),
             prompt_variables=_tuple_of_str(spec, "prompt_variables"),
+            answer_key_variables=_tuple_of_str_aliases(spec, "answer_key_variables", "answer_key_fields"),
+            grading_rubric_variables=_tuple_of_str_aliases(spec, "grading_rubric_variables", "grading_rubric_fields"),
+            chain_of_thought_variables=_tuple_of_str_aliases(spec, "chain_of_thought_variables", "chain_of_thought_fields"),
             few_shot_examples=_evaluation_few_shot_examples(spec),
             max_prompt_tokens=_optional_int(spec, "max_prompt_tokens"),
         )
@@ -1754,6 +1781,13 @@ def _tuple_of_str(spec: dict[str, Any], key: str) -> tuple[str, ...]:
     if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):
         raise ValueError(f"artifact field '{key}' must be a list of non-empty strings")
     return tuple(value)
+
+
+def _tuple_of_str_aliases(spec: dict[str, Any], *keys: str) -> tuple[str, ...]:
+    values: list[str] = []
+    for key in keys:
+        values.extend(_tuple_of_str(spec, key))
+    return tuple(values)
 
 
 def _tuple_of_int(spec: dict[str, Any], key: str) -> tuple[int, ...]:

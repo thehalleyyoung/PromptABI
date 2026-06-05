@@ -161,9 +161,12 @@ CHECK_RULE_IDS: dict[str, tuple[str, ...]] = {
     ),
     "evaluation-harness-contracts": (
         "evaluation-harness-answer-parser-mismatch",
+        "evaluation-harness-answer-key-leakage",
+        "evaluation-harness-chain-of-thought-leakage",
         "evaluation-harness-contract-missing",
         "evaluation-harness-few-shot-budget-overflow",
         "evaluation-harness-few-shot-role-mismatch",
+        "evaluation-harness-grading-rubric-leakage",
         "evaluation-harness-model-mismatch",
         "evaluation-harness-prompt-template-mismatch",
         "evaluation-harness-prompt-variable-missing",
@@ -424,6 +427,7 @@ def _surfaces_for_check(check_name: str, artifact_kinds: tuple[ArtifactKind, ...
         ),
         "evaluation-harness-contracts": (
             _surface("evaluation", "benchmark-prompts", ArtifactKind.EVALUATION_HARNESS, "covered", "required prompt variables and prompt-template pins are compared against configured contracts"),
+            _surface("evaluation", "private-eval-fields", ArtifactKind.EVALUATION_HARNESS, "complete", "answer-key, private grading-rubric, and chain-of-thought fields must not overlap model-visible prompt variables"),
             _surface("evaluation", "few-shot-examples", ArtifactKind.EVALUATION_HARNESS, "bounded", "finite few-shot role labels and declared token counts are checked against provider/model prompt contracts"),
             _surface("evaluation", "answer-parsers", ArtifactKind.EVALUATION_HARNESS, "bounded", "JSON-style answer parsers are compared with configured schema artifacts"),
             _surface("evaluation", "stop-policies", ArtifactKind.EVALUATION_HARNESS, "covered", "benchmark stop sequences must exactly match configured stop-policy artifacts"),

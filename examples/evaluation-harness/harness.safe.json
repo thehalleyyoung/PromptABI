@@ -10,6 +10,9 @@
   "allowed_roles": ["system", "user", "assistant"],
   "required_prompt_variables": ["question", "rubric"],
   "prompt_variables": ["question", "rubric"],
+  "answer_key_variables": ["expected_answer"],
+  "grading_rubric_variables": ["private_grading_rubric"],
+  "chain_of_thought_variables": ["grader_chain_of_thought"],
   "max_prompt_tokens": 64,
   "few_shot_examples": [
     {

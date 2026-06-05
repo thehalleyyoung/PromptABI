@@ -1,5 +1,5 @@
 \documentclass[10pt]{article}
-\usepackage[margin=0.58in]{geometry}
+\usepackage[margin=0.55in]{geometry}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
 \usepackage{hyperref}
@@ -93,8 +93,9 @@ raw private dataset material, a first-class evaluation-harness verifier that
 loads benchmark prompt manifests and proves, over finite declared facts, that
 provider/model metadata, tokenizer pins, prompt-template names, required prompt
 variables, few-shot role vocabularies and token budgets, JSON-style answer
-parsers, schema artifacts, and stop sequences agree with the model/provider
-contract before a benchmark score is trusted,
+parsers, schema artifacts, stop sequences, and private answer-key, grader-rubric,
+and chain-of-thought fields agree with the model/provider contract before a
+benchmark score is trusted,
 a curated \texttt{promptabi gallery} that reruns real pinned configurations,
 emits compatibility badges, summarizes actual solver backends rather than merely
 advertised solver capability, and explains abstentions plus accepted risks,
@@ -1940,7 +1941,11 @@ Hugging Face Datasets, JSONL, Parquet metadata, Axolotl, LLaMA-Factory, TRL,
 OpenRLHF, internal redacted schemas, and bounded streaming JSONL shards; clean manifests prove safety, while defective manifests
 trigger static counterexamples for source leakage, prompt-hash, mask-policy,
 truncation, role-layout, response-start, packing-boundary, and synthetic
-generator role/schema/tool/truncation bugs. The same
+generator role/schema/tool/truncation bugs. The evaluation slice now also checks
+that declared answer-key, private grading-rubric, and chain-of-thought variables
+do not overlap model-visible prompt variables, with
+\texttt{examples/evaluation-harness/unsafe.promptabi.json} exercising all three
+leakage diagnostics against real source-mapped JSON. The same
 report measures abstentions, runtime, memory, witness completeness, Z3-backed
 solver decisiveness, and differential agreement against recorded real-library
 semantics.
@@ -2139,6 +2144,8 @@ Role-boundary checker tests & Bounded non-forgeability catches dynamic role-head
 Real-world bugs & Eight public llama.cpp/vLLM/Hugging Face bug patterns plus the real-bug benchmark suite are reduced to synthetic offline fixtures and detected with concrete witnesses. \\
 \hline
 Stop/provider/structured-output tests & Recorded provider chunks replay through CPU-only simulators; parser compatibility, tool-schema ingestion, tool serialization, grammar emptiness, grammar ambiguity, and stop overreachability run through real CLI fixtures. \\
+\hline
+Evaluation-harness tests & \texttt{examples/evaluation-harness/*.promptabi.json} prove provider/model/tokenizer/template/parser/stop/few-shot compatibility and reject answer-key, private rubric, and chain-of-thought variables rendered into model-visible prompt fields. \\
 \hline
 Corpus commands & \texttt{promptabi corpus manifest}, \texttt{promptabi corpus structured-schema-manifest}, \texttt{promptabi corpus real-bug-benchmark}, \texttt{promptabi corpus smt-benchmark}, \texttt{promptabi corpus verify}, \texttt{promptabi corpus evaluation}, and \texttt{promptabi corpus beta-report} validate fixture coverage, metrics, witness quality, hashes, and CLI/public-API renderers. \\
 \hline

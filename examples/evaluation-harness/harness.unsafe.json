@@ -9,7 +9,10 @@
   "stop_sequences": ["###"],
   "allowed_roles": ["system", "user", "assistant"],
   "required_prompt_variables": ["question", "rubric"],
-  "prompt_variables": ["question"],
+  "prompt_variables": ["question", "answer_key", "private_rubric", "hidden_cot"],
+  "answer_key_variables": ["answer_key"],
+  "grading_rubric_variables": ["private_rubric"],
+  "chain_of_thought_variables": ["hidden_cot"],
   "max_prompt_tokens": 10,
   "few_shot_examples": [
     {

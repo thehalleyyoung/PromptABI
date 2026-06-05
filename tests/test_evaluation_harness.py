@@ -24,6 +24,9 @@ def test_evaluation_harness_artifact_parses_manifest_fields() -> None:
             "prompt_template": "template",
             "answer_parser": "json-schema",
             "stop_sequences": ["</answer>", "</answer>"],
+            "answer_key_variables": ["expected"],
+            "grading_rubric_fields": ["private_rubric"],
+            "chain_of_thought_variables": ["grader_notes"],
             "few_shot_examples": [{"id": "one", "role": "user", "content": "Q", "token_count": 1}],
         },
         base_dir=ROOT,
@@ -32,6 +35,9 @@ def test_evaluation_harness_artifact_parses_manifest_fields() -> None:
     assert isinstance(artifact, EvaluationHarnessArtifact)
     assert artifact.kind is ArtifactKind.EVALUATION_HARNESS
     assert artifact.stop_sequences == ("</answer>",)
+    assert artifact.answer_key_variables == ("expected",)
+    assert artifact.grading_rubric_variables == ("private_rubric",)
+    assert artifact.chain_of_thought_variables == ("grader_notes",)
     assert artifact.few_shot_examples[0].token_count == 1
 
 
@@ -56,13 +62,18 @@ def test_unsafe_evaluation_harness_reports_contract_breaks_with_spans() -> None:
         "evaluation-harness-prompt-template-mismatch",
         "evaluation-harness-stop-policy-mismatch",
         "evaluation-harness-answer-parser-mismatch",
+        "evaluation-harness-answer-key-leakage",
+        "evaluation-harness-chain-of-thought-leakage",
         "evaluation-harness-prompt-variable-missing",
         "evaluation-harness-few-shot-role-mismatch",
         "evaluation-harness-few-shot-budget-overflow",
+        "evaluation-harness-grading-rubric-leakage",
     }
     assert result.ok is False
     assert expected.issubset(by_rule)
     assert by_rule["evaluation-harness-stop-policy-mismatch"].span is not None
+    assert ("actual", "answer_key") in by_rule["evaluation-harness-answer-key-leakage"].properties
+    assert by_rule["evaluation-harness-chain-of-thought-leakage"].span is not None
     assert by_rule["evaluation-harness-few-shot-role-mismatch"].witness is not None
     assert "evaluation-harness-verified" not in by_rule
 
@@ -75,6 +86,10 @@ def test_evaluation_harness_cli_json_output(capsys) -> None:
     payload = json.loads(captured.out)
     assert any(
         diagnostic["rule_id"] == "evaluation-harness-stop-policy-mismatch"
+        for diagnostic in payload["diagnostics"]
+    )
+    assert any(
+        diagnostic["rule_id"] == "evaluation-harness-grading-rubric-leakage"
         for diagnostic in payload["diagnostics"]
     )
 

@@ -97,6 +97,7 @@ def analyze_evaluation_harness_contracts(
     findings.extend(_stop_findings(harness, stop_policies, spans))
     findings.extend(_parser_findings(harness, schemas, spans))
     findings.extend(_prompt_variable_findings(harness, spans))
+    findings.extend(_leakage_findings(harness, spans))
     findings.extend(_few_shot_findings(harness, spans))
 
     if not any(finding.severity == "error" for finding in findings):
@@ -106,7 +107,7 @@ def analyze_evaluation_harness_contracts(
                 severity="info",
                 message=(
                     f"evaluation harness '{harness.name}' matches declared provider, tokenizer, "
-                    "prompt, parser, few-shot, and stop contracts within the finite manifest"
+                    "prompt, parser, few-shot, leakage, and stop contracts within the finite manifest"
                 ),
                 suggestion="Keep the harness manifest pinned beside benchmark releases so published scores remain reproducible.",
                 witness=(
@@ -367,6 +368,55 @@ def _few_shot_findings(
                         suggestion="Reduce few-shot examples or raise the benchmark prompt budget to match the provider context contract.",
                     )
                 )
+    return tuple(findings)
+
+
+def _leakage_findings(
+    harness: EvaluationHarnessArtifact,
+    spans: Mapping[str, SourceSpan],
+) -> tuple[EvaluationHarnessFinding, ...]:
+    visible_variables = set(harness.prompt_variables).union(harness.required_prompt_variables)
+    if not visible_variables:
+        return ()
+    protected_groups = (
+        (
+            "evaluation-harness-answer-key-leakage",
+            "answer_key_variables",
+            "answer key",
+            harness.answer_key_variables,
+            "Move answer-key fields into the grader-only record, or rename the rendered prompt variable so benchmark answers are not visible to the model.",
+        ),
+        (
+            "evaluation-harness-grading-rubric-leakage",
+            "grading_rubric_variables",
+            "grading rubric",
+            harness.grading_rubric_variables,
+            "Keep private grading rubrics in grader-only metadata, or declare only intentionally model-visible instructions as prompt variables.",
+        ),
+        (
+            "evaluation-harness-chain-of-thought-leakage",
+            "chain_of_thought_variables",
+            "chain-of-thought",
+            harness.chain_of_thought_variables,
+            "Remove chain-of-thought fields from rendered prompt variables and expose only non-secret task instructions to the model.",
+        ),
+    )
+    findings: list[EvaluationHarnessFinding] = []
+    for rule_id, subject, label, protected_variables, suggestion in protected_groups:
+        leaked = tuple(sorted(set(protected_variables).intersection(visible_variables)))
+        if not leaked:
+            continue
+        findings.append(
+            _mismatch(
+                rule_id,
+                subject,
+                f"evaluation harness can render {label} fields into model-visible prompt regions",
+                expected="no overlap with prompt_variables or required_prompt_variables",
+                actual=", ".join(leaked),
+                span=spans.get(subject) or spans.get("prompt_variables") or spans.get("required_prompt_variables"),
+                suggestion=suggestion,
+            )
+        )
     return tuple(findings)
 
 
