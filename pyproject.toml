@@ -28,6 +28,8 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 docs = ["mkdocs>=1.6"]
+grammars = ["jsonschema>=4.20"]
+solver = ["z3-solver>=4.12"]
 tokenizers = ["sentencepiece>=0.2", "tiktoken>=0.7", "tokenizers>=0.15"]
 
 [project.scripts]

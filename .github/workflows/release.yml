@@ -1,0 +1,203 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semantic version to release, with or without a leading v.
+        required: true
+        type: string
+      publish:
+        description: Publish to PyPI and GHCR after building artifacts.
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  id-token: write
+  packages: write
+  attestations: write
+
+env:
+  PYTHON_VERSION: "3.12"
+  PACKAGE_NAME: promptabi
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/promptabi
+
+jobs:
+  build-python:
+    name: Build Python artifacts
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Resolve semantic version
+        id: version
+        shell: python
+        env:
+          INPUT_VERSION: ${{ inputs.version || '' }}
+        run: |
+          import os
+          import re
+          import tomllib
+          from pathlib import Path
+
+          event = os.environ["GITHUB_EVENT_NAME"]
+          ref_name = os.environ["GITHUB_REF_NAME"]
+          requested = os.environ.get("INPUT_VERSION", "").strip()
+          tag = ref_name if event == "push" else requested
+          if not tag.startswith("v"):
+              tag = f"v{tag}"
+          version = tag[1:]
+          if re.fullmatch(r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:[-+][0-9A-Za-z.-]+)?", version) is None:
+              raise SystemExit(f"{tag} is not a semantic version tag")
+          project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]
+          source_version = Path("src/promptabi/_version.py").read_text(encoding="utf-8")
+          if project["version"] != version or f'__version__ = "{version}"' not in source_version:
+              raise SystemExit(f"tag {tag} does not match pyproject/_version metadata")
+          output = Path(os.environ["GITHUB_OUTPUT"])
+          with output.open("a", encoding="utf-8") as handle:
+              handle.write(f"version={version}\n")
+              handle.write(f"tag={tag}\n")
+
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          python -m twine check dist/*
+
+      - name: Upload distribution artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-dist
+          path: dist/*
+          if-no-files-found: error
+
+  build-standalone:
+    name: Build standalone executable
+    runs-on: ${{ matrix.os }}
+    needs: build-python
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: promptabi-linux-x86_64
+            executable: dist/promptabi
+          - os: macos-latest
+            artifact: promptabi-macos-arm64
+            executable: dist/promptabi
+          - os: windows-latest
+            artifact: promptabi-windows-x86_64
+            executable: dist/promptabi.exe
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Build executable
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip pyinstaller
+          python -m pip install -e .
+          pyinstaller --clean --onefile --name promptabi src/promptabi/__main__.py
+
+      - name: Smoke test executable
+        shell: bash
+        run: ${{ matrix.executable }} --version
+
+      - name: Upload standalone artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.executable }}
+          if-no-files-found: error
+
+  build-container:
+    name: Build Docker image
+    runs-on: ubuntu-latest
+    needs: build-python
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        if: ${{ github.event_name == 'push' || inputs.publish }}
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and optionally push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name == 'push' || inputs.publish }}
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ needs.build-python.outputs.version }}
+            ${{ env.IMAGE_NAME }}:latest
+          labels: |
+            org.opencontainers.image.title=PromptABI
+            org.opencontainers.image.version=${{ needs.build-python.outputs.version }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+  publish:
+    name: Publish signed release
+    runs-on: ubuntu-latest
+    needs:
+      - build-python
+      - build-standalone
+      - build-container
+    if: ${{ github.event_name == 'push' || inputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Collect release files
+        run: |
+          mkdir -p release-files
+          find release-artifacts -maxdepth 3 -type f -print -exec cp {} release-files/ \;
+          ls -la release-files
+
+      - name: Generate artifact attestations
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "release-files/*"
+
+      - name: Sign release artifacts
+        uses: sigstore/gh-action-sigstore-python@v3.0.1
+        with:
+          inputs: "release-files/*"
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: release-artifacts/python-dist
+          skip-existing: true
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.build-python.outputs.tag }}
+          generate_release_notes: true
+          files: release-files/*

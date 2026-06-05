@@ -310,12 +310,17 @@ returns stable policy-controlled process exit codes, writes and enforces
 deterministic verification lockfiles that fail closed on artifact, config,
 provider-fixture, library-version, supported-fragment, or diagnostic-baseline
 drift,
-ships a repository-local GitHub Action that composes cache restoration,
+ships cross-version CI over supported Python releases, operating systems,
+optional tokenizer/grammar/Z3 dependency slices, and pinned backend versions,
+plus a repository-local GitHub Action that composes cache restoration,
 lockfile enforcement, changed-artifact detection, SARIF upload, workflow
 annotations, and markdown summaries around the same verifier, and installs a
 local pre-commit workflow that gates staged PromptABI-relevant schemas,
 templates, tokenizers, tools, training manifests, configs, and lockfiles while
 failing closed when staged content differs from the working tree,
+packages releases as checked PyPI distributions, standalone executables,
+Docker images, signed/attested GitHub assets, changelogged semantic-version tags,
+and GHCR container images,
 compares baseline and current PromptABI configs with \texttt{promptabi diff},
 emitting text, JSON, or SARIF diagnostics for removed checks, missing artifacts,
 tokenizer/config drift, provider-contract regressions, framework truncation
@@ -1641,9 +1646,11 @@ detection, SARIF, GitHub Actions, pre-commit hooks, HTML reports, suppression
 policies, and plugin APIs turn the verifier from a library into an everyday CI
 tool.
 
-The research roadmap adds reproducibility packages, executable specifications,
-proof sketches for supported fragments, mutation-based fuzzing, cross-version
-CI, and real-bug benchmark suites. The community roadmap adds contribution
+The research roadmap adds executable specifications,
+proof sketches for supported fragments, richer formal-methods documentation, and
+post-release corpus audits on top of the shipped reproducibility packages,
+mutation fuzzing, cross-version CI, release automation, and real-bug benchmark
+suites. The community roadmap adds contribution
 infrastructure, compatibility matrices, integration guides, launch assets, and
 governance. These activities are not separate from the technical work. They are
 how a formal verifier becomes durable enough for production teams to trust and
@@ -1699,6 +1706,8 @@ that the repository can already execute code, not just describe a future tool.
 \textbf{Line} & \textbf{Current status} \\
 \hline
 Focused tests & Artifact model, public API, config loading, and CLI workflow behavior pass in isolation. \\
+\hline
+CI and release automation tests & Workflow fixtures prove Python/OS/backend matrix coverage, optional dependency slices, semantic-version gates, checked PyPI builds, standalone executables, Docker images, signed release assets, and changelog presence. \\
 \hline
 Formal core tests & Automata reachability and difference, transducer composition/projection/over-approximation, finite-domain solving, unsat-core extraction, and Z3-backed assignment extraction pass against executable code. \\
 \hline

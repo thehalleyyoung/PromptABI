@@ -1,0 +1,87 @@
+name: Cross-version CI
+
+on:
+  pull_request:
+    paths:
+      - "pyproject.toml"
+      - "src/**"
+      - "tests/**"
+      - "examples/**"
+      - "fixtures/**"
+      - ".github/workflows/ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "pyproject.toml"
+      - "src/**"
+      - "tests/**"
+      - "examples/**"
+      - "fixtures/**"
+      - ".github/workflows/ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: ${{ matrix.os }} / py${{ matrix.python-version }} / ${{ matrix.optional-set }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python-version: "3.11"
+            optional-set: core
+            install-command: python -m pip install -e ".[dev]"
+            test-command: python -m pytest tests/test_cli.py tests/test_config.py tests/test_public_api.py
+
+          - os: ubuntu-latest
+            python-version: "3.12"
+            optional-set: pinned-older-tokenizers
+            install-command: python -m pip install -e ".[dev]" jsonschema==4.22.0 sentencepiece==0.2.0 tiktoken==0.7.0 tokenizers==0.15.2
+            test-command: python -m pytest tests/test_tokenizers.py tests/test_stop_analysis.py tests/test_grammar_differential.py
+
+          - os: macos-latest
+            python-version: "3.13"
+            optional-set: grammars-and-z3
+            install-command: python -m pip install -e ".[dev,grammars,solver]"
+            test-command: python -m pytest tests/test_formal.py tests/test_static_contracts.py tests/test_grammars.py tests/test_grammar_emptiness.py tests/test_grammar_ambiguity.py
+
+          - os: windows-latest
+            python-version: "3.12"
+            optional-set: action-and-local-workflows
+            install-command: python -m pip install -e ".[dev,grammars,solver]"
+            test-command: python -m pytest tests/test_github_action.py tests/test_local_workflows.py tests/test_lockfiles.py
+
+          - os: ubuntu-latest
+            python-version: "3.14"
+            optional-set: latest-all-backends
+            install-command: python -m pip install -e ".[dev,grammars,solver,tokenizers]" transformers==4.57.3
+            test-command: python -m pytest tests/test_chat_templates.py tests/test_tokenizers.py tests/test_parser_compatibility.py tests/test_checker_properties.py
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install PromptABI test slice
+        run: ${{ matrix.install-command }}
+
+      - name: Show backend versions
+        shell: python
+        run: |
+          import importlib.metadata as metadata
+          for package in ("jsonschema", "sentencepiece", "tiktoken", "tokenizers", "transformers", "z3-solver"):
+              try:
+                  print(f"{package}=={metadata.version(package)}")
+              except metadata.PackageNotFoundError:
+                  print(f"{package}=not-installed")
+
+      - name: Run targeted tests
+        run: ${{ matrix.test-command }}
