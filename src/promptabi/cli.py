@@ -354,6 +354,12 @@ from .stop_policy_lemmas import (
     render_stop_policy_lemmas_text,
     verify_stop_policy_lemmas,
 )
+from .envelope_map_constraints import (
+    load_envelope_contract,
+    render_envelope_report_json,
+    render_envelope_report_text,
+    verify_envelope_contract,
+)
 from .loaders import ArtifactLoader
 from .lockfiles import (
     LockfileError,
@@ -923,6 +929,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     _add_local_summary_argument(stop_lemmas)
+
+    envelope_map = subparsers.add_parser(
+        "envelope-map",
+        help="prove finite-map constraints (presence, ranges, exclusions, implications) for a provider envelope",
+    )
+    envelope_map.add_argument(
+        "--contract",
+        required=True,
+        help="path to an envelope-contract JSON document",
+    )
+    envelope_map.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    _add_local_summary_argument(envelope_map)
 
     explain = subparsers.add_parser("explain", help="expand one diagnostic into a tutorial-style explanation")
     explain.add_argument(
@@ -3877,6 +3900,36 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "format": args.format,
                 "policy_name": report.policy_name,
                 "stop_sequences": len(report.stop_sequences),
+                "ok": report.ok,
+            },
+        ):
+            return 2
+        print(output, end="")
+        return exit_code
+
+    if args.command == "envelope-map":
+        started_at = time.perf_counter()
+        try:
+            contract = load_envelope_contract(str(Path(args.contract).resolve()))
+            report = verify_envelope_contract(contract)
+        except (OSError, ValueError, KeyError) as exc:
+            print(f"promptabi: cannot verify envelope contract: {exc}", file=sys.stderr)
+            return 2
+        output = (
+            render_envelope_report_json(report)
+            if args.format == "json"
+            else render_envelope_report_text(report)
+        )
+        exit_code = 0 if report.ok else 1
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="envelope-map",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={
+                "format": args.format,
+                "contract": report.contract,
+                "guarantees": len(report.results),
                 "ok": report.ok,
             },
         ):

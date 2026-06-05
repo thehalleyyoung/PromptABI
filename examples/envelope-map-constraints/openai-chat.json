@@ -1,0 +1,22 @@
+{
+  "name": "openai-chat-request",
+  "fields": [
+    {"name": "model", "kind": "enum", "members": ["gpt-4o", "gpt-4o-mini"], "optional": false},
+    {"name": "temperature", "kind": "int", "minimum": 0, "maximum": 2, "optional": true},
+    {"name": "stream", "kind": "bool", "optional": true},
+    {"name": "tools", "kind": "bool", "optional": true},
+    {"name": "tool_choice", "kind": "enum", "members": ["auto", "none", "required"], "optional": true}
+  ],
+  "assumptions": [
+    {"name": "tool_choice-requires-tools", "kind": "implies",
+     "antecedent": {"kind": "present", "field": "tool_choice"},
+     "consequent": {"kind": "present", "field": "tools"}}
+  ],
+  "guarantees": [
+    {"name": "model-is-supported", "kind": "in", "field": "model", "members": ["gpt-4o", "gpt-4o-mini"]},
+    {"name": "temperature-within-range", "kind": "compare", "field": "temperature", "op": "<=", "value": 2},
+    {"name": "tool_choice-implies-tools", "kind": "implies",
+     "antecedent": {"kind": "present", "field": "tool_choice"},
+     "consequent": {"kind": "present", "field": "tools"}}
+  ]
+}

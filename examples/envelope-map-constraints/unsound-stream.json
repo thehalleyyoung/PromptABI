@@ -1,0 +1,13 @@
+{
+  "name": "unsound-stream-request",
+  "fields": [
+    {"name": "stream", "kind": "bool", "optional": true},
+    {"name": "logprobs", "kind": "bool", "optional": true}
+  ],
+  "assumptions": [],
+  "guarantees": [
+    {"name": "stream-excludes-logprobs", "kind": "implies",
+     "antecedent": {"kind": "compare", "field": "stream", "op": "==", "value": true},
+     "consequent": {"kind": "absent", "field": "logprobs"}}
+  ]
+}
