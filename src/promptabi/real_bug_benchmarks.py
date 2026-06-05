@@ -26,6 +26,7 @@ from .artifacts import (
 )
 from .chat_templates import ChatTemplateSymbolicBounds, parse_hf_chat_template_config
 from .config import VerificationConfig
+from .diagnostics import UpstreamIssueLink
 from .loaders import LoadedArtifact
 from .role_boundaries import analyze_role_boundary_nonforgeability
 from .session import VerificationSession
@@ -68,6 +69,7 @@ class RealBugBenchmarkCase:
     expected_rule_ids: tuple[str, ...]
     replay: dict[str, object]
     labels: tuple[str, ...]
+    upstream_issues: tuple[UpstreamIssueLink, ...] = ()
 
     def to_manifest_entry(self, result: "RealBugBenchmarkResult") -> dict[str, object]:
         return {
@@ -79,6 +81,7 @@ class RealBugBenchmarkCase:
             "bug_class": self.bug_class,
             "labels": list(self.labels),
             "expected_rule_ids": list(self.expected_rule_ids),
+            "upstream_issues": [link.to_dict() for link in self.upstream_issues],
             "observed_rule_ids": list(result.observed_rule_ids),
             "passed": result.passed,
             "evidence_summary": result.evidence_summary,
@@ -214,6 +217,7 @@ def _case_from_mapping(suite_path: Path, raw: object) -> RealBugBenchmarkCase:
         raise RealBugBenchmarkError(f"{suite_path} case {raw['id']!r} must record a public GitHub reference")
     expected_rule_ids = _string_tuple(raw.get("expected_rule_ids"), suite_path, str(raw["id"]), "expected_rule_ids")
     labels = _string_tuple(raw.get("labels"), suite_path, str(raw["id"]), "labels")
+    upstream_issues = _upstream_issues(raw.get("upstream_issues"), suite_path, str(raw["id"]))
     replay = raw.get("replay")
     if not isinstance(replay, dict):
         raise RealBugBenchmarkError(f"{suite_path} case {raw['id']!r} field 'replay' must be an object")
@@ -237,6 +241,7 @@ def _case_from_mapping(suite_path: Path, raw: object) -> RealBugBenchmarkCase:
         expected_rule_ids=expected_rule_ids,
         replay=dict(replay),
         labels=labels,
+        upstream_issues=upstream_issues,
     )
 
 
@@ -469,6 +474,26 @@ def _string_tuple(value: object, suite_path: Path, case_id: str, field_name: str
     if not isinstance(value, list) or not value or not all(isinstance(item, str) and item for item in value):
         raise RealBugBenchmarkError(f"{suite_path} case {case_id!r} field '{field_name}' must be a non-empty string list")
     return tuple(value)
+
+
+def _upstream_issues(value: object, suite_path: Path, case_id: str) -> tuple[UpstreamIssueLink, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, list) or not value:
+        raise RealBugBenchmarkError(f"{suite_path} case {case_id!r} field 'upstream_issues' must be a non-empty list")
+    links: list[UpstreamIssueLink] = []
+    for index, item in enumerate(value, start=1):
+        if not isinstance(item, dict):
+            raise RealBugBenchmarkError(
+                f"{suite_path} case {case_id!r} upstream_issues[{index}] must be an object"
+            )
+        try:
+            links.append(UpstreamIssueLink.from_dict(item))
+        except (KeyError, ValueError, TypeError) as exc:
+            raise RealBugBenchmarkError(
+                f"{suite_path} case {case_id!r} upstream_issues[{index}] is invalid: {exc}"
+            ) from exc
+    return tuple(sorted(links, key=lambda link: link.stable_key))
 
 
 def _stable_json_hash(value: Any) -> str:

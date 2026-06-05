@@ -301,6 +301,7 @@ from .diagnostics import (
     Diagnostic,
     DiagnosticSeverity,
     SourceSpan,
+    UpstreamIssueLink,
     WitnessStep,
     WitnessTrace,
 )
@@ -1200,6 +1201,7 @@ __all__ = [
     "TransducerTransition",
     "TransducerWitness",
     "TruncationStrategy",
+    "UpstreamIssueLink",
     "UsageAnalyticsError",
     "UsageSummaryReport",
     "LocalMetricsReport",

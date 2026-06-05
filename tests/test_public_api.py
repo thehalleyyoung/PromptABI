@@ -9,7 +9,9 @@ from promptabi import (
     DiagnosticSeverity,
     SchemaArtifact,
     SourceSpan,
+    UpstreamIssueLink,
     VerificationConfig,
+    VerificationResult,
     VerificationSession,
     WitnessStep,
     WitnessTrace,
@@ -132,6 +134,7 @@ def test_diagnostic_to_dict_omits_absent_optional_fields() -> None:
         "severity": "warning",
         "message": "example",
         "fingerprint": diagnostic.fingerprint,
+        "witness_digest": diagnostic.witness_digest,
         "suggestions": [],
         "check_modes": [],
         "artifact": {"kind": "config", "name": "promptabi"},
@@ -196,3 +199,59 @@ def test_diagnostic_model_preserves_provenance_witness_steps_and_stable_fingerpr
     ]
     assert payload["check_modes"] == ["bounded", "sound", "z3-backed-smt"]
     assert CheckMode.ABSTAINING.description.startswith("The check explicitly declines")
+
+
+def test_diagnostic_model_preserves_upstream_issue_links_without_changing_fingerprint() -> None:
+    link = UpstreamIssueLink(
+        url="https://github.com/example/upstream/pull/42",
+        title="Fix tokenizer control-token regression",
+        status="merged",
+        affected_versions=("tokenizer-fixture-v1",),
+        fixed_versions=("tokenizer-fixture-v2",),
+        workarounds=("Pin tokenizer revisions until the provider patch is deployed.",),
+    )
+    base = Diagnostic(
+        rule_id="tokenizer-differential-mismatch",
+        severity=DiagnosticSeverity.ERROR,
+        message="tokenizer fixture drifted",
+    )
+    linked = Diagnostic(
+        rule_id=base.rule_id,
+        severity=base.severity,
+        message=base.message,
+        upstream_issues=(link,),
+    )
+
+    payload = linked.to_dict()
+    round_tripped = Diagnostic.from_dict(payload)
+
+    assert linked.fingerprint == base.fingerprint
+    assert payload["upstream_issues"] == [link.to_dict()]
+    assert round_tripped.upstream_issues == (link,)
+
+
+def test_bug_report_includes_upstream_issue_status_and_workarounds() -> None:
+    link = UpstreamIssueLink(
+        url="https://github.com/example/upstream/issues/77",
+        title="Structured-output parser mismatch",
+        status="fixed",
+        fixed_versions=("schema-fixture-v2",),
+        workarounds=("Normalize the app parser and constrained decoder against the same JSON Schema.",),
+    )
+    result = VerificationResult(
+        config=VerificationConfig(name="linked-report", checks=("parser-compatibility-mismatch",)),
+        diagnostics=(
+            Diagnostic(
+                rule_id="parser-compatibility-mismatch",
+                severity=DiagnosticSeverity.ERROR,
+                message="parser accepts output outside the grammar",
+                upstream_issues=(link,),
+            ),
+        ),
+    )
+
+    rendered = render_bug_report(create_bug_report(result, rule_id="parser-compatibility-mismatch"))
+
+    assert "## Upstream status" in rendered
+    assert "[Structured-output parser mismatch](https://github.com/example/upstream/issues/77)" in rendered
+    assert "Normalize the app parser" in rendered

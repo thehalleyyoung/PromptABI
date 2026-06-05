@@ -1,5 +1,5 @@
 \documentclass[10pt]{article}
-\usepackage[margin=0.45in]{geometry}
+\usepackage[margin=0.43in]{geometry}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
 \usepackage{hyperref}
@@ -7,6 +7,7 @@
 \usepackage{longtable}
 \usepackage{verbatim}
 \usepackage{amsthm}
+\linespread{0.96}
 
 \newtheorem{theorem}{Theorem}
 
@@ -32,7 +33,7 @@ This paper presents the repository as it now stands and the research system it
 is designed to become. The implementation already contains a typed Python
 package, a deterministic command line workflow, a public embedding API, a
 typed artifact model, a stable diagnostic contract with text, JSON, and SARIF
-renderers locked by structured snapshots, position-aware source spans for configs and JSON artifacts, offline
+renderers locked by structured snapshots, upstream issue/fix/workaround links, position-aware source spans for configs and JSON artifacts, offline
 version-pinned artifact loading, a tokenizer abstraction and differential harness
 validated against real Hugging Face \texttt{tokenizers},
 \texttt{tiktoken}, and SentencePiece libraries, deterministic finite automata,
@@ -211,7 +212,8 @@ failure-preserving or globally minimality-certified predicates into compact
 upstreamable repros,
 an upstream bug-report generator that turns a selected real diagnostic into a
 sanitized markdown issue containing artifact versions and hashes, reproduction
-commands, expected and actual behavior, redacted length-limited witness traces,
+commands, expected and actual behavior, linked patches, fixed versions,
+local workarounds, redacted length-limited witness traces,
 minimized input summaries when supplied, and privacy guarantees suitable for
 filing with tokenizer, template, framework, or provider maintainers,
 a maintainer refresh workflow that regenerates model-artifact manifests,
@@ -274,7 +276,8 @@ leakage, multi-function XML boundary confusion, and XML tool-call
 parser-boundary stops, a replayable real-bug benchmark manifest that extends
 those reductions with tokenizer-differential drift, provider migration,
 structured-output parser mismatch, RAG truncation, and supervised
-target-role-alignment failures under one deterministic CPU-only command, a
+target-role-alignment failures under one deterministic CPU-only command while
+preserving upstream links, fixed versions, and local workarounds, a
 labeled evaluation runner that expands real-bug cases and a maintained
 eval-fixture pack for stop-string, parser, truncation, role-boundary, and
 tokenizer-mismatch bugs into scoped precision/recall, abstention rate, runtime,
@@ -417,8 +420,9 @@ render/tokenize witness steps produced by real checks rather than a separate
 editor-only analysis.
 The adjacent \texttt{promptabi bug-report} command uses the same selector and
 verification path but emits an upstream-ready markdown issue rather than a local
-tutorial, so the strongest evaluation unit---a maintainer-actionable bug
-report---is generated from the exact diagnostic object exercised in CI.
+tutorial, including upstream status, fixed versions, and local workarounds, so the strongest evaluation unit---a
+maintainer-actionable bug report---is generated from the exact diagnostic object
+exercised in CI.
 The remaining checkers fit into that surface rather than requiring a rewrite. We
 describe the transducer-oriented formalism, the artifact model, the diagnostic
 contract, the deployed benchmark lines, and the planned evaluation against real tokenizer, template,

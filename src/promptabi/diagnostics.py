@@ -71,6 +71,7 @@ CHECK_MODE_DESCRIPTIONS: dict[CheckMode, str] = {
 
 LOCALIZATION_ID_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
 LOCALIZATION_ARG_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+UPSTREAM_URL_PATTERN = re.compile(r"^https://github\.com/[^/\s]+/[^/\s]+/(?:issues|pull)/[0-9]+$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -288,6 +289,63 @@ class WitnessTrace:
 
 
 @dataclass(frozen=True, slots=True)
+class UpstreamIssueLink:
+    """A sanitized external bug/patch link attached to a diagnostic."""
+
+    url: str
+    title: str
+    status: str = "unknown"
+    fixed_versions: tuple[str, ...] = ()
+    affected_versions: tuple[str, ...] = ()
+    workarounds: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not UPSTREAM_URL_PATTERN.fullmatch(self.url):
+            raise ValueError("upstream issue URL must be a public GitHub issue or pull request URL")
+        if not self.title:
+            raise ValueError("upstream issue title must be non-empty")
+        if not self.status:
+            raise ValueError("upstream issue status must be non-empty")
+        fixed_versions = tuple(str(item) for item in self.fixed_versions)
+        affected_versions = tuple(str(item) for item in self.affected_versions)
+        workarounds = tuple(str(item) for item in self.workarounds)
+        if any(not item for item in fixed_versions + affected_versions + workarounds):
+            raise ValueError("upstream issue versions and workarounds must be non-empty")
+        object.__setattr__(self, "fixed_versions", fixed_versions)
+        object.__setattr__(self, "affected_versions", affected_versions)
+        object.__setattr__(self, "workarounds", workarounds)
+
+    @property
+    def stable_key(self) -> tuple[str, str]:
+        return (self.url, self.title)
+
+    def to_dict(self) -> dict[str, Any]:
+        data: dict[str, Any] = {
+            "url": self.url,
+            "title": self.title,
+            "status": self.status,
+        }
+        if self.affected_versions:
+            data["affected_versions"] = list(self.affected_versions)
+        if self.fixed_versions:
+            data["fixed_versions"] = list(self.fixed_versions)
+        if self.workarounds:
+            data["workarounds"] = list(self.workarounds)
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "UpstreamIssueLink":
+        return cls(
+            url=str(data["url"]),
+            title=str(data["title"]),
+            status=str(data.get("status", "unknown")),
+            fixed_versions=tuple(str(item) for item in data.get("fixed_versions", ())),
+            affected_versions=tuple(str(item) for item in data.get("affected_versions", ())),
+            workarounds=tuple(str(item) for item in data.get("workarounds", ())),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class Diagnostic:
     """A deterministic diagnostic that can be rendered in multiple formats."""
 
@@ -302,6 +360,7 @@ class Diagnostic:
     properties: tuple[tuple[str, Any], ...] = field(default_factory=tuple)
     message_id: str | None = None
     message_args: tuple[tuple[str, Any], ...] = field(default_factory=tuple)
+    upstream_issues: tuple[UpstreamIssueLink, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
         if not self.rule_id:
@@ -318,6 +377,10 @@ class Diagnostic:
         if any(not key for key, _value in self.properties):
             raise ValueError("diagnostic property keys must be non-empty")
         object.__setattr__(self, "properties", tuple(sorted(self.properties, key=lambda item: item[0])))
+        upstream_issues = tuple(sorted(self.upstream_issues, key=lambda item: item.stable_key))
+        if len({item.stable_key for item in upstream_issues}) != len(upstream_issues):
+            raise ValueError("diagnostic upstream_issues must not contain duplicates")
+        object.__setattr__(self, "upstream_issues", upstream_issues)
         if self.message_id is not None and not LOCALIZATION_ID_PATTERN.fullmatch(self.message_id):
             raise ValueError("diagnostic message_id must be a stable dotted lowercase identifier")
         if any(not LOCALIZATION_ARG_PATTERN.fullmatch(key) for key, _value in self.message_args):
@@ -381,6 +444,8 @@ class Diagnostic:
             data["witness"] = self.witness.to_dict()
         if self.properties:
             data["properties"] = dict(self.properties)
+        if self.upstream_issues:
+            data["upstream_issues"] = [link.to_dict() for link in self.upstream_issues]
         if self.message_id is not None or self.message_args:
             data["localization"] = {
                 "message_id": self.localization_key,
@@ -414,6 +479,11 @@ class Diagnostic:
             else (),
             message_id=message_id,
             message_args=message_args,
+            upstream_issues=tuple(
+                UpstreamIssueLink.from_dict(item)
+                for item in data.get("upstream_issues", ())
+                if isinstance(item, dict)
+            ),
         )
 
 

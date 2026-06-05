@@ -122,9 +122,12 @@ def _render_markdown(
         f"- Fingerprint: `{diagnostic.fingerprint}`",
         f"- Modes: {_mode_list(diagnostic)}",
         "",
-        "## Non-sensitive witness trace",
-        "",
     ]
+    if diagnostic.upstream_issues:
+        lines.extend(["## Upstream status", ""])
+        lines.extend(_upstream_issue_lines(diagnostic, max_chars=max_witness_chars))
+        lines.append("")
+    lines.extend(["## Non-sensitive witness trace", ""])
     lines.extend(_witness_lines(diagnostic, max_chars=max_witness_chars))
     lines.extend(
         [
@@ -255,6 +258,27 @@ def _mode_list(diagnostic: Diagnostic) -> str:
     if not diagnostic.check_modes:
         return "_not declared_"
     return ", ".join(f"`{mode.value}`" for mode in diagnostic.check_modes)
+
+
+def _upstream_issue_lines(diagnostic: Diagnostic, *, max_chars: int) -> list[str]:
+    lines: list[str] = []
+    for link in diagnostic.upstream_issues:
+        lines.append(f"- [{_sanitize_text(link.title, limit=max_chars)}]({link.url})")
+        lines.append(f"  - Status: `{_sanitize_text(link.status, limit=max_chars)}`")
+        if link.affected_versions:
+            lines.append(
+                "  - Affected versions/artifacts: "
+                + ", ".join(f"`{_sanitize_text(item, limit=max_chars)}`" for item in link.affected_versions)
+            )
+        if link.fixed_versions:
+            lines.append(
+                "  - Fixed versions/patches: "
+                + ", ".join(f"`{_sanitize_text(item, limit=max_chars)}`" for item in link.fixed_versions)
+            )
+        if link.workarounds:
+            lines.append("  - Local compatibility workarounds:")
+            lines.extend(f"    - {_sanitize_text(item, limit=max_chars)}" for item in link.workarounds)
+    return lines
 
 
 def _md_cell(value: str) -> str:

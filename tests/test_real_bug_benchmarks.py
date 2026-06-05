@@ -24,6 +24,11 @@ def test_real_bug_benchmark_suite_covers_required_categories_and_provenance() ->
         assert case.expected_rule_ids
         assert case.labels
         assert "synthetic" in case.source_kind or "public-github" in case.source_kind
+        assert case.upstream_issues
+        for link in case.upstream_issues:
+            assert link.url.startswith("https://github.com/")
+            assert link.fixed_versions
+            assert link.workarounds
 
 
 def test_real_bug_benchmark_replays_all_labeled_failures_against_real_analyzers() -> None:
@@ -53,6 +58,7 @@ def test_real_bug_benchmark_manifest_records_replay_hashes_and_results(tmp_path:
     assert len(manifest["manifest_sha256"]) == 64
     assert {entry["category"] for entry in manifest["entries"]} == set(REQUIRED_REAL_BUG_CATEGORIES)
     assert all(entry["observed_rule_ids"] for entry in manifest["entries"])
+    assert all(entry["upstream_issues"] for entry in manifest["entries"])
 
 
 def test_real_bug_benchmark_cli_prints_and_writes_manifest(tmp_path: Path, capsys) -> None:

@@ -76,6 +76,14 @@ def render_text(
                 if span.end_column is not None:
                     location += f":{span.end_column}"
             lines.append(f"  span: {location}")
+        for upstream_issue in diagnostic.upstream_issues:
+            lines.append(
+                f"  upstream: {upstream_issue.status} {upstream_issue.url} - {upstream_issue.title}"
+            )
+            if upstream_issue.fixed_versions:
+                lines.append(f"    fixed: {', '.join(upstream_issue.fixed_versions)}")
+            for workaround in upstream_issue.workarounds:
+                lines.append(f"    workaround: {workaround}")
         if diagnostic.witness is not None:
             lines.append(f"  witness: {diagnostic.witness.summary}")
             for index, step in enumerate(diagnostic.witness.steps, start=1):
@@ -277,6 +285,8 @@ def _diagnostic_to_sarif_result(diagnostic, *, options: SarifRenderOptions) -> d
     }
     if diagnostic.witness is not None:
         properties["witness"] = diagnostic.witness.to_dict()
+    if diagnostic.upstream_issues:
+        properties["upstreamIssues"] = [link.to_dict() for link in diagnostic.upstream_issues]
     if diagnostic.properties:
         properties.update(
             {
@@ -555,6 +565,7 @@ def _diagnostic_detail(diagnostic, index: int) -> str:
     modes = "".join(f'<span class="badge">{_escape(mode.value)}</span>' for mode in diagnostic.check_modes)
     suggestions = "".join(f"<li>{_escape(suggestion)}</li>" for suggestion in diagnostic.suggestions)
     witness = _witness_block(diagnostic)
+    upstream = _upstream_issue_block(diagnostic)
     properties = _properties_block(dict(diagnostic.properties))
     artifact = ""
     if diagnostic.artifact is not None:
@@ -566,6 +577,7 @@ def _diagnostic_detail(diagnostic, index: int) -> str:
         f"<p><strong>Location:</strong> {_escape(_diagnostic_location(diagnostic))}</p>"
         f"{artifact}"
         f"{'<p><strong>Modes:</strong> ' + modes + '</p>' if modes else ''}"
+        f"{upstream}"
         f"{'<h3>Suggestions</h3><ul>' + suggestions + '</ul>' if suggestions else ''}"
         f"{witness}{properties}"
         "</details>"
@@ -574,6 +586,27 @@ def _diagnostic_detail(diagnostic, index: int) -> str:
 
 def _severity_badge(severity: str) -> str:
     return f'<span class="badge {_escape(severity)}">{_escape(severity.upper())}</span>'
+
+
+def _upstream_issue_block(diagnostic) -> str:
+    if not diagnostic.upstream_issues:
+        return ""
+    items = []
+    for link in diagnostic.upstream_issues:
+        details = [f"status: {_escape(link.status)}"]
+        if link.affected_versions:
+            details.append(f"affected: {_escape(', '.join(link.affected_versions))}")
+        if link.fixed_versions:
+            details.append(f"fixed: {_escape(', '.join(link.fixed_versions))}")
+        if link.workarounds:
+            details.append(f"workarounds: {_escape('; '.join(link.workarounds))}")
+        items.append(
+            "<li>"
+            f'<a href="{_escape(link.url)}">{_escape(link.title)}</a>'
+            f" ({'; '.join(details)})"
+            "</li>"
+        )
+    return "<h3>Upstream issues</h3><ul>" + "".join(items) + "</ul>"
 
 
 def _diagnostic_location(diagnostic) -> str:

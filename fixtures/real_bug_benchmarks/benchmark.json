@@ -11,6 +11,16 @@
       "bug_class": "attacker-controlled role/content fields can render model control delimiters",
       "labels": ["chat-template", "role-boundary", "popular-template"],
       "expected_rule_ids": ["role-boundary-nonforgeability"],
+      "upstream_issues": [
+        {
+          "url": "https://github.com/ggml-org/llama.cpp/pull/18462",
+          "title": "Phi-style chat-template role delimiter handling",
+          "status": "patch-linked",
+          "affected_versions": ["phi-style ChatML reductions before patched template handling"],
+          "fixed_versions": ["llama.cpp PR 18462"],
+          "workarounds": ["Escape or JSON-encode user-controlled fields before rendering role delimiters."]
+        }
+      ],
       "replay": {
         "method": "real-world-role-boundary",
         "case_id": "phi_system_turn_forgery"
@@ -25,6 +35,16 @@
       "bug_class": "normalization plus added special tokens invalidates a pinned tokenizer expectation",
       "labels": ["tokenizer", "normalization", "special-token"],
       "expected_rule_ids": ["tokenizer-differential-mismatch"],
+      "upstream_issues": [
+        {
+          "url": "https://github.com/huggingface/transformers/issues/29279",
+          "title": "Tokenizer added-token and normalization drift",
+          "status": "upstream-issue-linked",
+          "affected_versions": ["unpinned tokenizer.json/tokenizer_config.json combinations"],
+          "fixed_versions": ["pin exact tokenizer revision and expected added-token metadata"],
+          "workarounds": ["Regenerate PromptABI lockfiles when tokenizer normalizers or added tokens change."]
+        }
+      ],
       "replay": {
         "method": "tokenizer-differential",
         "text": " Cafe\u0301<tool><eos> ",
@@ -44,6 +64,16 @@
       "bug_class": "tool argument strings can contain configured XML close-marker stops",
       "labels": ["tool-schema", "stop-policy", "structured-output"],
       "expected_rule_ids": ["stop-overreach-content"],
+      "upstream_issues": [
+        {
+          "url": "https://github.com/vllm-project/vllm/pull/40861",
+          "title": "Qwen XML tool-call stop overreach",
+          "status": "patch-linked",
+          "affected_versions": ["XML-like tool templates with close-marker stop strings"],
+          "fixed_versions": ["vLLM PR 40861"],
+          "workarounds": ["Use provider-native tool calls or choose stops that cannot occur inside tool argument strings."]
+        }
+      ],
       "replay": {
         "method": "real-world-stop-overreachability",
         "case_id": "qwen3_xml_tool_parameter_stop"
@@ -58,6 +88,16 @@
       "bug_class": "provider migration can lose tool IDs, streaming chunks, stop semantics, context limits, and structured-output fields",
       "labels": ["provider-migration", "tool-calling", "streaming"],
       "expected_rule_ids": ["provider-migration"],
+      "upstream_issues": [
+        {
+          "url": "https://github.com/thehalleyyoung/PromptABI/issues/164",
+          "title": "OpenAI-compatible provider migration contract regressions",
+          "status": "local-fixture",
+          "affected_versions": ["provider fixture pack provider-fixtures-v1"],
+          "fixed_versions": ["fixed-target-openai-compatible fixture"],
+          "workarounds": ["Keep migration gates enabled until target providers preserve tool IDs, stream chunks, stops, and structured-output fields."]
+        }
+      ],
       "replay": {
         "method": "verification-config",
         "config": "fixtures/provider_migration/promptabi.json"
@@ -72,6 +112,16 @@
       "bug_class": "application parser accepts outputs outside the constrained structured-output contract",
       "labels": ["structured-output", "json-schema", "parser-compatibility"],
       "expected_rule_ids": ["parser-compatibility-mismatch"],
+      "upstream_issues": [
+        {
+          "url": "https://github.com/thehalleyyoung/PromptABI/issues/165",
+          "title": "Structured-output parser/schema mismatch reduction",
+          "status": "local-fixture",
+          "affected_versions": ["open-source-agent-ticket structured schema fixture"],
+          "fixed_versions": ["parser-compatible schema fixture"],
+          "workarounds": ["Validate constrained-decoding grammar and application parser against the same normalized JSON contract."]
+        }
+      ],
       "replay": {
         "method": "structured-schema-entry",
         "entry_id": "open-source-agent-ticket"
@@ -86,6 +136,16 @@
       "bug_class": "RAG chunk packing can drift tokenizers, drop citations, miscount overlap, and exceed payload limits",
       "labels": ["rag", "truncation", "token-budget"],
       "expected_rule_ids": ["rag-citation-loss", "rag-overlap-accounting", "rag-template-overhead"],
+      "upstream_issues": [
+        {
+          "url": "https://github.com/thehalleyyoung/PromptABI/issues/166",
+          "title": "RAG citation and metadata truncation reduction",
+          "status": "local-fixture",
+          "affected_versions": ["rag-chunking promptabi fixture before fixed budget"],
+          "fixed_versions": ["examples/end-to-end/rag-truncation/fixed-budget.json"],
+          "workarounds": ["Reserve explicit token budget for citations and count metadata/template overhead with the serving tokenizer."]
+        }
+      ],
       "replay": {
         "method": "verification-config",
         "config": "examples/rag-chunking/promptabi.json"
@@ -100,6 +160,16 @@
       "bug_class": "training manifest target roles include a role absent from the serving chat template",
       "labels": ["training-manifest", "static-contract", "role-alignment"],
       "expected_rule_ids": ["static-contract-violation", "training-target-role-alignment"],
+      "upstream_issues": [
+        {
+          "url": "https://github.com/thehalleyyoung/PromptABI/issues/167",
+          "title": "Supervised fine-tuning target role misalignment reduction",
+          "status": "local-fixture",
+          "affected_versions": ["training manifest with assistant and critic target roles"],
+          "fixed_versions": ["examples/end-to-end/training-alignment/fixed.promptabi.json"],
+          "workarounds": ["Require target roles to be declared by the serving chat template before packing or masking training examples."]
+        }
+      ],
       "replay": {
         "method": "static-training-contract"
       }

@@ -8,10 +8,11 @@ from promptabi.diagnostics import (
     Diagnostic,
     DiagnosticSeverity,
     SourceSpan,
+    UpstreamIssueLink,
     WitnessStep,
     WitnessTrace,
 )
-from promptabi.render import SarifRenderOptions, render_github_annotations, render_json, render_sarif, render_text
+from promptabi.render import SarifRenderOptions, render_github_annotations, render_html, render_json, render_sarif, render_text
 from promptabi.session import VerificationResult
 
 
@@ -509,3 +510,35 @@ def test_github_annotations_escape_messages_and_rewrite_locations(tmp_path) -> N
         "::error title=schema-warning,file=schemas/answer.schema.json,line=7,col=5,"
         "endLine=8,endColumn=2::bad schema%0Aneeds escaping, urgently\n"
     )
+
+
+def test_upstream_issue_links_render_in_text_json_sarif_and_html() -> None:
+    link = UpstreamIssueLink(
+        url="https://github.com/example/project/issues/123",
+        title="Provider stop handling patched",
+        status="fixed",
+        affected_versions=("provider-fixtures-v1",),
+        fixed_versions=("provider-fixtures-v2",),
+        workarounds=("Disable XML close-marker stops inside tool argument strings.",),
+    )
+    result = VerificationResult(
+        config=VerificationConfig(name="upstream-links", checks=("stop-overreach-content",)),
+        diagnostics=(
+            Diagnostic(
+                rule_id="stop-overreach-content",
+                severity=DiagnosticSeverity.ERROR,
+                message="stop can fire inside a valid tool argument",
+                upstream_issues=(link,),
+            ),
+        ),
+    )
+
+    text = render_text(result)
+    json_payload = json.loads(render_json(result))
+    sarif_payload = json.loads(render_sarif(result))
+    html = render_html(result)
+
+    assert "upstream: fixed https://github.com/example/project/issues/123 - Provider stop handling patched" in text
+    assert json_payload["diagnostics"][0]["upstream_issues"] == [link.to_dict()]
+    assert sarif_payload["runs"][0]["results"][0]["properties"]["upstreamIssues"] == [link.to_dict()]
+    assert "Provider stop handling patched" in html
