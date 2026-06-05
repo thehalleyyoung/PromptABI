@@ -1,0 +1,70 @@
+{
+  "cases": [
+    {
+      "analysis": "role-boundary-template",
+      "extraction": {
+        "additional_special_tokens": [
+          "<|system|>",
+          "<|user|>",
+          "<|assistant|>",
+          "<|end|>"
+        ],
+        "eos_token": "<|end|>",
+        "expected_witnesses": [
+          [
+            "{messages[0].content}",
+            "<|system|>",
+            "role-header"
+          ],
+          [
+            "{messages[0].content}",
+            "<|user|>",
+            "role-header"
+          ],
+          [
+            "{messages[0].content}",
+            "<|end|>",
+            "assistant-prefix"
+          ]
+        ],
+        "template_source": "jinja-file"
+      },
+      "id": "phi_system_turn_forgery",
+      "reference": {
+        "license": "MIT",
+        "path": "models/templates/microsoft-Phi-3.5-mini-instruct.jinja",
+        "public_url": "https://github.com/ggml-org/llama.cpp/blob/2016bf2b3bca10e49e06a00586a8a2fde9f6cc32/models/templates/microsoft-Phi-3.5-mini-instruct.jinja",
+        "ref": "2016bf2b3bca10e49e06a00586a8a2fde9f6cc32",
+        "repository": "ggml-org/llama.cpp",
+        "source_file_sha": "d1533d1526b2e42fccd99477a7274dc20b7a189b"
+      },
+      "source_excerpt": "{% for message in messages %}{% if message['role'] == 'system' and message['content'] %}{{'<|system|>\n' + message['content'] + '<|end|>\n'}}{% elif message['role'] == 'user' %}{{'<|user|>\n' + message['content'] + '<|end|>\n'}}{% elif message['role'] == 'assistant' %}{{'<|assistant|>\n' + message['content'] + '<|end|>\n'}}{% endif %}{% endfor %}{% if add_generation_prompt %}{{ '<|assistant|>\n' }}{% else %}{{ eos_token }}{% endif %}",
+      "source_sha256": "78d976a442bcde2f0be15aafbb8e3050e1104f86732266f68403251b89982a90"
+    },
+    {
+      "analysis": "stop-overreachability-source",
+      "extraction": {
+        "expected_stop_sequences": [
+          "</tool_call>",
+          "</function>",
+          "</parameter>"
+        ],
+        "real_world_case_id": "qwen3_xml_tool_parameter_stop",
+        "real_world_section": "stop_overreachability_cases"
+      },
+      "id": "qwen3_xml_tool_parameter_stop",
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/tool_parsers/qwen3coder_tool_parser.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/6a11d72df7f15b39d76570dba5f415ff2b0292b3/vllm/tool_parsers/qwen3coder_tool_parser.py#L53-L75",
+        "ref": "6a11d72df7f15b39d76570dba5f415ff2b0292b3",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "7457590c5ac0437f37149b51f1ddd091c1221b1f"
+      },
+      "source_excerpt": "        # Sentinel tokens for streaming mode\n        self.tool_call_start_token: str = \"<tool_call>\"\n        self.tool_call_end_token: str = \"</tool_call>\"\n        self.tool_call_prefix: str = \"<function=\"\n        self.function_end_token: str = \"</function>\"\n        self.parameter_prefix: str = \"<parameter=\"\n        self.parameter_end_token: str = \"</parameter>\"\n        self.is_tool_call_started: bool = False\n        self.failed_count: int = 0\n\n        # Enhanced streaming state - reset for each new message\n        self._reset_streaming_state()\n\n        # Regex patterns\n        self.tool_call_complete_regex = re.compile(\n            r\"<tool_call>(.*?)</tool_call>\", re.DOTALL\n        )\n        self.tool_call_regex = re.compile(\n            r\"<tool_call>(.*?)</tool_call>|<tool_call>(.*?)$\", re.DOTALL\n        )\n        self.tool_call_function_regex = re.compile(\n            r\"<function=(.*?)</function>|<function=(.*)$\", re.DOTALL\n        )\n",
+      "source_sha256": "571e0a3876af7db8c21396e12b000bf68da2b0fee9623130fb13b6f3613bb57b"
+    }
+  ],
+  "methodology": "Each case traverses exact pinned public production-code bytes. Source excerpts are SHA-256 checked before extraction; replay fails closed if an expected delimiter/template is not source-derived. Local schemas remain minimized payload models only after the production parser/template bytes supply the interface boundary under test.",
+  "version": 1
+}

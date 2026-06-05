@@ -1,9 +1,15 @@
 # Real-world bug corpus
 
-This corpus records public GitHub bug patterns as minimized, synthetic fixtures.
-It does not copy upstream source code; each entry keeps only the public reference,
-the interface failure class, and a small repro artifact that PromptABI can verify
-offline.
+This corpus records public GitHub bug patterns with deterministic offline replay.
+The benchmarked template/parser cases in `production_code.json` include exact
+pinned upstream source excerpts, SHA-256 hashes, repository refs, file paths, and
+licenses. PromptABI traverses those bytes to extract the template or parser
+delimiters before running the local analyzers; replay fails if the expected
+boundary is not source-derived.
+
+`corpus.json` still carries minimized local payload models (tool schemas, JSON
+schemas, and expected witnesses) so the analyzers can exercise the vulnerable
+interface boundary without depending on private data or a network call.
 
 The entries cover bugs from `ggml-org/llama.cpp`, `vllm-project/vllm`, and
 `huggingface/transformers`:
@@ -19,8 +25,10 @@ The entries cover bugs from `ggml-org/llama.cpp`, `vllm-project/vllm`, and
 | `gemma4_quote_sentinel_truncation` | <https://github.com/vllm-project/vllm/issues/39069> | `stop-overreachability` |
 | `llama_cpp_tool_call_parser_boundary` | <https://github.com/ggml-org/llama.cpp/pull/20660> | `stop-overreachability` |
 
-The tests in `tests/test_real_world_bugs.py` load `corpus.json` and assert that
-the current detectors emit concrete witnesses for every labeled bug pattern.
+The tests in `tests/test_real_world_bugs.py` load both `production_code.json`
+and `corpus.json`, asserting that the production-code cases replay through exact
+source excerpts and that the current detectors emit concrete witnesses for every
+labeled bug pattern.
 `fixtures/real_bug_benchmarks/benchmark.json` reuses these reductions alongside
 tokenizer, provider-migration, structured-output, RAG, and training-pipeline
 cases to form the broader replayable real-bug benchmark suite.

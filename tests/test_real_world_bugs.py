@@ -13,9 +13,11 @@ from promptabi import (
     analyze_stop_overreachability,
     parse_hf_chat_template_config,
 )
+from promptabi.production_code_bugs import ProductionCodeBugCorpusError, load_production_code_bug_corpus
 
 
 CORPUS_PATH = Path("fixtures/real_world_bugs/corpus.json")
+PRODUCTION_CODE_PATH = Path("fixtures/real_world_bugs/production_code.json")
 
 
 def _load_corpus() -> dict[str, Any]:
@@ -32,6 +34,54 @@ def test_real_world_bug_corpus_records_public_provenance() -> None:
         assert case["public_reference"].startswith("https://github.com/")
         assert case["bug_class"]
         assert case["expected_witnesses"] if "expected_witnesses" in case else case["expected_findings"]
+
+
+def test_production_code_bug_corpus_traverses_exact_pinned_source() -> None:
+    corpus = load_production_code_bug_corpus(PRODUCTION_CODE_PATH)
+    replays = {replay.case_id: replay for replay in corpus.replay(real_world_corpus_path=CORPUS_PATH)}
+
+    assert set(replays) == {"phi_system_turn_forgery", "qwen3_xml_tool_parameter_stop"}
+    assert all(replay.passed for replay in replays.values())
+    assert replays["phi_system_turn_forgery"].extracted_values["expected_witnesses_matched"] == 3
+    assert replays["qwen3_xml_tool_parameter_stop"].extracted_values["stop_sequences"] == [
+        "</tool_call>",
+        "</function>",
+        "</parameter>",
+    ]
+    for case in corpus.cases:
+        assert case.reference.public_url.startswith("https://github.com/")
+        assert case.source_sha256
+        assert case.source_excerpt
+
+
+def test_production_code_bug_corpus_rejects_tampered_source_excerpt(tmp_path: Path) -> None:
+    payload = json.loads(PRODUCTION_CODE_PATH.read_text(encoding="utf-8"))
+    payload["cases"][0]["source_excerpt"] += "\n# tampered after hashing"
+    fixture = tmp_path / "production_code.json"
+    fixture.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+
+    try:
+        load_production_code_bug_corpus(fixture)
+    except ProductionCodeBugCorpusError as exc:
+        assert "source_excerpt sha256 mismatch" in str(exc)
+    else:
+        raise AssertionError("expected production-code corpus hash validation failure")
+
+
+def test_production_code_bug_replay_rejects_non_source_derived_stop(tmp_path: Path) -> None:
+    payload = json.loads(PRODUCTION_CODE_PATH.read_text(encoding="utf-8"))
+    stop_case = next(case for case in payload["cases"] if case["id"] == "qwen3_xml_tool_parameter_stop")
+    stop_case["extraction"]["expected_stop_sequences"][0] = "</not_in_source>"
+    fixture = tmp_path / "production_code.json"
+    fixture.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+    corpus = load_production_code_bug_corpus(fixture)
+
+    try:
+        corpus.replay_case("qwen3_xml_tool_parameter_stop", real_world_corpus_path=CORPUS_PATH)
+    except ProductionCodeBugCorpusError as exc:
+        assert "is not in source excerpt" in str(exc)
+    else:
+        raise AssertionError("expected source-derived stop validation failure")
 
 
 def test_mined_role_boundary_bugs_are_detected() -> None:

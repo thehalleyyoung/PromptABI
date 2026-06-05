@@ -837,6 +837,14 @@ class _PathState:
             bindings=self.bindings,
         )
 
+    def with_segments(self, segments: tuple[ChatTemplateSymbolicSegment, ...]) -> "_PathState":
+        return _PathState(
+            conditions=self.conditions,
+            segments=self.segments + segments,
+            loop_iterations=self.loop_iterations,
+            bindings=self.bindings,
+        )
+
     def to_public(self) -> ChatTemplateSymbolicPath:
         return ChatTemplateSymbolicPath(
             conditions=self.conditions,
@@ -1059,7 +1067,7 @@ class _SymbolicExecutor:
         environment: dict[str, str],
     ) -> tuple[_PathState, ...]:
         return tuple(
-            state.with_segment(self._expression_segment(expression, environment, state.bindings))
+            state.with_segments(self._expression_segments(expression, environment, state.bindings))
             for state in states
         )
 
@@ -1164,6 +1172,18 @@ class _SymbolicExecutor:
             return ChatTemplateSymbolicSegment(kind="variable", value="{" + bound + "}", expression=expression, filters=filters)
         self._abstain("expression", expression, "Expression is outside the bounded symbolic evaluator fragment.")
         return ChatTemplateSymbolicSegment(kind="unknown", value="{" + expression + "}", expression=expression, filters=filters)
+
+    def _expression_segments(
+        self,
+        expression: str,
+        environment: dict[str, str],
+        bindings: tuple[tuple[str, ChatTemplateSymbolicSegment], ...],
+    ) -> tuple[ChatTemplateSymbolicSegment, ...]:
+        base, filters = _split_filters(expression)
+        parts = _split_top_level_concat(base)
+        if filters or len(parts) <= 1:
+            return (self._expression_segment(expression, environment, bindings),)
+        return tuple(self._expression_segment(part, environment, bindings) for part in parts)
 
     def _bound_name(self, expression: str, environment: dict[str, str]) -> str | None:
         path = _variable_path(expression)
@@ -1353,10 +1373,64 @@ def _canonical_special_token_names(tokens: tuple[ChatTemplateSpecialToken, ...])
 
 
 def _split_filters(expression: str) -> tuple[str, tuple[str, ...]]:
-    parts = [part.strip() for part in expression.split("|")]
+    parts = [part.strip() for part in _split_top_level_pipes(expression)]
     base = parts[0]
     filters = tuple(part.split("(", 1)[0].strip() for part in parts[1:] if part.strip())
     return base, filters
+
+
+def _split_top_level_pipes(expression: str) -> tuple[str, ...]:
+    parts: list[str] = []
+    start = 0
+    quote: str | None = None
+    escaped = False
+    for index, char in enumerate(expression):
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = None
+            continue
+        if char in {"'", '"'}:
+            quote = char
+        elif char == "|":
+            parts.append(expression[start:index])
+            start = index + 1
+    parts.append(expression[start:])
+    return tuple(parts)
+
+
+def _split_top_level_concat(expression: str) -> tuple[str, ...]:
+    parts: list[str] = []
+    start = 0
+    quote: str | None = None
+    escaped = False
+    for index, char in enumerate(expression):
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = None
+            continue
+        if char in {"'", '"'}:
+            quote = char
+        elif char == "+":
+            part = expression[start:index].strip()
+            if not part:
+                return (expression,)
+            parts.append(part)
+            start = index + 1
+    if quote is not None:
+        return (expression,)
+    tail = expression[start:].strip()
+    if not tail:
+        return (expression,)
+    parts.append(tail)
+    return tuple(parts) if len(parts) > 1 else (expression,)
 
 
 def _string_literal(expression: str) -> str | None:

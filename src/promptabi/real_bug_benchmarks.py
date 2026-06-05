@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -16,22 +15,17 @@ from .artifacts import (
     FrameworkTruncationConfigArtifact,
     PromptSegment,
     PromptSegmentArtifact,
-    SchemaArtifact,
     SpecialToken,
     SpecialTokenMapArtifact,
-    StopPolicyArtifact,
-    ToolDefinitionArtifact,
     TrainingManifestArtifact,
     TruncationStrategy,
 )
-from .chat_templates import ChatTemplateSymbolicBounds, parse_hf_chat_template_config
 from .config import VerificationConfig
 from .diagnostics import UpstreamIssueLink
 from .loaders import LoadedArtifact
-from .role_boundaries import analyze_role_boundary_nonforgeability
+from .production_code_bugs import load_production_code_bug_corpus
 from .session import VerificationSession
 from .static_contracts import analyze_static_contracts
-from .stop_overreachability import analyze_stop_overreachability
 from .structured_schema_corpus import load_structured_schema_corpus, validate_structured_schema_entry
 from .tokenizer_diff import TokenizerDifferentialCase, TokenizerExpectation, run_tokenizer_differential
 from .tokenizers import ByteLevelTokenizer
@@ -291,43 +285,21 @@ def _result_from_observed(
 
 
 def _replay_real_world_role(case: RealBugBenchmarkCase, repo_root: Path) -> tuple[tuple[str, ...], str]:
-    corpus_case = _real_world_case(repo_root, "role_boundary_cases", _required_string(case, "case_id"))
-    parsed = parse_hf_chat_template_config(corpus_case["template_config"])
-    report = analyze_role_boundary_nonforgeability(
-        parsed,
-        bounds=ChatTemplateSymbolicBounds(max_messages=1, max_tools=0, max_loop_iterations=1, max_paths=32),
-    )
-    expected = {tuple(witness) for witness in corpus_case["expected_witnesses"]}
-    actual = {(finding.input_expression, finding.marker, finding.marker_kind) for finding in report.findings}
-    observed = ("role-boundary-nonforgeability",) if expected <= actual else ()
-    return observed, f"{len(report.findings)} role-boundary witness(es) for {corpus_case['id']}"
+    case_id = _required_string(case, "case_id")
+    production = load_production_code_bug_corpus(repo_root / "fixtures" / "real_world_bugs" / "production_code.json")
+    replay = production.replay_case(case_id, real_world_corpus_path=repo_root / "fixtures" / "real_world_bugs" / "corpus.json")
+    if replay.passed:
+        return replay.rule_ids, replay.evidence_summary
+    raise RealBugBenchmarkError(f"{case.case_id} production-code replay failed: {replay.evidence_summary}")
 
 
 def _replay_real_world_stop(case: RealBugBenchmarkCase, repo_root: Path) -> tuple[tuple[str, ...], str]:
-    corpus_case = _real_world_case(repo_root, "stop_overreachability_cases", _required_string(case, "case_id"))
-    policy = StopPolicyArtifact(
-        kind=ArtifactKind.STOP_POLICY,
-        name=f"{corpus_case['id']}-stops",
-        location=ArtifactLocation(uri=f"memory://real-bug-benchmark/{corpus_case['id']}/stops"),
-        stop_sequences=tuple(corpus_case["stop_sequences"]),
-    )
-    with tempfile.TemporaryDirectory(prefix="promptabi-real-bug-") as directory:
-        artifacts = _structured_artifacts_for_real_world_case(corpus_case, Path(directory))
-        report = analyze_stop_overreachability(policy, artifacts)
-    expected_findings = corpus_case["expected_findings"]
-    matched = 0
-    for expected in expected_findings:
-        matched += int(
-            any(
-                finding.stop_sequence == expected["stop_sequence"]
-                and finding.category == expected["category"]
-                and finding.region.kind == expected["region_kind"]
-                and expected["parser_state_contains"] in finding.resulting_state
-                for finding in report.findings
-            )
-        )
-    observed = ("stop-overreach-content", "stop-overreach-structural") if matched == len(expected_findings) else ()
-    return observed, f"{matched}/{len(expected_findings)} stop-overreach witness(es) matched for {corpus_case['id']}"
+    case_id = _required_string(case, "case_id")
+    production = load_production_code_bug_corpus(repo_root / "fixtures" / "real_world_bugs" / "production_code.json")
+    replay = production.replay_case(case_id, real_world_corpus_path=repo_root / "fixtures" / "real_world_bugs" / "corpus.json")
+    if replay.passed:
+        return replay.rule_ids, replay.evidence_summary
+    raise RealBugBenchmarkError(f"{case.case_id} production-code replay failed: {replay.evidence_summary}")
 
 
 def _replay_tokenizer_differential(case: RealBugBenchmarkCase) -> tuple[tuple[str, ...], str]:
@@ -407,42 +379,6 @@ def _replay_static_training_contract() -> tuple[tuple[str, ...], str]:
     violation_names = {finding.name for finding in report.violations}
     observed = ("static-contract-violation", "training-target-role-alignment") if "training-target-role-alignment" in violation_names else ()
     return observed, f"{len(report.violations)} static-contract violation(s), including {', '.join(sorted(violation_names))}"
-
-
-def _real_world_case(repo_root: Path, section: str, case_id: str) -> dict[str, Any]:
-    corpus = _read_json_object(repo_root / "fixtures" / "real_world_bugs" / "corpus.json")
-    cases = corpus.get(section)
-    if not isinstance(cases, list):
-        raise RealBugBenchmarkError(f"real_world_bugs corpus section {section!r} is missing")
-    for item in cases:
-        if isinstance(item, dict) and item.get("id") == case_id:
-            return item
-    raise RealBugBenchmarkError(f"real_world_bugs corpus has no {section} case {case_id!r}")
-
-
-def _structured_artifacts_for_real_world_case(case: dict[str, Any], tmp_path: Path):
-    artifact_kind = case["artifact_kind"]
-    if artifact_kind == "builtin-structural":
-        return ()
-    path = tmp_path / f"{case['id']}.json"
-    path.write_text(json.dumps(case["artifact_json"], sort_keys=True), encoding="utf-8")
-    if artifact_kind == "schema":
-        return (
-            SchemaArtifact(
-                kind=ArtifactKind.SCHEMA,
-                name=case["id"],
-                location=ArtifactLocation(path=str(path)),
-            ),
-        )
-    if artifact_kind == "tool-definition":
-        return (
-            ToolDefinitionArtifact(
-                kind=ArtifactKind.TOOL_DEFINITION,
-                name=case["id"],
-                location=ArtifactLocation(path=str(path)),
-            ),
-        )
-    raise RealBugBenchmarkError(f"unsupported real-world bug artifact kind: {artifact_kind}")
 
 
 def _loaded(artifact) -> LoadedArtifact:

@@ -42,6 +42,9 @@ def test_real_bug_benchmark_replays_all_labeled_failures_against_real_analyzers(
     assert "provider-migration" in observed_by_category["provider-migration"]
     assert "rag-citation-loss" in observed_by_category["rag-truncation"]
     assert "training-target-role-alignment" in observed_by_category["training-pipeline"]
+    by_id = {result.case_id: result for result in results}
+    assert "production" in by_id["phi-template-role-forgery-benchmark"].evidence_summary
+    assert "source-derived stop sequence" in by_id["qwen-tool-schema-stop-benchmark"].evidence_summary
 
 
 def test_real_bug_benchmark_manifest_records_replay_hashes_and_results(tmp_path: Path) -> None:

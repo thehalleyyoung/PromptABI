@@ -1,13 +1,13 @@
 {
   "manifest_version": 1,
-  "methodology": "Synthetic reductions of public bug patterns are replayed offline against real PromptABI analyzers. The suite preserves failure classes and public provenance without copying upstream project source.",
+  "methodology": "Pinned public production-code excerpts are replayed offline for benchmarked real-world parser/template bugs, and remaining benchmark categories use minimized local payload reductions. The suite preserves failure classes, public provenance, and deterministic local replay.",
   "cases": [
     {
       "id": "phi-template-role-forgery-benchmark",
       "category": "popular-template",
       "display_name": "Phi-style chat template role delimiter forgery",
       "public_reference": "https://github.com/ggml-org/llama.cpp/pull/18462",
-      "source_kind": "public-github-synthetic-reduction",
+      "source_kind": "public-github-production-code",
       "bug_class": "attacker-controlled role/content fields can render model control delimiters",
       "labels": ["chat-template", "role-boundary", "popular-template"],
       "expected_rule_ids": ["role-boundary-nonforgeability"],
@@ -60,7 +60,7 @@
       "category": "tool-schema",
       "display_name": "Qwen XML-like tool parameter stop overreach",
       "public_reference": "https://github.com/vllm-project/vllm/pull/40861",
-      "source_kind": "public-github-synthetic-reduction",
+      "source_kind": "public-github-production-code",
       "bug_class": "tool argument strings can contain configured XML close-marker stops",
       "labels": ["tool-schema", "stop-policy", "structured-output"],
       "expected_rule_ids": ["stop-overreach-content"],

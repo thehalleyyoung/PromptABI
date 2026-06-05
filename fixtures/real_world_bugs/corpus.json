@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "methodology": "Public GitHub reports are reduced to synthetic tokenizer/template/stop/schema/tool fixtures that preserve the interface failure without copying upstream code.",
+  "methodology": "Public GitHub reports pair exact pinned production-code excerpts in production_code.json with minimized local payload models in this file. PromptABI extracts templates or parser delimiters from production bytes first, then uses the local payload models to replay the interface failure offline.",
   "role_boundary_cases": [
     {
       "id": "phi_system_turn_forgery",
