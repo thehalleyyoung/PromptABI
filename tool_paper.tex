@@ -88,7 +88,7 @@ PromptABI contributes:
   production code in the wild, not synthetic simplifications of those bugs.
 \end{enumerate}
 
-\section{The Need}
+\section{Motivation}
 
 LLM applications are commonly tested end-to-end: run a model, inspect a sample,
 and patch the prompt when behavior looks wrong. That style misses interface
@@ -114,7 +114,7 @@ PromptABI addresses these gaps by moving checks left: the same artifacts that
 would be passed to inference are loaded, normalized, and checked before any
 weights or provider credentials are needed.
 
-\section{A Prompt ABI}
+\section{Core Abstraction}
 
 \begin{definition}[Prompt interface artifact]
 A prompt interface artifact is a discrete, versioned object that influences the
@@ -145,7 +145,7 @@ The tool deliberately does not claim to model arbitrary Python, arbitrary
 Jinja, or arbitrary parser code. Its supported fragments are explicit. Outside
 them, PromptABI reports abstention instead of returning a false proof.
 
-\section{How PromptABI Checks Interfaces}
+\section{Formal Verification Core}
 
 PromptABI's checkers share a common pattern:
 \begin{enumerate}
@@ -288,7 +288,7 @@ schema cannot be modeled, or a source-derived value cannot be recovered,
 PromptABI reports that fact. It does not silently turn an unsupported case into
 a safe result.
 
-\begin{theorem}[Bounded witness soundness]
+\begin{theorem}[Bounded counterexample soundness]
 For a supported checker fragment, every unsafe PromptABI diagnostic contains a
 witness that is accepted by the artifact semantics used by that checker and
 violates the stated interface obligation.
@@ -305,7 +305,7 @@ finite obligation. Tests replay these witnesses through the same checker
 semantics and, where applicable, real library adapters.
 \end{proof}
 
-\begin{theorem}[Honest fragment boundary]
+\begin{theorem}[Honest supported-fragment boundary]
 PromptABI's successful safety claims are scoped to explicit supported fragments;
 inputs outside those fragments produce abstentions or setup failures rather than
 passing diagnostics.
@@ -337,7 +337,346 @@ structural witnesses for public fixtures, but private workflows can choose
 position-preserving redaction, hash-only evidence, or structural summaries while
 preserving stable fingerprints.
 
-\section{Evaluation}
+\newpage
+\section{Deployed Workflows}
+
+PromptABI is intentionally presented as a tool, not only as a library of
+analyses. The implementation ships multiple workflows that exercise the same
+artifact semantics from different operational positions.
+
+\paragraph{Pull-request verification.}
+The core command is \texttt{promptabi verify}. It discovers or accepts a
+configuration file, loads typed artifacts, applies policy packs, runs selected
+checks, and emits deterministic text, JSON, SARIF, GitHub annotations, or static
+HTML. CI usage can require a lockfile, compare changed artifacts only, and
+upload SARIF without contacting an LLM provider.
+
+\paragraph{Training preflight.}
+\texttt{promptabi verify-training} builds or loads a training manifest and checks
+role layouts, tokenizer/template consistency, packing windows, loss masks,
+target spans, DPO/RLHF pair structure, data-loader adapters, and redaction
+constraints. It is designed to run before a costly fine-tuning job starts.
+
+\paragraph{Prompt-pack governance.}
+Reusable prompts are treated as packages with exported templates, roles, tool
+schemas, stops, supported model families, lockfiles, upgrade checks, signed
+provenance, public registry metadata, and offline mirrors. A consuming
+application can reuse package-level proofs and then add local context, RAG
+chunks, tools, or truncation rules.
+
+\paragraph{Debugging and education.}
+\texttt{promptabi explain} expands one diagnostic into artifact snippets,
+formal property, witness, likely symptom, and fix. \texttt{promptabi proofs}
+emits proof sketches and executable notebook artifacts for the core families:
+role-boundary non-forgeability, stop reachability, grammar emptiness, budget
+survival, and training-mask alignment.
+
+\paragraph{Release and maintainer workflows.}
+The repository includes compatibility audits, corpus verification, maintainer
+refresh, LTS planning, release readiness, theorem-to-test traceability, and
+benchmark leaderboards. These are not paper-only scripts; they are CLI commands
+that run against repository fixtures and examples.
+
+\newpage
+\section{Platform Integration Payloads}
+
+The stable integration API emits a single platform-facing report whose surfaces
+are specialized for downstream systems.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{0.2\linewidth}p{0.32\linewidth}p{0.34\linewidth}}
+\toprule
+Surface & Payload & Intended consumer \\
+\midrule
+CI provider & exit code, SARIF, annotations, runtime counts & GitHub Actions,
+Buildkite, Jenkins, internal merge gates \\
+IDE extension & document-grouped spans, rule IDs, suggestions & VS Code,
+language-server bridges, editor plugins \\
+Dataset platform & training/eval artifacts and private-field-safe diagnostics
+& fine-tuning and benchmark pipelines \\
+Model registry & provenance, reproducibility hash, optional signed bundle &
+HF Hub, MLflow-style stores, internal registries \\
+Internal platform & policy, guarantee mode, privacy, risk rollups & enterprise
+AI platforms and audit dashboards \\
+\bottomrule
+\end{tabular}
+\caption{Downstream integration surfaces produced by the same verification run.}
+\label{tab:integration-surfaces}
+\end{table}
+
+The key engineering decision is that these payloads are stable and
+non-content-first. They preserve hashes, fingerprints, offsets, modes, and
+artifact summaries; they do not require platform teams to parse human text or
+copy private prompt contents into central services.
+
+\newpage
+\section{Model Registry Gates}
+
+Model publication is a natural place to enforce prompt-interface evidence:
+registry promotion already records model IDs, aliases, stages, lineage, and
+artifacts. PromptABI adds a deterministic publication manifest for four common
+registry families:
+\begin{enumerate}
+  \item Hugging Face Hub model repositories and model-card metadata;
+  \item internal registries with access-controlled attestation storage;
+  \item MLflow-style registered models and artifact directories;
+  \item generic artifact repositories such as OCI, S3, or Artifactory layouts.
+\end{enumerate}
+
+The command
+\[
+\texttt{promptabi model-registry --config examples/model-registries/promptabi.json --targets examples/model-registries/targets.json}
+\]
+builds a manifest containing the registry evidence surface, target-specific
+publication commands, signed bundle metadata, reproducibility hash, diagnostic
+fingerprints, and artifact summaries. A deployment system can require
+\texttt{ok: true} before changing a model alias to production.
+
+This matters because model registries often track weights but not the prompt ABI
+that makes those weights usable. The same base model can be safe for one
+template and unsafe for another; one provider adapter may serialize tools
+differently from another; one tokenizer revision may invalidate an accepted
+structured-output grammar. PromptABI attaches evidence to the published model
+version without embedding private prompts or calling the model.
+
+\newpage
+\section{Enterprise and Air-Gapped Operation}
+
+The repository contains enterprise features that are unusual for research
+verification prototypes. Policy packs can require checks, set severity
+thresholds, select supported fragments, tune solver timeouts, disable local
+summary files, and require approved provider fixtures. Access-control metadata
+records approved private artifact indexes, prompt packs, policy packs, and
+audit-bundle retention expectations.
+
+Air-gapped usage is first-class. PromptABI can run with local fixtures,
+vendored wheels, vendored Z3 binaries or wheels, offline seed corpora, local
+prompt-pack mirrors, and no provider network calls. Signed verification bundles
+store enough reproducibility metadata for an audit trail: config hash, lockfile
+state, artifact hashes, diagnostic fingerprints, witness hashes, solver
+metadata, and optional non-sensitive excerpts.
+
+The resulting operational posture is conservative. The verifier does not need
+model weights, does not need prompt text to leave the repository, and does not
+send telemetry. Teams that need strict privacy can emit hash-only witnesses and
+still keep stable diagnostic fingerprints for trend reports and suppressions.
+
+\newpage
+\section{SDKs and Stable Public API}
+
+PromptABI exposes two layers for downstream code. The Python package exports
+typed artifacts, diagnostics, sessions, reports, lockfiles, bundles, integration
+payloads, model-registry publication helpers, and renderers. Public API metadata
+is generated by \texttt{promptabi api-docs}; stable symbols carry a compatibility
+promise for the 1.x line, while provisional symbols remain importable for
+experimentation.
+
+For non-Python consumers, the repository ships thin TypeScript, Go, and Rust
+clients. They intentionally do not reimplement PromptABI's analyses. Instead,
+they read stable payloads: diagnostic JSON, integration reports, lockfiles, and
+signed verification bundles. This is the right boundary for CI providers, IDEs,
+model registries, dataset platforms, and internal AI platforms: verification
+stays in one implementation, while consumers get stable schemas.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{0.18\linewidth}p{0.34\linewidth}p{0.34\linewidth}}
+\toprule
+Client & Reads & Typical use \\
+\midrule
+TypeScript & diagnostics, reports, lockfiles, bundles & web dashboards,
+VS Code bridges, registry frontends \\
+Go & diagnostics, reports, lockfiles, bundles & CI runners and platform
+controllers \\
+Rust & diagnostics, reports, lockfiles, bundles & high-assurance release
+gates and local tools \\
+\bottomrule
+\end{tabular}
+\caption{Thin SDKs consume stable evidence instead of duplicating checks.}
+\label{tab:sdks}
+\end{table}
+
+\newpage
+\section{Examples as Executable Specifications}
+
+The repository examples are designed to be executable specifications. The
+minimal example demonstrates config loading, artifact hashing, schema and tool
+metadata, and deterministic diagnostics. Role-boundary examples show a buggy
+ChatML-style template and a fixed escaped version. Stop-policy examples exercise
+vLLM-style stop traces. Token-budget examples demonstrate must-survive segments,
+reserved output budgets, and framework truncation behavior.
+
+End-to-end examples cover tool calling, JSON structured output, RAG truncation,
+provider migration, training alignment, and a GPU-free training quickstart. Each
+pair contains the application symptom, a buggy PromptABI config, and a fixed
+config. The examples are intentionally small enough for CI but grounded in real
+interfaces: provider JSON, tool schemas, tokenizer configs, training manifests,
+and application parsers.
+
+The model-registry examples extend this pattern to deployment. They show how the
+same verification result can be attached to a Hugging Face Hub model, an
+internal registry record, an MLflow-style registered model, or a generic
+artifact repository. The example target manifest is executable through
+\texttt{promptabi model-registry}; tests assert that all four publication
+families are present and that the evidence is signed and reproducible.
+
+\newpage
+\section{Benchlines and Experiments}
+
+PromptABI's repository includes several benchlines, each serving a different
+claim.
+
+\paragraph{Smoke performance.}
+\texttt{benchmarks/benchmark\_smoke.py} measures representative local checks:
+tokenizer analysis, grammar emptiness, stop checks, SMT-backed static
+contracts, budget checks, and corpus-wide verification. The goal is not GPU
+throughput; it is whether static verification is cheap enough to run before
+merge.
+
+\paragraph{Real-bug benchmark.}
+\texttt{promptabi corpus real-bug-benchmark} loads labeled real-world bug
+records and verifies source hashes, upstream references, and expected
+diagnostic families. The production-code replay benchmark additionally checks
+merged upstream bugfix PRs against pre-fix source excerpts and removed lines.
+
+\paragraph{Adversarial corpus.}
+\texttt{promptabi corpus adversarial} generates and replays cases for role
+delimiters, special tokens, Unicode normalization, JSON escaping, markdown
+fences, XML-ish tool tags, and provider envelopes. This is a stress suite for
+interface boundaries, not a model attack benchmark.
+
+\paragraph{Evaluation corpus.}
+\texttt{promptabi corpus evaluation} scores labeled cases from
+\texttt{fixtures/evaluation/labeled\_corpus.json}. The output reports precision,
+recall-like agreement, abstention behavior, and witness quality on known
+safe/unsafe/unsupported cases.
+
+\paragraph{Conformance suites.}
+Grammar-backend, tokenizer-family, provider-fixture, and framework-truncation
+conformance suites compare PromptABI abstractions to real or fixture-backed
+library behavior. These suites defend against abstraction drift: if the checker
+no longer matches the deployed library fragment, it should fail or abstain.
+
+\paragraph{Maintainer refresh.}
+\paragraph{Corpus release gate.}
+\texttt{promptabi corpus verify} runs the maintained seed, structured-schema,
+provider-fixture, conformance, real-bug, evaluation, and SMT benchmark gates
+with release-blocking thresholds.
+
+\paragraph{Maintainer refresh.}
+\texttt{promptabi maintain refresh} updates corpus summaries, expected
+diagnostics, provider fixtures, release notes, and benchmark metadata. It makes
+evaluation maintenance reproducible rather than relying on informal manual
+updates.
+
+\newpage
+\section{Diagnostic Quality}
+
+A PromptABI diagnostic is designed to answer five questions in one artifact:
+what invariant failed, where the source of the invariant lives, which semantic
+mode was used, what witness demonstrates the issue, and what low-blast-radius
+fix is plausible. The diagnostic model includes severity, source span,
+artifact provenance, check modes, fingerprint, suggestions, witness trace, and
+optional upstream issue links.
+
+Witnesses are deliberately concrete. A role-boundary witness contains the
+attacker-controlled field, rendered excerpt, token evidence, and forged
+boundary. A stop witness contains the stop, valid full output, returned prefix,
+and parser state. A budget witness contains token counts, truncation decisions,
+and dropped required segments. An SMT witness contains a finite assignment or
+unsat evidence. This makes diagnostics actionable for engineers and replayable
+for maintainers.
+
+PromptABI also includes witness validation and shrinking. Counterexamples can be
+minimized by string length, token count, message count, schema size, or rule
+complexity. The upstream bug-report generator then turns the minimized repro
+into a sanitized issue with artifact versions, reproduction commands,
+expected/actual behavior, and non-sensitive traces.
+
+\newpage
+\section{Versioning, Drift, and Lockfiles}
+
+LLM interface artifacts drift. Tokenizer IDs change, added tokens appear,
+normalizers shift, chat templates acquire generation prompts, provider
+envelopes change, stop policies move from framework defaults to provider
+overrides, and dataset preprocessing pipelines get rebuilt with new library
+versions. PromptABI treats these changes as contract events.
+
+Lockfiles pin artifact hashes, upstream revisions, library versions, provider
+fixture versions, supported fragments, and diagnostic baselines. The
+\texttt{promptabi diff} workflow compares configurations and reports
+contract-breaking changes with witnesses. The \texttt{promptabi version-gate}
+workflow lets teams declare whether a change is patch-safe, minor-breaking, or
+major-breaking for a deployment.
+
+Regression bisection then identifies the exact artifact update that introduced
+a failure. Maintainers can bisect tokenizer, template, schema, provider, or
+framework revisions without running a model. This makes PromptABI useful not
+only for initial verification but for long-lived production systems that upgrade
+their surrounding LLM software weekly.
+
+\newpage
+\section{Static Contract Language}
+
+Beyond built-in checks, PromptABI includes a static contract language for
+declaring allowed roles, required regions, forbidden delimiters, schema
+obligations, stop policies, and solver-backed invariants. The language can be
+formatted, linted, migrated, and composed across organization policies,
+prompt packs, app configs, RAG systems, fine-tuning datasets, and eval
+harnesses.
+
+The compiler lowers rules to the same verification backends used elsewhere:
+automata products, SMT formulas, differential checks, and diagnostics with
+source spans. Composition is explicit about precedence. Linting catches
+impossible rules, vacuous guarantees, unsupported fragments, contradictory
+policies, and overly broad suppressions. Migration explains behavior changes
+when rule syntax or solver-backed semantics evolve.
+
+This is important because production teams rarely want only built-in checks.
+They want local invariants: ``this system message must survive,'' ``these tool
+names are the only allowed tools,'' ``user text must not enter assistant loss,''
+or ``this provider migration cannot change argument encoding.'' Static contracts
+make those policies versioned and reviewable.
+
+\newpage
+\section{Governance and Community Infrastructure}
+
+PromptABI includes contribution and governance machinery because verification
+tools fail when corpora, proofs, and supported fragments are informal.
+Governance docs specify checker acceptance criteria, proof standards, corpus
+licensing, security disclosures, and release-blocking regressions. Maintainer
+health checks cover triage labels, release checklists, corpus review procedures,
+rotation docs, and long-term project metrics.
+
+Community workflows accept sanitized bug fixtures, minimized witnesses,
+prompt-pack metadata, provider fixtures, and training-manifest adapters. Plugin
+certification tests check that third-party loaders, renderers, providers, and
+solver encodings preserve diagnostic and privacy contracts. A marketplace-style
+index records plugin capabilities, supported fragments, privacy behavior,
+version compatibility, and verification status.
+
+\newpage
+\section{Why Static Interface Verification Is Distinct}
+
+PromptABI occupies a narrow but valuable point in the LLM tooling space. It does
+not compete with model evals, red-team prompts, jailbreak classifiers, or
+semantic safety policies. Those tools ask what a model might do. PromptABI asks
+whether the deterministic interface surrounding the model is internally
+consistent before the model acts.
+
+The distinction creates practical advantages. The verifier is CPU-only, so it
+can run in every pull request. It is version-aware, so a dependency update can
+be gated. It is source-mapped, so a diagnostic points to the artifact that
+created the contract. It is privacy-preserving, so teams can share hashes and
+structural witnesses without sharing prompts. And it is honest about supported
+fragments, so unsupported cases become visible engineering work rather than
+silent false proofs.
+
+\newpage
+\section{Evaluation Design}
 
 PromptABI's evaluation separates verifier-maintenance tests from real-world
 claims. Unit tests, property tests, and small local fixtures are useful for
@@ -499,7 +838,7 @@ file, an exact source hash, and source lines removed by the upstream fix. We do
 not count those 60 scale cases as additional PromptABI boundary bugs unless a
 PromptABI verifier family actually analyzes them.
 
-\section{Limitations and Non-Goals}
+\section{Threat Model, Limitations, and Non-Goals}
 
 PromptABI is not a model-behavior verifier. It does not prove that an LLM will
 answer truthfully, refuse harmful requests, or choose a tool wisely. It proves
@@ -514,7 +853,7 @@ Finally, PromptABI is not a sandbox. It avoids provider calls and model
 execution for verification, and it can operate on redacted evidence, but process
 isolation and secret governance remain deployment responsibilities.
 
-\section{Related Work}
+\section{Related Systems}
 
 PromptABI sits between several families of tools. Prompt linters and jailbreak
 tests look for risky strings or behavioral failures, but they do not generally

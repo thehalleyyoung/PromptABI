@@ -244,6 +244,12 @@ from .local_metrics import (
     render_local_metrics_json,
     render_local_metrics_text,
 )
+from .model_registry import (
+    ModelRegistryError,
+    build_model_registry_publication,
+    render_model_registry_publication_json,
+    render_model_registry_publication_text,
+)
 from .lockfiles import (
     LockfileError,
     build_lockfile,
@@ -1716,6 +1722,42 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="overwrite existing generated launch asset files",
     )
+
+    model_registry = subparsers.add_parser(
+        "model-registry",
+        help="build registry publication evidence for HF Hub, MLflow-style, internal, and artifact repositories",
+    )
+    model_registry.add_argument(
+        "--config",
+        help="path to a PromptABI JSON config; defaults to discovering promptabi.json upward from cwd",
+    )
+    model_registry.add_argument(
+        "--targets",
+        required=True,
+        help="model-registry target manifest JSON",
+    )
+    model_registry.add_argument(
+        "--bundle-key",
+        help="bundle signing key required for publishable registry evidence (default: PROMPTABI_BUNDLE_KEY)",
+    )
+    model_registry.add_argument("--bundle-key-id", default="model-registry", help="identifier recorded with the signature")
+    model_registry.add_argument(
+        "--fail-on",
+        choices=("error", "warning", "any", "never"),
+        default="error",
+        help="exit with code 1 at this diagnostic threshold (default: error)",
+    )
+    model_registry.add_argument(
+        "--workspace-root",
+        help="workspace root used for relative artifact paths (default: config directory)",
+    )
+    model_registry.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    model_registry.add_argument("--output", help="write publication evidence to this path instead of stdout")
 
     adoption_playbooks = subparsers.add_parser(
         "adoption-playbooks",
@@ -3995,6 +4037,34 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"promptabi: cannot write adoption playbooks: {exc}", file=sys.stderr)
             return 2
         return 0
+
+    if args.command == "model-registry":
+        try:
+            config_path = Path(args.config).resolve() if args.config else discover_config()
+            publication = build_model_registry_publication(
+                config_path,
+                targets=args.targets,
+                fail_on=args.fail_on,
+                bundle_key=args.bundle_key or os.environ.get("PROMPTABI_BUNDLE_KEY"),
+                bundle_key_id=args.bundle_key_id,
+                workspace_root=args.workspace_root,
+            )
+            output = (
+                render_model_registry_publication_json(publication)
+                if args.format == "json"
+                else render_model_registry_publication_text(publication)
+            )
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+            else:
+                print(output, end="")
+        except (ConfigError, ModelRegistryError, ValueError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write model-registry evidence: {exc}", file=sys.stderr)
+            return 2
+        return 0 if publication.ok else 1
 
     if args.command == "fuzz" and args.fuzz_command == "mutations":
         try:

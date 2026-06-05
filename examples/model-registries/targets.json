@@ -1,0 +1,61 @@
+{
+  "manifest_version": "promptabi.model-registry.v1",
+  "targets": [
+    {
+      "kind": "hugging-face-hub",
+      "name": "hf-hub-model-card",
+      "model_ref": "hf://acme/support-agent-v1",
+      "evidence_path": "promptabi/verification-bundle.json",
+      "instructions": [
+        "promptabi model-registry --config examples/model-registries/promptabi.json --targets examples/model-registries/targets.json --bundle-key $PROMPTABI_BUNDLE_KEY --format json --output promptabi-registry-evidence.json",
+        "huggingface-cli upload acme/support-agent-v1 promptabi-registry-evidence.json promptabi/verification-bundle.json"
+      ],
+      "metadata": {
+        "card_field": "promptabi_reproducibility_hash",
+        "visibility": "public-or-private"
+      }
+    },
+    {
+      "kind": "internal-registry",
+      "name": "enterprise-model-catalog",
+      "model_ref": "registry.internal/acme/support-agent:v1",
+      "evidence_path": "attestations/promptabi-registry-evidence.json",
+      "instructions": [
+        "promptabi model-registry --config examples/model-registries/promptabi.json --targets examples/model-registries/targets.json --bundle-key $PROMPTABI_BUNDLE_KEY --format json --output attestations/promptabi-registry-evidence.json",
+        "registryctl attach-attestation registry.internal/acme/support-agent:v1 attestations/promptabi-registry-evidence.json"
+      ],
+      "metadata": {
+        "required_gate": "pass",
+        "retention": "audit-bundle-retention-policy"
+      }
+    },
+    {
+      "kind": "mlflow-style",
+      "name": "mlflow-registered-model",
+      "model_ref": "models:/support-agent/Production",
+      "evidence_path": "artifacts/promptabi-registry-evidence.json",
+      "instructions": [
+        "promptabi model-registry --config examples/model-registries/promptabi.json --targets examples/model-registries/targets.json --bundle-key $PROMPTABI_BUNDLE_KEY --format json --output promptabi-registry-evidence.json",
+        "mlflow artifacts log-artifact --artifact-path promptabi promptabi-registry-evidence.json"
+      ],
+      "metadata": {
+        "registered_model_alias": "Production",
+        "stage_gate": "before-transition"
+      }
+    },
+    {
+      "kind": "artifact-repository",
+      "name": "oci-or-s3-artifact-store",
+      "model_ref": "oci://registry.example.com/acme/support-agent:v1",
+      "evidence_path": "sha256/promptabi-registry-evidence.json",
+      "instructions": [
+        "promptabi model-registry --config examples/model-registries/promptabi.json --targets examples/model-registries/targets.json --bundle-key $PROMPTABI_BUNDLE_KEY --format json --output promptabi-registry-evidence.json",
+        "oras attach registry.example.com/acme/support-agent:v1 --artifact-type application/vnd.promptabi.evidence.v1+json promptabi-registry-evidence.json"
+      ],
+      "metadata": {
+        "content_type": "application/vnd.promptabi.evidence.v1+json",
+        "offline_mirror": "supported"
+      }
+    }
+  ]
+}

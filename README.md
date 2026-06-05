@@ -60,7 +60,7 @@ The same local verifier covers:
 | **Prompt packs** | reusable templates with compositional role/tool/stop/model-family/RAG/truncation guarantees, locks, upgrade gates, registries, signing, and offline mirrors |
 | **Budgets + RAG** | must-survive prompt segments, dropped citations, metadata inflation, tokenizer mismatch, framework truncation, and context-window overflow |
 | **Provenance** | artifact hashes, licenses, trusted sources, reproducible HF revisions, lockfile drift, offline fixture integrity, and upstream bug/fix/workaround links |
-| **Enterprise + platform posture** | org policy packs, no-network mirrors, access-controlled private indexes/prompt packs/policy packs, audit-bundle retention, approved fixtures, privacy rules, governance gates, expiring witness-stable suppressions, and stable payloads for CI, IDEs, dataset platforms, registries, and internal AI platforms |
+| **Enterprise + platform posture** | org policy packs, no-network mirrors, access-controlled private indexes/prompt packs/policy packs, audit-bundle retention, approved fixtures, privacy rules, governance gates, stable payloads for CI/IDEs/registries, and TS/Go/Rust readers for reports, lockfiles, and bundles |
 | **Training/eval contracts** | target-role alignment, benchmark-tokenizer drift, eval-harness prompt/few-shot/multi-turn/grading-parser/stop/private-field/cross-provider compatibility, proof-carrying streaming shards, data-loader adapters, synthetic-generator preflight, invalid roles/tools/JSON/stops, packing, loss masks, leakage, drift, RLHF/DPO defects, and real-bug benchmarks |
 
 Under the hood, PromptABI combines a declarative static contract language,
@@ -103,6 +103,7 @@ promptabi prompt-pack registry --config examples/prompt-packs/promptabi.json --o
 promptabi prompt-pack provenance create --config examples/prompt-packs/promptabi.json --output /tmp/prompt-pack.provenance.json --key local-review-key
 promptabi prompt-pack mirror build --config examples/prompt-packs/promptabi.json --mirror-dir /tmp/prompt-pack-mirror
 promptabi prompt-pack upgrade --config examples/prompt-packs/promptabi.json --baseline-lockfile /tmp/prompt-pack.lock.json
+promptabi model-registry --config examples/model-registries/promptabi.json --targets examples/model-registries/targets.json --bundle-key local-registry-key --format json
 python examples/agent-frameworks/dynamic_support_agent.py examples/agent-frameworks/safe.agent-prompt-pack.json --write-config /tmp/support-agent.promptabi.json
 promptabi verify --config examples/end-to-end/training-quickstart/fixed.promptabi.json
 promptabi verify-training --manifest examples/end-to-end/training-quickstart/fixed.training-manifest.json
