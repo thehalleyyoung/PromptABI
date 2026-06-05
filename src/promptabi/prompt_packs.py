@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
+import os
 import shutil
 from dataclasses import dataclass
 from enum import StrEnum
@@ -39,6 +41,8 @@ PROMPT_PACK_LOCKFILE_VERSION = 1
 PROMPT_PACK_LOCK_CHECK_MODES = (CheckMode.SOUND, CheckMode.COMPLETE)
 PROMPT_PACK_REGISTRY_VERSION = 1
 PROMPT_PACK_MIRROR_VERSION = 1
+PROMPT_PACK_PROVENANCE_VERSION = 1
+PROMPT_PACK_SIGNATURE_ALGORITHM = "hmac-sha256"
 
 
 class PromptPackLockError(ValueError):
@@ -47,6 +51,10 @@ class PromptPackLockError(ValueError):
 
 class PromptPackMirrorError(ValueError):
     """Raised when a local prompt-pack registry mirror cannot be built or verified."""
+
+
+class PromptPackProvenanceError(ValueError):
+    """Raised when a signed prompt-pack provenance manifest cannot be built or verified."""
 
 
 class PromptPackFindingKind(StrEnum):
@@ -322,6 +330,55 @@ class PromptPackMirrorVerification:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class SignedPromptPackProvenance:
+    """Signed provenance manifest for reviewed prompt-pack registry metadata."""
+
+    payload: dict[str, object]
+    signature: str
+    signing_key_id: str
+    algorithm: str = PROMPT_PACK_SIGNATURE_ALGORITHM
+
+    @property
+    def provenance_hash(self) -> str:
+        return _hash_jsonable(self.payload)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "algorithm": self.algorithm,
+            "payload": self.payload,
+            "provenance_hash": self.provenance_hash,
+            "signature": self.signature,
+            "signing_key_id": self.signing_key_id,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PromptPackProvenanceVerification:
+    """Result of checking a signed prompt-pack provenance manifest."""
+
+    ok: bool
+    provenance_hash: str
+    signing_key_id: str
+    expected_signature: str
+    actual_signature: str
+    package_count: int
+    reason: str | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {
+            "actual_signature": self.actual_signature,
+            "expected_signature": self.expected_signature,
+            "ok": self.ok,
+            "package_count": self.package_count,
+            "provenance_hash": self.provenance_hash,
+            "signing_key_id": self.signing_key_id,
+        }
+        if self.reason is not None:
+            data["reason"] = self.reason
+        return data
+
+
 def analyze_prompt_pack_contracts(
     prompt_pack: PromptPackArtifact,
     artifacts: tuple[Artifact, ...],
@@ -548,6 +605,141 @@ def write_prompt_pack_registry(path: str | Path, registry: PromptPackRegistry) -
     registry_path = Path(path)
     registry_path.parent.mkdir(parents=True, exist_ok=True)
     registry_path.write_text(prompt_pack_registry_to_json(registry), encoding="utf-8")
+
+
+def create_signed_prompt_pack_provenance(
+    loaded_artifacts: tuple[LoadedArtifact, ...],
+    diagnostics: tuple[Diagnostic, ...] = (),
+    *,
+    key: str | bytes | None = None,
+    key_id: str = "local",
+    base_dir: str | Path | None = None,
+) -> SignedPromptPackProvenance:
+    """Create a signed, privacy-preserving provenance manifest for prompt packs."""
+
+    registry = build_prompt_pack_registry(loaded_artifacts, diagnostics, base_dir=base_dir)
+    payload = build_prompt_pack_provenance_payload(registry)
+    return sign_prompt_pack_provenance_payload(payload, key=key, key_id=key_id)
+
+
+def build_prompt_pack_provenance_payload(registry: PromptPackRegistry) -> dict[str, object]:
+    """Build unsigned prompt-pack provenance from a registry manifest."""
+
+    registry_dict = registry.to_dict()
+    entries = registry_dict["prompt_packs"]
+    payload: dict[str, object] = {
+        "provenance_version": PROMPT_PACK_PROVENANCE_VERSION,
+        "registry_hash": _hash_jsonable(registry_dict),
+        "package_count": len(registry.entries),
+        "prompt_packs": entries,
+    }
+    payload["proof_set_hash"] = _hash_jsonable(
+        [
+            {
+                "contract_hash": entry["contract_hash"],
+                "name": entry["name"],
+                "package_name": entry["package_name"],
+                "proof_hash": entry["proof_hash"],
+                "sha256": entry.get("sha256"),
+                "version": entry.get("version"),
+            }
+            for entry in entries  # type: ignore[union-attr]
+            if isinstance(entry, dict)
+        ]
+    )
+    return payload
+
+
+def sign_prompt_pack_provenance_payload(
+    payload: dict[str, object],
+    *,
+    key: str | bytes | None = None,
+    key_id: str = "local",
+) -> SignedPromptPackProvenance:
+    """Sign a prompt-pack provenance payload with a local HMAC key."""
+
+    _validate_prompt_pack_provenance_payload(payload)
+    signature = _prompt_pack_signature(payload, _resolve_prompt_pack_key(key))
+    return SignedPromptPackProvenance(payload=payload, signature=signature, signing_key_id=key_id)
+
+
+def verify_signed_prompt_pack_provenance(
+    provenance: SignedPromptPackProvenance | dict[str, object] | str | Path,
+    *,
+    key: str | bytes | None = None,
+) -> PromptPackProvenanceVerification:
+    """Verify a signed prompt-pack provenance manifest without reading prompt contents."""
+
+    data = _prompt_pack_provenance_mapping(provenance)
+    algorithm = data.get("algorithm")
+    if algorithm != PROMPT_PACK_SIGNATURE_ALGORITHM:
+        raise PromptPackProvenanceError(f"unsupported prompt-pack provenance signature algorithm: {algorithm!r}")
+    payload = data.get("payload")
+    if not isinstance(payload, dict):
+        raise PromptPackProvenanceError("prompt-pack provenance payload must be an object")
+    _validate_prompt_pack_provenance_payload(payload)
+    actual = _provenance_required_str(data, "signature")
+    key_id = _provenance_required_str(data, "signing_key_id")
+    expected = _prompt_pack_signature(payload, _resolve_prompt_pack_key(key))
+    ok = hmac.compare_digest(actual, expected)
+    return PromptPackProvenanceVerification(
+        ok=ok,
+        provenance_hash=_hash_jsonable(payload),
+        signing_key_id=key_id,
+        expected_signature=expected,
+        actual_signature=actual,
+        package_count=_provenance_package_count(payload),
+        reason=None if ok else "signature mismatch",
+    )
+
+
+def load_signed_prompt_pack_provenance(path: str | Path) -> SignedPromptPackProvenance:
+    """Load a signed prompt-pack provenance manifest from JSON."""
+
+    data = _prompt_pack_provenance_mapping(path)
+    payload = data.get("payload")
+    if not isinstance(payload, dict):
+        raise PromptPackProvenanceError("prompt-pack provenance payload must be an object")
+    _validate_prompt_pack_provenance_payload(payload)
+    return SignedPromptPackProvenance(
+        payload=payload,
+        signature=_provenance_required_str(data, "signature"),
+        signing_key_id=_provenance_required_str(data, "signing_key_id"),
+        algorithm=_provenance_required_str(data, "algorithm"),
+    )
+
+
+def write_signed_prompt_pack_provenance(
+    path: str | Path,
+    provenance: SignedPromptPackProvenance,
+    *,
+    force: bool = False,
+) -> None:
+    """Write signed prompt-pack provenance JSON, refusing accidental overwrites by default."""
+
+    destination = Path(path)
+    if destination.exists() and not force:
+        raise PromptPackProvenanceError(f"prompt-pack provenance already exists: {destination}; pass --force to overwrite")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(render_prompt_pack_provenance_json(provenance), encoding="utf-8")
+
+
+def render_prompt_pack_provenance_json(provenance: SignedPromptPackProvenance) -> str:
+    return json.dumps(provenance.to_dict(), indent=2, sort_keys=True) + "\n"
+
+
+def render_prompt_pack_provenance_verification_text(verification: PromptPackProvenanceVerification) -> str:
+    status = "PASS" if verification.ok else "FAIL"
+    lines = [
+        "PromptABI signed prompt-pack provenance verification",
+        f"status: {status}",
+        f"packages: {verification.package_count}",
+        f"provenance_hash: {verification.provenance_hash}",
+        f"signing_key_id: {verification.signing_key_id}",
+    ]
+    if verification.reason is not None:
+        lines.append(f"reason: {verification.reason}")
+    return "\n".join(lines) + "\n"
 
 
 def build_prompt_pack_mirror(
@@ -1441,6 +1633,78 @@ def _sha256_file(path: Path) -> str:
 
 def _hash_jsonable(value: object) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def _prompt_pack_signature(payload: dict[str, object], key: bytes) -> str:
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hmac.new(key, encoded, hashlib.sha256).hexdigest()
+
+
+def _resolve_prompt_pack_key(key: str | bytes | None) -> bytes:
+    raw = key if key is not None else os.environ.get("PROMPTABI_PROMPT_PACK_KEY")
+    if raw is None:
+        raise PromptPackProvenanceError("prompt-pack provenance signing key is required; pass --key or set PROMPTABI_PROMPT_PACK_KEY")
+    if isinstance(raw, bytes):
+        if not raw:
+            raise PromptPackProvenanceError("prompt-pack provenance signing key must be non-empty")
+        return raw
+    if not raw:
+        raise PromptPackProvenanceError("prompt-pack provenance signing key must be non-empty")
+    return raw.encode("utf-8")
+
+
+def _prompt_pack_provenance_mapping(value: SignedPromptPackProvenance | dict[str, object] | str | Path) -> dict[str, object]:
+    if isinstance(value, SignedPromptPackProvenance):
+        return value.to_dict()
+    if isinstance(value, dict):
+        return value
+    path = Path(value)
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise PromptPackProvenanceError(f"prompt-pack provenance not found: {path}") from exc
+    except json.JSONDecodeError as exc:
+        raise PromptPackProvenanceError(
+            f"prompt-pack provenance is not valid JSON at {path}:{exc.lineno}:{exc.colno}: {exc.msg}"
+        ) from exc
+    if not isinstance(raw, dict):
+        raise PromptPackProvenanceError("prompt-pack provenance root must be a JSON object")
+    return raw
+
+
+def _validate_prompt_pack_provenance_payload(payload: dict[str, object]) -> None:
+    if payload.get("provenance_version") != PROMPT_PACK_PROVENANCE_VERSION:
+        raise PromptPackProvenanceError(f"unsupported prompt-pack provenance version: {payload.get('provenance_version')!r}")
+    prompt_packs = payload.get("prompt_packs")
+    if not isinstance(prompt_packs, list):
+        raise PromptPackProvenanceError("prompt-pack provenance field 'prompt_packs' must be a list")
+    for item in prompt_packs:
+        if not isinstance(item, dict):
+            raise PromptPackProvenanceError("prompt-pack provenance entries must be objects")
+        _registry_entry_from_mapping(item)
+    package_count = payload.get("package_count")
+    if not isinstance(package_count, int) or isinstance(package_count, bool) or package_count != len(prompt_packs):
+        raise PromptPackProvenanceError("prompt-pack provenance package_count must match prompt_packs")
+    registry_hash = payload.get("registry_hash")
+    if not isinstance(registry_hash, str) or not registry_hash:
+        raise PromptPackProvenanceError("prompt-pack provenance field 'registry_hash' must be a non-empty string")
+    proof_set_hash = payload.get("proof_set_hash")
+    if not isinstance(proof_set_hash, str) or not proof_set_hash:
+        raise PromptPackProvenanceError("prompt-pack provenance field 'proof_set_hash' must be a non-empty string")
+
+
+def _provenance_package_count(payload: dict[str, object]) -> int:
+    value = payload.get("package_count")
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise PromptPackProvenanceError("prompt-pack provenance package_count must be an integer")
+    return value
+
+
+def _provenance_required_str(data: dict[str, object], key: str) -> str:
+    value = data.get(key)
+    if not isinstance(value, str) or not value:
+        raise PromptPackProvenanceError(f"prompt-pack provenance field '{key}' must be a non-empty string")
+    return value
 
 
 def _pairs_to_dict(pairs: tuple[tuple[str, object], ...]) -> dict[str, object]:

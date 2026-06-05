@@ -6,11 +6,14 @@ from promptabi.cli import main
 from promptabi.loaders import ArtifactLoader
 from promptabi.prompt_packs import (
     build_prompt_pack_mirror,
+    create_signed_prompt_pack_provenance,
     build_prompt_pack_lockfile,
     build_prompt_pack_registry,
     compare_prompt_pack_lockfile,
     compare_prompt_pack_upgrade,
+    load_signed_prompt_pack_provenance,
     load_prompt_pack_mirror_manifest,
+    verify_signed_prompt_pack_provenance,
     verify_prompt_pack_mirror,
     prompt_pack_registry_to_json,
 )
@@ -517,6 +520,95 @@ def test_cli_prompt_pack_registry_writes_public_manifest(tmp_path: Path, capsys)
     assert payload["prompt_packs"][0]["package_name"] == "support-pack"
     assert "refund_user" not in output.read_text(encoding="utf-8")
     assert "</tool_call>" not in output.read_text(encoding="utf-8")
+
+
+def test_signed_prompt_pack_provenance_trusts_registry_metadata_without_raw_prompts(tmp_path: Path) -> None:
+    pack = tmp_path / "support.prompt-pack.json"
+    config = tmp_path / "promptabi.json"
+    _write_prompt_pack(pack, schema_digest="sha256:refund-v1")
+    _write_safe_config(config, pack)
+    session = VerificationSession.from_config_file(config)
+    result = session.run()
+    loaded, _load_diagnostics = session.load_artifacts_with_diagnostics()
+
+    provenance = create_signed_prompt_pack_provenance(
+        loaded,
+        result.diagnostics,
+        key="prompt-pack-secret",
+        key_id="registry-review",
+        base_dir=tmp_path,
+    )
+    verification = verify_signed_prompt_pack_provenance(provenance, key="prompt-pack-secret")
+    encoded = json.dumps(provenance.to_dict(), sort_keys=True)
+
+    assert verification.ok
+    assert verification.signing_key_id == "registry-review"
+    assert verification.package_count == 1
+    assert provenance.payload["package_count"] == 1
+    assert provenance.payload["prompt_packs"][0]["package_name"] == "support-pack"
+    assert provenance.to_dict()["provenance_hash"] == provenance.provenance_hash
+    assert "refund_user" not in encoded
+    assert "</tool_call>" not in encoded
+    assert "{% for message in messages %}" not in encoded
+
+
+def test_signed_prompt_pack_provenance_rejects_tampering(tmp_path: Path) -> None:
+    pack = tmp_path / "support.prompt-pack.json"
+    config = tmp_path / "promptabi.json"
+    _write_prompt_pack(pack, schema_digest="sha256:refund-v1")
+    _write_safe_config(config, pack)
+    session = VerificationSession.from_config_file(config)
+    result = session.run()
+    loaded, _load_diagnostics = session.load_artifacts_with_diagnostics()
+    provenance = create_signed_prompt_pack_provenance(loaded, result.diagnostics, key="prompt-pack-secret")
+    tampered = provenance.to_dict()
+    tampered["payload"]["prompt_packs"][0]["contract_hash"] = "0" * 64
+
+    verification = verify_signed_prompt_pack_provenance(tampered, key="prompt-pack-secret")
+
+    assert verification.ok is False
+    assert verification.reason == "signature mismatch"
+
+
+def test_cli_prompt_pack_provenance_create_and_verify(tmp_path: Path, capsys) -> None:
+    pack = tmp_path / "support.prompt-pack.json"
+    config = tmp_path / "promptabi.json"
+    output = tmp_path / "prompt-pack.provenance.json"
+    _write_prompt_pack(pack, schema_digest="sha256:refund-v1")
+    _write_safe_config(config, pack)
+
+    assert main(
+        [
+            "prompt-pack",
+            "provenance",
+            "create",
+            "--config",
+            str(config),
+            "--output",
+            str(output),
+            "--key",
+            "prompt-pack-secret",
+            "--key-id",
+            "cli-review",
+        ]
+    ) == 0
+    created = capsys.readouterr()
+    assert "wrote signed prompt-pack provenance" in created.out
+    assert load_signed_prompt_pack_provenance(output).signing_key_id == "cli-review"
+
+    assert main(["prompt-pack", "provenance", "verify", str(output), "--key", "prompt-pack-secret", "--format", "json"]) == 0
+    verified = json.loads(capsys.readouterr().out)
+    assert verified["ok"] is True
+    assert verified["package_count"] == 1
+    assert verified["signing_key_id"] == "cli-review"
+
+    tampered = json.loads(output.read_text(encoding="utf-8"))
+    tampered["payload"]["prompt_packs"][0]["proof_hash"] = "1" * 64
+    output.write_text(json.dumps(tampered, indent=2, sort_keys=True), encoding="utf-8")
+    assert main(["prompt-pack", "provenance", "verify", str(output), "--key", "prompt-pack-secret", "--format", "json"]) == 1
+    rejected = json.loads(capsys.readouterr().out)
+    assert rejected["ok"] is False
+    assert rejected["reason"] == "signature mismatch"
 
 
 def test_prompt_pack_mirror_copies_local_packs_and_verifies_offline(tmp_path: Path) -> None:

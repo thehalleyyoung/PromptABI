@@ -106,9 +106,13 @@ package-manager-style \texttt{promptabi prompt-pack lock} workflow, and
 a public \texttt{promptabi prompt-pack registry} manifest that publishes
 non-sensitive proof hashes, diagnostic fingerprints, supported-fragment counts,
 and reproducible artifact metadata without raw template, tool, or stop contents,
-plus a \texttt{promptabi prompt-pack mirror} workflow that copies local private
-pack artifacts into checksum-verified, network-free enterprise mirrors and
-revalidates them offline before use,
+plus signed \texttt{promptabi prompt-pack provenance} manifests that bind reviewed
+registry metadata, contract hashes, proof hashes, package checksums, versions,
+and diagnostic baselines under a local HMAC key so downstream teams can verify
+template, schema, and tool-definition bundles without seeing raw prompt-pack
+contents, and a \texttt{promptabi prompt-pack mirror} workflow that copies local
+private pack artifacts into checksum-verified, network-free enterprise mirrors
+and revalidates them offline before use,
 validating, pinning, and proving upgrade preservation for exported templates,
 role-boundary and budget hashes, tool schemas, stop policies, supported
 model/provider families, package hashes, and diagnostic baselines against
@@ -636,7 +640,7 @@ The repository layout is designed to scale:
 \hline
 \texttt{src/promptabi/plugins.py} & Typed extension registry for artifact loaders, dependency-aware checks, diagnostic renderers, and capability metadata covering provider adapters, grammar backends, template dialects, truncation policies, and solver encodings. \\
 \hline
-\texttt{src/promptabi/prompt\_packs.py} & Prompt-pack compatibility checker for reusable prompt libraries, package lock/upgrade gates, public registry manifests with non-sensitive proof hashes, and checksum-verified local mirror manifests for air-gapped private prompt-pack indexes. \\
+\texttt{src/promptabi/prompt\_packs.py} & Prompt-pack compatibility checker for reusable prompt libraries, package lock/upgrade gates, public registry manifests with non-sensitive proof hashes, signed provenance manifests, and checksum-verified local mirror manifests for air-gapped private prompt-pack indexes. \\
 \hline
 \texttt{src/promptabi/api\_stability.py} & Generated public-API manifest, stable/provisional/deprecated symbol taxonomy, deprecation decorator, Markdown/JSON API reference renderers, and baseline compatibility comparison for downstream plugin authors. \\
 \hline

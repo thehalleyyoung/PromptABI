@@ -143,20 +143,26 @@ from .policies import policy_forbids_local_summary
 from .prompt_packs import (
     PromptPackLockError,
     PromptPackMirrorError,
+    PromptPackProvenanceError,
     build_prompt_pack_mirror,
+    create_signed_prompt_pack_provenance,
     build_prompt_pack_registry,
     build_prompt_pack_lockfile,
     compare_prompt_pack_lockfile,
     compare_prompt_pack_upgrade,
+    load_signed_prompt_pack_provenance,
     load_prompt_pack_mirror_manifest,
     load_prompt_pack_lockfile,
     prompt_pack_mirror_error_diagnostic,
     prompt_pack_mirror_to_json,
     prompt_pack_lock_error_diagnostic,
+    render_prompt_pack_provenance_verification_text,
     prompt_pack_registry_to_json,
     render_prompt_pack_mirror_text,
     render_prompt_pack_mirror_verification_text,
     render_prompt_pack_registry_text,
+    verify_signed_prompt_pack_provenance,
+    write_signed_prompt_pack_provenance,
     verify_prompt_pack_mirror,
     write_prompt_pack_registry,
     write_prompt_pack_lockfile,
@@ -716,6 +722,58 @@ def build_parser() -> argparse.ArgumentParser:
     prompt_pack_mirror_verify.add_argument("--output", help="write verification output to this path instead of stdout")
     prompt_pack_mirror_verify.add_argument("-q", "--quiet", action="count", default=0, help="suppress stdout when --output is set")
     _add_local_summary_argument(prompt_pack_mirror_verify)
+    prompt_pack_provenance = prompt_pack_subparsers.add_parser(
+        "provenance",
+        help="create or verify signed provenance for reviewed prompt-pack registry metadata",
+    )
+    prompt_pack_provenance_subparsers = prompt_pack_provenance.add_subparsers(
+        dest="prompt_pack_provenance_command",
+        required=True,
+    )
+    prompt_pack_provenance_create = prompt_pack_provenance_subparsers.add_parser(
+        "create",
+        help="run verification and write signed prompt-pack provenance JSON",
+    )
+    prompt_pack_provenance_create.add_argument(
+        "--config",
+        help="path to a PromptABI JSON config containing prompt-pack artifacts; defaults to discovering promptabi.json",
+    )
+    prompt_pack_provenance_create.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        metavar="NAME=PATH_OR_URI",
+        help="override or add an artifact location for this run; may be repeated",
+    )
+    prompt_pack_provenance_create.add_argument("--output", required=True, help="write signed provenance JSON to this path")
+    prompt_pack_provenance_create.add_argument("--key", help="provenance signing key (default: PROMPTABI_PROMPT_PACK_KEY)")
+    prompt_pack_provenance_create.add_argument("--key-id", default="local", help="identifier recorded with the signature")
+    prompt_pack_provenance_create.add_argument("--force", action="store_true", help="overwrite existing provenance JSON")
+    prompt_pack_provenance_create.add_argument("-q", "--quiet", action="count", default=0, help="suppress stdout after writing provenance")
+    prompt_pack_provenance_create.add_argument("-v", "--verbose", action="count", default=0, help="include config and output paths")
+    prompt_pack_provenance_create.add_argument(
+        "--plugin",
+        action="append",
+        default=[],
+        metavar="MODULE[:OBJECT]",
+        help="import a PromptABI plugin module for artifact loading compatibility",
+    )
+    _add_local_summary_argument(prompt_pack_provenance_create)
+    prompt_pack_provenance_verify = prompt_pack_provenance_subparsers.add_parser(
+        "verify",
+        help="verify signed prompt-pack provenance without reading prompt contents",
+    )
+    prompt_pack_provenance_verify.add_argument("provenance", help="signed prompt-pack provenance JSON path")
+    prompt_pack_provenance_verify.add_argument("--key", help="provenance signing key (default: PROMPTABI_PROMPT_PACK_KEY)")
+    prompt_pack_provenance_verify.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    prompt_pack_provenance_verify.add_argument("--output", help="write verification output to this path instead of stdout")
+    prompt_pack_provenance_verify.add_argument("-q", "--quiet", action="count", default=0, help="suppress stdout when --output is set")
+    _add_local_summary_argument(prompt_pack_provenance_verify)
 
     corpus = subparsers.add_parser("corpus", help="seed corpus maintenance commands")
     corpus_subparsers = corpus.add_subparsers(dest="corpus_command", required=True)
@@ -1699,6 +1757,95 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "output_format": args.format,
                 "prompt_pack_count": len(verification.manifest.entries) if verification is not None else 0,
             },
+        ):
+            return 2
+        if not args.output or not args.quiet:
+            print(output, end="")
+        return exit_code
+
+    if args.command == "prompt-pack" and args.prompt_pack_command == "provenance" and args.prompt_pack_provenance_command == "create":
+        started_at = time.perf_counter()
+        try:
+            if args.quiet and args.verbose:
+                parser.error("--quiet and --verbose cannot be used together")
+            config_path = Path(args.config).resolve() if args.config else discover_config()
+            output_path = Path(args.output).expanduser().resolve()
+            plugin_registry = _load_cli_plugins(args.plugin)
+            overrides = _parse_artifact_overrides(args.artifact, parser)
+            config = load_config(config_path).with_artifact_overrides(overrides, base_dir=Path.cwd())
+            if args.local_summary is not None and policy_forbids_local_summary(config.policy):
+                print("promptabi: organization policy pack forbids --local-summary writes", file=sys.stderr)
+                return 2
+            session = VerificationSession(config, plugin_registry=plugin_registry)
+            result = session.run()
+            loaded_artifacts, load_diagnostics = session.load_artifacts_with_diagnostics()
+            if any(diagnostic.severity.value == "error" for diagnostic in load_diagnostics):
+                print("promptabi: cannot sign prompt-pack provenance while artifact loading has errors", file=sys.stderr)
+                return 2
+            provenance = create_signed_prompt_pack_provenance(
+                loaded_artifacts,
+                result.diagnostics,
+                key=args.key,
+                key_id=args.key_id,
+                base_dir=output_path.parent,
+            )
+            write_signed_prompt_pack_provenance(output_path, provenance, force=args.force)
+            output = (
+                "wrote signed prompt-pack provenance: "
+                f"{output_path} ({provenance.payload['package_count']} packages, hash {provenance.provenance_hash})\n"
+            )
+            if args.verbose:
+                output += f"config: {config_path}\n"
+            exit_code = 0
+        except (ConfigError, PromptPackLockError, PromptPackProvenanceError, PluginError, ValueError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write prompt-pack provenance: {exc}", file=sys.stderr)
+            return 2
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="prompt-pack provenance create",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={"prompt_pack_count": provenance.payload["package_count"]},
+        ):
+            return 2
+        if not args.quiet:
+            print(output, end="")
+        return exit_code
+
+    if args.command == "prompt-pack" and args.prompt_pack_command == "provenance" and args.prompt_pack_provenance_command == "verify":
+        started_at = time.perf_counter()
+        try:
+            provenance = load_signed_prompt_pack_provenance(args.provenance)
+            verification = verify_signed_prompt_pack_provenance(provenance, key=args.key)
+            output = (
+                json.dumps(verification.to_dict(), indent=2, sort_keys=True) + "\n"
+                if args.format == "json"
+                else render_prompt_pack_provenance_verification_text(verification)
+            )
+            exit_code = 0 if verification.ok else 1
+        except PromptPackProvenanceError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot verify prompt-pack provenance: {exc}", file=sys.stderr)
+            return 2
+        if args.output:
+            try:
+                output_path = Path(args.output).expanduser().resolve()
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_text(output, encoding="utf-8")
+            except OSError as exc:
+                print(f"promptabi: cannot write prompt-pack provenance verification: {exc}", file=sys.stderr)
+                return 2
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="prompt-pack provenance verify",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={"output_format": args.format, "prompt_pack_count": verification.package_count},
         ):
             return 2
         if not args.output or not args.quiet:
