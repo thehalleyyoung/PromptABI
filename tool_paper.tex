@@ -7,7 +7,7 @@
 \usepackage{longtable}
 \usepackage{verbatim}
 \usepackage{amsthm}
-\linespread{0.94}
+\linespread{0.91}
 
 \newtheorem{theorem}{Theorem}
 
@@ -77,7 +77,12 @@ witnesses, secret-bearing fixtures, license-incompatible corpora, and labeled
 real-bug regressions,
 a generated
 public-API stability manifest with deprecation metadata, Markdown/JSON API docs,
-and downstream plugin compatibility tests, focused tests, examples, a fixture
+downstream plugin compatibility tests, and a stable integration API that returns
+versioned, non-content platform payloads for CI providers, IDE extensions,
+dataset platforms, model registries, and internal AI platforms by composing the
+same verification result into SARIF, annotation, inline-diagnostic,
+training/evaluation-contract, reproducibility-bundle, guarantee-mode, policy,
+and privacy summaries, focused tests, examples, a fixture
 corpus layout, a curated ten-family seed corpus, a deterministic corpus manifest
 pipeline, a Hugging Face \texttt{tokenizer\_config.json} chat-template parser,
 a tokenizer/config drift checker that compares real tokenizer revisions for

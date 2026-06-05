@@ -60,7 +60,7 @@ The same local verifier covers:
 | **Prompt packs** | reusable templates with compositional role/tool/stop/model-family/RAG/truncation guarantees, locks, upgrade gates, registries, signing, and offline mirrors |
 | **Budgets + RAG** | must-survive prompt segments, dropped citations, metadata inflation, tokenizer mismatch, framework truncation, and context-window overflow |
 | **Provenance** | artifact hashes, licenses, trusted sources, reproducible HF revisions, lockfile drift, offline fixture integrity, and upstream bug/fix/workaround links |
-| **Enterprise posture** | org policy packs, no-network mirrors, access-controlled private indexes/prompt packs/policy packs, audit-bundle retention, approved fixtures, privacy rules, governance gates, and expiring witness-stable suppressions |
+| **Enterprise + platform posture** | org policy packs, no-network mirrors, access-controlled private indexes/prompt packs/policy packs, audit-bundle retention, approved fixtures, privacy rules, governance gates, expiring witness-stable suppressions, and stable payloads for CI, IDEs, dataset platforms, registries, and internal AI platforms |
 | **Training/eval contracts** | target-role alignment, benchmark-tokenizer drift, eval-harness prompt/few-shot/multi-turn/grading-parser/stop/private-field/cross-provider compatibility, proof-carrying streaming shards, data-loader adapters, synthetic-generator preflight, invalid roles/tools/JSON/stops, packing, loss masks, leakage, drift, RLHF/DPO defects, and real-bug benchmarks |
 
 Under the hood, PromptABI combines a declarative static contract language,
