@@ -263,7 +263,8 @@ Context-budget, mask, role, and private-field obligations &
 Survival proof, dropped-region witness, finite assignment \\
 \addlinespace
 Maintain reproducible CI &
-Lockfiles, signed bundles, replayable solver certificates, sliced products &
+Lockfiles, inherited config lineage, signed bundles, replayable solver
+certificates, sliced products &
 Artifact hash, diagnostic fingerprint, replay hash, minimal artifact cover \\
 \addlinespace
 Block stale deploys &
@@ -309,6 +310,15 @@ Static contracts that combine budgets, roles, stops, masks, and provider facts
 are lowered to finite SMT obligations. Solver models become counterexamples;
 unsatisfiable obligations become proof summaries. Reduced solver-replay files
 allow a result to be rerun without the original private artifacts.
+
+\paragraph{Inherited proof obligations.}
+Large deployments share base PromptABI configs for organization policies, common
+artifacts, and solver budgets, then let services extend them with local prompts
+or tool schemas. PromptABI resolves every inherited config in its own directory,
+merges typed artifacts rather than raw JSON, detects cycles, and records which
+file contributed each proof obligation. Static-contract findings include this
+lineage, so an unsafe budget witness can say that the prompt came from a service
+config while the finite context bound came from a platform base config.
 
 \paragraph{Differential replay.}
 Where a library is the specification, PromptABI runs small differential cases

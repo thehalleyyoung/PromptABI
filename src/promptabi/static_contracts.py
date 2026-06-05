@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from pathlib import Path
 
 from .artifacts import (
     ArtifactKind,
@@ -160,7 +161,56 @@ def analyze_static_contracts(
                 evidence=(("artifact_count", str(len(loaded_artifacts))),),
             )
         )
-    return StaticContractReport(findings=tuple(findings))
+    return StaticContractReport(findings=_attach_inheritance_lineage(config, tuple(findings)))
+
+
+def _attach_inheritance_lineage(
+    config: VerificationConfig,
+    findings: tuple[StaticContractFinding, ...],
+) -> tuple[StaticContractFinding, ...]:
+    if not config.inheritance_sources:
+        return findings
+    source_summary = " -> ".join(source.path for source in config.inheritance_sources)
+    lineage = config.proof_obligation_lineage
+    updated: list[StaticContractFinding] = []
+    for finding in findings:
+        relevant = tuple(
+            item
+            for item in lineage
+            if item.obligation == finding.name
+            or item.field.removeprefix("artifacts.") in finding.artifacts
+            or _same_obligation_family(item.obligation, finding.name)
+            or item.obligation in finding.name
+            or finding.name in item.obligation
+        )
+        if not relevant:
+            relevant = tuple(item for item in lineage if item.field.startswith("checks."))[:4]
+        compact = "; ".join(
+            f"{item.status}:{Path(item.source_path).name}:{item.field}={item.detail}"
+            for item in relevant[:8]
+        ) or "no matching inherited obligation fields"
+        updated.append(
+            replace(
+                finding,
+                evidence=(
+                    *finding.evidence,
+                    ("config_inheritance", source_summary),
+                    ("obligation_lineage", compact),
+                ),
+            )
+        )
+    return tuple(updated)
+
+
+def _same_obligation_family(obligation: str, finding_name: str) -> bool:
+    families = {
+        "prompt-segment-budget": ("prompt-segment-survival", "prompt-segment-budget"),
+        "role-region-nonforgeability": ("role-region", "role-boundary"),
+        "stop-control-token-collision": ("stop-control", "stop-policy"),
+        "tool-schema-precondition-satisfiability": ("tool-schema", "tool-provider"),
+        "z3-backed-finite-contract": ("static-contract", "finite-contract"),
+    }
+    return any(finding_name.startswith(prefix) for prefix in families.get(obligation, ()))
 
 
 def _budget_obligation(
