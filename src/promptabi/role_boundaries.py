@@ -212,6 +212,8 @@ class RoleBoundaryForgeryFinding:
     marker_start_offset: int
     marker_end_offset: int
     boundary_description: str
+    token_ids: tuple[int, ...]
+    role_region: dict[str, object]
 
     def __post_init__(self) -> None:
         if self.path_index < 0:
@@ -220,6 +222,8 @@ class RoleBoundaryForgeryFinding:
             raise ValueError("region_index must be non-negative")
         if self.marker_start_offset < 0 or self.marker_end_offset <= self.marker_start_offset:
             raise ValueError("marker offsets must identify a non-empty boundary")
+        if any(token_id < 0 for token_id in self.token_ids):
+            raise ValueError("token_ids must be non-negative")
         for field_name in (
             "input_expression",
             "input_role",
@@ -233,6 +237,8 @@ class RoleBoundaryForgeryFinding:
         ):
             if not getattr(self, field_name):
                 raise ValueError(f"{field_name} must be non-empty")
+        object.__setattr__(self, "token_ids", tuple(self.token_ids))
+        object.__setattr__(self, "role_region", dict(self.role_region))
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -249,6 +255,8 @@ class RoleBoundaryForgeryFinding:
             "marker_start_offset": self.marker_start_offset,
             "marker_end_offset": self.marker_end_offset,
             "boundary_description": self.boundary_description,
+            "token_ids": list(self.token_ids),
+            "role_region": self.role_region,
         }
 
 
@@ -791,6 +799,7 @@ def _forgery_finding(
     marker_start = expression_start + malicious_input.find(marker) if expression_start >= 0 else -1
     marker_end = marker_start + len(marker) if marker_start >= 0 else len(marker)
     excerpt = _rendered_excerpt_from_offsets(rendered, marker_start, marker_end)
+    tokenized_representation, token_ids = _tokenized_excerpt(excerpt, marker)
     return RoleBoundaryForgeryFinding(
         path_index=path.path_index,
         region_index=region.region_index,
@@ -800,7 +809,7 @@ def _forgery_finding(
         marker_kind=marker_kind,
         malicious_input=malicious_input,
         rendered_excerpt=excerpt,
-        tokenized_representation=_tokenized_representation(excerpt, marker),
+        tokenized_representation=tokenized_representation,
         forged_boundary=(
             f"{marker_kind} {marker!r} at rendered chars {marker_start}:{marker_end} "
             f"inside path {path.path_index} region {region.region_index}"
@@ -808,6 +817,8 @@ def _forgery_finding(
         marker_start_offset=marker_start,
         marker_end_offset=marker_end,
         boundary_description=boundary_description,
+        token_ids=token_ids,
+        role_region=region.to_dict(),
     )
 
 
@@ -835,6 +846,10 @@ def _rendered_excerpt_from_offsets(rendered: str, marker_start: int, marker_end:
 
 
 def _tokenized_representation(excerpt: str, marker: str) -> str:
+    return _tokenized_excerpt(excerpt, marker)[0]
+
+
+def _tokenized_excerpt(excerpt: str, marker: str) -> tuple[str, tuple[int, ...]]:
     tokenizer = ByteLevelTokenizer(added_tokens=(marker,), special_tokens={marker: 256})
     encoded = tokenizer.encode(excerpt)
     marker_indexes = [index for index, token in enumerate(encoded.tokens) if token.text == marker]
@@ -862,4 +877,4 @@ def _tokenized_representation(excerpt: str, marker: str) -> str:
         token_pieces.append(f"{token.token_id}:{text!r}{flag_suffix}")
     if end_index < len(encoded.tokens):
         token_pieces.append(f"...+{len(encoded.tokens) - end_index} tokens")
-    return "byte-level " + " ".join(token_pieces)
+    return "byte-level " + " ".join(token_pieces), encoded.token_ids

@@ -142,6 +142,11 @@ overreachability, tokenizer/grammar emptiness, must-survive budgets, and finite
 SMT contracts, with executable checks that replay real witnesses where the
 necessary transition relation or solver proof object is present and explicitly
 downgrade to sketches or abstentions where it is not,
+rich diagnostic witness records that carry the human trace plus machine-readable
+rendered strings, exact token IDs, role-region offsets, parser states, solver
+assignments, truncation decisions, and ranked minimal fixes, so a CI failure can
+be replayed by tools, surfaced in HTML, and audited without reverse-engineering a
+plain-text explanation,
 a reusable GitHub Action and \texttt{promptabi github-action} runner that restore
 analysis caches, enforce lockfiles for app configs, run \texttt{verify-training}
 for training-manifest pull requests before fine-tuning jobs start, skip unrelated

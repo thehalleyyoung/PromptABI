@@ -209,6 +209,13 @@ class WitnessTrace:
     summary: str
     steps: tuple[str | WitnessStep, ...] = ()
     artifacts: tuple[ArtifactRef, ...] = ()
+    rendered_strings: tuple[str, ...] = ()
+    token_ids: tuple[int, ...] = ()
+    role_regions: tuple[dict[str, Any], ...] = ()
+    parser_states: tuple[str, ...] = ()
+    solver_assignments: tuple[dict[str, Any], ...] = ()
+    truncation_decisions: tuple[dict[str, Any], ...] = ()
+    minimal_fixes: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.summary:
@@ -216,15 +223,49 @@ class WitnessTrace:
         normalized_steps = tuple(
             step if isinstance(step, WitnessStep) else WitnessStep(action=step) for step in self.steps
         )
+        rendered_strings = tuple(str(item) for item in self.rendered_strings)
+        if any(not item for item in rendered_strings):
+            raise ValueError("witness rendered strings must be non-empty")
+        token_ids = tuple(int(token_id) for token_id in self.token_ids)
+        if any(token_id < 0 for token_id in token_ids):
+            raise ValueError("witness token ids must be non-negative")
+        parser_states = tuple(str(item) for item in self.parser_states)
+        if any(not item for item in parser_states):
+            raise ValueError("witness parser states must be non-empty")
+        minimal_fixes = tuple(str(item) for item in self.minimal_fixes)
+        if any(not item for item in minimal_fixes):
+            raise ValueError("witness minimal fixes must be non-empty")
         object.__setattr__(self, "steps", normalized_steps)
         object.__setattr__(self, "artifacts", tuple(sorted(self.artifacts, key=lambda item: (item.kind, item.name))))
+        object.__setattr__(self, "rendered_strings", rendered_strings)
+        object.__setattr__(self, "token_ids", token_ids)
+        object.__setattr__(self, "role_regions", tuple(dict(item) for item in self.role_regions))
+        object.__setattr__(self, "parser_states", parser_states)
+        object.__setattr__(self, "solver_assignments", tuple(dict(item) for item in self.solver_assignments))
+        object.__setattr__(self, "truncation_decisions", tuple(dict(item) for item in self.truncation_decisions))
+        object.__setattr__(self, "minimal_fixes", minimal_fixes)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data: dict[str, Any] = {
             "summary": self.summary,
             "steps": [step.to_dict() for step in self.steps],
             "artifacts": [artifact.to_dict() for artifact in self.artifacts],
         }
+        if self.rendered_strings:
+            data["rendered_strings"] = list(self.rendered_strings)
+        if self.token_ids:
+            data["token_ids"] = list(self.token_ids)
+        if self.role_regions:
+            data["role_regions"] = list(self.role_regions)
+        if self.parser_states:
+            data["parser_states"] = list(self.parser_states)
+        if self.solver_assignments:
+            data["solver_assignments"] = list(self.solver_assignments)
+        if self.truncation_decisions:
+            data["truncation_decisions"] = list(self.truncation_decisions)
+        if self.minimal_fixes:
+            data["minimal_fixes"] = list(self.minimal_fixes)
+        return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "WitnessTrace":
@@ -232,6 +273,17 @@ class WitnessTrace:
             summary=str(data["summary"]),
             steps=tuple(WitnessStep.from_dict(step) for step in data.get("steps", ())),
             artifacts=tuple(ArtifactRef.from_dict(artifact) for artifact in data.get("artifacts", ())),
+            rendered_strings=tuple(str(item) for item in data.get("rendered_strings", ())),
+            token_ids=tuple(int(item) for item in data.get("token_ids", ())),
+            role_regions=tuple(dict(item) for item in data.get("role_regions", ()) if isinstance(item, dict)),
+            parser_states=tuple(str(item) for item in data.get("parser_states", ())),
+            solver_assignments=tuple(
+                dict(item) for item in data.get("solver_assignments", ()) if isinstance(item, dict)
+            ),
+            truncation_decisions=tuple(
+                dict(item) for item in data.get("truncation_decisions", ()) if isinstance(item, dict)
+            ),
+            minimal_fixes=tuple(str(item) for item in data.get("minimal_fixes", ())),
         )
 
 

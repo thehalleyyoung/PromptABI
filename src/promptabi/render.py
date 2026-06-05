@@ -85,6 +85,7 @@ def render_text(
                 if step.output is not None:
                     rendered += f" | output: {step.output}"
                 lines.append(f"    {index}. {rendered}")
+            lines.extend(_witness_detail_lines(diagnostic.witness))
         for suggestion in diagnostic.suggestions:
             lines.append(f"  suggestion: {suggestion}")
     return "\n".join(lines) + "\n"
@@ -592,8 +593,70 @@ def _witness_block(diagnostic) -> str:
         "<h3>Witness</h3>"
         f"<p>{_escape(diagnostic.witness.summary)}</p>"
         f"<ol>{steps}</ol>"
+        f"{_witness_details_html(diagnostic.witness)}"
         f"{'<h3>Witness artifacts</h3><ul>' + artifacts + '</ul>' if artifacts else ''}"
     )
+
+
+def _witness_detail_lines(witness) -> list[str]:
+    lines: list[str] = []
+    for rendered in witness.rendered_strings:
+        lines.append(f"    rendered: {_compact_text(rendered)}")
+    if witness.token_ids:
+        lines.append(f"    token_ids: {list(witness.token_ids)}")
+    for region in witness.role_regions:
+        role = region.get("role", "unknown")
+        role_source = region.get("role_source", "unknown")
+        path_index = region.get("path_index", "?")
+        region_index = region.get("region_index", "?")
+        start = region.get("start_offset", "?")
+        end = region.get("end_offset", "?")
+        lines.append(
+            "    role_region: "
+            f"path={path_index} region={region_index} role={role} source={role_source} chars={start}:{end}"
+        )
+    for state in witness.parser_states:
+        lines.append(f"    parser_state: {state}")
+    for assignment in witness.solver_assignments:
+        lines.append(f"    solver_assignment: {_compact_json(assignment)}")
+    for decision in witness.truncation_decisions:
+        lines.append(f"    truncation_decision: {_compact_json(decision)}")
+    for fix in witness.minimal_fixes:
+        lines.append(f"    minimal_fix: {fix}")
+    return lines
+
+
+def _witness_details_html(witness) -> str:
+    sections: list[str] = []
+    if witness.rendered_strings:
+        rendered = "".join(f"<li><pre>{_escape(item)}</pre></li>" for item in witness.rendered_strings)
+        sections.append(f"<h3>Rendered strings</h3><ol>{rendered}</ol>")
+    if witness.token_ids:
+        sections.append(f"<h3>Token IDs</h3><pre>{_escape(list(witness.token_ids))}</pre>")
+    if witness.role_regions:
+        sections.append(f"<h3>Role regions</h3>{_render_value(list(witness.role_regions))}")
+    if witness.parser_states:
+        states = "".join(f"<li>{_escape(state)}</li>" for state in witness.parser_states)
+        sections.append(f"<h3>Parser states</h3><ul>{states}</ul>")
+    if witness.solver_assignments:
+        sections.append(f"<h3>Solver assignments</h3>{_render_value(list(witness.solver_assignments))}")
+    if witness.truncation_decisions:
+        sections.append(f"<h3>Truncation decisions</h3>{_render_value(list(witness.truncation_decisions))}")
+    if witness.minimal_fixes:
+        fixes = "".join(f"<li>{_escape(fix)}</li>" for fix in witness.minimal_fixes)
+        sections.append(f"<h3>Minimal fixes</h3><ul>{fixes}</ul>")
+    return "".join(sections)
+
+
+def _compact_text(value: str, *, limit: int = 240) -> str:
+    normalized = value.replace("\n", "\\n").replace("\r", "\\r")
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: limit - 3] + "..."
+
+
+def _compact_json(value: Any) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
 
 def _inline_code(value: object) -> str:
@@ -685,6 +748,7 @@ def _step_card(diagnostic, steps) -> str:
         f"<h3><code>{_escape(diagnostic.rule_id)}</code></h3>"
         f"<p>{_severity_badge(diagnostic.severity.value)} {_escape(diagnostic.message)}</p>"
         f"<ol>{rendered_steps}</ol>"
+        f"{_witness_details_html(diagnostic.witness) if diagnostic.witness is not None else ''}"
         "</article>"
     )
 

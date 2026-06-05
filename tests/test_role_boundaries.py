@@ -1,3 +1,5 @@
+import json
+
 from promptabi import (
     ArtifactKind,
     ArtifactLocation,
@@ -10,6 +12,8 @@ from promptabi import (
     parse_hf_chat_template_config,
     parse_hf_tokenizer_config_chat_template,
 )
+from promptabi.render import render_json, render_text
+from promptabi.session import VerificationSession
 
 
 ROLE_BOUNDARY_REGRESSION_CASES = (
@@ -284,6 +288,47 @@ def test_role_boundary_nonforgeability_flags_raw_role_and_content_controls() -> 
     assert content_forgery.marker_start_offset > 0
     assert "256:'<|im_start|>'/special,added" in content_forgery.tokenized_representation
     assert content_forgery.to_dict()["malicious_input"] == "<|im_start|>"
+    assert content_forgery.token_ids
+    assert 256 in content_forgery.token_ids
+    assert content_forgery.role_region["role"] == "{messages[0].role}"
+
+
+def test_role_boundary_diagnostic_emits_rich_witness_formats() -> None:
+    result = VerificationSession.from_config_file("examples/role-boundary/unsafe.promptabi.json").run()
+    diagnostic = next(
+        item
+        for item in result.diagnostics
+        if item.rule_id == "role-boundary-nonforgeability"
+        and item.message.startswith("{messages[0].content} can forge assistant-prefix '<|im_start|>'")
+    )
+
+    assert diagnostic.witness is not None
+    assert diagnostic.witness.rendered_strings == (
+        "<|im_start|>{messages[0].role}\n<|im_start|><|im_end|>\n<|im_start|>assistant\n",
+    )
+    assert diagnostic.witness.token_ids
+    assert 256 in diagnostic.witness.token_ids
+    assert diagnostic.witness.role_regions[0]["role"] == "{messages[0].role}"
+    assert diagnostic.witness.role_regions[0]["content_expressions"] == ["{messages[0].content}"]
+    assert diagnostic.witness.minimal_fixes[0].startswith(
+        "Apply escaping or encoding to {messages[0].content}"
+    )
+
+    text = render_text(result)
+    assert "token_ids:" in text
+    assert "role_region: path=" in text
+    assert "role={messages[0].role} source=variable chars=" in text
+    assert "minimal_fix: Apply escaping or encoding to {messages[0].content}" in text
+
+    payload = json.loads(render_json(result))
+    rendered = [
+        item["witness"]
+        for item in payload["diagnostics"]
+        if item["fingerprint"] == diagnostic.fingerprint
+    ][0]
+    assert rendered["rendered_strings"] == list(diagnostic.witness.rendered_strings)
+    assert rendered["token_ids"] == list(diagnostic.witness.token_ids)
+    assert rendered["role_regions"] == list(diagnostic.witness.role_regions)
 
 
 def test_role_boundary_nonforgeability_does_not_concatenate_across_content_placeholders() -> None:

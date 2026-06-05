@@ -1525,6 +1525,13 @@ def _role_boundary_forgery_diagnostic(artifact, span, finding: RoleBoundaryForge
                 WitnessStep(action="locate forged boundary", output=finding.forged_boundary),
             ),
             artifacts=(artifact,),
+            rendered_strings=(finding.rendered_excerpt,),
+            token_ids=finding.token_ids,
+            role_regions=(finding.role_region,),
+            minimal_fixes=(
+                f"Apply escaping or encoding to {finding.input_expression} before rendering it in the template.",
+                "Replace dynamic role text with an explicit allowlist mapping to known role labels.",
+            ),
         ),
     )
 
