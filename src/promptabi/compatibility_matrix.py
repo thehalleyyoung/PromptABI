@@ -15,6 +15,14 @@ from .session import CHECK_DEPENDENCIES, CHECK_MODE_CATALOG, VerificationSession
 
 CHECK_RULE_IDS: dict[str, tuple[str, ...]] = {
     "repository-skeleton": ("repository-skeleton",),
+    "artifact-provenance": (
+        "artifact-provenance-missing-hash",
+        "artifact-provenance-missing-license",
+        "artifact-provenance-missing-source",
+        "artifact-provenance-nonreproducible-remote",
+        "artifact-provenance-untrusted-source",
+        "artifact-provenance-verified",
+    ),
     "role-boundary-nonforgeability": ("role-boundary-abstained", "role-boundary-nonforgeability"),
     "stop-differential": (
         "stop-differential-abstained",

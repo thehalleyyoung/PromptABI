@@ -55,7 +55,9 @@ special-token ID changes, added-token changes, normalizer changes, chat-template
 hashes, BOS/EOS flags and IDs, and generation stop-policy deltas,
 deterministic PromptABI lockfiles that pin verified artifact hashes, upstream
 revisions, library versions, provider fixture versions, supported-fragment
-metadata, and expected diagnostic fingerprints for CI enforcement,
+metadata, and expected diagnostic fingerprints for CI enforcement, plus
+supply-chain diagnostics for missing hashes, license metadata, trusted-source
+annotations, and non-reproducible remote revisions,
 a curated \texttt{promptabi gallery} that reruns real pinned configurations,
 emits compatibility badges, summarizes actual solver backends rather than merely
 advertised solver capability, and explains abstentions plus accepted risks,
@@ -330,7 +332,8 @@ loads real JSON configuration, discovers configs from subdirectories, accepts
 explicit artifact overrides, normalizes artifact paths, builds typed artifact
 bundles, records source spans for config declarations and parsed JSON artifact
 fields, materializes local and metadata-only remote artifacts, validates sha256
-pins, adapts real tokenizer backends into stable encode/decode metadata,
+pins, audits licenses, trusted-source annotations, and reproducible remote
+revisions, adapts real tokenizer backends into stable encode/decode metadata,
 extracts Hugging Face chat-template structure from \texttt{tokenizer\_config.json},
 derives sanitizer-aware role-boundary regions over bounded rendered prompt patterns,
 emits minimized role-forgery witnesses with attacker input, rendered excerpt,
@@ -401,7 +404,8 @@ chat-template role universe,
 returns stable policy-controlled process exit codes, writes and enforces
 deterministic verification lockfiles that fail closed on artifact, config,
 provider-fixture, library-version, supported-fragment, or diagnostic-baseline
-drift,
+drift, and adds an opt-in artifact-provenance check for hash, license,
+trusted-source, and reproducible-download supply-chain gates,
 ships cross-version CI over supported Python releases, operating systems,
 optional tokenizer/grammar/Z3 dependency slices, and pinned backend versions,
 plus a repository-local GitHub Action that composes cache restoration,
@@ -586,7 +590,7 @@ truncation configs, and training/fine-tuning manifests. It also provides \texttt
 \texttt{VerificationResult}. These types establish the compatibility contract:
 
 \begin{itemize}
-\item artifacts have stable kinds, names, local paths or URIs, provenance, and optional versions, revisions, hashes, licenses, and sources;
+\item artifacts have stable kinds, names, local paths or URIs, provenance, optional versions, revisions, hashes, licenses, sources, and trusted-source metadata;
 \item kind-specific fields capture stop strings, schema dialects, grammar types, tool names, prompt segment requirements, provider families, truncation strategies, and training message/target roles;
 \item spans are one-based, validated at construction time, and source-mapped from PromptABI configs plus tokenizer, schema, tool, provider, and fixture JSON artifacts;
 \item witnesses are explicit traces, not prose hidden in the message string;
@@ -2004,6 +2008,8 @@ Evaluation runner & \texttt{promptabi corpus evaluation} reports labeled precisi
 Maintainer tooling & \texttt{promptabi maintain refresh} writes seed, structured-schema, provider-fixture, real-bug, corpus-verification, expected-diagnostic, diff, snapshot, and release-note artifacts; focused tests run the workflow against real corpora, assert repository-relative diagnostic paths, compare mutated snapshots, and exercise the CLI baseline mode. \\
 \hline
 Verified configuration gallery & \texttt{promptabi gallery} reruns five curated configurations covering pinned OpenAI-style tools, sanitized ChatML role boundaries, training-to-serving static contracts, RAG truncation budgets, and audited accepted-risk suppressions; focused tests assert deterministic JSON/text renderers, actual solver-backend summaries, lockfile/pin badges, and risk explanations. \\
+\hline
+Supply-chain provenance & \texttt{artifact-provenance} focused tests verify local sha256/license/source/trust metadata, flag missing reproducibility fields, reject movable Hugging Face revisions through the real CLI, and assert compatibility-matrix registration. \\
 \hline
 Editor diagnostics & \texttt{promptabi diagnostics lsp} emits stable LSP-style \texttt{publishDiagnostics} JSON for configs and local artifacts; focused tests verify URI grouping, zero-based ranges, invalid-JSON config failures, watched-artifact clearing, public API rendering, and CLI exit codes against real PromptABI configs. \\
 \hline

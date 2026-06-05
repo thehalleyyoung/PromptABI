@@ -55,6 +55,7 @@ The same local verifier covers:
 | **Grammars + schemas** | JSON Schema/regex/EBNF/Outlines/xgrammar/llguidance fragments that are empty, ambiguous, or parser-incompatible under tokenizer assumptions |
 | **Tools + providers** | OpenAI, Anthropic, MCP, LangChain, Pydantic, TypeScript-style, vLLM, llama.cpp, LiteLLM, Gemini, Bedrock, Groq, Together, and Ollama serialization drift |
 | **Budgets + RAG** | must-survive prompt segments, dropped citations, metadata inflation, tokenizer mismatch, framework truncation, and context-window overflow |
+| **Provenance** | artifact hashes, licenses, trusted sources, reproducible HF revisions, lockfile drift, and offline fixture integrity |
 | **Training/eval contracts** | target-role alignment, tokenizer/template drift, supervised-region checks, and fixture-backed real-bug benchmarks |
 
 Under the hood, PromptABI combines deterministic finite automata,

@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from threading import RLock
+from urllib.parse import parse_qs, urlparse
 
 from .artifacts import ArtifactKind, TokenizerArtifact
 from .budgets import TokenBudgetFinding, TokenBudgetReport, analyze_token_budget
@@ -77,6 +78,12 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "artifact-weak-pin": (CheckMode.SOUND, CheckMode.COMPLETE),
     "artifact-pin-invalid": (CheckMode.SOUND, CheckMode.COMPLETE),
     "artifact-hash-mismatch": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "artifact-provenance-missing-hash": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "artifact-provenance-missing-license": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "artifact-provenance-missing-source": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "artifact-provenance-untrusted-source": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "artifact-provenance-nonreproducible-remote": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "artifact-provenance-verified": (CheckMode.SOUND, CheckMode.COMPLETE),
     "lockfile-artifact-added": LOCKFILE_CHECK_MODES,
     "lockfile-artifact-drift": LOCKFILE_CHECK_MODES,
     "lockfile-artifact-missing": LOCKFILE_CHECK_MODES,
@@ -250,6 +257,7 @@ class ScheduledCheck:
 
 CHECK_DEPENDENCIES: dict[str, CheckDependency] = {
     "repository-skeleton": CheckDependency(artifact_kinds=tuple(ArtifactKind), resources=("repository-summary",)),
+    "artifact-provenance": CheckDependency(artifact_kinds=tuple(ArtifactKind)),
     "role-boundary-nonforgeability": CheckDependency(artifact_kinds=(ArtifactKind.CHAT_TEMPLATE,)),
     "stop-differential": CheckDependency(
         artifact_kinds=(ArtifactKind.STOP_POLICY, ArtifactKind.PROVIDER_CONFIG),
@@ -475,6 +483,7 @@ class VerificationSession:
         self.check_modes: dict[str, tuple[CheckMode, ...]] = dict(CHECK_MODE_CATALOG)
         self.checks: dict[str, CheckCallable] = {
             "repository-skeleton": self._repository_skeleton_check,
+            "artifact-provenance": self._artifact_provenance_check,
             "role-boundary-nonforgeability": self._role_boundary_nonforgeability_check,
             "stop-differential": self._stop_differential_check,
             "stop-overreachability": self._stop_overreachability_check,
@@ -578,6 +587,95 @@ class VerificationSession:
                 ),
             ),
         )
+
+    def _artifact_provenance_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        diagnostics: list[Diagnostic] = []
+        for loaded in context.loaded_artifacts:
+            artifact = loaded.artifact
+            provenance = artifact.provenance
+            metadata = dict(artifact.metadata)
+            if loaded.resolved and loaded.actual_sha256 is not None and provenance.sha256 is None:
+                diagnostics.append(
+                    _artifact_provenance_diagnostic(
+                        loaded,
+                        "artifact-provenance-missing-hash",
+                        f"artifact '{artifact.name}' lacks a sha256 pin for its resolved bytes",
+                        "sha256",
+                        "missing",
+                        "Add the computed sha256 to the artifact provenance after reviewing the bytes.",
+                        DiagnosticSeverity.WARNING,
+                    )
+                )
+            if provenance.license is None:
+                diagnostics.append(
+                    _artifact_provenance_diagnostic(
+                        loaded,
+                        "artifact-provenance-missing-license",
+                        f"artifact '{artifact.name}' lacks license metadata",
+                        "license",
+                        "missing",
+                        "Record the artifact license or dataset/model-card license in the PromptABI config.",
+                        DiagnosticSeverity.WARNING,
+                    )
+                )
+            if provenance.source is None:
+                diagnostics.append(
+                    _artifact_provenance_diagnostic(
+                        loaded,
+                        "artifact-provenance-missing-source",
+                        f"artifact '{artifact.name}' lacks an upstream source annotation",
+                        "source",
+                        "missing",
+                        "Record the upstream model repo, fixture origin, or internal source-of-truth URI.",
+                        DiagnosticSeverity.WARNING,
+                    )
+                )
+            elif not _metadata_bool(metadata, "trusted_source"):
+                diagnostics.append(
+                    _artifact_provenance_diagnostic(
+                        loaded,
+                        "artifact-provenance-untrusted-source",
+                        f"artifact '{artifact.name}' source is not explicitly trusted",
+                        "trusted_source",
+                        "missing",
+                        "Set metadata.trusted_source to true only for reviewed internal mirrors or approved upstreams.",
+                        DiagnosticSeverity.WARNING,
+                    )
+                )
+            remote_reason = _nonreproducible_remote_reason(loaded)
+            if remote_reason is not None:
+                diagnostics.append(
+                    _artifact_provenance_diagnostic(
+                        loaded,
+                        "artifact-provenance-nonreproducible-remote",
+                        f"remote artifact '{artifact.name}' is not reproducibly downloadable",
+                        "remote",
+                        remote_reason,
+                        "Use hf://...?...revision=<40-hex-commit> or a local mirrored artifact with sha256 provenance.",
+                        DiagnosticSeverity.ERROR,
+                    )
+                )
+        if not diagnostics and context.loaded_artifacts:
+            diagnostics.append(
+                Diagnostic(
+                    rule_id="artifact-provenance-verified",
+                    severity=DiagnosticSeverity.INFO,
+                    message=f"{len(context.loaded_artifacts)} artifact provenance record(s) are pinned and trusted",
+                    check_modes=CHECK_MODE_CATALOG["artifact-provenance-verified"],
+                    witness=WitnessTrace(
+                        summary="PromptABI verified reproducibility metadata for all loaded artifacts.",
+                        steps=(
+                            WitnessStep(action="load artifacts", output=f"{len(context.loaded_artifacts)} loaded"),
+                            WitnessStep(action="verify hashes", output="all resolved artifacts pinned by sha256"),
+                            WitnessStep(action="verify license metadata", output="present"),
+                            WitnessStep(action="verify trusted-source annotations", output="present"),
+                            WitnessStep(action="classify remote downloads", output="reproducible or mirrored"),
+                        ),
+                        artifacts=tuple(loaded.artifact.to_ref() for loaded in context.loaded_artifacts),
+                    ),
+                )
+            )
+        return tuple(diagnostics)
 
     def _role_boundary_nonforgeability_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
         diagnostics: list[Diagnostic] = []
@@ -990,6 +1088,72 @@ def _artifact_span(artifact_model) -> SourceSpan | None:
         return artifact_model.source_span
     path = artifact_model.location.path
     return SourceSpan(path=path) if path is not None else None
+
+
+def _artifact_provenance_diagnostic(
+    loaded: LoadedArtifact,
+    rule_id: str,
+    message: str,
+    field: str,
+    output: str,
+    suggestion: str,
+    severity: DiagnosticSeverity,
+) -> Diagnostic:
+    artifact = loaded.artifact.to_ref()
+    provenance = loaded.artifact.provenance
+    steps = [
+        WitnessStep(action="classify artifact source", input=loaded.source_type, output="resolved" if loaded.resolved else "metadata-only"),
+        WitnessStep(action=f"inspect {field}", input=loaded.artifact.location.ref_path, output=output),
+    ]
+    if loaded.actual_sha256 is not None:
+        steps.append(WitnessStep(action="hash resolved artifact", output=f"sha256={loaded.actual_sha256}"))
+    if loaded.manifest_sha256 is not None:
+        steps.append(WitnessStep(action="hash artifact manifest", output=f"sha256={loaded.manifest_sha256}"))
+    if provenance.source is not None:
+        steps.append(WitnessStep(action="read source annotation", output=provenance.source))
+    if provenance.license is not None:
+        steps.append(WitnessStep(action="read license metadata", output=provenance.license))
+    return Diagnostic(
+        rule_id=rule_id,
+        severity=severity,
+        message=message,
+        artifact=artifact,
+        span=_artifact_span(loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG[rule_id],
+        suggestions=(suggestion,),
+        witness=WitnessTrace(
+            summary="PromptABI audited artifact provenance and supply-chain reproducibility metadata.",
+            steps=tuple(steps),
+            artifacts=(artifact,),
+        ),
+        properties=(
+            ("field", field),
+            ("source_type", loaded.source_type),
+            ("resolved", loaded.resolved),
+        ),
+    )
+
+
+def _metadata_bool(metadata: dict[str, object], key: str) -> bool:
+    value = metadata.get(key)
+    return isinstance(value, bool) and value
+
+
+def _nonreproducible_remote_reason(loaded: LoadedArtifact) -> str | None:
+    uri = loaded.artifact.location.uri
+    if uri is None:
+        return None
+    parsed = urlparse(uri)
+    if parsed.scheme == "memory":
+        return None
+    if parsed.scheme != "hf":
+        return f"unsupported remote scheme {parsed.scheme!r}"
+    revision = parse_qs(parsed.query).get("revision", [None])[0] or loaded.artifact.provenance.revision
+    if revision is None:
+        return "missing immutable Hugging Face revision"
+    if len(revision) != 40 or any(char not in "0123456789abcdef" for char in revision.lower()):
+        return f"movable Hugging Face revision {revision!r}"
+    return None
 
 
 def _scheduled_diagnostic_sort_key(item: ScheduledDiagnostic) -> tuple[object, ...]:
