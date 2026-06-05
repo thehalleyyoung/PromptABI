@@ -25,6 +25,7 @@ from .structured_schema_corpus import (
     load_structured_schema_corpus,
     validate_structured_schema_entry,
 )
+from .tokenizer_conformance import build_tokenizer_conformance_report
 
 
 class CorpusVerificationError(ValueError):
@@ -118,6 +119,7 @@ def run_corpus_verification(
     structured_schema_root: str | Path | None = None,
     provider_fixture_root: str | Path | None = None,
     grammar_conformance_suite_path: str | Path | None = None,
+    tokenizer_conformance_suite_path: str | Path | None = None,
     real_bug_benchmark_path: str | Path | None = None,
     evaluation_corpus_path: str | Path | None = None,
     evaluation_fixture_pack_path: str | Path | None = None,
@@ -135,6 +137,7 @@ def run_corpus_verification(
             _verify_structured_schema_corpus(structured_schema_root),
             _verify_provider_fixture_corpus(provider_fixture_root),
             _verify_grammar_conformance(grammar_conformance_suite_path),
+            _verify_tokenizer_conformance(tokenizer_conformance_suite_path),
             _verify_real_bug_benchmark(real_bug_benchmark_path),
             _verify_evaluation_fixture_pack(evaluation_fixture_pack_path),
             _verify_labeled_evaluation(evaluation_corpus_path, resolved_thresholds),
@@ -312,6 +315,52 @@ def _verify_grammar_conformance(path: str | Path | None) -> CorpusVerificationCh
             "sample_count": report.sample_count,
             "required_backends": list(report.required_backends),
             "backend_families": [coverage.backend_family for coverage in report.backend_coverage if coverage.case_ids],
+        },
+    )
+
+
+def _verify_tokenizer_conformance(path: str | Path | None) -> CorpusVerificationCheck:
+    try:
+        report = build_tokenizer_conformance_report(path)
+    except ValueError as exc:
+        return CorpusVerificationCheck(
+            name="tokenizer-conformance",
+            passed=False,
+            summary=f"tokenizer family conformance suite could not be replayed: {exc}",
+            coverage_count=0,
+            expected_count=1,
+            failures=(str(exc),),
+        )
+    failures = []
+    if not report.all_cases_passed:
+        failures.extend(f"missing required tokenizer family: {family}" for family in report.missing_families)
+        failures.extend(f"missing required tokenizer feature: {feature}" for feature in report.missing_features)
+        failures.extend(
+            f"{case.case_id}: {mismatch.field} expected {mismatch.expected!r}, got {mismatch.actual!r}"
+            for case in report.cases
+            for mismatch in case.differential_report.mismatches
+        )
+        failures.extend(
+            f"{coverage.family}: missing samples or clean replay"
+            for coverage in report.family_coverage
+            if not coverage.passed
+        )
+    return CorpusVerificationCheck(
+        name="tokenizer-conformance",
+        passed=not failures,
+        summary=(
+            f"{report.case_count} tokenizer conformance cases, {report.sample_count} replayed samples, "
+            f"{len(report.family_coverage)} tokenizer families"
+        ),
+        coverage_count=report.case_count,
+        expected_count=max(report.case_count, len(report.required_families)),
+        failures=tuple(failures),
+        metrics={
+            "manifest_sha256": report.manifest_sha256,
+            "sample_count": report.sample_count,
+            "required_families": list(report.required_families),
+            "required_features": list(report.required_features),
+            "families": [coverage.family for coverage in report.family_coverage if coverage.case_ids],
         },
     )
 

@@ -1249,8 +1249,10 @@ adapter is compared against \texttt{cl100k\_base}, including special-token and
 byte-fallback behavior. A temporary SentencePiece model is trained and compared
 against \texttt{SentencePieceProcessor}. The byte-level adapter separately
 proves normalization, added-token, special-token, UTF-8 span, and round-trip
-behavior. These tests form the first differential benchline for the eventual
-tokenizer corpus.
+behavior. The deployed \texttt{promptabi corpus tokenizer-conformance} suite
+turns those checks into a release-gated benchline for BPE, Unigram, byte
+fallback, added-token, normalized-space, special-token, and detokenization
+edge cases.
 
 \subsection{Tokenizer Differential Harness}
 

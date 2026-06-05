@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "huggingface-byte-bpe-added-special-normalized",
+      "family": "bpe",
+      "backend": "huggingface-byte-bpe",
+      "features": ["added-tokens", "normalized-spaces", "special-token-splitting", "detokenization"],
+      "normalization": ["nfc", "lowercase"],
+      "special_tokens": ["[UNK]", "<s>", "</s>"],
+      "added_tokens": ["<tool>", "<assistant>"],
+      "post_processor": {
+        "single": "<s> $A </s>",
+        "special_tokens": ["<s>", "</s>"]
+      },
+      "vocab_size": 128,
+      "training_corpus": [
+        "Hello <tool> cafe\u0301",
+        "HELLO <assistant> tool calls preserve byte-level BPE boundaries.",
+        "PromptABI checks added tokens, special tokens, and detokenization.",
+        "Normalized spaces and Unicode cafe\u0301 should survive replay."
+      ],
+      "samples": [
+        {
+          "name": "bpe-added-token-with-template-specials",
+          "text": "Hello <tool> Cafe\u0301",
+          "add_special_tokens": true,
+          "byte_spans_required": true
+        },
+        {
+          "name": "bpe-skip-template-specials",
+          "text": "<assistant> says hello",
+          "add_special_tokens": true,
+          "skip_special_tokens": true,
+          "byte_spans_required": false
+        },
+        {
+          "name": "bpe-normalized-double-space-detokenizes",
+          "text": "HELLO  PromptABI",
+          "byte_spans_required": true
+        }
+      ]
+    },
+    {
+      "id": "sentencepiece-unigram-normalized-space-detokenization",
+      "family": "unigram",
+      "backend": "sentencepiece-unigram",
+      "features": ["normalized-spaces", "detokenization"],
+      "vocab_size": 72,
+      "training_corpus": [
+        "promptabi verifies tokenizer family conformance",
+        "sentencepiece unigram uses leading space markers",
+        "unicode cafe and emoji earth appear in realistic prompts",
+        "tool calls and structured outputs need stable detokenization"
+      ],
+      "samples": [
+        {
+          "name": "unigram-leading-space-marker",
+          "text": "promptabi verifies unigram",
+          "round_trip_normalized": true
+        },
+        {
+          "name": "unigram-detokenizes-multiple-words",
+          "text": "structured outputs need stable detokenization",
+          "round_trip_normalized": true
+        }
+      ]
+    },
+    {
+      "id": "portable-byte-fallback-added-special",
+      "family": "byte-fallback",
+      "backend": "byte-level",
+      "features": ["byte-fallback", "added-tokens", "special-token-splitting", "detokenization"],
+      "normalization": ["strip", "nfc"],
+      "special_tokens": {
+        "<eos>": 2
+      },
+      "added_tokens": ["<tool>", "<eos>"],
+      "samples": [
+        {
+          "name": "byte-fallback-utf8-added-special",
+          "text": "  Cafe\u0301<tool><eos> \ud83c\udf0d  ",
+          "expectation": {
+            "token_ids": [67, 97, 102, 195, 169, 256, 2, 32, 240, 159, 140, 141],
+            "token_texts": ["0x43", "0x61", "0x66", "0xc3", "0xa9", "<tool>", "<eos>", "0x20", "0xf0", "0x9f", "0x8c", "0x8d"],
+            "decoded_text": "Caf\u00e9<tool><eos> \ud83c\udf0d",
+            "normalized_text": "Caf\u00e9<tool><eos> \ud83c\udf0d",
+            "special_token_ids": [2],
+            "added_token_ids": [2, 256],
+            "normalization_steps": ["strip", "nfc"],
+            "byte_spans_required": true,
+            "round_trip_normalized": true
+          }
+        },
+        {
+          "name": "byte-fallback-skip-special-detokenizes",
+          "text": "A<eos>B",
+          "skip_special_tokens": true,
+          "expectation": {
+            "token_ids": [65, 2, 66],
+            "token_texts": ["0x41", "<eos>", "0x42"],
+            "decoded_text": "AB",
+            "normalized_text": "A<eos>B",
+            "special_token_ids": [2],
+            "added_token_ids": [2],
+            "normalization_steps": ["strip", "nfc"],
+            "byte_spans_required": true
+          }
+        },
+        {
+          "name": "byte-fallback-raw-byte-escape",
+          "text_bytes_hex": "5a00c3a9",
+          "expectation": {
+            "token_ids": [90, 0, 195, 169],
+            "token_texts": ["0x5a", "0x00", "0xc3", "0xa9"],
+            "decoded_text": "Z\u0000\u00e9",
+            "normalized_text": "Z\u0000\u00e9",
+            "special_token_ids": [],
+            "added_token_ids": [],
+            "normalization_steps": ["strip", "nfc"],
+            "byte_spans_required": true,
+            "round_trip_normalized": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "tiktoken-special-byte-detokenization",
+      "family": "byte-fallback",
+      "backend": "tiktoken",
+      "features": ["byte-fallback", "special-token-splitting", "detokenization"],
+      "encoding": "cl100k_base",
+      "samples": [
+        {
+          "name": "tiktoken-special-token-as-control",
+          "text": "bytes:\u00ff emoji:\ud83c\udf0d <|endoftext|>",
+          "add_special_tokens": true,
+          "byte_spans_required": true,
+          "round_trip_normalized": true
+        },
+        {
+          "name": "tiktoken-skip-special-detokenizes-prefix",
+          "text": "plain <|endoftext|>",
+          "add_special_tokens": true,
+          "skip_special_tokens": true,
+          "byte_spans_required": true
+        }
+      ]
+    }
+  ]
+}

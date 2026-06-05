@@ -31,6 +31,19 @@ def test_corpus_verification_release_gate_runs_full_real_corpora() -> None:
         "instructor",
         "provider-native",
     }
+    assert checks["tokenizer-conformance"]["coverage_count"] >= 4
+    assert checks["tokenizer-conformance"]["metrics"]["sample_count"] >= 10
+    assert set(checks["tokenizer-conformance"]["metrics"]["required_families"]) == {
+        "bpe",
+        "unigram",
+        "byte-fallback",
+    }
+    assert set(checks["tokenizer-conformance"]["metrics"]["required_features"]) == {
+        "added-tokens",
+        "normalized-spaces",
+        "special-token-splitting",
+        "detokenization",
+    }
     assert checks["real-bug-benchmark"]["coverage_count"] >= 7
     assert checks["evaluation-fixture-pack"]["coverage_count"] == 5
     assert set(checks["evaluation-fixture-pack"]["metrics"]["bug_classes"]) == {
@@ -71,7 +84,7 @@ def test_corpus_verification_renderers_and_cli_shape(tmp_path: Path, capsys) -> 
     assert "PromptABI corpus verification" in text
     assert "seed-corpus" in text
     assert payload["ok"] is True
-    assert payload["check_count"] == 10
+    assert payload["check_count"] == 11
 
     exit_code = main(["corpus", "verify", "--format", "json"])
     captured = capsys.readouterr()

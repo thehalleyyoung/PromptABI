@@ -145,6 +145,7 @@ promptabi corpus evaluation --format text
 promptabi corpus evaluation-reproducibility --config examples/evaluation-harness/safe.promptabi.json --format json
 promptabi verify --config examples/evaluation-harness/safe.promptabi.json
 promptabi corpus grammar-conformance --format text
+promptabi corpus tokenizer-conformance --format text
 promptabi corpus smt-benchmark --format text
 promptabi corpus leaderboard --format text
 promptabi corpus adversarial --format text

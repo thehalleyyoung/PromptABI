@@ -94,6 +94,12 @@ from .grammar_conformance import (
     render_grammar_conformance_json,
     render_grammar_conformance_text,
 )
+from .tokenizer_conformance import (
+    TokenizerConformanceReport,
+    build_tokenizer_conformance_report,
+    render_tokenizer_conformance_json,
+    render_tokenizer_conformance_text,
+)
 from .bug_reports import BugReport, generate_bug_report, render_bug_report
 from .bundles import (
     VerificationBundle,
@@ -342,6 +348,23 @@ def grammar_conformance_suite(
         return render_grammar_conformance_json(report)
     if output_format == "text":
         return render_grammar_conformance_text(report)
+    raise ValueError("output_format must be 'json' or 'text'")
+
+
+def tokenizer_conformance_suite(
+    path: str | Path | None = None,
+    *,
+    output_format: str | None = None,
+) -> TokenizerConformanceReport | str:
+    """Replay the maintained tokenizer-family conformance suite."""
+
+    report = build_tokenizer_conformance_report(path)
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_tokenizer_conformance_json(report)
+    if output_format == "text":
+        return render_tokenizer_conformance_text(report)
     raise ValueError("output_format must be 'json' or 'text'")
 
 
@@ -881,6 +904,7 @@ def verify_corpora(
     structured_schema_root: str | Path | None = None,
     provider_fixture_root: str | Path | None = None,
     grammar_conformance_suite_path: str | Path | None = None,
+    tokenizer_conformance_suite_path: str | Path | None = None,
     real_bug_benchmark_path: str | Path | None = None,
     evaluation_corpus_path: str | Path | None = None,
     evaluation_fixture_pack_path: str | Path | None = None,
@@ -894,6 +918,7 @@ def verify_corpora(
         structured_schema_root=structured_schema_root,
         provider_fixture_root=provider_fixture_root,
         grammar_conformance_suite_path=grammar_conformance_suite_path,
+        tokenizer_conformance_suite_path=tokenizer_conformance_suite_path,
         real_bug_benchmark_path=real_bug_benchmark_path,
         evaluation_corpus_path=evaluation_corpus_path,
         evaluation_fixture_pack_path=evaluation_fixture_pack_path,
