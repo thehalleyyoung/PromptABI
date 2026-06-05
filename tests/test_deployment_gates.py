@@ -25,6 +25,8 @@ def test_deployment_gate_report_requires_current_signed_bundle_evidence() -> Non
     assert report.reproducibility_hash
     assert payload["ok"] is True
     assert payload["bundle"]["signing_key_id"] == "deploy-test"
+    assert payload["safe_deployment_cores"][0]["core"] == ["required-tokens-exceed-input-budget"]
+    assert payload["safe_deployment_cores"][0]["minimal"] is True
     assert tuple(example.surface for example in report.examples) == DEPLOYMENT_GATE_SURFACES
     assert all(report.bundle_hash in example.content for example in report.examples)
     assert all(report.reproducibility_hash in example.content for example in report.examples)
@@ -54,6 +56,7 @@ def test_deployment_gate_text_and_writer_create_real_examples(tmp_path: Path) ->
 
     assert "PromptABI deployment gates" in text
     assert "status: PASS" in text
+    assert "unsat-core budget-unsat-survival" in text
     assert sorted(path.name for path in written.written_files) == [
         "deployment-gates.json",
         "github-environments.yml",

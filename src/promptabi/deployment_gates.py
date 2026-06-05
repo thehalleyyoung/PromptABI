@@ -12,6 +12,7 @@ from typing import Any
 from ._version import __version__
 from .integration_api import IntegrationGate, build_integration_report
 from .bundles import _stable_json_hash
+from .safe_deployment_cores import MinimalUnsatCoreCertificate, derive_safe_deployment_cores
 
 
 DEPLOYMENT_GATE_MANIFEST_VERSION = "promptabi.deployment-gates.v1"
@@ -71,6 +72,7 @@ class DeploymentGateReport:
     reproducibility_hash: str
     signing_key_id: str
     diagnostic_counts: Mapping[str, int]
+    safe_deployment_cores: tuple[MinimalUnsatCoreCertificate, ...]
     examples: tuple[DeploymentGateExample, ...]
     blockers: tuple[str, ...]
     manifest_sha256: str
@@ -88,6 +90,7 @@ class DeploymentGateReport:
                 "signing_key_id": self.signing_key_id,
             },
             "diagnostic_counts": dict(sorted(self.diagnostic_counts.items())),
+            "safe_deployment_cores": [certificate.to_dict() for certificate in self.safe_deployment_cores],
             "blockers": list(self.blockers),
             "examples": [example.to_dict() for example in self.examples],
             "manifest_sha256": self.manifest_sha256,
@@ -133,6 +136,7 @@ def build_deployment_gate_report(
     signing_key_id = _required_str(signed_bundle, "signing_key_id")
     reproducibility_hash = _required_str(registry_surface, "reproducibility_hash")
     blockers = _deployment_blockers(report.ok, report.gate, report.diagnostic_counts)
+    safe_core_report = derive_safe_deployment_cores()
     source_config = report.request.config_path or _relative_to_cwd(config_path)
     examples = _build_examples(
         source_config=source_config,
@@ -151,6 +155,7 @@ def build_deployment_gate_report(
         "reproducibility_hash": reproducibility_hash,
         "signing_key_id": signing_key_id,
         "diagnostic_counts": dict(sorted(report.diagnostic_counts.items())),
+        "safe_deployment_cores": [certificate.to_dict() for certificate in safe_core_report.certificates],
         "blockers": blockers,
         "examples": [example.to_dict() for example in examples],
     }
@@ -162,6 +167,7 @@ def build_deployment_gate_report(
         reproducibility_hash=reproducibility_hash,
         signing_key_id=signing_key_id,
         diagnostic_counts=report.diagnostic_counts,
+        safe_deployment_cores=safe_core_report.certificates,
         examples=examples,
         blockers=blockers,
         manifest_sha256=_stable_json_hash(payload),
@@ -184,8 +190,11 @@ def render_deployment_gate_text(report: DeploymentGateReport) -> str:
         f"gate: {report.gate.value}",
         f"bundle_hash: {report.bundle_hash}",
         f"reproducibility_hash: {report.reproducibility_hash}",
+        f"safe_deployment_cores: {len(report.safe_deployment_cores)}",
         f"examples: {len(report.examples)}",
     ]
+    for certificate in report.safe_deployment_cores:
+        lines.append(f"- unsat-core {certificate.case_id}: {', '.join(certificate.core)}")
     for example in report.examples:
         lines.append(f"- {example.surface.value}: {example.path}")
         lines.append(f"  command: {example.command}")

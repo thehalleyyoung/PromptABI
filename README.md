@@ -108,6 +108,7 @@ promptabi prompt-pack upgrade --config examples/prompt-packs/promptabi.json --ba
 promptabi prompt-pack monotonicity --config examples/prompt-packs/promptabi.json --baseline-lockfile /tmp/prompt-pack.lock.json
 promptabi model-registry --config examples/model-registries/promptabi.json --targets examples/model-registries/targets.json --bundle-key local-registry-key --format json
 promptabi deployment-gates --config examples/minimal/promptabi.json --bundle-key local-deploy-key --output-dir /tmp/promptabi-deploy-gates --force
+promptabi solver minimal-unsat-cores --format text
 promptabi runtime-attestation --config examples/minimal/promptabi.json --bundle-key local-runtime-key --service support-agent --format json
 promptabi runtime-alarms /tmp/runtime-attestation.json --lockfile examples/minimal/promptabi.lock.json --known-bad fixtures/runtime/known-bad.json
 python examples/agent-frameworks/dynamic_support_agent.py examples/agent-frameworks/safe.agent-prompt-pack.json --write-config /tmp/support-agent.promptabi.json

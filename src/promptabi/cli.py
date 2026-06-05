@@ -185,6 +185,12 @@ from .runtime_alarms import (
     render_runtime_alarm_json,
     render_runtime_alarm_text,
 )
+from .safe_deployment_cores import (
+    SafeDeploymentCoreError,
+    derive_safe_deployment_cores,
+    render_safe_deployment_cores_json,
+    render_safe_deployment_cores_text,
+)
 from .streaming_parser_products import (
     AutomatonError as StreamingParserProductError,
     analyze_streaming_parser_product,
@@ -1749,6 +1755,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     solver_replay.add_argument("file", help="solver replay JSON file")
     solver_replay.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    solver_cores = solver_subparsers.add_parser(
+        "minimal-unsat-cores",
+        help="derive minimal unsat cores for safe deployment obligations",
+    )
+    solver_cores.add_argument(
+        "--path",
+        help="SMT benchmark JSON path (default: repository fixtures/smt_benchmarks/benchmark.json)",
+    )
+    solver_cores.add_argument(
         "--format",
         choices=("text", "json"),
         default="text",
@@ -4306,6 +4326,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             output = render_solver_replay_json(report) if args.format == "json" else render_solver_replay_text(report)
         except (OSError, ValueError) as exc:
             print(f"promptabi: cannot replay solver file: {exc}", file=sys.stderr)
+            return 2
+        print(output, end="")
+        return 0 if report.ok else 1
+
+    if args.command == "solver" and args.solver_command == "minimal-unsat-cores":
+        try:
+            report = derive_safe_deployment_cores(args.path)
+            output = render_safe_deployment_cores_json(report) if args.format == "json" else render_safe_deployment_cores_text(report)
+        except (SmtBenchmarkError, SafeDeploymentCoreError, ValueError) as exc:
+            print(f"promptabi: cannot derive minimal unsat cores: {exc}", file=sys.stderr)
             return 2
         print(output, end="")
         return 0 if report.ok else 1
