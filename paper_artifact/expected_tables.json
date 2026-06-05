@@ -1,0 +1,153 @@
+{
+  "benchmarks": [
+    {
+      "benchmark": "tokenizer-analysis",
+      "iterations": 1,
+      "metrics": {
+        "exact_round_trips": 40,
+        "samples": 50,
+        "tokens": 1500
+      }
+    },
+    {
+      "benchmark": "template-symbolic-execution",
+      "iterations": 1,
+      "metrics": {
+        "abstentions": 0,
+        "symbolic_paths": 163,
+        "templates": 10
+      }
+    },
+    {
+      "benchmark": "grammar-emptiness",
+      "iterations": 1,
+      "metrics": {
+        "checked_candidates": 1,
+        "grammar_accepts": 1,
+        "grammar_states": 58,
+        "status": "satisfiable"
+      }
+    },
+    {
+      "benchmark": "stop-checks",
+      "iterations": 1,
+      "metrics": {
+        "collisions": 0,
+        "overreach_findings": 5,
+        "stop_sequences": 4,
+        "stop_token_ids": 3,
+        "unreachable_token_ids": 1
+      }
+    },
+    {
+      "benchmark": "z3-static-contracts",
+      "iterations": 1,
+      "metrics": {
+        "findings": 2,
+        "violations": 2
+      }
+    },
+    {
+      "benchmark": "budget-checks",
+      "iterations": 1,
+      "metrics": {
+        "findings": 4,
+        "input_budget_tokens": 60,
+        "required_prompt_tokens": 91,
+        "segments": 4
+      }
+    },
+    {
+      "benchmark": "corpus-wide-verification",
+      "iterations": 1,
+      "metrics": {
+        "configs": 6,
+        "diagnostics": 40,
+        "failing_configs": 4
+      }
+    },
+    {
+      "benchmark": "cache-cold-warm",
+      "iterations": 1,
+      "metrics": {
+        "cache_reused": true,
+        "cold_findings": 4,
+        "loaded_artifacts": 2,
+        "warm_findings": 4
+      }
+    }
+  ],
+  "corpus_manifests": {
+    "provider_fixture_packs": {
+      "entry_count": 6,
+      "manifest_sha256": "b5a2508324340fdc92354a1afe0d2915bee36368126f0fc35942ed8ad85127dc",
+      "provider_families": [
+        "anthropic",
+        "bedrock",
+        "gemini",
+        "litellm",
+        "openai",
+        "vllm-openai-server"
+      ]
+    },
+    "real_bug_benchmark": {
+      "all_cases_passed": true,
+      "case_count": 7,
+      "categories": [
+        "popular-template",
+        "provider-migration",
+        "rag-truncation",
+        "structured-output-library",
+        "tokenizer",
+        "tool-schema",
+        "training-pipeline"
+      ],
+      "manifest_sha256": "68e7a34eeb08cb8a047ae105b13b952a4003be01d29a4f8fb5d1826fc71540c6"
+    },
+    "seed_corpus": {
+      "entry_count": 10,
+      "families": [
+        "chatml",
+        "deepseek",
+        "fine-tune",
+        "gemma",
+        "llama",
+        "mistral",
+        "openai-compatible",
+        "phi",
+        "qwen",
+        "zephyr"
+      ],
+      "manifest_sha256": "017cdb53a4b49f7eb6316908bbb935cd7edf324935526d663c65d0d718e6b211"
+    },
+    "structured_schemas": {
+      "entry_count": 5,
+      "manifest_sha256": "7aedcbd4d72cfe79e71b7748d70f197ce6262bd074f9fee8d1f5e899d7fa478a",
+      "source_categories": [
+        "anonymized-production-pattern",
+        "open-source-agent-reduction",
+        "synthetic-stress"
+      ]
+    }
+  },
+  "evaluation": {
+    "abstention_rate": 0.0,
+    "case_count": 11,
+    "differential_agreement_rate": 0.333333,
+    "f1": 1.0,
+    "passed": true,
+    "precision": 1.0,
+    "recall": 1.0,
+    "solver_result_quality": {
+      "decisive_rate": 1.0,
+      "decisive_results": 1,
+      "observed_rule_ids": [
+        "static-contract-violation"
+      ],
+      "z3_available": true,
+      "z3_backed_results": 1
+    },
+    "witness_quality_score": 0.975124
+  },
+  "manifest_version": 1
+}

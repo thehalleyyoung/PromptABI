@@ -1,0 +1,41 @@
+{
+  "benchmark_cases": [
+    "tokenizer-analysis",
+    "template-symbolic-execution",
+    "grammar-emptiness",
+    "stop-checks",
+    "z3-static-contracts",
+    "budget-checks",
+    "corpus-wide-verification",
+    "cache-cold-warm"
+  ],
+  "manifest_version": 1,
+  "package": {
+    "dependencies": [],
+    "name": "promptabi",
+    "optional_dependencies": {
+      "dev": [
+        "pytest>=8"
+      ],
+      "docs": [
+        "mkdocs>=1.6"
+      ],
+      "tokenizers": [
+        "sentencepiece>=0.2",
+        "tiktoken>=0.7",
+        "tokenizers>=0.15"
+      ]
+    },
+    "version": "0.1.0"
+  },
+  "python": {
+    "observed": "3.14.3",
+    "requires": ">=3.11"
+  },
+  "solver": {
+    "fallback": "finite exhaustive enumeration for bounded contracts when z3-solver is absent",
+    "reproduction_pin": "z3-solver==4.15.4",
+    "z3_available": true,
+    "z3_version": "4.15.4"
+  }
+}

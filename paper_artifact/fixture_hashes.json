@@ -1,0 +1,304 @@
+{
+  "corpora": {
+    "evaluation_corpus": {
+      "file_count": 1,
+      "files": [
+        {
+          "bytes": 2716,
+          "path": "fixtures/evaluation/labeled_corpus.json",
+          "sha256": "4e343bce61cb3109786b931a8dfb6c5885e71afe4a53159ff83deb696e9842ad"
+        }
+      ],
+      "tree_sha256": "4bc444a3acd70975964981ffcde46afabcb8c68093ce79f5e6a7255984db6e5f"
+    },
+    "provider_fixture_packs": {
+      "file_count": 13,
+      "files": [
+        {
+          "bytes": 547,
+          "path": "fixtures/provider_fixture_packs/anthropic-messages/metadata.json",
+          "sha256": "60019f1801f8dfb245cf4f02a7c3222aa500d4b195cee0d3a4529adda20dcd48"
+        },
+        {
+          "bytes": 1637,
+          "path": "fixtures/provider_fixture_packs/anthropic-messages/pack.json",
+          "sha256": "adfedc4b51b0d5de9585d98a8c60fef20ca999ce9cdf045b8afebbc43830f3fb"
+        },
+        {
+          "bytes": 553,
+          "path": "fixtures/provider_fixture_packs/bedrock-converse/metadata.json",
+          "sha256": "27800e15695b519b7812ea4cc7384fd7efc4e9f51ae9b0709040f5658cbcac9b"
+        },
+        {
+          "bytes": 1656,
+          "path": "fixtures/provider_fixture_packs/bedrock-converse/pack.json",
+          "sha256": "65b4d3f5eb3d67595672abc903d8852dbd56d98375f29d6cad0df3bf3fd6a802"
+        },
+        {
+          "bytes": 566,
+          "path": "fixtures/provider_fixture_packs/gemini-generate-content/metadata.json",
+          "sha256": "ae92803c1c574c31a52ce1bc18449b5bcd03c13e35179202cddc7711bf051e16"
+        },
+        {
+          "bytes": 1732,
+          "path": "fixtures/provider_fixture_packs/gemini-generate-content/pack.json",
+          "sha256": "80a644a55fc50130975121cb51db3160d89483a03465d17f433f290779073643"
+        },
+        {
+          "bytes": 562,
+          "path": "fixtures/provider_fixture_packs/litellm-router/metadata.json",
+          "sha256": "5ddb8ac3027c5a1995f9b024b994917523c7daa9740f4e711d72b60b1cd1fd2e"
+        },
+        {
+          "bytes": 1979,
+          "path": "fixtures/provider_fixture_packs/litellm-router/pack.json",
+          "sha256": "32be90a6901cb00bf477a0ca26b7c3818e78d5a8217731f61af5d5706320ee35"
+        },
+        {
+          "bytes": 617,
+          "path": "fixtures/provider_fixture_packs/openai-chat-completions/metadata.json",
+          "sha256": "8aa89c02ab888a351678a7bdb5b3efa11d9028545a5dc37123e29ce6a83fef99"
+        },
+        {
+          "bytes": 1914,
+          "path": "fixtures/provider_fixture_packs/openai-chat-completions/pack.json",
+          "sha256": "e57cc1d4ce9cab8f380c6251d35a873a6e59c4a966ec29af05af93fc0a3de0b6"
+        },
+        {
+          "bytes": 1409,
+          "path": "fixtures/provider_fixture_packs/promptabi.json",
+          "sha256": "1adcca54c183dc842ff615a93cf58009c048bc7a83274cd718a124ab97377e40"
+        },
+        {
+          "bytes": 574,
+          "path": "fixtures/provider_fixture_packs/vllm-openai-server/metadata.json",
+          "sha256": "d8d34a2289335fc1476ac7801309e0b6595ba6b3adab671b82fb7731a046ab4a"
+        },
+        {
+          "bytes": 1762,
+          "path": "fixtures/provider_fixture_packs/vllm-openai-server/pack.json",
+          "sha256": "b5dfaa7db34ce946e844fabb9dd1be5704b430ad5239266d69e945ffb0142453"
+        }
+      ],
+      "tree_sha256": "3a32c2afb73fecd67a42ee3721fc840bd93085a27403fde77b5ececa27ba9440"
+    },
+    "real_bug_benchmark": {
+      "file_count": 1,
+      "files": [
+        {
+          "bytes": 5179,
+          "path": "fixtures/real_bug_benchmarks/benchmark.json",
+          "sha256": "7daea0c16a369e4be6e27fa6dd55f3bc332d89f0371a14119cfb57d605d45f01"
+        }
+      ],
+      "tree_sha256": "d5af2b6d158a8aadc9336dab9c6a8198708e1125c17fa6d6a34fceab7e7912f8"
+    },
+    "seed_corpus": {
+      "file_count": 20,
+      "files": [
+        {
+          "bytes": 666,
+          "path": "fixtures/seed_corpus/chatml/metadata.json",
+          "sha256": "5cb31fad984c4e25d7088325bedda6eee8a933d76e0ee9b549c9f46a69e432e8"
+        },
+        {
+          "bytes": 331,
+          "path": "fixtures/seed_corpus/chatml/tokenizer_config.json",
+          "sha256": "2d47d8e21eb84ce2e12d2ac03486d4d47fefd28e6612548fcbe0a7838c212170"
+        },
+        {
+          "bytes": 775,
+          "path": "fixtures/seed_corpus/deepseek/metadata.json",
+          "sha256": "200d297fe587a46788c50e425d174ea96a136bc1f2adbe12abe5cc2b5b6fa4d1"
+        },
+        {
+          "bytes": 546,
+          "path": "fixtures/seed_corpus/deepseek/tokenizer_config.json",
+          "sha256": "e85062cf0d7a96c9de35dbfa0f0fbcf02eebc1bfac571551b469dc70fc1aac1b"
+        },
+        {
+          "bytes": 767,
+          "path": "fixtures/seed_corpus/fine-tune/metadata.json",
+          "sha256": "7fe23801953bae7a9a26561291a7f74a917eefa7abee4c87b19bbb0994e488c3"
+        },
+        {
+          "bytes": 516,
+          "path": "fixtures/seed_corpus/fine-tune/tokenizer_config.json",
+          "sha256": "46a31854a2fc710e8932272a73ec926eed8202b1f5f5018b232b2433ca7389d5"
+        },
+        {
+          "bytes": 695,
+          "path": "fixtures/seed_corpus/gemma/metadata.json",
+          "sha256": "d3e35d38e5111c09b465b94cf38d49cae4e8ef1c15508e41f2acde71d4ec7187"
+        },
+        {
+          "bytes": 389,
+          "path": "fixtures/seed_corpus/gemma/tokenizer_config.json",
+          "sha256": "a69b3d0f080617470eaafd2e9000fd44bb00501b35336ac615f7f0f67e66a699"
+        },
+        {
+          "bytes": 754,
+          "path": "fixtures/seed_corpus/llama/metadata.json",
+          "sha256": "ad8762d2c3e830ca434637b28aacfbf8ac7273d9382a52c6f47feebbb7c20213"
+        },
+        {
+          "bytes": 423,
+          "path": "fixtures/seed_corpus/llama/tokenizer_config.json",
+          "sha256": "4f50c829f5bfe5aff44928afaf4edb83dcd3bf78597dd6d98f49c93f5f99f4bb"
+        },
+        {
+          "bytes": 713,
+          "path": "fixtures/seed_corpus/mistral/metadata.json",
+          "sha256": "7ce49d32171aa8da2197d4504be7b0b4c166ae8b2253129070ba59dbdea7f2b9"
+        },
+        {
+          "bytes": 451,
+          "path": "fixtures/seed_corpus/mistral/tokenizer_config.json",
+          "sha256": "d02a90ff9b863e5cebe71ad0efac1bf6f0b05204bc855e18afc3c5557fb8c8e0"
+        },
+        {
+          "bytes": 809,
+          "path": "fixtures/seed_corpus/openai-compatible/metadata.json",
+          "sha256": "9e6a4a8cc0e1697c5f916e4c1bbbed5cacaf941b5186cdce924a28fc9b493166"
+        },
+        {
+          "bytes": 398,
+          "path": "fixtures/seed_corpus/openai-compatible/tokenizer_config.json",
+          "sha256": "65b11f8a9a05e751c2ec59276930f63c96f674de3f4c60961f3e61e407876e25"
+        },
+        {
+          "bytes": 709,
+          "path": "fixtures/seed_corpus/phi/metadata.json",
+          "sha256": "cceb9b8b17defa60a305b1f30a3510f6b91b196c074877b6424b40ebb16f167f"
+        },
+        {
+          "bytes": 328,
+          "path": "fixtures/seed_corpus/phi/tokenizer_config.json",
+          "sha256": "3221260d2b2115ae41ab85caf25769a1f4ed9cf4dfcd9392a768b347a3d0a59a"
+        },
+        {
+          "bytes": 693,
+          "path": "fixtures/seed_corpus/qwen/metadata.json",
+          "sha256": "f3b1df3126f3652b458e404ca38d06f70c92c1111b6c143b67728b4179172a96"
+        },
+        {
+          "bytes": 326,
+          "path": "fixtures/seed_corpus/qwen/tokenizer_config.json",
+          "sha256": "615c393070f0ab814ce9493234308e27692cec9ce7c8df4d6e4e25368d907b8a"
+        },
+        {
+          "bytes": 717,
+          "path": "fixtures/seed_corpus/zephyr/metadata.json",
+          "sha256": "7c927a0100c1a011085ea750d6a1a05dddb844244a555a56f0d5a5a87da0067a"
+        },
+        {
+          "bytes": 312,
+          "path": "fixtures/seed_corpus/zephyr/tokenizer_config.json",
+          "sha256": "c0ae661e9be4e2edb833284af4f88e1dd840bf9d44b81f11d6eaf916140d666e"
+        }
+      ],
+      "tree_sha256": "bdcb6c916ef4c69d227c7845d52bba775277b35c5e58a0b88e55123983f4dfbf"
+    },
+    "structured_schemas": {
+      "file_count": 18,
+      "files": [
+        {
+          "bytes": 20,
+          "path": "fixtures/structured_schemas/anonymized-markdown-json/grammar.regex",
+          "sha256": "e05f3a95b25824cae2e042a6afebd245ad35e9747385cbf45920da8582bcb6d4"
+        },
+        {
+          "bytes": 1047,
+          "path": "fixtures/structured_schemas/anonymized-markdown-json/metadata.json",
+          "sha256": "51feb2d67250934cda73a181a9540d9b511d78326f01f49297b81aed51927616"
+        },
+        {
+          "bytes": 577,
+          "path": "fixtures/structured_schemas/anonymized-markdown-json/promptabi.json",
+          "sha256": "b17a36610760b5906b194e91933d3768616c46d4a3b0531d26cde6e15cf6b269"
+        },
+        {
+          "bytes": 1246,
+          "path": "fixtures/structured_schemas/open-source-agent-ticket/metadata.json",
+          "sha256": "6076f2390d4d6645f9e204d23239f70cea7b570fded027a9542be0cf3a2379c2"
+        },
+        {
+          "bytes": 752,
+          "path": "fixtures/structured_schemas/open-source-agent-ticket/promptabi.json",
+          "sha256": "4c9d4b7b50beb493da8e22a924a8fadb75efd74bb32363f8e6b746bd13222af9"
+        },
+        {
+          "bytes": 325,
+          "path": "fixtures/structured_schemas/open-source-agent-ticket/schema.json",
+          "sha256": "db4091790102698de4156259f5a650c54d23aa918c6bce458ea9d77ea9666eb3"
+        },
+        {
+          "bytes": 1122,
+          "path": "fixtures/structured_schemas/openai-tool-definition/metadata.json",
+          "sha256": "d7824f333123b82765877576eccea2e608f2a6e46498bdeb4d13f7d42173c57e"
+        },
+        {
+          "bytes": 463,
+          "path": "fixtures/structured_schemas/openai-tool-definition/promptabi.json",
+          "sha256": "6ab007eeac9ca3de71e187c3b890db334dd81e5815cfc59de2072351f25af35b"
+        },
+        {
+          "bytes": 1029,
+          "path": "fixtures/structured_schemas/openai-tool-definition/tools.json",
+          "sha256": "97a4a747bbd0693c941054bb8525b610f28c3ac560f853e47be7b809db0b59d5"
+        },
+        {
+          "bytes": 48,
+          "path": "fixtures/structured_schemas/synthetic-xml-tool-call/grammar.regex",
+          "sha256": "b18e26a604eed32a46721695e9297d0ddc055b95f8631d5b7aae20d735cfdfd9"
+        },
+        {
+          "bytes": 1075,
+          "path": "fixtures/structured_schemas/synthetic-xml-tool-call/metadata.json",
+          "sha256": "0c9b97ced365bb446a4cf9df1d808f52bc37876613660dbce25a15d97633e15e"
+        },
+        {
+          "bytes": 626,
+          "path": "fixtures/structured_schemas/synthetic-xml-tool-call/promptabi.json",
+          "sha256": "d15ddc27ca3df4f1ed56113c3522154e6892f9787946092bbcbc3255f1937648"
+        },
+        {
+          "bytes": 1118,
+          "path": "fixtures/structured_schemas/tool-serialization-contract/metadata.json",
+          "sha256": "961acf15d9d4b4d3cc2e4e6e1dca96911659a90e17f065235b05fd5969d1586b"
+        },
+        {
+          "bytes": 1205,
+          "path": "fixtures/structured_schemas/tool-serialization-contract/promptabi.json",
+          "sha256": "a870761492e4bc8a59035e904d432dc44a8fd8815b7eb355e3bc7b902317ae69"
+        },
+        {
+          "bytes": 1115,
+          "path": "fixtures/structured_schemas/tool-serialization-contract/provider.json",
+          "sha256": "812f4b417b71ac2e221ddee832c10cc4148adaaa9ae977546b2ea76dc56cad3a"
+        },
+        {
+          "bytes": 61,
+          "path": "fixtures/structured_schemas/tool-serialization-contract/stops.json",
+          "sha256": "9ea62c4d4b746ee59be13f6eb356b71548ac2416b37682f08a41c645b3719231"
+        },
+        {
+          "bytes": 311,
+          "path": "fixtures/structured_schemas/tool-serialization-contract/tokenizer_config.json",
+          "sha256": "869a4f86b192a553fcdf83b802bec3e5a7c49207dd833f299be87a0072c77ec9"
+        },
+        {
+          "bytes": 1029,
+          "path": "fixtures/structured_schemas/tool-serialization-contract/tools.json",
+          "sha256": "97a4a747bbd0693c941054bb8525b610f28c3ac560f853e47be7b809db0b59d5"
+        }
+      ],
+      "tree_sha256": "781c62f5dbf6a4d7512c74a4a644f920b783238f216955ebc5a547beadd0ccf1"
+    }
+  },
+  "manifest_version": 1,
+  "summary": {
+    "file_count": 53,
+    "tree_sha256": "cf6bbb6643bff4f322204486698401c9ffd77827a224ac5faad1068e5a40eb93"
+  }
+}

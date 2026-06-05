@@ -333,8 +333,10 @@ modeled training-manifest surface,
 applies repository policy files after real diagnostics are produced so accepted
 risks are auditable, expiring, and fingerprint-stable rather than blanket
 ignores,
-and runs CPU-only performance benchmarks over tokenizer, template, grammar,
-stop, SMT, budget, corpus, and cache paths.
+runs CPU-only performance benchmarks over tokenizer, template, grammar, stop,
+SMT, budget, corpus, and cache paths, and writes a paper reproducibility package
+with frozen fixture hashes, stable expected tables, solver-version pins,
+environment metadata, and one-command regeneration scripts.
 
 The repository layout is designed to scale:
 
@@ -355,7 +357,7 @@ The repository layout is designed to scale:
 \hline
 \texttt{examples/stop-policies} & A vLLM sampling-parameter fixture that exercises real stop-policy artifact loading and normalization. \\
 \hline
-\texttt{fixtures} & Curated seed corpus, real-world bug reductions, grammar differential cases, labeled structured-schema/tool-calling fixtures, and secret-free provider fixture packs with provenance metadata, expected behaviors, reproducibility notes, runnable configs, and deterministic hashes. \\
+\texttt{fixtures} and \texttt{paper\_artifact} & Curated seed corpus, real-world bug reductions, grammar differential cases, labeled structured-schema/tool-calling fixtures, secret-free provider packs, and a generated paper artifact containing fixture hashes, expected tables, solver pins, and regeneration commands. \\
 \hline
 \texttt{benchmarks} & CPU-only benchmark entrypoints for tokenizer analysis, symbolic template execution, grammar products, stop checks, SMT contracts, budget modeling, corpus verification, and cache reuse. \\
 \hline
@@ -1760,21 +1762,21 @@ competitive advantage.
 \clearpage
 \section{Conclusion}
 
-PromptABI is positioned to verify a layer of LLM systems that is both fragile
-and under-tooled: the discrete interface between application data structures,
-prompt rendering, tokenization, constrained output, provider protocols, and
-application parsing. The first repository milestone establishes the engineering
-foundation: typed package, artifact model, tokenizer abstraction, CLI, public
-API, diagnostics, tests, docs, examples, fixtures, benchmarks, and contribution
-guidance. The research foundation is the transducer view of prompts, tokenizers, grammars, stop
-policies, parsers, and budget policies.
+PromptABI verifies a fragile and under-tooled layer of LLM systems: the discrete
+interface between application data structures, prompt rendering, tokenization,
+constrained output, provider protocols, truncation policies, and application
+parsing. The repository now combines a typed package, formal automata and SMT
+core, deterministic CLI and API surfaces, source-mapped diagnostics, minimized
+witnesses, real fixture corpora, precision/recall evaluation, CPU-only
+benchmarks, policy gates, GitHub integration, and a generated paper artifact
+with frozen hashes and regeneration commands.
 
-The next milestones should add the first formal checkers without changing the
-public surface. If the project maintains
-deterministic outputs, minimized witnesses,
-clear abstention boundaries, and real corpus validation, it can become both a
-practical CI tool and a credible systems research contribution. The core insight
-is simple but powerful: many production LLM failures happen before the neural
-network is involved, and those failures can be found before deployment.
+The research foundation is the transducer view of prompts, tokenizers, grammars,
+stop policies, parsers, and budgets. If the project continues to preserve
+deterministic outputs, honest abstention boundaries, replayable witnesses, and
+real corpus validation, it can become both a practical CI tool and a credible
+systems research contribution. The core insight is simple but powerful: many
+production LLM failures happen before the neural network is involved, and those
+failures can be found before deployment.
 
 \end{document}

@@ -9,6 +9,7 @@ blocks that later checkers can reuse without changing the embedding API.
 from ._version import __version__
 from .api import (
     create_bug_report,
+    create_reproducibility_package,
     compatibility_matrix,
     collect_diagnostics,
     create_session,
@@ -284,6 +285,14 @@ from .provider_fixture_packs import (
     load_provider_fixture_pack_corpus,
     write_provider_fixture_pack_manifest,
 )
+from .reproducibility import (
+    REPRODUCIBILITY_PACKAGE_VERSION,
+    ReproducibilityInputs,
+    ReproducibilityPackage,
+    ReproducibilityPackageError,
+    build_reproducibility_package,
+    write_reproducibility_package,
+)
 from .role_boundaries import (
     DEFAULT_STRUCTURAL_ROLES,
     RoleBoundaryForgeryFinding,
@@ -539,6 +548,7 @@ __all__ = [
     "ProviderConfigArtifact",
     "PROVIDER_FIXTURE_PACK_MANIFEST_VERSION",
     "PROMPTABI_PLUGIN_ENTRY_POINT",
+    "REPRODUCIBILITY_PACKAGE_VERSION",
     "ProviderFixturePackCorpus",
     "ProviderFixturePackEntry",
     "ProviderFixturePackError",
@@ -549,6 +559,9 @@ __all__ = [
     "ProviderMigrationFinding",
     "ProviderMigrationFindingKind",
     "ProviderMigrationReport",
+    "ReproducibilityInputs",
+    "ReproducibilityPackage",
+    "ReproducibilityPackageError",
     "RoleBoundaryModel",
     "RoleBoundaryForgeryFinding",
     "RoleBoundaryNonforgeabilityReport",
@@ -640,6 +653,7 @@ __all__ = [
     "collect_diagnostics",
     "compatibility_matrix",
     "create_session",
+    "create_reproducibility_package",
     "create_first_party_plugin_registry",
     "evaluate_corpus",
     "discover_config",
@@ -650,6 +664,7 @@ __all__ = [
     "build_json_source_map",
     "build_compatibility_matrix",
     "build_provider_fixture_pack_manifest",
+    "build_reproducibility_package",
     "compile_json_schema_mapping",
     "ingest_grammar_file",
     "ingest_grammar_mapping",
@@ -715,6 +730,7 @@ __all__ = [
     "symbolically_execute_chat_template",
     "write_seed_corpus_manifest",
     "write_provider_fixture_pack_manifest",
+    "write_reproducibility_package",
     "validate_structured_schema_entry",
     "write_structured_schema_corpus_manifest",
 ]

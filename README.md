@@ -27,6 +27,8 @@ promptabi matrix --format json
 promptabi github-action --config examples/minimal/promptabi.json --require-lockfile
 # labeled precision/recall/runtime/witness evaluation:
 promptabi corpus evaluation --format text
+# regenerate the paper artifact bundle:
+promptabi paper reproducibility --output-dir paper_artifact --force
 # local commit gate for changed prompt artifacts:
 promptabi pre-commit install --config examples/minimal/promptabi.json
 ```
@@ -115,7 +117,9 @@ current role-boundary and stop-overreachability checkers catch the same failure
 classes without copying upstream code. `promptabi corpus evaluation` now expands
 labeled real-bug and fixture-backed cases into precision/recall, abstention,
 runtime, peak-memory, witness-quality, solver-quality, and differential-agreement
-metrics. Grammar ingestion now normalizes JSON
+metrics; `promptabi paper reproducibility` writes the frozen fixture hashes,
+solver pins, regeneration script, and stable expected tables used by the paper
+artifact. Grammar ingestion now normalizes JSON
 Schema, regex, EBNF, Outlines, xgrammar, llguidance, and PromptABI grammars into
 typed rules, terminals, source spans, and explicit abstentions; the JSON Schema
 path compiles the supported subset into a bounded grammar IR and DFA witness with

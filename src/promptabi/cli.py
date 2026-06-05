@@ -67,6 +67,10 @@ from .real_bug_benchmarks import (
     build_real_bug_benchmark_manifest,
     write_real_bug_benchmark_manifest,
 )
+from .reproducibility import (
+    ReproducibilityPackageError,
+    write_reproducibility_package,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -334,6 +338,29 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("text", "json"),
         default="text",
         help="output format (default: text)",
+    )
+
+    paper = subparsers.add_parser("paper", help="paper artifact and reproducibility commands")
+    paper_subparsers = paper.add_subparsers(dest="paper_command", required=True)
+    reproducibility = paper_subparsers.add_parser(
+        "reproducibility",
+        help="write the paper reproducibility package with fixture hashes and expected tables",
+    )
+    reproducibility.add_argument(
+        "--output-dir",
+        default="paper_artifact",
+        help="directory to write the reproducibility package (default: paper_artifact)",
+    )
+    reproducibility.add_argument(
+        "--benchmark-iterations",
+        type=int,
+        default=1,
+        help="iterations per benchmark case for expected table regeneration (default: 1)",
+    )
+    reproducibility.add_argument(
+        "--force",
+        action="store_true",
+        help="overwrite existing reproducibility package files in the output directory",
     )
 
     minimize = subparsers.add_parser(
@@ -754,6 +781,25 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"promptabi: {exc}", file=sys.stderr)
             return 2
         print(output, end="")
+        return 0
+
+    if args.command == "paper" and args.paper_command == "reproducibility":
+        try:
+            package = write_reproducibility_package(
+                args.output_dir,
+                benchmark_iterations=args.benchmark_iterations,
+                force=args.force,
+            )
+        except ReproducibilityPackageError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write reproducibility package: {exc}", file=sys.stderr)
+            return 2
+        print(
+            "wrote paper reproducibility package: "
+            f"{args.output_dir} ({package.manifest['summary']['fixture_file_count']} fixture files)"
+        )
         return 0
 
     if args.command == "minimize":

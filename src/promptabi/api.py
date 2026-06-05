@@ -33,6 +33,12 @@ from .minimization import (
 )
 from .plugins import PluginRegistry
 from .policies import Suppression, VerificationPolicy, apply_policy_diagnostics, load_policy_file
+from .reproducibility import (
+    ReproducibilityInputs,
+    ReproducibilityPackage,
+    build_reproducibility_package,
+    write_reproducibility_package,
+)
 from .render import SarifRenderOptions, render_github_annotations, render_html, render_json, render_sarif, render_text
 from .session import CheckCallable, VerificationResult, VerificationSession
 
@@ -286,6 +292,25 @@ def evaluate_corpus(
     if output_format == "text":
         return render_evaluation_text(report)
     raise ValueError("output_format must be one of: text, json")
+
+
+def create_reproducibility_package(
+    *,
+    inputs: ReproducibilityInputs | None = None,
+    benchmark_iterations: int = 1,
+    output_dir: str | Path | None = None,
+    force: bool = False,
+) -> ReproducibilityPackage:
+    """Build or write the paper reproducibility package with frozen fixtures and expected tables."""
+
+    if output_dir is None:
+        return build_reproducibility_package(inputs=inputs, benchmark_iterations=benchmark_iterations)
+    return write_reproducibility_package(
+        output_dir,
+        inputs=inputs,
+        benchmark_iterations=benchmark_iterations,
+        force=force,
+    )
 
 
 def _resolve_config(config: str | Path | VerificationConfig) -> VerificationConfig:

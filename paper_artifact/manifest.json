@@ -1,0 +1,30 @@
+{
+  "artifact_sha256": "664960660b456a5f0231c649f0f137d80f6fe4b15fb996e7d9d3742dc72ad202",
+  "benchmark_iterations": 1,
+  "frozen_corpora": {
+    "evaluation_corpus": "fixtures/evaluation/labeled_corpus.json",
+    "provider_fixture_packs": "fixtures/provider_fixture_packs",
+    "real_bug_benchmark": "fixtures/real_bug_benchmarks/benchmark.json",
+    "seed_corpus": "fixtures/seed_corpus",
+    "structured_schemas": "fixtures/structured_schemas"
+  },
+  "manifest_version": 1,
+  "package_files": [
+    "manifest.json",
+    "fixture_hashes.json",
+    "expected_tables.json",
+    "environment.json",
+    "reproduction_commands.sh"
+  ],
+  "promptabi_version": "0.1.0",
+  "purpose": "PromptABI paper artifact: frozen corpora, fixture hashes, solver pins, expected tables, and regeneration commands.",
+  "repository_root": ".",
+  "summary": {
+    "benchmark_count": 8,
+    "evaluation_case_count": 11,
+    "evaluation_passed": true,
+    "fixture_file_count": 53,
+    "fixture_tree_sha256": "cf6bbb6643bff4f322204486698401c9ffd77827a224ac5faad1068e5a40eb93",
+    "z3_available": true
+  }
+}
