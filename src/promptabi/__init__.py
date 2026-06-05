@@ -1193,6 +1193,17 @@ from .solver_version_gate import (
     render_solver_version_gate_json,
     render_solver_version_gate_text,
 )
+from .migration_interpolant import (
+    MIGRATION_INTERPOLANT_VERSION,
+    InterpolantLiteral,
+    MigrationInterpolant,
+    MigrationInterpolantError,
+    MigrationStatus,
+    combine_contracts,
+    derive_migration_interpolant,
+    render_migration_interpolant_json,
+    render_migration_interpolant_text,
+)
 from .provider_fixture_replay import (
     ProviderFixtureReplayCase,
     ProviderFixtureReplayFinding,
@@ -2150,6 +2161,15 @@ __all__ = [
     "evaluate_solver_version_gate",
     "render_solver_version_gate_json",
     "render_solver_version_gate_text",
+    "MIGRATION_INTERPOLANT_VERSION",
+    "InterpolantLiteral",
+    "MigrationInterpolant",
+    "MigrationInterpolantError",
+    "MigrationStatus",
+    "combine_contracts",
+    "derive_migration_interpolant",
+    "render_migration_interpolant_json",
+    "render_migration_interpolant_text",
     "analyze_parser_compatibility",
     "analyze_tokenizer_grammar_ambiguity",
     "analyze_tokenizer_grammar_emptiness",
