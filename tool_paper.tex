@@ -253,6 +253,11 @@ Artifact hash, diagnostic fingerprint, replay hash \\
 Block stale deploys &
 Kubernetes, Terraform, GitHub Environment, and release-system gates &
 Current bundle hash, reproducibility hash, gate manifest \\
+\addlinespace
+Report live contract identity &
+Runtime attestation hooks for services exposing verified prompt, tokenizer,
+template, schema, and provider contracts &
+Service-scoped bundle hash, per-contract hashes, env/HTTP/Kubernetes/OTel hooks \\
 \bottomrule
 \end{tabular}
 \caption{PromptABI capabilities stated as user-facing verification needs.}
@@ -361,6 +366,18 @@ evidence and emits enforcement examples for Kubernetes admission policies,
 Terraform preconditions, GitHub protected environments, and internal release
 systems. Each example binds deployment metadata to the current bundle hash,
 reproducibility hash, signing-key identifier, and verification gate status.
+
+\paragraph{Runtime attestation.}
+\texttt{promptabi runtime-attestation} produces the complementary service-side
+payload: a process can report which verified prompt segments, tokenizers, chat
+templates, schemas, and provider contracts it is running. The output includes a
+deterministic manifest plus environment-file, HTTP JSON, Kubernetes annotation,
+and OpenTelemetry attribute hooks. Each hook carries the current signed bundle
+hash, reproducibility hash, signing-key identifier, service name, environment,
+and stable per-contract hashes, so inventory systems can answer ``what PromptABI
+contract is live here?'' without reading private prompt contents. Drift alarms
+are intentionally a separate policy layer; this workflow is the trustworthy
+self-reporting primitive.
 
 \paragraph{Training preflight.}
 \texttt{promptabi verify-training} builds or loads a training manifest and checks

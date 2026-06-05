@@ -170,6 +170,15 @@ from .deployment_gates import (
     render_deployment_gate_write_summary,
     write_deployment_gate_examples,
 )
+from .runtime_attestation import (
+    RuntimeAttestationError,
+    build_runtime_attestation_report,
+    render_runtime_attestation_json,
+    render_runtime_attestation_text,
+    render_runtime_attestation_write_summary,
+    runtime_contract_refs_from_cli,
+    write_runtime_attestation_hooks,
+)
 from .editor_protocol import (
     EditorProtocolError,
     build_editor_diagnostic_report,
@@ -1828,6 +1837,56 @@ def build_parser() -> argparse.ArgumentParser:
         "--force",
         action="store_true",
         help="overwrite existing generated deployment-gate files",
+    )
+
+    runtime_attestation = subparsers.add_parser(
+        "runtime-attestation",
+        help="generate runtime hooks that report the verified prompt-interface contracts a service is running",
+    )
+    runtime_attestation.add_argument(
+        "--config",
+        help="path to a PromptABI JSON config; defaults to discovering promptabi.json upward from cwd",
+    )
+    runtime_attestation.add_argument(
+        "--bundle-key",
+        help="bundle signing key required for runtime attestation evidence (default: PROMPTABI_BUNDLE_KEY)",
+    )
+    runtime_attestation.add_argument("--bundle-key-id", default="runtime-attestation", help="identifier recorded with the signature")
+    runtime_attestation.add_argument("--service", default="promptabi-service", help="service name recorded in the attestation")
+    runtime_attestation.add_argument("--environment", default="production", help="runtime environment recorded in the attestation")
+    runtime_attestation.add_argument("--revision", help="service revision, image digest, or release identifier")
+    runtime_attestation.add_argument("--instance-id", help="runtime instance identifier, pod UID, or process identity")
+    runtime_attestation.add_argument(
+        "--runtime-contract",
+        action="append",
+        default=[],
+        metavar="NAME=REF",
+        help="bind a verified artifact name to the runtime reference the service is using; may be repeated",
+    )
+    runtime_attestation.add_argument(
+        "--fail-on",
+        choices=("error", "warning", "any", "never"),
+        default="error",
+        help="runtime attestation gate threshold (default: error)",
+    )
+    runtime_attestation.add_argument(
+        "--workspace-root",
+        help="workspace root used for relative artifact paths (default: config directory)",
+    )
+    runtime_attestation.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format when not writing files (default: text)",
+    )
+    runtime_attestation.add_argument(
+        "--output-dir",
+        help="write runtime-attestation hooks and JSON manifest to this directory instead of stdout",
+    )
+    runtime_attestation.add_argument(
+        "--force",
+        action="store_true",
+        help="overwrite existing generated runtime-attestation files",
     )
 
     fuzz = subparsers.add_parser("fuzz", help="mutation-based fuzzing workflows")
@@ -4145,6 +4204,56 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         except OSError as exc:
             print(f"promptabi: cannot write deployment gates: {exc}", file=sys.stderr)
+            return 2
+        return 0 if ok else 1
+
+    if args.command == "runtime-attestation":
+        try:
+            config_path = Path(args.config).resolve() if args.config else discover_config()
+            bundle_key = args.bundle_key or os.environ.get("PROMPTABI_BUNDLE_KEY")
+            runtime_refs = runtime_contract_refs_from_cli(args.runtime_contract)
+            if args.output_dir:
+                result = write_runtime_attestation_hooks(
+                    args.output_dir,
+                    config_path,
+                    bundle_key=bundle_key,
+                    bundle_key_id=args.bundle_key_id,
+                    service=args.service,
+                    environment=args.environment,
+                    revision=args.revision,
+                    instance_id=args.instance_id,
+                    runtime_contract_refs=runtime_refs,
+                    fail_on=args.fail_on,
+                    workspace_root=args.workspace_root,
+                    force=args.force,
+                )
+                print(render_runtime_attestation_write_summary(result), end="")
+                ok = result.report.ok
+            else:
+                report = build_runtime_attestation_report(
+                    config_path,
+                    bundle_key=bundle_key,
+                    bundle_key_id=args.bundle_key_id,
+                    service=args.service,
+                    environment=args.environment,
+                    revision=args.revision,
+                    instance_id=args.instance_id,
+                    runtime_contract_refs=runtime_refs,
+                    fail_on=args.fail_on,
+                    workspace_root=args.workspace_root,
+                )
+                output = (
+                    render_runtime_attestation_json(report)
+                    if args.format == "json"
+                    else render_runtime_attestation_text(report)
+                )
+                print(output, end="")
+                ok = report.ok
+        except (ConfigError, RuntimeAttestationError, ValueError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write runtime attestation hooks: {exc}", file=sys.stderr)
             return 2
         return 0 if ok else 1
 

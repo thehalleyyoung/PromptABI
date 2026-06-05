@@ -83,6 +83,12 @@ from .deployment_gates import (
     render_deployment_gate_text,
     write_deployment_gate_examples,
 )
+from .runtime_attestation import (
+    RuntimeAttestationReport,
+    build_runtime_attestation_report,
+    render_runtime_attestation_json,
+    render_runtime_attestation_text,
+)
 from .enterprise import (
     EnterpriseSettings,
     enterprise_readiness_diagnostics,
@@ -964,6 +970,43 @@ def deployment_gates(
         return render_deployment_gate_text(report)
     if output_format == "json":
         return render_deployment_gate_json(report)
+    raise ValueError("output_format must be one of: text, json")
+
+
+def runtime_attestation(
+    config: str | Path,
+    *,
+    bundle_key: str | bytes | None = None,
+    bundle_key_id: str = "runtime-attestation",
+    service: str = "promptabi-service",
+    environment: str = "production",
+    revision: str | None = None,
+    instance_id: str | None = None,
+    runtime_contract_refs: Mapping[str, str] | None = None,
+    fail_on: str = "error",
+    workspace_root: str | Path | None = None,
+    output_format: str | None = None,
+) -> RuntimeAttestationReport | str:
+    """Build or render runtime hooks that report verified PromptABI contracts."""
+
+    report = build_runtime_attestation_report(
+        config,
+        bundle_key=bundle_key,
+        bundle_key_id=bundle_key_id,
+        service=service,
+        environment=environment,
+        revision=revision,
+        instance_id=instance_id,
+        runtime_contract_refs=runtime_contract_refs,
+        fail_on=fail_on,
+        workspace_root=workspace_root,
+    )
+    if output_format is None:
+        return report
+    if output_format == "text":
+        return render_runtime_attestation_text(report)
+    if output_format == "json":
+        return render_runtime_attestation_json(report)
     raise ValueError("output_format must be one of: text, json")
 
 
