@@ -12,6 +12,10 @@ from promptabi.artifacts import (
     EvaluationHarnessArtifact,
     FrameworkTruncationConfigArtifact,
     GrammarArtifact,
+    PromptPackArtifact,
+    PromptPackStopPolicy,
+    PromptPackTemplate,
+    PromptPackToolSchema,
     PromptSegment,
     PromptSegmentArtifact,
     ProviderConfigArtifact,
@@ -131,6 +135,27 @@ def test_core_artifact_model_serializes_every_kind_deterministically() -> None:
             few_shot_examples=(EvaluationFewShotExample("ex1", "user", "What?", 2),),
             max_prompt_tokens=16,
         ),
+        PromptPackArtifact(
+            kind=ArtifactKind.PROMPT_PACK,
+            name="pack",
+            location=location,
+            pack_name="support-pack",
+            pack_version="1.0.0",
+            exported_templates=(
+                PromptPackTemplate(
+                    name="support-chat",
+                    template="{{ messages }}",
+                    roles=("system", "user", "assistant"),
+                    variables=("messages",),
+                    required_regions=("system-policy",),
+                    supported_model_families=("openai-compatible",),
+                ),
+            ),
+            expected_roles=("system", "user", "assistant"),
+            tool_schemas=(PromptPackToolSchema("refund_user", provider="openai"),),
+            stop_policies=(PromptPackStopPolicy("tool-json", stop_sequences=("</tool_call>",)),),
+            supported_model_families=("openai-compatible",),
+        ),
     )
 
     bundle = ArtifactBundle(artifacts)
@@ -194,6 +219,24 @@ def test_config_artifact_parser_accepts_the_same_kinds_as_the_model(tmp_path: Pa
             "prompt_variables": ["question"],
             "few_shot_examples": [{"id": "ex1", "role": "user", "content": "What?", "token_count": 2}],
             "max_prompt_tokens": 16,
+        },
+        ArtifactKind.PROMPT_PACK: {
+            "pack_name": "support-pack",
+            "pack_version": "1.0.0",
+            "exported_templates": [
+                {
+                    "name": "support-chat",
+                    "template": "{{ messages }}",
+                    "roles": ["system", "user", "assistant"],
+                    "variables": ["messages"],
+                    "required_regions": ["system-policy"],
+                    "supported_model_families": ["openai-compatible"],
+                }
+            ],
+            "expected_roles": ["system", "user", "assistant"],
+            "tool_schemas": [{"name": "refund_user", "provider": "openai"}],
+            "stop_policies": [{"name": "tool-json", "stop_sequences": ["</tool_call>"]}],
+            "supported_model_families": ["openai-compatible"],
         },
     }
 

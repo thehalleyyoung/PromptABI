@@ -9,7 +9,7 @@ from pathlib import Path
 from threading import RLock
 from urllib.parse import parse_qs, urlparse
 
-from .artifacts import ArtifactKind, EvaluationHarnessArtifact, TokenizerArtifact, TrainingManifestArtifact
+from .artifacts import ArtifactKind, EvaluationHarnessArtifact, PromptPackArtifact, TokenizerArtifact, TrainingManifestArtifact
 from .budgets import TokenBudgetFinding, TokenBudgetReport, analyze_token_budget
 from .chat_templates import ChatTemplateParseError, parse_hf_tokenizer_config_chat_template
 from .config import VerificationConfig, load_config
@@ -42,6 +42,7 @@ from .parser_compatibility import (
 from .first_party_plugins import create_first_party_plugin_registry
 from .plugins import PluginRegistry
 from .policies import apply_org_policy_diagnostics, apply_policy_diagnostics
+from .prompt_packs import PromptPackFinding, PromptPackFindingKind, analyze_prompt_pack_contracts
 from .provider_fixture_replay import ProviderFixtureReplayCase, ProviderFixtureReplayFinding, analyze_provider_fixture_replay
 from .provider_migration import ProviderMigrationFinding, analyze_provider_migration
 from .loaders import ArtifactLoadError, ArtifactLoadWarning, ArtifactLoader, LoadedArtifact
@@ -138,6 +139,13 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "parser-compatibility-abstained": (CheckMode.ABSTAINING, CheckMode.HEURISTIC),
     "parser-compatibility-agreement": (CheckMode.HEURISTIC,),
     "parser-compatibility-mismatch": (CheckMode.HEURISTIC,),
+    "prompt-pack-app-role-missing": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "prompt-pack-empty": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "prompt-pack-model-family-unsupported": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "prompt-pack-stop-missing": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "prompt-pack-template-role-mismatch": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "prompt-pack-tool-missing": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "prompt-pack-verified": (CheckMode.SOUND, CheckMode.COMPLETE),
     "provider-fixture-replay": (CheckMode.BOUNDED, CheckMode.HEURISTIC),
     "provider-migration": (CheckMode.BOUNDED, CheckMode.HEURISTIC),
     "tool-schema-ingestion": (CheckMode.SOUND, CheckMode.COMPLETE),
@@ -388,6 +396,17 @@ CHECK_DEPENDENCIES: dict[str, CheckDependency] = {
         resources=("tokenizer-adapter", "automata-product"),
     ),
     "parser-compatibility": CheckDependency(artifact_kinds=(ArtifactKind.SCHEMA, ArtifactKind.GRAMMAR)),
+    "prompt-pack-contracts": CheckDependency(
+        artifact_kinds=(
+            ArtifactKind.PROMPT_PACK,
+            ArtifactKind.CHAT_TEMPLATE,
+            ArtifactKind.PROMPT_SEGMENT,
+            ArtifactKind.TOOL_DEFINITION,
+            ArtifactKind.STOP_POLICY,
+            ArtifactKind.PROVIDER_CONFIG,
+            ArtifactKind.TOKENIZER,
+        ),
+    ),
     "provider-fixture-replay": CheckDependency(artifact_kinds=(ArtifactKind.PROVIDER_CONFIG, ArtifactKind.TOOL_DEFINITION)),
     "provider-migration": CheckDependency(artifact_kinds=(ArtifactKind.PROVIDER_CONFIG, ArtifactKind.TOOL_DEFINITION)),
     "rag-chunking-compatibility": CheckDependency(
@@ -613,6 +632,7 @@ class VerificationSession:
             "grammar-tokenizer-ambiguity": self._grammar_tokenizer_ambiguity_check,
             "grammar-tokenizer-emptiness": self._grammar_tokenizer_emptiness_check,
             "parser-compatibility": self._parser_compatibility_check,
+            "prompt-pack-contracts": self._prompt_pack_contracts_check,
             "provider-fixture-replay": self._provider_fixture_replay_check,
             "provider-migration": self._provider_migration_check,
             "rag-chunking-compatibility": self._rag_chunking_compatibility_check,
@@ -1179,6 +1199,17 @@ class VerificationSession:
                 _evaluation_harness_finding_diagnostic(loaded_by_name, loaded, finding)
                 for finding in report.findings
             )
+        return tuple(diagnostics)
+
+    def _prompt_pack_contracts_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        diagnostics: list[Diagnostic] = []
+        artifacts = tuple(loaded.artifact for loaded in context.loaded_artifacts)
+        for loaded in context.loaded_artifacts:
+            if not isinstance(loaded.artifact, PromptPackArtifact):
+                continue
+            spans = {name: span for name, span in loaded.source_spans}
+            report = analyze_prompt_pack_contracts(loaded.artifact, artifacts, source_spans=spans)
+            diagnostics.extend(_prompt_pack_finding_diagnostic(loaded, finding) for finding in report.findings)
         return tuple(diagnostics)
 
     def _synthetic_generator_contracts_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
@@ -2659,6 +2690,76 @@ def _provider_migration_diagnostic(finding: ProviderMigrationFinding) -> Diagnos
             steps=tuple(context_steps) + evidence_steps,
         ),
     )
+
+
+_PROMPT_PACK_RULE_IDS: dict[PromptPackFindingKind, str] = {
+    PromptPackFindingKind.EMPTY_PACK: "prompt-pack-empty",
+    PromptPackFindingKind.TEMPLATE_ROLE_MISMATCH: "prompt-pack-template-role-mismatch",
+    PromptPackFindingKind.APP_ROLE_MISSING: "prompt-pack-app-role-missing",
+    PromptPackFindingKind.TOOL_MISSING: "prompt-pack-tool-missing",
+    PromptPackFindingKind.STOP_MISSING: "prompt-pack-stop-missing",
+    PromptPackFindingKind.MODEL_FAMILY_UNSUPPORTED: "prompt-pack-model-family-unsupported",
+    PromptPackFindingKind.VERIFIED: "prompt-pack-verified",
+}
+
+
+def _prompt_pack_finding_diagnostic(loaded: LoadedArtifact, finding: PromptPackFinding) -> Diagnostic:
+    rule_id = _PROMPT_PACK_RULE_IDS[finding.kind]
+    severity = DiagnosticSeverity.INFO if finding.kind is PromptPackFindingKind.VERIFIED else DiagnosticSeverity.ERROR
+    steps = [
+        WitnessStep(
+            action="load prompt-pack contract",
+            input=finding.pack.pack_name,
+            output=f"{len(finding.pack.exported_templates)} exported template(s)",
+        ),
+        WitnessStep(action="compare expected roles", output=_join_or_none(finding.expected)),
+        WitnessStep(action="compare downstream app facts", output=_join_or_none(finding.observed)),
+    ]
+    if finding.template is not None:
+        steps.append(WitnessStep(action="inspect exported template", input=finding.template.name, output=_join_or_none(finding.template.roles)))
+    if finding.tool is not None:
+        steps.append(WitnessStep(action="inspect required tool schema", input=finding.tool.name, output=finding.tool.provider or "provider-independent"))
+    if finding.stop_policy is not None:
+        steps.append(WitnessStep(action="inspect stop policy", input=finding.stop_policy.name, output=_join_or_none(finding.stop_policy.stop_sequences)))
+    return Diagnostic(
+        rule_id=rule_id,
+        severity=severity,
+        message=finding.message,
+        artifact=loaded.artifact.to_ref(),
+        span=finding.span or _artifact_span(loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG[rule_id],
+        suggestions=(_prompt_pack_suggestion(finding.kind),) if finding.kind is not PromptPackFindingKind.VERIFIED else (),
+        witness=WitnessTrace(
+            summary="PromptABI checked reusable prompt-pack contracts against configured app artifacts.",
+            steps=tuple(steps),
+            artifacts=(loaded.artifact.to_ref(),),
+        ),
+        properties=(
+            ("pack_name", finding.pack.pack_name),
+            ("pack_version", finding.pack.pack_version or ""),
+            ("finding_kind", finding.kind.value),
+        ),
+    )
+
+
+def _prompt_pack_suggestion(kind: PromptPackFindingKind) -> str:
+    if kind is PromptPackFindingKind.EMPTY_PACK:
+        return "Export at least one template with declared roles, variables, and supported model families."
+    if kind is PromptPackFindingKind.TEMPLATE_ROLE_MISMATCH:
+        return "Align exported template roles with expected_roles or split incompatible templates into a separate prompt pack."
+    if kind is PromptPackFindingKind.APP_ROLE_MISSING:
+        return "Add downstream chat-template or prompt-segment artifacts that declare every role required by the prompt pack."
+    if kind is PromptPackFindingKind.TOOL_MISSING:
+        return "Configure matching tool-definition artifacts or mark the prompt-pack tool as optional after review."
+    if kind is PromptPackFindingKind.STOP_MISSING:
+        return "Configure a downstream stop-policy artifact that includes the prompt-pack stop contract."
+    if kind is PromptPackFindingKind.MODEL_FAMILY_UNSUPPORTED:
+        return "Use a supported provider/model family or update the prompt pack after compatibility verification."
+    return "Inspect the prompt-pack contract."
+
+
+def _join_or_none(values: tuple[str, ...]) -> str:
+    return ", ".join(values) if values else "<none>"
 
 
 def _provider_fixture_replay_finding_diagnostic(finding: ProviderFixtureReplayFinding) -> Diagnostic:

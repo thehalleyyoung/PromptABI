@@ -25,6 +25,7 @@ class ArtifactKind(StrEnum):
     FRAMEWORK_TRUNCATION_CONFIG = "framework-truncation-config"
     TRAINING_MANIFEST = "training-manifest"
     EVALUATION_HARNESS = "evaluation-harness"
+    PROMPT_PACK = "prompt-pack"
 
 
 class TruncationStrategy(StrEnum):
@@ -84,6 +85,97 @@ class TrainingTextSourceKind(StrEnum):
     SYSTEM = "system"
     DEVELOPER = "developer"
     UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True, slots=True)
+class PromptPackTemplate:
+    """One reusable template exported by a prompt-pack library."""
+
+    name: str
+    template: str
+    roles: tuple[str, ...] = ()
+    variables: tuple[str, ...] = ()
+    required_regions: tuple[str, ...] = ()
+    supported_model_families: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        _require_non_empty("prompt-pack template name", self.name)
+        _require_non_empty("prompt-pack template source", self.template)
+        object.__setattr__(self, "roles", _unique_strings(self.roles, field_name="prompt-pack template roles"))
+        object.__setattr__(self, "variables", _unique_strings(self.variables, field_name="prompt-pack template variables"))
+        object.__setattr__(
+            self,
+            "required_regions",
+            _unique_strings(self.required_regions, field_name="prompt-pack template required_regions"),
+        )
+        object.__setattr__(
+            self,
+            "supported_model_families",
+            _unique_strings(self.supported_model_families, field_name="prompt-pack template supported_model_families"),
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {"name": self.name, "template": self.template}
+        if self.roles:
+            data["roles"] = list(self.roles)
+        if self.variables:
+            data["variables"] = list(self.variables)
+        if self.required_regions:
+            data["required_regions"] = list(self.required_regions)
+        if self.supported_model_families:
+            data["supported_model_families"] = list(self.supported_model_families)
+        return data
+
+
+@dataclass(frozen=True, slots=True)
+class PromptPackToolSchema:
+    """Tool schema promised by a reusable prompt pack."""
+
+    name: str
+    provider: str | None = None
+    schema_digest: str | None = None
+    required: bool = True
+
+    def __post_init__(self) -> None:
+        _require_non_empty("prompt-pack tool name", self.name)
+        _optional_non_empty("prompt-pack tool provider", self.provider)
+        _optional_non_empty("prompt-pack tool schema_digest", self.schema_digest)
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {"name": self.name, "required": self.required}
+        if self.provider is not None:
+            data["provider"] = self.provider
+        if self.schema_digest is not None:
+            data["schema_digest"] = self.schema_digest
+        return data
+
+
+@dataclass(frozen=True, slots=True)
+class PromptPackStopPolicy:
+    """Stop-policy contract exported by a prompt pack."""
+
+    name: str
+    stop_sequences: tuple[str, ...] = ()
+    stop_token_ids: tuple[int, ...] = ()
+    include_eos: bool = True
+
+    def __post_init__(self) -> None:
+        _require_non_empty("prompt-pack stop-policy name", self.name)
+        object.__setattr__(self, "stop_sequences", _unique_strings(self.stop_sequences, field_name="prompt-pack stop_sequences"))
+        if any(token_id < 0 for token_id in self.stop_token_ids):
+            raise ValueError("prompt-pack stop token ids must be non-negative")
+        object.__setattr__(self, "stop_token_ids", tuple(sorted(dict.fromkeys(self.stop_token_ids))))
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {
+            "name": self.name,
+            "include_eos": self.include_eos,
+        }
+        if self.stop_sequences:
+            data["stop_sequences"] = list(self.stop_sequences)
+        if self.stop_token_ids:
+            data["stop_token_ids"] = list(self.stop_token_ids)
+        return data
 
 
 @dataclass(frozen=True, slots=True)
@@ -1611,6 +1703,60 @@ class EvaluationHarnessArtifact(BaseArtifact):
         return data
 
 
+@dataclass(frozen=True, slots=True)
+class PromptPackArtifact(BaseArtifact):
+    """Reusable prompt-library contract with exported templates and ABI promises."""
+
+    pack_name: str = "prompt-pack"
+    pack_version: str | None = None
+    exported_templates: tuple[PromptPackTemplate, ...] = ()
+    expected_roles: tuple[str, ...] = ()
+    tool_schemas: tuple[PromptPackToolSchema, ...] = ()
+    stop_policies: tuple[PromptPackStopPolicy, ...] = ()
+    supported_model_families: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        BaseArtifact.__post_init__(self)
+        _require_kind(self.kind, ArtifactKind.PROMPT_PACK)
+        _require_non_empty("prompt-pack name", self.pack_name)
+        _optional_non_empty("prompt-pack version", self.pack_version)
+        templates = tuple(sorted(self.exported_templates, key=lambda template: template.name))
+        if len({template.name for template in templates}) != len(templates):
+            raise ValueError("prompt-pack exported template names must be unique")
+        object.__setattr__(self, "exported_templates", templates)
+        object.__setattr__(self, "expected_roles", _unique_strings(self.expected_roles, field_name="prompt-pack expected_roles"))
+        tools = tuple(sorted(self.tool_schemas, key=lambda tool: tool.name))
+        if len({tool.name for tool in tools}) != len(tools):
+            raise ValueError("prompt-pack tool schema names must be unique")
+        object.__setattr__(self, "tool_schemas", tools)
+        stops = tuple(sorted(self.stop_policies, key=lambda policy: policy.name))
+        if len({policy.name for policy in stops}) != len(stops):
+            raise ValueError("prompt-pack stop policy names must be unique")
+        object.__setattr__(self, "stop_policies", stops)
+        object.__setattr__(
+            self,
+            "supported_model_families",
+            _unique_strings(self.supported_model_families, field_name="prompt-pack supported_model_families"),
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        data = BaseArtifact.to_dict(self)
+        data["pack_name"] = self.pack_name
+        if self.pack_version is not None:
+            data["pack_version"] = self.pack_version
+        if self.exported_templates:
+            data["exported_templates"] = [template.to_dict() for template in self.exported_templates]
+        if self.expected_roles:
+            data["expected_roles"] = list(self.expected_roles)
+        if self.tool_schemas:
+            data["tool_schemas"] = [tool.to_dict() for tool in self.tool_schemas]
+        if self.stop_policies:
+            data["stop_policies"] = [policy.to_dict() for policy in self.stop_policies]
+        if self.supported_model_families:
+            data["supported_model_families"] = list(self.supported_model_families)
+        return data
+
+
 Artifact = (
     TokenizerArtifact
     | ChatTemplateArtifact
@@ -1624,6 +1770,7 @@ Artifact = (
     | FrameworkTruncationConfigArtifact
     | TrainingManifestArtifact
     | EvaluationHarnessArtifact
+    | PromptPackArtifact
 )
 
 
@@ -1817,6 +1964,17 @@ def artifact_from_config(
             required_tools=_tuple_of_str(spec, "required_tools"),
             available_tools=_tuple_of_str(spec, "available_tools"),
             benchmark_tokenizer=_evaluation_tokenizer_snapshot(spec),
+        )
+    if kind is ArtifactKind.PROMPT_PACK:
+        return PromptPackArtifact(
+            **common,
+            pack_name=_str(spec, "pack_name", default=_str(spec, "name", default=name) if "name" in spec else name),
+            pack_version=_optional_str(spec, "pack_version") or _optional_str(spec, "version"),
+            exported_templates=_prompt_pack_templates(spec),
+            expected_roles=_tuple_of_str(spec, "expected_roles"),
+            tool_schemas=_prompt_pack_tool_schemas(spec),
+            stop_policies=_prompt_pack_stop_policies(spec),
+            supported_model_families=_tuple_of_str(spec, "supported_model_families"),
         )
     raise AssertionError(f"unhandled artifact kind: {kind}")
 
@@ -2191,6 +2349,71 @@ def _synthetic_generators(spec: dict[str, Any]) -> tuple[SyntheticGeneratorSpec,
             )
         )
     return tuple(generators)
+
+
+def _prompt_pack_templates(spec: dict[str, Any]) -> tuple[PromptPackTemplate, ...]:
+    raw_templates = spec.get("exported_templates", spec.get("exports", []))
+    if not isinstance(raw_templates, list):
+        raise ValueError("artifact field 'exported_templates' must be a list")
+    templates: list[PromptPackTemplate] = []
+    for item in raw_templates:
+        if not isinstance(item, dict):
+            raise ValueError("prompt-pack template entries must be objects")
+        templates.append(
+            PromptPackTemplate(
+                name=_str(item, "name"),
+                template=_str(item, "template", default=_str(item, "template_source") if "template_source" in item else None),
+                roles=_tuple_of_str(item, "roles"),
+                variables=_tuple_of_str(item, "variables"),
+                required_regions=_tuple_of_str(item, "required_regions"),
+                supported_model_families=_tuple_of_str(item, "supported_model_families"),
+            )
+        )
+    return tuple(templates)
+
+
+def _prompt_pack_tool_schemas(spec: dict[str, Any]) -> tuple[PromptPackToolSchema, ...]:
+    raw_tools = spec.get("tool_schemas", spec.get("tools", []))
+    if not isinstance(raw_tools, list):
+        raise ValueError("artifact field 'tool_schemas' must be a list")
+    tools: list[PromptPackToolSchema] = []
+    for item in raw_tools:
+        if isinstance(item, str):
+            tools.append(PromptPackToolSchema(name=item))
+            continue
+        if not isinstance(item, dict):
+            raise ValueError("prompt-pack tool schema entries must be strings or objects")
+        tools.append(
+            PromptPackToolSchema(
+                name=_str(item, "name"),
+                provider=_optional_str(item, "provider"),
+                schema_digest=_optional_str(item, "schema_digest") or _optional_str(item, "sha256"),
+                required=_bool(item, "required", default=True),
+            )
+        )
+    return tuple(tools)
+
+
+def _prompt_pack_stop_policies(spec: dict[str, Any]) -> tuple[PromptPackStopPolicy, ...]:
+    raw_policies = spec.get("stop_policies", spec.get("stops", []))
+    if not isinstance(raw_policies, list):
+        raise ValueError("artifact field 'stop_policies' must be a list")
+    policies: list[PromptPackStopPolicy] = []
+    for index, item in enumerate(raw_policies):
+        if isinstance(item, str):
+            policies.append(PromptPackStopPolicy(name=f"stop-{index + 1}", stop_sequences=(item,)))
+            continue
+        if not isinstance(item, dict):
+            raise ValueError("prompt-pack stop policy entries must be strings or objects")
+        policies.append(
+            PromptPackStopPolicy(
+                name=_str(item, "name", default=f"stop-{index + 1}"),
+                stop_sequences=_tuple_of_str(item, "stop_sequences"),
+                stop_token_ids=_tuple_of_int(item, "stop_token_ids"),
+                include_eos=_bool(item, "include_eos", default=True),
+            )
+        )
+    return tuple(policies)
 
 
 def _evaluation_few_shot_examples(spec: dict[str, Any]) -> tuple[EvaluationFewShotExample, ...]:

@@ -18,6 +18,7 @@ from .artifacts import (
     GrammarArtifact,
     PromptSegment,
     PromptSegmentArtifact,
+    PromptPackArtifact,
     SchemaArtifact,
     StopPolicyArtifact,
     ToolDefinitionArtifact,
@@ -207,6 +208,8 @@ class ArtifactLoader:
             return self._load_training_manifest(artifact, path)
         if artifact.kind is ArtifactKind.EVALUATION_HARNESS:
             return self._load_evaluation_harness(artifact, path)
+        if artifact.kind is ArtifactKind.PROMPT_PACK:
+            return self._load_prompt_pack(artifact, path)
         if artifact.kind is ArtifactKind.PROVIDER_CONFIG:
             return self._load_provider_snapshot(artifact, path)
         return self._load_file(artifact, path, source_type="local-file")
@@ -767,6 +770,70 @@ class ArtifactLoader:
             warnings=loaded.warnings,
         )
 
+    def _load_prompt_pack(self, artifact: Artifact, path: Path) -> LoadedArtifact:
+        if path.suffix.lower() != ".json":
+            return self._load_file(artifact, path, source_type="prompt-pack-file")
+        try:
+            text = path.read_text(encoding="utf-8")
+            raw = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"prompt-pack artifact '{artifact.name}' is not valid JSON",
+                suggestion="Store prompt packs as deterministic JSON objects with exported_templates, expected_roles, tool_schemas, stop_policies, and supported_model_families.",
+                steps=(("parse prompt-pack JSON", str(path), exc.msg),),
+                span=SourceSpan(path=str(path), start_line=exc.lineno, start_column=exc.colno),
+            ) from exc
+        if not isinstance(raw, dict):
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"prompt-pack artifact '{artifact.name}' must be a JSON object",
+                suggestion="Use an object with package metadata and exported prompt contracts.",
+                steps=(("parse prompt-pack root", str(path), type(raw).__name__),),
+            )
+        try:
+            source_map = build_json_source_map(text, path)
+            parsed = artifact_from_config(
+                artifact.name,
+                {**raw, "kind": ArtifactKind.PROMPT_PACK.value, "path": str(path)},
+                base_dir=Path("."),
+            )
+        except ValueError as exc:
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"prompt-pack artifact '{artifact.name}' could not be parsed",
+                suggestion="Declare exported templates, expected roles, tool schemas, stop policies, and supported model families with supported PromptABI fields.",
+                steps=(("parse prompt-pack fields", str(path), str(exc)),),
+            ) from exc
+        loaded = self._load_file(artifact, path, source_type="prompt-pack")
+        parsed_artifact = artifact
+        if isinstance(artifact, PromptPackArtifact) and isinstance(parsed, PromptPackArtifact):
+            parsed_artifact = replace(
+                parsed,
+                location=artifact.location,
+                provenance=artifact.provenance,
+                metadata=_merge_metadata(artifact.metadata, parsed.metadata),
+                source_span=artifact.source_span,
+            )
+        template_count = len(parsed_artifact.exported_templates) if isinstance(parsed_artifact, PromptPackArtifact) else 0
+        tool_count = len(parsed_artifact.tool_schemas) if isinstance(parsed_artifact, PromptPackArtifact) else 0
+        stop_count = len(parsed_artifact.stop_policies) if isinstance(parsed_artifact, PromptPackArtifact) else 0
+        return LoadedArtifact(
+            artifact=parsed_artifact,
+            source_type="prompt-pack",
+            pinned=loaded.pinned,
+            resolved=loaded.resolved,
+            actual_sha256=loaded.actual_sha256,
+            size_bytes=loaded.size_bytes,
+            metadata=(
+                ("template_count", template_count),
+                ("tool_schema_count", tool_count),
+                ("stop_policy_count", stop_count),
+            ),
+            source_spans=_prompt_pack_source_spans(source_map, parsed_artifact) or loaded.source_spans,
+            warnings=loaded.warnings,
+        )
+
     def _load_grammar(self, artifact: Artifact, path: Path) -> LoadedArtifact:
         declared_type = artifact.grammar_type if isinstance(artifact, GrammarArtifact) else "promptabi"
         if declared_type.strip().lower().replace("_", "-") == "grammar-differential":
@@ -1104,6 +1171,30 @@ def _prompt_segment_source_spans(source_map, segments: tuple[PromptSegment, ...]
         )
         if span is not None:
             spans.append((segment.name, span))
+    return tuple(spans)
+
+
+def _prompt_pack_source_spans(source_map, artifact: Artifact) -> tuple[tuple[str, SourceSpan], ...]:
+    if not isinstance(artifact, PromptPackArtifact):
+        return ()
+    spans: list[tuple[str, SourceSpan]] = []
+    for key in ("exported_templates", "expected_roles", "tool_schemas", "stop_policies", "supported_model_families"):
+        span = source_map.span_for((key,)) or source_map.key_span_for((key,))
+        if span is not None:
+            spans.append((key, span))
+    for index, template in enumerate(artifact.exported_templates):
+        base = ("exported_templates", str(index))
+        span = source_map.span_for((*base, "roles")) or source_map.key_span_for((*base, "roles"))
+        if span is not None:
+            spans.append((f"exported_templates.{template.name}.roles", span))
+    for index, tool in enumerate(artifact.tool_schemas):
+        span = source_map.span_for(("tool_schemas", str(index))) or source_map.key_span_for(("tool_schemas", str(index)))
+        if span is not None:
+            spans.append((f"tool_schemas.{tool.name}", span))
+    for index, stop_policy in enumerate(artifact.stop_policies):
+        span = source_map.span_for(("stop_policies", str(index))) or source_map.key_span_for(("stop_policies", str(index)))
+        if span is not None:
+            spans.append((f"stop_policies.{stop_policy.name}", span))
     return tuple(spans)
 
 

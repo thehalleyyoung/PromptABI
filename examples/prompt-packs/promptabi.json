@@ -1,0 +1,36 @@
+{
+  "name": "prompt-pack-support-contract",
+  "checks": ["prompt-pack-contracts"],
+  "artifacts": {
+    "support-pack": {
+      "kind": "prompt-pack",
+      "path": "support.prompt-pack.json",
+      "version": "1.0.0"
+    },
+    "messages": {
+      "kind": "prompt-segment",
+      "uri": "memory://prompt-pack/messages",
+      "segments": [
+        { "name": "system-policy", "role": "system", "required": true },
+        { "name": "user-request", "role": "user", "required": true },
+        { "name": "assistant-answer", "role": "assistant" }
+      ]
+    },
+    "tools": {
+      "kind": "tool-definition",
+      "uri": "memory://prompt-pack/tools",
+      "provider": "openai",
+      "tool_names": ["refund_user"]
+    },
+    "stops": {
+      "kind": "stop-policy",
+      "uri": "memory://prompt-pack/stops",
+      "stop_sequences": ["</tool_call>"]
+    },
+    "provider": {
+      "kind": "provider-config",
+      "uri": "memory://prompt-pack/provider",
+      "provider": "openai-compatible"
+    }
+  }
+}

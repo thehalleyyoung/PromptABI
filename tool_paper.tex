@@ -1,5 +1,5 @@
 \documentclass[10pt]{article}
-\usepackage[margin=0.52in]{geometry}
+\usepackage[margin=0.45in]{geometry}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
 \usepackage{hyperref}
@@ -100,6 +100,10 @@ bounded cross-provider compatibility reports that compare OpenAI-compatible,
 Anthropic-style, Gemini-style, Bedrock, local vLLM, llama.cpp, and Ollama eval
 adapters for request/response fields, tool argument encoding, parallel tool
 support, stop policies, and structured-output modes,
+a prompt-pack artifact model and \texttt{prompt-pack-contracts} check for
+reusable prompt libraries, validating exported templates, expected roles, tool
+schemas, stop policies, and supported model/provider families against downstream
+application artifacts,
 a curated \texttt{promptabi gallery} that reruns real pinned configurations,
 emits compatibility badges, summarizes actual solver backends rather than merely
 advertised solver capability, and explains abstentions plus accepted risks,
@@ -525,6 +529,9 @@ deserialized formula,
 statically checks evaluation harnesses so prompts, few-shots, grading parsers,
 application parsers, tokenizer snapshots, and stops use the
 provider/template/schema contract verified for serving,
+loads reusable prompt packs as first-class artifacts and checks that their
+exported templates, expected roles, required tools, stop sequences, and supported
+model/provider families remain compatible with the app that imports them,
 returns stable policy-controlled process exit codes, writes and enforces
 deterministic verification lockfiles that fail closed on artifact, config,
 provider-fixture, library-version, supported-fragment, or diagnostic-baseline
@@ -613,6 +620,8 @@ The repository layout is designed to scale:
 \hline
 \texttt{src/promptabi/plugins.py} & Typed extension registry for artifact loaders, dependency-aware checks, diagnostic renderers, and capability metadata covering provider adapters, grammar backends, template dialects, truncation policies, and solver encodings. \\
 \hline
+\texttt{src/promptabi/prompt\_packs.py} & Prompt-pack compatibility checker for reusable prompt libraries, including exported-template role contracts, tool-schema requirements, stop-policy requirements, and supported model/provider family matching. \\
+\hline
 \texttt{src/promptabi/api\_stability.py} & Generated public-API manifest, stable/provisional/deprecated symbol taxonomy, deprecation decorator, Markdown/JSON API reference renderers, and baseline compatibility comparison for downstream plugin authors. \\
 \hline
 \texttt{src/promptabi/contributor\_validation.py} & Dependency-free validation for issue templates, label manifests, plugin author docs, checker design rules, corpus contribution rules, MkDocs navigation, and CI contributor-test gates exposed as \texttt{promptabi contribute validate}. \\
@@ -622,6 +631,8 @@ The repository layout is designed to scale:
 \texttt{tests} & Focused tests for package API and CLI determinism. \\
 \hline
 \texttt{examples/minimal} & A typed artifact config, messages file, tool schema, and answer schema used by tests and docs. \\
+\hline
+\texttt{examples/prompt-packs} & A reusable support prompt-pack fixture and downstream app contract proving prompt-library imports preserve role, tool, stop, and model-family assumptions. \\
 \hline
 \texttt{examples/role-boundary} & Paired unsafe and sanitized ChatML-style \texttt{tokenizer\_config.json} artifacts that exercise the real role-boundary non-forgeability CLI check. \\
 \hline
