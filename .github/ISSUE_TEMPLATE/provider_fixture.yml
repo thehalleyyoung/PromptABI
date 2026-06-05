@@ -1,0 +1,33 @@
+name: Provider fixture contribution
+description: Submit offline provider request/response fixtures for conformance and migration checks.
+title: "[Provider fixture]: "
+labels: ["area: provider"]
+body:
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Provider provenance
+      description: Include provider/API name, adapter, version, recording date, fixture origin, exact revision/hash, and license or permission to share.
+    validations:
+      required: true
+  - type: textarea
+    id: coverage
+    attributes:
+      label: Fixture coverage
+      description: Describe tool-call streaming, parallel calls, JSON mode, response formats, stops, error shapes, context-window limits, or migration semantics covered.
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy review
+      description: Confirm fixtures are offline and contain no API keys, organization IDs, account IDs, private prompts, customer data, or credential-like values.
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation commands
+      description: Include promptabi corpus provider-conformance and promptabi contribute validate commands.
+    validations:
+      required: true

@@ -7,6 +7,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from .contribution_workflows import build_contribution_workflows
+
 
 CONTRIBUTOR_VALIDATION_VERSION = 1
 REQUIRED_ISSUE_TEMPLATES = (
@@ -14,6 +16,10 @@ REQUIRED_ISSUE_TEMPLATES = (
     "checker_proposal.yml",
     "corpus_fixture.yml",
     "plugin_request.yml",
+    "prompt_pack_metadata.yml",
+    "provider_fixture.yml",
+    "training_adapter.yml",
+    "witness_minimization.yml",
 )
 REQUIRED_LABELS = (
     "good first issue",
@@ -21,12 +27,17 @@ REQUIRED_LABELS = (
     "area: checker",
     "area: corpus",
     "area: plugin",
+    "area: prompt-pack",
+    "area: provider",
+    "area: training",
+    "area: witness",
     "type: bug",
     "type: docs",
     "type: proposal",
 )
 REQUIRED_GUIDE_PATHS = (
     "CONTRIBUTING.md",
+    "docs/contributing/community-workflows.md",
     "docs/contributing/plugin-author-guide.md",
     "docs/contributing/checker-design.md",
     "docs/contributing/corpus-contributions.md",
@@ -93,6 +104,8 @@ def validate_contributor_infrastructure(repo_root: str | Path | None = None) -> 
     issues: list[ContributorValidationIssue] = []
     checked_paths: set[str] = set()
     checked_templates: list[str] = []
+    workflow_templates = {workflow.issue_template for workflow in build_contribution_workflows()}
+    workflow_labels = {workflow.label for workflow in build_contribution_workflows()}
 
     template_dir = root / ".github" / "ISSUE_TEMPLATE"
     checked_paths.add(".github/ISSUE_TEMPLATE")
@@ -108,6 +121,8 @@ def validate_contributor_infrastructure(repo_root: str | Path | None = None) -> 
             continue
         text = template.read_text(encoding="utf-8")
         _validate_issue_template(relative, text, issues)
+        if template_name in workflow_templates:
+            _validate_workflow_template(template_name, relative, text, issues)
 
     config = root / ".github" / "ISSUE_TEMPLATE" / "config.yml"
     checked_paths.add(".github/ISSUE_TEMPLATE/config.yml")
@@ -132,6 +147,9 @@ def validate_contributor_infrastructure(repo_root: str | Path | None = None) -> 
         for required in REQUIRED_LABELS:
             if required not in labels:
                 issues.append(_issue(".github/labels.yml", "required-label", f"missing label: {required}"))
+        for required in workflow_labels:
+            if required not in labels:
+                issues.append(_issue(".github/labels.yml", "workflow-label", f"missing workflow label: {required}"))
 
     for relative in REQUIRED_GUIDE_PATHS:
         checked_paths.add(relative)
@@ -176,6 +194,14 @@ def validate_contributor_infrastructure(repo_root: str | Path | None = None) -> 
                         f"CI must trigger on {path_fragment}",
                     )
                 )
+        if "promptabi contribute validate --format text" not in ci_text:
+            issues.append(
+                _issue(
+                    ".github/workflows/ci.yml",
+                    "contributor-command",
+                    "CI must run `promptabi contribute validate --format text`",
+                )
+            )
 
     return ContributorValidationReport(
         repo_root=root,
@@ -225,6 +251,13 @@ def _validate_issue_template(relative: str, text: str, issues: list[ContributorV
 def _validate_guide(relative: str, text: str, issues: list[ContributorValidationIssue]) -> None:
     required_terms = {
         "CONTRIBUTING.md": ("deterministic", "CPU-only", "promptabi contribute validate"),
+        "docs/contributing/community-workflows.md": (
+            "sanitized bug fixtures",
+            "minimized witnesses",
+            "prompt-pack metadata",
+            "provider fixtures",
+            "training-manifest adapters",
+        ),
         "docs/contributing/plugin-author-guide.md": ("PluginRegistry", "privacy", "tests/test_contributor_infrastructure.py"),
         "docs/contributing/checker-design.md": ("CheckMode", "witness", "abstention"),
         "docs/contributing/corpus-contributions.md": ("provenance", "license", "no secrets"),
@@ -233,6 +266,20 @@ def _validate_guide(relative: str, text: str, issues: list[ContributorValidation
     for term in required_terms:
         if term.lower() not in lower:
             issues.append(_issue(relative, "guide-content", f"missing required guidance term: {term}"))
+
+
+def _validate_workflow_template(
+    template_name: str,
+    relative: str,
+    text: str,
+    issues: list[ContributorValidationIssue],
+) -> None:
+    workflow = next(workflow for workflow in build_contribution_workflows() if workflow.issue_template == template_name)
+    if workflow.label not in text:
+        issues.append(_issue(relative, "workflow-label", f"template must apply label `{workflow.label}`"))
+    for term in ("provenance", "privacy", "validation"):
+        if term not in text.lower():
+            issues.append(_issue(relative, "workflow-fields", f"workflow template must request {term} details"))
 
 
 def _extract_label_names(text: str) -> tuple[str, ...]:

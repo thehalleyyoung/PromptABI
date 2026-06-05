@@ -238,10 +238,13 @@ envelopes, replaying each generated case through real PromptABI analyzers before
 release, real-bug benchmark
 manifests, portable expected-diagnostic baselines, corpus diffs, and release
 notes from real verification output,
-a contributor-infrastructure gate that validates structured GitHub issue
-templates, a label manifest with good-first-issue and area labels, MkDocs-linked
-plugin/checker/corpus author guides, and CI path triggers through
-\texttt{promptabi contribute validate},
+a contributor-infrastructure gate and public workflow manifest that validate
+structured GitHub issue templates, a label manifest with good-first-issue and
+area labels, MkDocs-linked plugin/checker/corpus/community guides, and CI path
+triggers through \texttt{promptabi contribute validate}, while exposing
+\texttt{promptabi contribute workflows} lanes for sanitized bug fixtures,
+minimized witnesses, prompt-pack metadata, provider fixtures, and
+training-manifest adapters,
 a \texttt{promptabi init} workflow that writes verifiable starter contracts and
 local fixture stubs for OpenAI tools, Hugging Face local models, vLLM
 OpenAI-compatible servers, llama.cpp, LangChain RAG, LlamaIndex agents, and
@@ -724,8 +727,11 @@ positioning are checked by focused tests, adds a \texttt{promptabi corpus bug-ga
 path that converts replayed real-bug benchmarks into sanitized artifacts,
 minimized structural witnesses, root-cause explanations, fixes, and upstream
 patch links, and validates contribution
-infrastructure---issue templates, labels, contributor guides, docs navigation, and
-CI triggers---through the same local CLI/API path used by maintainers.
+infrastructure---issue templates, labels, contributor guides, docs navigation, CI
+triggers, and typed community workflow manifests for sanitized fixtures,
+minimized witnesses, prompt-pack metadata, provider fixtures, and
+training-manifest adapters---through the same local CLI/API path used by
+maintainers.
 
 The repository layout is designed to scale:
 
@@ -748,7 +754,7 @@ The repository layout is designed to scale:
 \hline
 \texttt{src/promptabi/api\_stability.py} & Generated public-API manifest, stable/provisional/deprecated symbol taxonomy, deprecation decorator, Markdown/JSON API reference renderers, and baseline compatibility comparison for downstream plugin authors. \\
 \hline
-\texttt{src/promptabi/contributor\_validation.py} & Dependency-free validation for issue templates, label manifests, plugin author docs, checker design rules, corpus contribution rules, MkDocs navigation, and CI contributor-test gates exposed as \texttt{promptabi contribute validate}. \\
+\texttt{src/promptabi/contribution\_workflows.py} and \texttt{contributor\_validation.py} & Stable CLI/API manifest for sanitized bug fixtures, minimized witnesses, prompt-pack metadata, provider fixtures, and training-manifest adapters, plus dependency-free validation for issue templates, labels, contributor docs, MkDocs navigation, and CI contributor-test gates exposed as \texttt{promptabi contribute workflows} and \texttt{promptabi contribute validate}. \\
 \hline
 \texttt{editors/vscode} & Minimal VS Code extension shim that invokes \texttt{promptabi diagnostics lsp} and \texttt{promptabi explain}, publishes inline diagnostics, contributes quick-check/code-action commands, and renders witness previews from real verification payloads. \\
 \hline
@@ -2384,8 +2390,8 @@ The research roadmap adds executable specifications,
 proof sketches for supported fragments, richer formal-methods documentation,
 artifact evaluator guides, and post-release corpus audits on top of the shipped reproducibility packages,
 mutation fuzzing, cross-version CI, release automation, and real-bug benchmark
-suites. The community roadmap adds contribution
-infrastructure, compatibility matrices, integration guides, launch assets, and
+suites. The community roadmap adds typed contribution
+workflows, compatibility matrices, integration guides, launch assets, and
 governance. These activities are not separate from the technical work. They are
 how a formal verifier becomes durable enough for production teams to trust and
 for researchers to reproduce.

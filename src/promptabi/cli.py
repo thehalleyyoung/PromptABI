@@ -136,6 +136,11 @@ from .compatibility_audit import (
     render_compatibility_audit_text,
     run_compatibility_audit,
 )
+from .contribution_workflows import (
+    build_contribution_workflows,
+    render_contribution_workflows_json,
+    render_contribution_workflows_text,
+)
 from .contributor_validation import (
     ContributorValidationError,
     render_contributor_validation_json,
@@ -2143,6 +2148,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="repository root to validate (default: installed PromptABI repository root)",
     )
     contribute_validate.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    contribute_workflows = contribute_subparsers.add_parser(
+        "workflows",
+        help="print structured community contribution workflows",
+    )
+    contribute_workflows.add_argument(
         "--format",
         choices=("text", "json"),
         default="text",
@@ -4219,6 +4234,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         print(output, end="")
         return 0 if report.ok else 1
+
+    if args.command == "contribute" and args.contribute_command == "workflows":
+        workflows = build_contribution_workflows()
+        output = (
+            render_contribution_workflows_json(workflows)
+            if args.format == "json"
+            else render_contribution_workflows_text(workflows)
+        )
+        print(output, end="")
+        return 0
 
     if args.command == "minimize":
         try:

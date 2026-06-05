@@ -14,9 +14,12 @@ def test_contributor_validation_passes_against_repository() -> None:
     assert report.ok
     assert report.issue_count == 0
     assert ".github/ISSUE_TEMPLATE/bug_report.yml" in report.checked_paths
+    assert ".github/ISSUE_TEMPLATE/provider_fixture.yml" in report.checked_paths
     assert ".github/labels.yml" in report.checked_paths
     assert "good first issue" in report.labels
+    assert "area: training" in report.labels
     assert "checker_proposal.yml" in report.issue_templates
+    assert "prompt_pack_metadata.yml" in report.issue_templates
 
 
 def test_contributor_validation_cli_outputs_stable_json(capsys) -> None:
@@ -30,6 +33,39 @@ def test_contributor_validation_cli_outputs_stable_json(capsys) -> None:
     assert payload["issue_count"] == 0
     assert "docs/contributing/plugin-author-guide.md" in payload["checked_paths"]
     assert "area: plugin" in payload["labels"]
+    assert "docs/contributing/community-workflows.md" in payload["checked_paths"]
+
+
+def test_contribution_workflows_cli_outputs_stable_json(capsys) -> None:
+    exit_code = main(["contribute", "workflows", "--format", "json"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert captured.err == ""
+    assert payload["manifest_version"] == promptabi.CONTRIBUTION_WORKFLOW_VERSION
+    assert payload["workflow_count"] == 5
+    workflow_ids = {workflow["id"] for workflow in payload["workflows"]}
+    assert {
+        "sanitized-bug-fixture",
+        "minimized-witness",
+        "prompt-pack-metadata",
+        "provider-fixture",
+        "training-manifest-adapter",
+    } == workflow_ids
+    provider = next(workflow for workflow in payload["workflows"] if workflow["id"] == "provider-fixture")
+    assert provider["issue_template"] == "provider_fixture.yml"
+    assert "promptabi corpus provider-conformance --format text" in provider["validation_commands"]
+
+
+def test_contribution_workflows_public_api_lists_required_artifacts() -> None:
+    workflows = promptabi.contribution_workflows()
+
+    assert len(workflows) == 5
+    training = next(workflow for workflow in workflows if workflow.id == "training-manifest-adapter")
+    assert training.label == "area: training"
+    assert any("loss-mask" in artifact for artifact in training.accepted_artifacts)
+    assert "raw private training rows" in " ".join(training.privacy_checks)
 
 
 def test_contributor_guides_are_linked_and_actionable() -> None:
@@ -37,6 +73,7 @@ def test_contributor_guides_are_linked_and_actionable() -> None:
     contributing = (REPO_ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
 
     for relative_path in (
+        "contributing/community-workflows.md",
         "contributing/plugin-author-guide.md",
         "contributing/checker-design.md",
         "contributing/corpus-contributions.md",
@@ -45,6 +82,7 @@ def test_contributor_guides_are_linked_and_actionable() -> None:
         assert f"docs/{relative_path}" in contributing
 
     assert "promptabi contribute validate" in contributing
+    assert "promptabi contribute workflows --format text" in contributing
     assert "tests/test_contributor_infrastructure.py" in (
         REPO_ROOT / ".github" / "workflows" / "ci.yml"
     ).read_text(encoding="utf-8")
@@ -57,16 +95,37 @@ def test_contributor_validation_reports_missing_required_label(tmp_path: Path) -
     (repo / "docs" / "contributing").mkdir(parents=True)
 
     for template_name in promptabi.REQUIRED_ISSUE_TEMPLATES:
+        label = next(
+            (workflow.label for workflow in promptabi.build_contribution_workflows() if workflow.issue_template == template_name),
+            "type: bug",
+        )
         (repo / ".github" / "ISSUE_TEMPLATE" / template_name).write_text(
             "\n".join(
                 (
                     "name: Template",
                     "description: Example",
                     "title: Example",
-                    "labels: ['type: bug']",
+                    f"labels: ['{label}']",
                     "body:",
                     "  - type: textarea",
-                    "    id: details",
+                    "    id: provenance",
+                    "    attributes:",
+                    "      label: Provenance",
+                    "      description: provenance details",
+                    "    validations:",
+                    "      required: true",
+                    "  - type: textarea",
+                    "    id: privacy",
+                    "    attributes:",
+                    "      label: Privacy",
+                    "      description: privacy details",
+                    "    validations:",
+                    "      required: true",
+                    "  - type: textarea",
+                    "    id: validation",
+                    "    attributes:",
+                    "      label: Validation",
+                    "      description: validation details",
                     "    validations:",
                     "      required: true",
                     "",
@@ -86,6 +145,10 @@ def test_contributor_validation_reports_missing_required_label(tmp_path: Path) -
         "deterministic CPU-only promptabi contribute validate\n",
         encoding="utf-8",
     )
+    (repo / "docs" / "contributing" / "community-workflows.md").write_text(
+        "sanitized bug fixtures minimized witnesses prompt-pack metadata provider fixtures training-manifest adapters\n",
+        encoding="utf-8",
+    )
     (repo / "docs" / "contributing" / "plugin-author-guide.md").write_text(
         "PluginRegistry privacy tests/test_contributor_infrastructure.py\n",
         encoding="utf-8",
@@ -102,6 +165,7 @@ def test_contributor_validation_reports_missing_required_label(tmp_path: Path) -
         "\n".join(
             (
                 "contributing/plugin-author-guide.md",
+                "contributing/community-workflows.md",
                 "contributing/checker-design.md",
                 "contributing/corpus-contributions.md",
             )
@@ -115,6 +179,7 @@ def test_contributor_validation_reports_missing_required_label(tmp_path: Path) -
                 "docs/contributing/**",
                 ".github/ISSUE_TEMPLATE/**",
                 ".github/labels.yml",
+                "promptabi contribute validate --format text",
             )
         ),
         encoding="utf-8",

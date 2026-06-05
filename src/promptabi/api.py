@@ -25,6 +25,12 @@ from .compatibility_audit import (
     render_compatibility_audit_text,
     run_compatibility_audit,
 )
+from .contribution_workflows import (
+    ContributionWorkflow,
+    build_contribution_workflows,
+    render_contribution_workflows_json,
+    render_contribution_workflows_text,
+)
 from .contributor_validation import (
     ContributorValidationReport,
     render_contributor_validation_json,
@@ -1250,6 +1256,19 @@ def contributor_infrastructure(
         return render_contributor_validation_json(report)
     if output_format == "text":
         return render_contributor_validation_text(report)
+    raise ValueError("output_format must be one of: text, json")
+
+
+def contribution_workflows(*, output_format: str | None = None) -> tuple[ContributionWorkflow, ...] | str:
+    """Return community workflows for fixtures, witnesses, prompt packs, providers, and training adapters."""
+
+    workflows = build_contribution_workflows()
+    if output_format is None:
+        return workflows
+    if output_format == "json":
+        return render_contribution_workflows_json(workflows)
+    if output_format == "text":
+        return render_contribution_workflows_text(workflows)
     raise ValueError("output_format must be one of: text, json")
 
 

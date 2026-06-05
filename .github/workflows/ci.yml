@@ -41,7 +41,7 @@ jobs:
             python-version: "3.11"
             optional-set: core
             install-command: python -m pip install -e ".[dev]"
-            test-command: python -m pytest tests/test_cli.py tests/test_config.py tests/test_public_api.py tests/test_contributor_infrastructure.py
+            test-command: python -m pytest tests/test_cli.py tests/test_config.py tests/test_public_api.py tests/test_contributor_infrastructure.py && promptabi contribute validate --format text
 
           - os: ubuntu-latest
             python-version: "3.12"

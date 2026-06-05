@@ -1,0 +1,33 @@
+name: Training-manifest adapter contribution
+description: Submit dataset loader adapter fixtures, training manifests, sidecars, or redaction policies.
+title: "[Training adapter]: "
+labels: ["area: training"]
+body:
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Adapter provenance
+      description: Include dataset/adapter format, library version, exact revision/hash, synthetic-vs-real source status, and license.
+    validations:
+      required: true
+  - type: textarea
+    id: manifest
+    attributes:
+      label: Manifest coverage
+      description: Describe tokenizer/template pins, redaction policy, loss masks, packing, invalid role/tool/JSON/stop examples, streaming shards, or sidecar proofs.
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy review
+      description: Confirm no raw private training rows are included and hash-only fingerprints or synthetic rows are used for sensitive shards.
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation commands
+      description: Include promptabi verify-training and promptabi contribute validate commands.
+    validations:
+      required: true

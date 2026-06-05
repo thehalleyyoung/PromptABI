@@ -1,0 +1,33 @@
+name: Prompt-pack metadata contribution
+description: Submit reusable prompt-pack metadata, locks, registries, provenance, mirrors, or upgrade-gate reports.
+title: "[Prompt pack]: "
+labels: ["area: prompt-pack"]
+body:
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Provenance and review status
+      description: Include package origin, maintainer, license, exact revision/hash, review status, and supported model families.
+    validations:
+      required: true
+  - type: textarea
+    id: metadata
+    attributes:
+      label: Prompt-pack metadata
+      description: Link lockfiles, registry entries, provenance envelopes, mirror manifests, upgrade reports, and compatibility notes.
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy behavior
+      description: Explain whether prompt text is public, bounded, hash-only, or omitted, and confirm no private prompt library content is exposed.
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation commands
+      description: Include promptabi prompt-pack lock, registry, provenance, mirror, upgrade, and promptabi contribute validate commands as applicable.
+    validations:
+      required: true

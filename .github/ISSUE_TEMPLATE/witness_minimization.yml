@@ -1,0 +1,33 @@
+name: Minimized witness contribution
+description: Submit a reduced witness or minimizer case that preserves a structural PromptABI finding.
+title: "[Witness]: "
+labels: ["area: witness"]
+body:
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Provenance and original failure
+      description: Describe the original diagnostic, rule ID, fixture origin, revision/hash, and license or permission to share.
+    validations:
+      required: true
+  - type: textarea
+    id: minimization
+    attributes:
+      label: Minimization evidence
+      description: Include the promptabi minimize command, oracle, before/after size, accepted shrink steps, and preserved fingerprint or substring.
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy review
+      description: Confirm secrets, credentials, customer data, private prompts, and account-specific identifiers were removed or replaced with hash-only witnesses.
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation commands
+      description: List the exact commands that replay the reduced witness and run promptabi contribute validate.
+    validations:
+      required: true
