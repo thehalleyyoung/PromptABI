@@ -58,11 +58,12 @@ The same local verifier covers:
 | **Training/eval contracts** | target-role alignment, tokenizer/template drift, supervised-region checks, and fixture-backed real-bug benchmarks |
 
 Under the hood, PromptABI combines deterministic finite automata,
-finite-state transducers, differential checks against real tokenizer/template
-libraries, and a Z3-backed finite contract layer over booleans, enums, integer
-ranges, membership, lengths, and bounded strings. Every diagnostic states its
-guarantee mode--`sound`, `complete`, `bounded`, `z3-backed-smt`, `heuristic`,
-or `abstaining`--so CI can distinguish proof from best-effort evidence.
+finite-state transducers, executable specs for witnesses/products/SMT outcomes,
+differential checks against real tokenizer/template libraries, and a Z3-backed
+finite contract layer over booleans, enums, integer ranges, membership, lengths,
+and bounded strings. Every diagnostic states its guarantee mode--`sound`,
+`complete`, `bounded`, `z3-backed-smt`, `heuristic`, or `abstaining`--so CI can
+distinguish proof from best-effort evidence.
 
 ## Daily workflows
 

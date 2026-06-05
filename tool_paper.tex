@@ -36,10 +36,12 @@ renderers locked by structured snapshots, position-aware source spans for config
 version-pinned artifact loading, a tokenizer abstraction and differential harness
 validated against real Hugging Face \texttt{tokenizers},
 \texttt{tiktoken}, and SentencePiece libraries, deterministic finite automata,
-finite-state transducers with composition and projection, a finite-contract
-solver with compressed lazy product witnesses, incremental DFA minimization,
-indexed transducer composition/projection, solver timeouts, and constraint-sliced
-finite enumeration, byte-level tokenizer memoization for repeated normalization,
+finite-state transducers with composition and projection, executable
+specifications that replay witnesses, bounded product-language laws, and SMT
+proof objects, a finite-contract solver with compressed lazy product witnesses,
+incremental DFA minimization, indexed transducer composition/projection, solver
+timeouts, and constraint-sliced finite enumeration, byte-level tokenizer
+memoization for repeated normalization,
 a dependency-aware verification-session scheduler with deterministic
 parallel check execution and a per-session analysis cache, a typed plugin
 registry for artifact loaders, checks, provider adapters, grammar backends,
@@ -328,7 +330,8 @@ extracts Hugging Face chat-template structure from \texttt{tokenizer\_config.jso
 derives sanitizer-aware role-boundary regions over bounded rendered prompt patterns,
 emits minimized role-forgery witnesses with attacker input, rendered excerpt,
 token evidence centered on the forged marker, exact boundary offsets, and explicit sanitizer metadata,
-extracts automata, transducer, and solver witnesses for finite formal contracts,
+extracts automata, transducer, and solver witnesses for finite formal contracts
+and independently checks those witnesses with executable specifications,
 tracks check dependencies over artifact kinds, reuses cached tokenizer adapters,
 tokenizer/grammar analysis reports, budget reports, and static-contract query
 results, parallelizes independent embedded checks, serializes shared tokenizer and
@@ -535,6 +538,14 @@ example, stop-tokenizer analysis is shown as a mixture of sound unreachable-stop
 results, heuristic collision evidence, and abstentions, while static contracts
 are shown as bounded Z3-backed SMT over all artifact kinds, including finite
 supervised target-role alignment for training manifests.
+The central proof obligations also have an executable specification layer:
+automata witnesses are replayed transition-by-transition, product automata are
+checked by bounded language equivalence rather than by trusting product state
+names, transducer witnesses are replayed with epsilon-aware input/output labels,
+SAT contract results are re-evaluated against their finite domains and named
+constraints, UNSAT cores are checked for deletion-minimal inconsistency on small
+domains, and UNKNOWN results are required to remain explicit abstentions rather
+than masquerading as proofs.
 
 \begin{theorem}[Bounded counterexample soundness]
 For any check classified as sound and bounded, if PromptABI emits a concrete
@@ -618,6 +629,21 @@ against the tracked named constraints while finite-domain restrictions remain
 background assumptions, so the proof object shown to a developer is not merely
 the first raw solver core.
 
+The formal core is now accompanied by \texttt{promptabi.specs}, a
+machine-checkable reference layer used by the tests and paper artifact. Its DFA
+spec replays state paths for shortest reachability witnesses and checks eager
+intersection, union, and difference products by enumerating bounded words over
+the union alphabet and comparing against the mathematical language operation.
+Its FST spec replays transition labels, including epsilon insertions and
+deletions, and reconstructs the accepted input/output pair from the label path.
+Its finite-contract spec validates SAT assignments by domain membership plus
+constraint re-evaluation, validates UNSAT cores by independent finite
+enumeration on toy-sized domains, and validates the sound abstention boundary by
+ensuring UNKNOWN results carry no counterexample or proof object. These
+specifications are deliberately slower and simpler than the optimized algorithms;
+their purpose is to make the paper's central claims executable against real
+objects produced by the repository.
+
 The automata layer now optimizes the exact same properties rather than adding a
 separate approximate engine. It can find intersection witnesses lazily without
 materializing full products, compressing tokenizer-sized alphabets by equivalent
@@ -689,7 +715,12 @@ compositions are recognized as unsatisfiable, that the installed Z3 backend
 returns the same kind of concrete assignment for a satisfiable finite contract,
 that raw Z3 cores are minimized deterministically before becoming diagnostics,
 and that CLI static-contract findings classify proof-of-safety and concrete
-counterexample outcomes in the witness trace.
+counterexample outcomes in the witness trace. The executable-spec tests add an
+orthogonal benchline: they reject malformed DFA paths, detect deliberately wrong
+product-language claims, replay composed render/tokenize transducer witnesses,
+re-check concrete finite-contract assignments, confirm minimal unsat cores, and
+prove that artificial solver cutoffs surface as abstentions rather than false
+safety.
 This is the first formal benchline on which role-boundary, stop-reachability,
 grammar-emptiness, and must-survive budget checkers can be built.
 
