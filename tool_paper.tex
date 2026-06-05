@@ -180,7 +180,9 @@ an opt-in \texttt{--local-summary} usage analytics path that appends only
 sanitized command names, exit codes, durations, diagnostic counts, and aggregate
 artifact/check counts to local JSONL while \texttt{promptabi usage privacy}
 explicitly states that prompts, schemas, configs, constraints, witnesses,
-artifact contents, paths, and network sends are excluded, a checked security
+artifact contents, paths, and network sends are excluded, a \texttt{promptabi dashboard} team-risk view that rolls up live diagnostics,
+accepted suppressions, solver abstentions, drift warnings, corpus regressions,
+and local JSONL trend deltas across configs without exposing prompt contents, a checked security
 model that documents structural prompt-interface risks, non-goals,
 secret-handling behavior, artifact privacy, solver-input privacy, provider
 fixture safety, suppressions, and a responsible disclosure workflow,

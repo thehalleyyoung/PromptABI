@@ -159,6 +159,14 @@ from .release import (
     render_release_readiness_json,
     render_release_readiness_text,
 )
+from .team_dashboard import (
+    DashboardSnapshot,
+    TeamDashboardReport,
+    build_team_dashboard,
+    load_dashboard_history,
+    render_team_dashboard_json,
+    render_team_dashboard_text,
+)
 from .version_gates import (
     VersionGatePolicy,
     VersionGateReport,
@@ -791,6 +799,31 @@ def release_readiness(
         return render_release_readiness_json(report)
     if output_format == "text":
         return render_release_readiness_text(report)
+    raise ValueError("output_format must be one of: text, json")
+
+
+def team_dashboard(
+    configs: Sequence[str | Path | VerificationConfig] | str | Path | VerificationConfig,
+    *,
+    history_path: str | Path | None = None,
+    output_format: str | None = None,
+) -> TeamDashboardReport | str:
+    """Build or render a team risk dashboard from one or more real configs."""
+
+    if isinstance(configs, (str, Path, VerificationConfig)):
+        config_sequence: Sequence[str | Path | VerificationConfig] = (configs,)
+    else:
+        config_sequence = configs
+    report = build_team_dashboard(
+        tuple(run_verification(config) for config in config_sequence),
+        history=load_dashboard_history(history_path),
+    )
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_team_dashboard_json(report)
+    if output_format == "text":
+        return render_team_dashboard_text(report)
     raise ValueError("output_format must be one of: text, json")
 
 

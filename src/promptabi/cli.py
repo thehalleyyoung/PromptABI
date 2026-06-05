@@ -266,6 +266,15 @@ from .reproducibility import (
     ReproducibilityPackageError,
     write_reproducibility_package,
 )
+from .team_dashboard import (
+    TeamDashboardError,
+    append_dashboard_history,
+    build_team_dashboard,
+    load_corpus_report_json,
+    load_dashboard_history,
+    render_team_dashboard_json,
+    render_team_dashboard_text,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1410,6 +1419,51 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     compatibility_audit.add_argument("--output", help="write compatibility audit report to this path instead of stdout")
+
+    dashboard = subparsers.add_parser(
+        "dashboard",
+        help="summarize team risk trends across diagnostics, suppressions, abstentions, drift, and corpus regressions",
+    )
+    dashboard.add_argument(
+        "--config",
+        action="append",
+        default=[],
+        help="PromptABI config to include; may be repeated (default: discover promptabi.json)",
+    )
+    dashboard.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        metavar="NAME=PATH_OR_URI",
+        help="override or add an artifact location for all dashboard config runs; may be repeated",
+    )
+    dashboard.add_argument(
+        "--plugin",
+        action="append",
+        default=[],
+        metavar="MODULE[:OBJECT]",
+        help="import an additional PromptABI plugin before building the dashboard; may be repeated",
+    )
+    dashboard.add_argument(
+        "--history",
+        help="local JSONL dashboard history path used for trend deltas",
+    )
+    dashboard.add_argument(
+        "--record",
+        action="store_true",
+        help="append the current dashboard snapshot to --history after rendering",
+    )
+    dashboard.add_argument(
+        "--corpus-report",
+        help="saved JSON from 'promptabi corpus verify --format json' to include as corpus-regression status",
+    )
+    dashboard.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    dashboard.add_argument("--output", help="write dashboard report to this path instead of stdout")
 
     usage = subparsers.add_parser("usage", help="inspect telemetry-free local command summaries")
     usage_subparsers = usage.add_subparsers(dest="usage_command", required=True)
@@ -3166,6 +3220,36 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         except OSError as exc:
             print(f"promptabi: cannot write compatibility audit report: {exc}", file=sys.stderr)
+            return 2
+        return 0 if report.ok else 1
+
+    if args.command == "dashboard":
+        try:
+            if args.record and not args.history:
+                parser.error("--record requires --history")
+            config_paths = [Path(path).resolve() for path in args.config] if args.config else [discover_config()]
+            overrides = _parse_artifact_overrides(args.artifact, parser)
+            plugin_registry = _load_cli_plugins(args.plugin)
+            results = []
+            for config_path in config_paths:
+                config = load_config(config_path).with_artifact_overrides(overrides, base_dir=Path.cwd())
+                results.append(VerificationSession(config, plugin_registry=plugin_registry).run())
+            history = load_dashboard_history(args.history)
+            corpus_report = load_corpus_report_json(args.corpus_report) if args.corpus_report else None
+            report = build_team_dashboard(tuple(results), corpus_report=corpus_report, history=history)
+            output = render_team_dashboard_json(report) if args.format == "json" else render_team_dashboard_text(report)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                print(f"wrote team dashboard: {args.output} ({len(report.current.sources)} source(s))")
+            else:
+                print(output, end="")
+            if args.record and args.history:
+                append_dashboard_history(args.history, report.current)
+        except (ConfigError, PluginError, TeamDashboardError, ValueError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write team dashboard: {exc}", file=sys.stderr)
             return 2
         return 0 if report.ok else 1
 

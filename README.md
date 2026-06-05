@@ -130,6 +130,7 @@ promptabi gallery --format text
 # Diagnose the local environment and emit editor-ready inline diagnostics.
 promptabi doctor --config examples/minimal/promptabi.json
 promptabi diagnostics cluster --config examples/minimal/promptabi.json --strategy rule
+promptabi dashboard --config examples/role-boundary/unsafe.promptabi.json --history .promptabi/team-dashboard.jsonl --record
 promptabi diagnostics catalog --config examples/minimal/promptabi.json --format json
 promptabi diagnostics lsp --config examples/minimal/promptabi.json --format json
 # Clusters rank fixes by safety, compatibility, blast radius, and prompt-behavior impact.
