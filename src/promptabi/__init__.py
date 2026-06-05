@@ -1132,6 +1132,15 @@ from .solver_portfolio_replay import (
     token_budget_portfolio_problems,
     verify_solver_portfolio,
 )
+from .smt_witness import (
+    SMT_WITNESS_VERSION,
+    MinimizedSmtWitness,
+    SmtWitnessError,
+    WitnessVariable,
+    minimize_smt_model,
+    render_smt_witness_json,
+    render_smt_witness_text,
+)
 from .provider_fixture_replay import (
     ProviderFixtureReplayCase,
     ProviderFixtureReplayFinding,
@@ -2038,6 +2047,13 @@ __all__ = [
     "run_solver_portfolio",
     "token_budget_portfolio_problems",
     "verify_solver_portfolio",
+    "SMT_WITNESS_VERSION",
+    "MinimizedSmtWitness",
+    "SmtWitnessError",
+    "WitnessVariable",
+    "minimize_smt_model",
+    "render_smt_witness_json",
+    "render_smt_witness_text",
     "analyze_parser_compatibility",
     "analyze_tokenizer_grammar_ambiguity",
     "analyze_tokenizer_grammar_emptiness",
