@@ -71,8 +71,9 @@ contract layer over booleans, enums, integer ranges, membership, lengths, and
 bounded strings. Solver queries are cacheable by normalized formulas, artifact
 hashes, supported-fragment metadata, and solver-version fingerprints. Every
 diagnostic states its guarantee mode--`sound`, `complete`, `bounded`,
-`z3-backed-smt`, `heuristic`, or `abstaining`--so CI can distinguish proof from
-best-effort evidence.
+`z3-backed-smt`, `heuristic`, or `abstaining`--and formal counterexamples can be
+shrunk to minimal strings, token paths, and solver assignments, so CI can
+distinguish proof from best-effort evidence.
 
 ## Daily workflows
 

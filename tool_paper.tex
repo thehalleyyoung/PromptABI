@@ -45,7 +45,8 @@ evaluation harnesses, now compiled into source-mapped finite obligations whose
 diagnostics preserve human rule names, rule-line spans, solver models, and proof
 or counterexample classification, lowered to a finite-contract solver with compressed lazy product witnesses,
 incremental DFA minimization, indexed transducer composition/projection, solver
-timeouts, constraint-sliced finite enumeration, and a deterministic solver-query
+timeouts, constraint-sliced finite enumeration, reusable automata/transducer/SMT
+counterexample shrinking for minimal strings, token paths, and finite assignments, and a deterministic solver-query
 cache keyed by normalized Z3 formulas, artifact hashes, supported-fragment
 metadata, and solver-version fingerprints, deterministic solver-replay JSON files
 that rerun reduced SMT-backed findings without loading original artifacts,
@@ -189,10 +190,9 @@ render audited suppression diagnostics without letting stale or unjustified
 exceptions weaken CI,
 a \texttt{promptabi minimize} workflow and public API that shrink failing
 templates, JSON Schemas, stop-string sets, message sets, finite solver-constraint
-lists, and provider fixtures under a failure-preserving predicate into compact
-upstreamable repros, including a safe substring oracle for local triage and a
-diagnostic oracle that rewrites a candidate artifact and proves a selected
-PromptABI rule still fires,
+lists, provider fixtures, and formal DFA/FST/SMT counterexamples under
+failure-preserving or globally minimality-certified predicates into compact
+upstreamable repros,
 an upstream bug-report generator that turns a selected real diagnostic into a
 sanitized markdown issue containing artifact versions and hashes, reproduction
 commands, expected and actual behavior, redacted length-limited witness traces,

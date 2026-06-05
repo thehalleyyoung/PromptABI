@@ -195,6 +195,15 @@ from .chat_templates import (
     symbolically_execute_chat_template,
 )
 from .config import ConfigError, VerificationConfig, discover_config, load_config
+from .counterexamples import (
+    CounterexampleMetric,
+    CounterexampleShrinkError,
+    CounterexampleShrinkReport,
+    CounterexampleShrinkStep,
+    shrink_automaton_counterexample,
+    shrink_finite_contract_counterexample,
+    shrink_transducer_counterexample,
+)
 from .witness_privacy import WitnessPrivacyMode, apply_witness_privacy, private_witness
 from .compatibility_matrix import (
     CHECK_RULE_IDS,
@@ -792,6 +801,10 @@ __all__ = [
     "ContributorValidationError",
     "ContributorValidationIssue",
     "ContributorValidationReport",
+    "CounterexampleMetric",
+    "CounterexampleShrinkError",
+    "CounterexampleShrinkReport",
+    "CounterexampleShrinkStep",
     "CorpusVerificationCheck",
     "CorpusVerificationError",
     "CorpusVerificationReport",
@@ -1108,6 +1121,9 @@ __all__ = [
     "compatibility_matrix",
     "contributor_infrastructure",
     "create_session",
+    "shrink_automaton_counterexample",
+    "shrink_finite_contract_counterexample",
+    "shrink_transducer_counterexample",
     "create_reproducibility_package",
     "create_signed_verification_bundle",
     "create_verification_bundle",
