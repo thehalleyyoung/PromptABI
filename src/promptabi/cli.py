@@ -185,6 +185,12 @@ from .runtime_alarms import (
     render_runtime_alarm_json,
     render_runtime_alarm_text,
 )
+from .streaming_parser_products import (
+    AutomatonError as StreamingParserProductError,
+    analyze_streaming_parser_product,
+    render_streaming_parser_product_json,
+    render_streaming_parser_product_text,
+)
 from .roadmap import (
     RoadmapError,
     build_annual_corpus_refresh_report,
@@ -629,6 +635,38 @@ def build_parser() -> argparse.ArgumentParser:
         help="import a PromptABI plugin module for this run; may be repeated",
     )
     _add_local_summary_argument(verify_training)
+
+    streaming_parser = subparsers.add_parser(
+        "streaming-parser",
+        help="model streamed parser chunks as a first-class parser/monitor product",
+    )
+    streaming_parser.add_argument(
+        "--chunk",
+        action="append",
+        default=[],
+        help="one streamed text chunk; may be repeated in order",
+    )
+    streaming_parser.add_argument(
+        "--input",
+        help="path to a UTF-8 text file to analyze as a single stream when --chunk is omitted",
+    )
+    streaming_parser.add_argument(
+        "--monitor",
+        help="literal whose occurrence inside a protected parser state should fail",
+    )
+    streaming_parser.add_argument(
+        "--max-depth",
+        type=int,
+        default=8,
+        help="bounded JSON nesting depth tracked by the parser product (default: 8)",
+    )
+    streaming_parser.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    _add_local_summary_argument(streaming_parser)
 
     explain = subparsers.add_parser("explain", help="expand one diagnostic into a tutorial-style explanation")
     explain.add_argument(
@@ -3161,6 +3199,50 @@ def main(argv: Sequence[str] | None = None) -> int:
             exit_code=exit_code,
             started_at=started_at,
             metadata=_verification_summary_metadata(result, output_format=args.format, fail_on=args.fail_on),
+        ):
+            return 2
+        print(output, end="")
+        return exit_code
+
+    if args.command == "streaming-parser":
+        started_at = time.perf_counter()
+        try:
+            if args.chunk and args.input:
+                parser.error("--chunk cannot be combined with --input")
+            if args.chunk:
+                chunks = tuple(args.chunk)
+            elif args.input:
+                chunks = (Path(args.input).expanduser().read_text(encoding="utf-8"),)
+            else:
+                chunks = (sys.stdin.read(),)
+            report = analyze_streaming_parser_product(
+                chunks,
+                monitor_literal=args.monitor,
+                max_depth=args.max_depth,
+            )
+            output = (
+                render_streaming_parser_product_json(report)
+                if args.format == "json"
+                else render_streaming_parser_product_text(report)
+            )
+        except StreamingParserProductError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot read streaming parser input: {exc}", file=sys.stderr)
+            return 2
+        exit_code = 0 if report.ok else 1
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="streaming-parser",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={
+                "output_format": args.format,
+                "chunk_count": len(chunks),
+                "event_count": len(report.replay.events),
+                "violation_count": len(report.violations),
+            },
         ):
             return 2
         print(output, end="")

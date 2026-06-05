@@ -97,6 +97,7 @@ promptabi init --stack openai-tools --output-dir .promptabi-demo
 
 # Replay paired buggy/fixed app contracts across tools, JSON, RAG, providers, and training.
 promptabi verify --config examples/end-to-end/tool-calling/buggy.promptabi.json --fail-on never
+promptabi streaming-parser --chunk '{"arguments":{"q":"hi </tool_call>"}}' --monitor '</tool_call>'
 promptabi verify --config examples/prompt-packs/promptabi.json
 promptabi prompt-pack lock --config examples/prompt-packs/promptabi.json --write --lockfile /tmp/prompt-pack.lock.json
 promptabi prompt-pack registry --config examples/prompt-packs/promptabi.json --output /tmp/prompt-pack.registry.json

@@ -185,7 +185,7 @@ The witness records the stop, the valid full output, the prefix returned after
 truncation, the parser state at the firing point, and the malformed or
 prematurely accepted structure a downstream parser would receive.
 
-\subsection{Tokenizers and Grammars}
+\subsection{Tokenizers, Grammars, and Streaming Parsers}
 
 Tokenizer bugs often arise from mismatches between text-level constraints and
 token-level behavior. PromptABI can compare tokenizer revisions, detect drift in
@@ -193,6 +193,16 @@ special-token IDs and normalization, and form bounded products between a
 tokenizer relation and a grammar. This exposes empty products, ambiguous token
 paths, decoded-text conflicts, whitespace aliases, Unicode normalization
 surprises, and added-token interactions.
+
+Streaming parsers are first-class products as well. A provider may split a tool
+call, JSON object, or structured response across arbitrary chunks, while the
+application parser treats some states as protected data regions. PromptABI models
+the chunked parser as a bounded deterministic state machine and composes it with
+a substring monitor DFA. The command
+\texttt{promptabi streaming-parser --monitor '</tool\_call>'} proves whether a
+literal can be observed while the parser is inside a JSON string, and returns the
+chunk index, event index, parser state, and excerpt when it can. This makes
+streaming stop/tool-parser bugs reproducible without calling a provider.
 
 \subsection{Budgets, Training, and Evaluation}
 
