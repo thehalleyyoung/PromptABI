@@ -366,6 +366,12 @@ from .token_budget_arithmetic import (
     render_token_budget_report_text,
     verify_token_budget_contract,
 )
+from .solver_lemma_cache import (
+    render_solver_lemma_cache_json,
+    render_solver_lemma_cache_text,
+    token_budget_lemma_suite,
+    verify_solver_lemma_cache,
+)
 from .loaders import ArtifactLoader
 from .lockfiles import (
     LockfileError,
@@ -969,6 +975,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     _add_local_summary_argument(token_budget)
+
+    solver_cache = subparsers.add_parser(
+        "solver-cache",
+        help="prove the solver-lemma cache is sound and reused across normalized artifact products",
+    )
+    solver_cache.add_argument(
+        "--contract",
+        required=True,
+        help="path to a token-budget contract JSON document whose guarantees seed the lemma suite",
+    )
+    solver_cache.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    _add_local_summary_argument(solver_cache)
 
     explain = subparsers.add_parser("explain", help="expand one diagnostic into a tutorial-style explanation")
     explain.add_argument(
@@ -3983,6 +4006,38 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "format": args.format,
                 "contract": report.contract,
                 "guarantees": len(report.results),
+                "ok": report.ok,
+            },
+        ):
+            return 2
+        print(output, end="")
+        return exit_code
+
+    if args.command == "solver-cache":
+        started_at = time.perf_counter()
+        try:
+            contract = load_token_budget_contract(str(Path(args.contract).resolve()))
+            suite = token_budget_lemma_suite(contract)
+            report = verify_solver_lemma_cache(suite)
+        except (OSError, ValueError, KeyError) as exc:
+            print(f"promptabi: cannot verify solver-lemma cache: {exc}", file=sys.stderr)
+            return 2
+        output = (
+            render_solver_lemma_cache_json(report)
+            if args.format == "json"
+            else render_solver_lemma_cache_text(report)
+        )
+        exit_code = 0 if report.ok else 1
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="solver-cache",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={
+                "format": args.format,
+                "hits": report.hits,
+                "misses": report.misses,
+                "soundness_ok": report.soundness_ok,
                 "ok": report.ok,
             },
         ):
