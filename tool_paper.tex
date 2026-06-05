@@ -82,7 +82,9 @@ synthetic-data generator preflight checks that reject finite generator plans abl
 to emit forbidden roles, invalid schema outputs, malformed tool-call envelopes,
 or truncation cases that drop required regions before any generated row is
 admitted, streaming-shard verification that samples JSONL chunks without
-materializing private corpora, offline data-loader adapter fixtures for Hugging Face Datasets,
+materializing private corpora, proof-carrying dataset shard sidecars that bind
+local verification summaries to streamed shard SHA-256 hashes and hash-only
+counterexample fingerprints, offline data-loader adapter fixtures for Hugging Face Datasets,
 JSONL, Parquet metadata, Axolotl, LLaMA-Factory, TRL, OpenRLHF, and internal
 formats, training-to-serving bridge facts, and corpus-metadata drift checks that compare
 training baselines against model-card facts, tokenizer/template pins, and serving

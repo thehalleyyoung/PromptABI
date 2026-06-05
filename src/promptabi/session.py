@@ -172,6 +172,12 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "training-streaming-chunk-oversized": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-streaming-count-mismatch": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-streaming-hash-missing": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-streaming-shard-proof-missing": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-streaming-shard-proof-invalid": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-streaming-shard-proof-hash-mismatch": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-streaming-shard-proof-summary-mismatch": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-streaming-shard-proof-unsafe-fingerprint": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-streaming-shard-proof-verified": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-streaming-verified": (CheckMode.SOUND, CheckMode.BOUNDED),
     "synthetic-generator-contracts-role-contract-violation": (CheckMode.SOUND, CheckMode.BOUNDED),
     "synthetic-generator-contracts-schema-contract-violation": (CheckMode.SOUND, CheckMode.BOUNDED),
@@ -2111,6 +2117,21 @@ def _training_streaming_finding_diagnostic(
         ),
         "training-streaming-hash-missing": (
             "Persist sha256:<digest> evidence for private target/mask fields instead of raw training content.",
+        ),
+        "training-streaming-shard-proof-missing": (
+            "Write the declared proof sidecar beside the dataset shard or remove the sidecar declaration until it exists.",
+        ),
+        "training-streaming-shard-proof-invalid": (
+            "Regenerate the shard proof sidecar with PromptABI's proof schema, matching shard path, and non-sensitive metadata only.",
+        ),
+        "training-streaming-shard-proof-hash-mismatch": (
+            "Regenerate the proof sidecar after changing the dataset shard so artifact_hashes.dataset matches the local file.",
+        ),
+        "training-streaming-shard-proof-summary-mismatch": (
+            "Regenerate the proof sidecar after changing sampling bounds, role contracts, hash fields, or dataset rows.",
+        ),
+        "training-streaming-shard-proof-unsafe-fingerprint": (
+            "Store only sha256:<digest> counterexample fingerprints in proof sidecars; do not store raw prompt or dataset content.",
         ),
     }.get(rule_id, ())
     return Diagnostic(

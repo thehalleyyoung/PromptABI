@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from enum import StrEnum
@@ -23,6 +24,12 @@ class TrainingStreamingFindingKind(StrEnum):
     CHUNK_OVERSIZED = "chunk-oversized"
     COUNT_MISMATCH = "count-mismatch"
     HASH_MISSING = "hash-missing"
+    SHARD_PROOF_MISSING = "shard-proof-missing"
+    SHARD_PROOF_INVALID = "shard-proof-invalid"
+    SHARD_PROOF_HASH_MISMATCH = "shard-proof-hash-mismatch"
+    SHARD_PROOF_SUMMARY_MISMATCH = "shard-proof-summary-mismatch"
+    SHARD_PROOF_UNSAFE_FINGERPRINT = "shard-proof-unsafe-fingerprint"
+    SHARD_PROOF_VERIFIED = "shard-proof-verified"
     VERIFIED = "verified"
 
 
@@ -43,6 +50,7 @@ class StreamingDatasetSpec:
     messages_field: str
     max_row_bytes: int | None
     expected_sample_rows: int | None
+    proof_sidecars: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,7 +78,7 @@ class TrainingStreamingReport:
     @property
     def verified(self) -> bool:
         return bool(self.findings) and all(
-            finding.kind is TrainingStreamingFindingKind.VERIFIED for finding in self.findings
+            finding.kind in _SUCCESS_KINDS for finding in self.findings
         )
 
 
@@ -80,6 +88,14 @@ _STREAMING_METADATA_KEYS = (
     "streaming_dataset_samples",
 )
 _STANDARD_ROLES = ("assistant", "developer", "function", "system", "tool", "user")
+_SHARD_PROOF_SCHEMA_VERSION = "promptabi.dataset-shard-proof.v1"
+_SHARD_PROOF_KIND = "promptabi-dataset-shard-proof"
+_SUCCESS_KINDS = frozenset(
+    {
+        TrainingStreamingFindingKind.VERIFIED,
+        TrainingStreamingFindingKind.SHARD_PROOF_VERIFIED,
+    }
+)
 
 
 def analyze_training_streaming(
@@ -91,7 +107,9 @@ def analyze_training_streaming(
 
     The checker reads only the declared JSONL prefix sample and validates chunk
     shape, required structural fields, role labels, hash-only evidence, and row
-    byte bounds. It never accumulates the full corpus in memory.
+    byte bounds. It never accumulates the full corpus in memory. When a contract
+    opts into proof sidecars, PromptABI additionally streams the declared shard
+    once to verify its proof-carrying artifact hash without materializing it.
     """
 
     dataset_index = {dataset.name: dataset for dataset in manifest.datasets}
@@ -142,6 +160,16 @@ def analyze_training_streaming(
         )
         findings.extend(sample_findings)
         if not sample_findings:
+            proof_findings = _proof_sidecar_findings(
+                manifest,
+                spec,
+                base_dir=root,
+                rows_sampled=rows_sampled,
+                chunks_sampled=chunks_sampled,
+            )
+            findings.extend(proof_findings)
+            if any(finding.kind not in _SUCCESS_KINDS for finding in proof_findings):
+                continue
             verified_rows += rows_sampled
             verified_chunks += chunks_sampled
             findings.append(
@@ -497,9 +525,306 @@ def _streaming_specs(
                 messages_field=_optional_string(item.get("messages_field"), "messages_field") or "messages",
                 max_row_bytes=_optional_positive_int(item.get("max_row_bytes"), "max_row_bytes"),
                 expected_sample_rows=_optional_positive_int(item.get("expected_sample_rows"), "expected_sample_rows"),
+                proof_sidecars=_proof_sidecars(item),
             )
         )
     return tuple(specs)
+
+
+def build_dataset_shard_proof(
+    *,
+    shard_path: str | Path,
+    sample_name: str,
+    rows_sampled: int,
+    chunks_sampled: int,
+    hash_fields: tuple[str, ...] | list[str] = (),
+    allowed_roles: tuple[str, ...] | list[str] = (),
+    chunk_size: int | None = None,
+    sample_rows: int | None = None,
+    counterexample_fingerprints: tuple[str, ...] | list[str] = (),
+    base_dir: str | Path | None = None,
+) -> dict[str, object]:
+    """Build a proof-carrying shard sidecar payload for local verification.
+
+    The returned mapping is intentionally non-sensitive: it contains the shard
+    path, a streamed SHA-256 digest, bounded verification counters, contract
+    names, and optional sha256-shaped counterexample fingerprints.
+    """
+
+    root = Path(base_dir) if base_dir is not None else Path.cwd()
+    shard = Path(shard_path)
+    digest = _file_sha256_ref(_resolve_under_root(shard, root))
+    summary: dict[str, object] = {
+        "sample_name": sample_name,
+        "rows_sampled": rows_sampled,
+        "chunks_sampled": chunks_sampled,
+        "hash_fields": sorted(dict.fromkeys(hash_fields)),
+        "allowed_roles": sorted(_normalize_role(role) for role in dict.fromkeys(allowed_roles)),
+    }
+    if chunk_size is not None:
+        summary["chunk_size"] = chunk_size
+    if sample_rows is not None:
+        summary["sample_rows"] = sample_rows
+    return {
+        "schema_version": _SHARD_PROOF_SCHEMA_VERSION,
+        "kind": _SHARD_PROOF_KIND,
+        "shard": str(shard),
+        "sample_name": sample_name,
+        "artifact_hashes": {"dataset": digest},
+        "verification_summary": summary,
+        "counterexample_fingerprints": list(counterexample_fingerprints),
+    }
+
+
+def _proof_sidecars(item: Mapping[str, object]) -> tuple[str, ...]:
+    direct = _optional_string(item.get("proof_sidecar"), "proof_sidecar")
+    many = _strings(item.get("proof_sidecars"), "proof_sidecars")
+    values = []
+    if direct is not None:
+        values.append(direct)
+    values.extend(many)
+    return tuple(dict.fromkeys(values))
+
+
+def _proof_sidecar_findings(
+    manifest: TrainingManifestArtifact,
+    spec: StreamingDatasetSpec,
+    *,
+    base_dir: Path,
+    rows_sampled: int,
+    chunks_sampled: int,
+) -> tuple[TrainingStreamingFinding, ...]:
+    if not spec.proof_sidecars:
+        return ()
+    findings: list[TrainingStreamingFinding] = []
+    shard_path = _resolve_under_root(Path(spec.path), base_dir)
+    expected_hash: str | None = None
+    for sidecar in spec.proof_sidecars:
+        sidecar_path = _resolve_under_root(Path(sidecar), base_dir)
+        try:
+            payload = json.loads(sidecar_path.read_text(encoding="utf-8"))
+        except OSError as exc:
+            findings.append(
+                _sample_finding(
+                    manifest,
+                    spec,
+                    TrainingStreamingFindingKind.SHARD_PROOF_MISSING,
+                    f"streaming dataset sample '{spec.name}' proof sidecar could not be opened: {exc}",
+                    "error",
+                    f"proof_sidecars.{sidecar}",
+                    rows_sampled,
+                    chunks_sampled,
+                    (("open proof sidecar", str(sidecar_path), exc.__class__.__name__),),
+                )
+            )
+            continue
+        except json.JSONDecodeError as exc:
+            findings.append(
+                _sample_finding(
+                    manifest,
+                    spec,
+                    TrainingStreamingFindingKind.SHARD_PROOF_INVALID,
+                    f"streaming dataset sample '{spec.name}' proof sidecar is not valid JSON: {exc.msg}",
+                    "error",
+                    f"proof_sidecars.{sidecar}",
+                    rows_sampled,
+                    chunks_sampled,
+                    (("parse proof sidecar", str(sidecar_path), exc.msg),),
+                )
+            )
+            continue
+        if not isinstance(payload, Mapping):
+            findings.append(
+                _sample_finding(
+                    manifest,
+                    spec,
+                    TrainingStreamingFindingKind.SHARD_PROOF_INVALID,
+                    f"streaming dataset sample '{spec.name}' proof sidecar is not a JSON object",
+                    "error",
+                    f"proof_sidecars.{sidecar}",
+                    rows_sampled,
+                    chunks_sampled,
+                    (("parse proof sidecar", str(sidecar_path), type(payload).__name__),),
+                )
+            )
+            continue
+        if expected_hash is None:
+            try:
+                expected_hash = _file_sha256_ref(shard_path)
+            except OSError as exc:
+                findings.append(
+                    _sample_finding(
+                        manifest,
+                        spec,
+                        TrainingStreamingFindingKind.STREAM_UNREADABLE,
+                        f"streaming dataset sample '{spec.name}' could not be hashed for proof sidecar verification: {exc}",
+                        "error",
+                        "path",
+                        rows_sampled,
+                        chunks_sampled,
+                        (("stream shard digest", str(shard_path), exc.__class__.__name__),),
+                    )
+                )
+                continue
+        findings.extend(
+            _validate_proof_payload(
+                manifest,
+                spec,
+                payload,
+                sidecar_path=sidecar_path,
+                shard_path=shard_path,
+                expected_hash=expected_hash,
+                rows_sampled=rows_sampled,
+                chunks_sampled=chunks_sampled,
+            )
+        )
+    return tuple(findings)
+
+
+def _validate_proof_payload(
+    manifest: TrainingManifestArtifact,
+    spec: StreamingDatasetSpec,
+    payload: Mapping[str, object],
+    *,
+    sidecar_path: Path,
+    shard_path: Path,
+    expected_hash: str,
+    rows_sampled: int,
+    chunks_sampled: int,
+) -> tuple[TrainingStreamingFinding, ...]:
+    findings: list[TrainingStreamingFinding] = []
+    schema_version = payload.get("schema_version")
+    kind = payload.get("kind")
+    if schema_version != _SHARD_PROOF_SCHEMA_VERSION or kind != _SHARD_PROOF_KIND:
+        findings.append(
+            _sample_finding(
+                manifest,
+                spec,
+                TrainingStreamingFindingKind.SHARD_PROOF_INVALID,
+                f"streaming dataset sample '{spec.name}' proof sidecar has unsupported schema metadata",
+                "error",
+                "proof_sidecars.schema_version",
+                rows_sampled,
+                chunks_sampled,
+                (("check proof schema", str(sidecar_path), f"{schema_version!r}/{kind!r}"),),
+            )
+        )
+    sidecar_shard = payload.get("shard")
+    if not isinstance(sidecar_shard, str) or _resolve_under_root(Path(sidecar_shard), shard_path.parent) != shard_path:
+        findings.append(
+            _sample_finding(
+                manifest,
+                spec,
+                TrainingStreamingFindingKind.SHARD_PROOF_INVALID,
+                f"streaming dataset sample '{spec.name}' proof sidecar points at a different shard",
+                "error",
+                "proof_sidecars.shard",
+                rows_sampled,
+                chunks_sampled,
+                (("compare proof shard", _display_value(sidecar_shard), str(shard_path)),),
+            )
+        )
+    artifact_hashes = payload.get("artifact_hashes")
+    dataset_hash = artifact_hashes.get("dataset") if isinstance(artifact_hashes, Mapping) else None
+    if dataset_hash != expected_hash:
+        findings.append(
+            _sample_finding(
+                manifest,
+                spec,
+                TrainingStreamingFindingKind.SHARD_PROOF_HASH_MISMATCH,
+                f"streaming dataset sample '{spec.name}' proof sidecar dataset hash does not match the local shard",
+                "error",
+                "proof_sidecars.artifact_hashes.dataset",
+                rows_sampled,
+                chunks_sampled,
+                (("stream shard digest", str(shard_path), expected_hash), ("compare proof digest", None, _display_value(dataset_hash))),
+            )
+        )
+    summary = payload.get("verification_summary")
+    if not isinstance(summary, Mapping) or _proof_summary_mismatches(spec, summary, rows_sampled, chunks_sampled):
+        findings.append(
+            _sample_finding(
+                manifest,
+                spec,
+                TrainingStreamingFindingKind.SHARD_PROOF_SUMMARY_MISMATCH,
+                f"streaming dataset sample '{spec.name}' proof sidecar summary does not match the current bounded verification",
+                "error",
+                "proof_sidecars.verification_summary",
+                rows_sampled,
+                chunks_sampled,
+                (
+                    ("compare proof rows", None, str(rows_sampled)),
+                    ("compare proof chunks", None, str(chunks_sampled)),
+                    ("compare proof contract", None, spec.name),
+                ),
+            )
+        )
+    fingerprints = payload.get("counterexample_fingerprints", ())
+    if not isinstance(fingerprints, list) or any(not isinstance(item, str) or not _is_sha256_ref(item) for item in fingerprints):
+        findings.append(
+            _sample_finding(
+                manifest,
+                spec,
+                TrainingStreamingFindingKind.SHARD_PROOF_UNSAFE_FINGERPRINT,
+                f"streaming dataset sample '{spec.name}' proof sidecar counterexample fingerprints are not hash-only",
+                "error",
+                "proof_sidecars.counterexample_fingerprints",
+                rows_sampled,
+                chunks_sampled,
+                (("inspect proof fingerprints", None, _display_value(fingerprints)),),
+            )
+        )
+    if not findings:
+        findings.append(
+            _sample_finding(
+                manifest,
+                spec,
+                TrainingStreamingFindingKind.SHARD_PROOF_VERIFIED,
+                f"streaming dataset sample '{spec.name}' proof sidecar matches the local shard and bounded verification summary",
+                "info",
+                "proof_sidecars",
+                rows_sampled,
+                chunks_sampled,
+                (
+                    ("open proof sidecar", str(sidecar_path), "json"),
+                    ("stream shard digest", str(shard_path), expected_hash),
+                    ("compare bounded summary", None, f"{rows_sampled} row(s), {chunks_sampled} chunk(s)"),
+                    ("verify counterexample fingerprints", None, "hash-only"),
+                ),
+            )
+        )
+    return tuple(findings)
+
+
+def _proof_summary_mismatches(
+    spec: StreamingDatasetSpec,
+    summary: Mapping[str, object],
+    rows_sampled: int,
+    chunks_sampled: int,
+) -> bool:
+    expected: dict[str, object] = {
+        "sample_name": spec.name,
+        "rows_sampled": rows_sampled,
+        "chunks_sampled": chunks_sampled,
+        "hash_fields": sorted(spec.hash_fields),
+        "allowed_roles": sorted(_normalize_role(role) for role in spec.allowed_roles),
+        "chunk_size": spec.chunk_size,
+        "sample_rows": spec.sample_rows,
+    }
+    return any(summary.get(key) != value for key, value in expected.items())
+
+
+def _resolve_under_root(path: Path, root: Path) -> Path:
+    resolved = path if path.is_absolute() else root / path
+    return resolved.resolve(strict=False)
+
+
+def _file_sha256_ref(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return f"sha256:{digest.hexdigest()}"
 
 
 def _row_roles(row: Mapping[str, object], *, messages_field: str) -> tuple[str, ...]:

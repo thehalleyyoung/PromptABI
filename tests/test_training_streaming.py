@@ -5,8 +5,9 @@ import promptabi
 from promptabi.cli import main
 from promptabi.config import load_config
 from promptabi.loaders import ArtifactLoader
+from promptabi.session import CHECK_MODE_CATALOG
 from promptabi.session import VerificationSession
-from promptabi.training_streaming import analyze_training_streaming
+from promptabi.training_streaming import TrainingStreamingFindingKind, analyze_training_streaming
 
 
 SHA = "sha256:" + "a" * 64
@@ -81,6 +82,54 @@ def test_training_streaming_abstains_without_contract(tmp_path: Path) -> None:
     assert result.ok
     assert [diagnostic.rule_id for diagnostic in diagnostics] == ["training-streaming-contract-missing"]
     assert diagnostics[0].check_modes[0].value == "abstaining"
+
+
+def test_training_streaming_verifies_proof_carrying_dataset_shard(tmp_path: Path) -> None:
+    manifest_path = _write_streaming_manifest(tmp_path, clean=True)
+    _attach_proof_sidecar(tmp_path, manifest_path)
+
+    result = VerificationSession(load_config(_write_config(tmp_path, manifest_path))).run()
+    diagnostics = [diagnostic for diagnostic in result.diagnostics if diagnostic.rule_id.startswith("training-streaming")]
+    rule_ids = [diagnostic.rule_id for diagnostic in diagnostics]
+
+    assert result.ok
+    assert rule_ids == ["training-streaming-shard-proof-verified", "training-streaming-verified"]
+    proof_properties = dict(diagnostics[0].properties)
+    assert proof_properties["rows_sampled"] == 5
+    assert proof_properties["chunks_sampled"] == 3
+    assert proof_properties["sample_name"] == "streamed-chat"
+    assert "stream shard digest" in [step.action for step in diagnostics[0].witness.steps]
+
+    artifact = ArtifactLoader().load(load_config(_write_config(tmp_path, manifest_path)).artifact_bundle.artifacts[0]).artifact
+    assert analyze_training_streaming(artifact, base_dir=tmp_path).verified
+
+
+def test_training_streaming_rejects_stale_or_sensitive_shard_proofs(tmp_path: Path) -> None:
+    manifest_path = _write_streaming_manifest(tmp_path, clean=True)
+    sidecar_path = _attach_proof_sidecar(tmp_path, manifest_path)
+    payload = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    payload["artifact_hashes"]["dataset"] = "sha256:" + "b" * 64
+    payload["counterexample_fingerprints"] = ["raw prompt excerpt"]
+    sidecar_path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+
+    result = VerificationSession(load_config(_write_config(tmp_path, manifest_path))).run()
+    diagnostics = [diagnostic for diagnostic in result.diagnostics if diagnostic.rule_id.startswith("training-streaming")]
+    rule_ids = {diagnostic.rule_id for diagnostic in diagnostics}
+
+    assert not result.ok
+    assert "training-streaming-shard-proof-hash-mismatch" in rule_ids
+    assert "training-streaming-shard-proof-unsafe-fingerprint" in rule_ids
+    assert "training-streaming-verified" not in rule_ids
+
+
+def test_training_streaming_finding_kinds_are_registered_for_diagnostics() -> None:
+    missing = [
+        f"training-streaming-{kind.value}"
+        for kind in TrainingStreamingFindingKind
+        if f"training-streaming-{kind.value}" not in CHECK_MODE_CATALOG
+    ]
+
+    assert missing == []
 
 
 def _write_config(tmp_path: Path, manifest_path: Path) -> Path:
@@ -211,3 +260,25 @@ def _write_streaming_manifest(tmp_path: Path, *, clean: bool) -> Path:
         encoding="utf-8",
     )
     return manifest_path
+
+
+def _attach_proof_sidecar(tmp_path: Path, manifest_path: Path) -> Path:
+    sidecar_path = tmp_path / "clean.jsonl.promptabi-proof.json"
+    proof = promptabi.build_dataset_shard_proof(
+        shard_path="clean.jsonl",
+        sample_name="streamed-chat",
+        rows_sampled=5,
+        chunks_sampled=3,
+        hash_fields=("assistant_target_sha256", "loss_mask_sha256"),
+        allowed_roles=("system", "user", "assistant"),
+        chunk_size=2,
+        sample_rows=5,
+        counterexample_fingerprints=(),
+        base_dir=tmp_path,
+    )
+    sidecar_path.write_text(json.dumps(proof, sort_keys=True), encoding="utf-8")
+
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    payload["metadata"]["streaming_dataset_verification"][0]["proof_sidecars"] = [sidecar_path.name]
+    manifest_path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+    return sidecar_path

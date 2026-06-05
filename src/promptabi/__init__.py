@@ -353,6 +353,7 @@ from .training_streaming import (
     TrainingStreamingFindingKind,
     TrainingStreamingReport,
     analyze_training_streaming,
+    build_dataset_shard_proof,
 )
 from .synthetic_generators import (
     SyntheticGeneratorFinding,
@@ -997,6 +998,7 @@ __all__ = [
     "TrainingStreamingFindingKind",
     "TrainingStreamingReport",
     "StreamingDatasetSpec",
+    "build_dataset_shard_proof",
     "TrainingRedactionMode",
     "TrainingRedactionPolicy",
     "TrainingSourceContribution",
