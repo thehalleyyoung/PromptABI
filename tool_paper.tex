@@ -54,6 +54,11 @@ metadata, and expected diagnostic fingerprints for CI enforcement,
 a curated \texttt{promptabi gallery} that reruns real pinned configurations,
 emits compatibility badges, summarizes actual solver backends rather than merely
 advertised solver capability, and explains abstentions plus accepted risks,
+a \texttt{promptabi doctor} preflight that inspects Python and PromptABI version
+metadata, optional tokenizer/grammar/Z3 dependencies, a live Z3 smoke query,
+cache writability, first-party and requested plugin registries, supported backend
+capabilities, config validity, artifact path health, and aggregated setup
+problems before CI or local verification,
 a reusable GitHub Action and \texttt{promptabi github-action} runner that restore
 analysis caches, enforce lockfiles, skip pull requests whose diffs do not touch
 configured PromptABI inputs, write markdown job summaries, emit workflow

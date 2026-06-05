@@ -20,6 +20,7 @@ from .compatibility_matrix import (
     render_compatibility_matrix_text,
 )
 from .diff import diff_config_files
+from .doctor import render_doctor_json, render_doctor_text, run_doctor
 from .explain import ExplainError, explain_diagnostic, render_explanation_json, render_explanation_text
 from .evaluation import EvaluationError, render_evaluation_json, render_evaluation_text, run_evaluation
 from .first_party_plugins import create_first_party_plugin_registry, render_plugin_capabilities
@@ -353,6 +354,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="import an additional PromptABI plugin before building the matrix; may be repeated",
     )
     matrix.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+
+    doctor = subparsers.add_parser(
+        "doctor",
+        help="inspect environment, optional backends, cache, plugins, config, and artifact setup",
+    )
+    doctor.add_argument(
+        "--config",
+        help="path to a PromptABI JSON config; defaults to discovering promptabi.json upward from cwd",
+    )
+    doctor.add_argument(
+        "--cache-dir",
+        help="directory for reusable PromptABI analysis caches (default: PROMPTABI_CACHE_DIR or user cache)",
+    )
+    doctor.add_argument(
+        "--plugin",
+        action="append",
+        default=[],
+        metavar="MODULE[:OBJECT]",
+        help="import an additional PromptABI plugin before inspecting supported backends; may be repeated",
+    )
+    doctor.add_argument(
         "--format",
         choices=("text", "json"),
         default="text",
@@ -877,6 +904,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         print(output, end="")
         return 0
+
+    if args.command == "doctor":
+        report = run_doctor(
+            config_path=args.config,
+            cache_dir=args.cache_dir,
+            plugin_specs=tuple(args.plugin),
+        )
+        output = render_doctor_json(report) if args.format == "json" else render_doctor_text(report)
+        print(output, end="")
+        return 0 if report.ok else 1
 
     if args.command == "gallery":
         try:

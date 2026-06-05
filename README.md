@@ -92,6 +92,9 @@ promptabi matrix --format text
 # Show pinned, verified real-world-style configs with proof/risk badges.
 promptabi gallery --format text
 
+# Diagnose the local environment, optional backends, cache, plugins, and artifacts.
+promptabi doctor --config examples/minimal/promptabi.json
+
 # Run labeled benchmarks, mutation fuzzing, and paper artifact regeneration.
 promptabi corpus evaluation --format text
 promptabi fuzz mutations --format text
