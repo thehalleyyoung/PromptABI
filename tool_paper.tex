@@ -47,7 +47,9 @@ parallel check execution and a per-session analysis cache, a typed plugin
 registry for artifact loaders, checks, provider adapters, grammar backends,
 template dialects, truncation policies, solver encodings, and diagnostic
 renderers, CLI-loadable module plugins, entry-point plugin discovery, and
-mode-aware plugin checks that preserve deterministic scheduling, focused tests, examples, a fixture
+mode-aware plugin checks that preserve deterministic scheduling, a generated
+public-API stability manifest with deprecation metadata, Markdown/JSON API docs,
+and downstream plugin compatibility tests, focused tests, examples, a fixture
 corpus layout, a curated ten-family seed corpus, a deterministic corpus manifest
 pipeline, a Hugging Face \texttt{tokenizer\_config.json} chat-template parser,
 a tokenizer/config drift checker that compares real tokenizer revisions for
@@ -497,6 +499,8 @@ The repository layout is designed to scale:
 \hline
 \texttt{src/promptabi/plugins.py} & Typed extension registry for artifact loaders, dependency-aware checks, diagnostic renderers, and capability metadata covering provider adapters, grammar backends, template dialects, truncation policies, and solver encodings. \\
 \hline
+\texttt{src/promptabi/api\_stability.py} & Generated public-API manifest, stable/provisional/deprecated symbol taxonomy, deprecation decorator, Markdown/JSON API reference renderers, and baseline compatibility comparison for downstream plugin authors. \\
+\hline
 \texttt{editors/vscode} & Minimal VS Code extension shim that invokes \texttt{promptabi diagnostics lsp} and \texttt{promptabi explain}, publishes inline diagnostics, contributes quick-check/code-action commands, and renders witness previews from real verification payloads. \\
 \hline
 \texttt{tests} & Focused tests for package API and CLI determinism. \\
@@ -517,7 +521,7 @@ The repository layout is designed to scale:
 \hline
 \texttt{promptabi launch-assets} & Evidence-backed launch material: comparison table, architecture diagram, demo GIF source script, SVG benchmark chart, bug gallery, positioning copy, and a manifest generated from real evaluation, benchmark, beta, and real-bug replay code paths. \\
 \hline
-\texttt{docs} & MkDocs-ready documentation for architecture, check families, artifact modeling, integration guides for major LLM stacks, the formal transducer/SMT basis, tokenizer-template composition, role boundaries, stop reachability, grammar emptiness, must-survive budgets, and the local structural security model. \\
+\texttt{docs} & MkDocs-ready documentation for architecture, check families, artifact modeling, public API stability, integration guides for major LLM stacks, the formal transducer/SMT basis, tokenizer-template composition, role boundaries, stop reachability, grammar emptiness, must-survive budgets, and the local structural security model. \\
 \hline
 \end{tabular}
 \end{center}
@@ -615,7 +619,13 @@ grammars, tool definitions, prompt segments, provider configs, framework
 truncation configs, and training/fine-tuning manifests. It also provides \texttt{ArtifactRef},
 \texttt{SourceSpan}, \texttt{WitnessTrace}, \texttt{Diagnostic},
 \texttt{VerificationConfig}, \texttt{VerificationSession}, and
-\texttt{VerificationResult}. These types establish the compatibility contract:
+\texttt{VerificationResult}. The API surface is now governed by a generated
+\texttt{PublicApiManifest}: stable plugin and embedding symbols are marked
+separately from provisional research surfaces, deprecated callables carry
+machine-readable replacement/removal metadata and emit \texttt{DeprecationWarning},
+and \texttt{promptabi api-docs} renders the same manifest as Markdown or JSON for
+downstream compatibility baselines. These types establish the compatibility
+contract:
 
 \begin{itemize}
 \item artifacts have stable kinds, names, local paths or URIs, provenance, optional versions, revisions, hashes, licenses, sources, and trusted-source metadata;
@@ -1217,6 +1227,10 @@ The public helpers \texttt{create\_session}, \texttt{load\_artifacts},
 The same embedding surface now exposes \texttt{create\_bug\_report} and
 \texttt{render\_bug\_report}, allowing downstream CI systems to attach
 sanitized upstream issues or maintainer tickets without scraping text output.
+It also exposes \texttt{build\_public\_api\_manifest},
+\texttt{compare\_public\_api\_manifests}, and
+\texttt{public\_api\_reference}, so plugin authors can pin a JSON baseline and
+fail upgrades only when a stable import path or required signature is removed.
 The gallery command uses the same session path, but changes the unit of
 presentation: each curated entry is a real config run with resolved/pinned
 artifacts, deterministic diagnostic counts, compatibility badges, actual finite
@@ -1580,7 +1594,7 @@ Outlines, xgrammar, llguidance, lm-format-enforcer, Guidance, and Instructor.
 The testing strategy has three tiers:
 
 \begin{itemize}
-\item unit and structured snapshot tests for public API and deterministic text, JSON, and SARIF rendering;
+\item unit and structured snapshot tests for public API stability, downstream plugin compatibility, deprecation metadata, generated API docs, and deterministic text, JSON, and SARIF rendering;
 \item tokenizer abstraction tests against real Hugging Face \texttt{tokenizers}, \texttt{tiktoken}, SentencePiece, and byte-level adapters;
 \item chat-template parser, symbolic-executor, concrete-renderer, role-region, and role-boundary non-forgeability tests across real \texttt{tokenizer\_config.json} fixtures and known delimiter-collision regressions, including ChatML, Llama header tokens, Mistral instruction tags, XML-ish tool tags, markdown fences, fine-tune hash headers, generation-prompt extraction, dynamic role headers, content-control delimiter collisions, role assumptions, field references, special tokens, bounded message/tool loops, filters, whitespace controls, path budgets, empty tool lists, tool-role messages, and unsupported constructs, with concrete outputs differentially checked against Hugging Face's renderer;
 \item loader and parser tests for local files, Hugging Face refs, tokenizer directories, GGUF stubs, provider snapshots, tool-definition schemas spanning OpenAI, Anthropic, LangChain, Pydantic, TypeScript-style, MCP, and provider tool-call envelopes, tool-serialization contracts over names, arguments, escaping, IDs, parallel calls, streaming chunks, template tool rendering, and stop delimiters, stop-policy configs spanning OpenAI-compatible, Hugging Face, llama.cpp/Ollama, vLLM, LiteLLM, wrapper kwargs, fixture archives, and source-mapped JSON fields;
@@ -2049,6 +2063,8 @@ Verified configuration gallery & \texttt{promptabi gallery} reruns five curated 
 Supply-chain provenance & \texttt{artifact-provenance} focused tests verify local sha256/license/source/trust metadata, flag missing reproducibility fields, reject movable Hugging Face revisions through the real CLI, and assert compatibility-matrix registration. \\
 \hline
 Editor diagnostics & \texttt{promptabi diagnostics lsp} emits stable LSP-style \texttt{publishDiagnostics} JSON for configs and local artifacts; focused tests verify URI grouping, zero-based ranges, invalid-JSON config failures, watched-artifact clearing, public API rendering, and CLI exit codes against real PromptABI configs. \\
+\hline
+Public API stability & \texttt{promptabi api-docs} generates Markdown/JSON manifests from \texttt{promptabi.\_\_all\_\_}; focused tests assert stable plugin imports, downstream check registration, deprecation warnings and metadata, manifest compatibility failures for removed stable symbols, and CLI generation of API docs. \\
 \hline
 Docs smoke & MkDocs-ready navigation includes architecture, checks, concepts, and the security model; focused tests assert that the security model references real CLI privacy, bug-report, minimization, and provider-fixture safety behavior. \\
 \hline

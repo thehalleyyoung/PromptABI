@@ -91,6 +91,7 @@ promptabi bug-report --config examples/role-boundary/unsafe.promptabi.json --ind
 # Compare an upgrade before merge and audit supported guarantees.
 promptabi diff promptabi.baseline.json promptabi.json
 promptabi matrix --format text
+promptabi api-docs --format markdown
 promptabi proofs --format text
 
 # In notebooks, inspect tokenizer/template/stop/grammar/SMT/budget witnesses as rich reprs.

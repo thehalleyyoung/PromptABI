@@ -4,6 +4,7 @@ nav:
   - Home: index.md
   - Quickstart: quickstart.md
   - Integration guides: integrations.md
+  - Public API: public-api.md
   - Architecture: architecture.md
   - Security model: security-model.md
   - Check families: checks.md

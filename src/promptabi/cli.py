@@ -12,6 +12,11 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ._version import __version__
+from .api_stability import (
+    build_public_api_manifest,
+    render_public_api_manifest_json,
+    render_public_api_manifest_markdown,
+)
 from .bug_reports import BugReportError, generate_bug_report, render_bug_report
 from .beta import (
     BetaProgramError,
@@ -445,6 +450,15 @@ def build_parser() -> argparse.ArgumentParser:
         default="text",
         help="output format (default: text)",
     )
+
+    api_docs = subparsers.add_parser("api-docs", help="generate public API stability docs")
+    api_docs.add_argument(
+        "--format",
+        choices=("markdown", "json"),
+        default="markdown",
+        help="output format (default: markdown)",
+    )
+    api_docs.add_argument("--output", help="write generated API docs to this path instead of stdout")
 
     matrix = subparsers.add_parser("matrix", help="show check compatibility and guarantee modes")
     matrix.add_argument(
@@ -1223,6 +1237,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"promptabi: {exc}", file=sys.stderr)
             return 2
         print(output, end="")
+        return 0
+
+    if args.command == "api-docs":
+        try:
+            manifest = build_public_api_manifest()
+            output = (
+                render_public_api_manifest_json(manifest)
+                if args.format == "json"
+                else render_public_api_manifest_markdown(manifest)
+            )
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+            else:
+                print(output, end="")
+        except OSError as exc:
+            print(f"promptabi: cannot write API docs: {exc}", file=sys.stderr)
+            return 2
         return 0
 
     if args.command == "matrix":

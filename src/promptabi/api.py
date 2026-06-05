@@ -48,6 +48,12 @@ from .bug_reports import BugReport, generate_bug_report, render_bug_report
 from .explain import DiagnosticExplanation, explain_diagnostic, render_explanation_json, render_explanation_text
 from .loaders import ArtifactLoader, LoadedArtifact
 from .first_party_plugins import create_first_party_plugin_registry
+from .api_stability import (
+    PublicApiManifest,
+    build_public_api_manifest,
+    render_public_api_manifest_json,
+    render_public_api_manifest_markdown,
+)
 from .localization import (
     DiagnosticCatalogEntry,
     build_diagnostic_catalog,
@@ -506,6 +512,19 @@ def fuzz_mutations(
     if output_format == "text":
         return render_mutation_fuzz_text(report)
     raise ValueError("output_format must be one of: text, json")
+
+
+def public_api_reference(*, output_format: str | None = None) -> PublicApiManifest | str:
+    """Return or render the generated public API stability manifest."""
+
+    manifest = build_public_api_manifest()
+    if output_format is None:
+        return manifest
+    if output_format == "json":
+        return render_public_api_manifest_json(manifest)
+    if output_format in {"markdown", "text"}:
+        return render_public_api_manifest_markdown(manifest)
+    raise ValueError("output_format must be one of: json, markdown")
 
 
 def _resolve_config(config: str | Path | VerificationConfig) -> VerificationConfig:
