@@ -56,3 +56,44 @@ The unsafe config fails with concrete witnesses for `assistant`,
 `<|im_start|>`, and `<|im_end|>`. The sanitized config JSON-encodes dynamic
 role and content fields, so delimiter bytes remain data inside a quoted JSON
 string rather than becoming a new role boundary.
+
+## Model details
+
+The implementation lives in `promptabi.role_boundaries`. It first builds a
+`RoleBoundaryModel` from bounded symbolic template paths. Each path records:
+
+| Field | Meaning |
+| --- | --- |
+| `conditions` | Role or branch predicates required for the path. |
+| `loop_iterations` | Bounded loop choices used for messages/tools. |
+| `rendered_pattern` | The rendered prompt with placeholders for controlled fields. |
+| `regions` | Structural role regions with offsets, message indexes, and control text. |
+| `abstentions` | Unsupported template features or unmodeled constructs. |
+
+A `RoleBoundaryRegion` is the unit checked for non-forgeability. It identifies
+the structural role (`system`, `user`, `assistant`, `tool`, `developer`, or
+`function`), the source of that role, the symbolic character offsets of the
+region, the controlled expressions inside it, and any recognized sanitizers.
+
+## Sanitizer boundary
+
+PromptABI recognizes sanitizers only when they change the structural language in
+a way the checker can reason about:
+
+| Sanitizer class | Accepted intuition |
+| --- | --- |
+| JSON encoding | Control bytes appear inside a quoted JSON string with escaping. |
+| Escaping filters | Delimiters are escaped before they reach the rendered prompt. |
+| Delimiter-safe wrappers | The wrapper restricts the emitted alphabet so a marker cannot appear raw. |
+
+If the checker cannot prove that a transformation prevents raw marker emission,
+it does not silently bless the field. Depending on the surrounding evidence, it
+either reports a bounded finding or records an abstention.
+
+## Witness shape
+
+A role-forgery finding includes the attacked input expression, the structural
+role it came from, the malicious input, rendered excerpt, tokenized
+representation, marker offsets, and a `forged_boundary` description. The witness
+is deliberately operational: a maintainer can paste the malicious field into the
+same template and observe the control marker in the final prompt.

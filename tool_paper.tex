@@ -66,6 +66,11 @@ artifact contents, paths, and network sends are excluded, a checked security
 model that documents structural prompt-interface risks, non-goals,
 secret-handling behavior, artifact privacy, solver-input privacy, provider
 fixture safety, suppressions, and a responsible disclosure workflow,
+deep conceptual documentation for the transducer formalism,
+tokenizer/template composition, Z3/SMT-backed finite contracts,
+role-boundary non-forgeability, stop reachability, grammar emptiness, and
+must-survive budget proofs, with tests that tie the documented examples and
+API names back to executable code,
 policy and suppression files that match diagnostics by stable fingerprints,
 artifacts, or paths; require reviewed justifications, owners, accepted-risk
 statements, and expiration dates; enforce repository severity thresholds; and
@@ -331,6 +336,10 @@ prompt text, schema bodies, solver constraints, witnesses, or network transport,
 documents the local trust boundary, structural security claims, non-goals, solver
 privacy, provider-fixture secret rejection, sanitized upstream reporting, and
 responsible disclosure path in a MkDocs-linked security model,
+adds MkDocs concept chapters for formal automata/transducers, tokenizer-template
+composition, Z3/SMT finite contracts, role-boundary non-forgeability, stop
+reachability, grammar emptiness, and must-survive budgets, and verifies those
+chapters against live symbols and executable examples in the test suite,
 packages releases as checked PyPI distributions, standalone executables,
 Docker images, signed/attested GitHub assets, changelogged semantic-version tags,
 and GHCR container images,
@@ -383,7 +392,7 @@ The repository layout is designed to scale:
 \hline
 \texttt{benchmarks} and \texttt{promptabi fuzz} & CPU-only benchmark entrypoints plus deterministic mutation fuzzing for tokenizer analysis, symbolic template execution, grammar products, stop checks, SMT contracts, budget modeling, corpus verification, cache reuse, and cross-artifact violation discovery. \\
 \hline
-\texttt{docs} & MkDocs-ready documentation for architecture, concepts, check families, role-boundary non-forgeability, and the local structural security model. \\
+\texttt{docs} & MkDocs-ready documentation for architecture, check families, artifact modeling, the formal transducer/SMT basis, tokenizer-template composition, role boundaries, stop reachability, grammar emptiness, must-survive budgets, and the local structural security model. \\
 \hline
 \end{tabular}
 \end{center}

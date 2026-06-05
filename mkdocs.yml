@@ -8,4 +8,10 @@ nav:
   - Check families: checks.md
   - Concepts:
       - Artifact model: concepts/artifact-model.md
+      - Formalism: concepts/formalism.md
+      - Tokenizer/template composition: concepts/tokenizer-template-composition.md
+      - Static contracts: concepts/static-contracts.md
       - Role-boundary non-forgeability: concepts/role-boundary-nonforgeability.md
+      - Stop reachability: concepts/stop-reachability.md
+      - Grammar emptiness: concepts/grammar-emptiness.md
+      - Must-survive budgets: concepts/must-survive-budgets.md

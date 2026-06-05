@@ -33,6 +33,10 @@ for the exact boundary, witness shape, sanitizer model, and runnable examples.
 Can a stop sequence fire inside a valid structured output? Is a requested stop
 sequence unreachable under the tokenizer and grammar?
 
+See [Stop reachability](concepts/stop-reachability.md) and
+[Grammar emptiness](concepts/grammar-emptiness.md) for the concrete finite
+products, witness formats, and abstention boundaries.
+
 `fixtures/real_world_bugs/` now includes public GitHub bug patterns reduced to
 synthetic offline fixtures. The corresponding tests prove the current
 role-boundary and stop-overreachability checkers catch Phi-style role delimiter
@@ -44,8 +48,16 @@ tool-call parser-boundary stop failures.
 Do required prompt segments remain present after the actual framework truncation
 policy is applied?
 
+See [Must-survive budgets](concepts/must-survive-budgets.md) for the normalized
+budget arithmetic, truncation policies, proof states, and RAG-specific fields.
+
 `promptabi verify --config examples/token-budget/promptabi.json` now includes a
 token-budget visualization in the `token-budget-model` diagnostic: each row
 shows the prompt segment, token span, count source, kept/dropped status, and
 must-survive guarantee. The same structured `token_budget_visualization` payload
 is available in JSON output and SARIF properties.
+
+For the shared machinery behind these families, read
+[Formalism](concepts/formalism.md),
+[Tokenizer/template composition](concepts/tokenizer-template-composition.md),
+and [Z3/SMT-backed finite contracts](concepts/static-contracts.md).
