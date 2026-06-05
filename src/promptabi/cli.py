@@ -45,6 +45,11 @@ from .contract_linting import (
     render_contract_lint_json,
     render_contract_lint_text,
 )
+from .contract_migration import (
+    migrate_static_contract_file,
+    render_contract_migration_json,
+    render_contract_migration_text,
+)
 from .contract_composition import (
     compose_static_contracts,
     contract_contributions_from_files,
@@ -811,6 +816,28 @@ def build_parser() -> argparse.ArgumentParser:
         "--check",
         action="store_true",
         help="exit non-zero if the .pabi file is not already in canonical format",
+    )
+    contract_migrate = contract_subparsers.add_parser(
+        "migrate",
+        help="rewrite deprecated .pabi rule syntax and explain solver/automata behavior changes",
+    )
+    contract_migrate.add_argument("path", help="PromptABI .pabi contract file")
+    contract_migrate.add_argument(
+        "--format",
+        choices=("text", "json", "pabi"),
+        default="text",
+        help="output format (default: text); pabi prints only migrated contract source",
+    )
+    contract_migrate.add_argument("--output", help="write migration output to this path instead of stdout")
+    contract_migrate.add_argument(
+        "--write",
+        action="store_true",
+        help="overwrite the input file with migrated canonical .pabi source",
+    )
+    contract_migrate.add_argument(
+        "--check",
+        action="store_true",
+        help="exit non-zero if migration or canonical formatting would change the file",
     )
     contract_lint = contract_subparsers.add_parser(
         "lint",
@@ -1745,6 +1772,36 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.fail_on == "never":
             return 0
         if args.fail_on == "warning" and report.findings:
+            return 1
+        return 1 if report.error_count else 0
+
+    if args.command == "contract" and args.contract_command == "migrate":
+        path = Path(args.path)
+        try:
+            report = migrate_static_contract_file(path)
+            if args.format == "json":
+                rendered = render_contract_migration_json(report)
+            elif args.format == "pabi":
+                rendered = report.migrated_text
+            else:
+                rendered = render_contract_migration_text(report)
+        except (OSError, ContractLanguageError, ValueError) as exc:
+            print(f"promptabi: cannot migrate static contract: {exc}", file=sys.stderr)
+            return 2
+        if args.write:
+            try:
+                path.write_text(report.migrated_text, encoding="utf-8")
+            except OSError as exc:
+                print(f"promptabi: cannot write migrated static contract: {exc}", file=sys.stderr)
+                return 2
+        if args.output:
+            output = Path(args.output)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(rendered, encoding="utf-8")
+        elif not args.check:
+            print(rendered, end="")
+        if args.check and report.changed:
+            print(f"promptabi: {path} needs contract migration", file=sys.stderr)
             return 1
         return 1 if report.error_count else 0
 

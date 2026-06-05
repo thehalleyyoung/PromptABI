@@ -39,7 +39,7 @@ validated against real Hugging Face \texttt{tokenizers},
 finite-state transducers with composition and projection, executable
 specifications that replay witnesses, bounded product-language laws, and SMT
 proof objects, a declarative static contract language with a canonical
-\texttt{.pabi} parser, formatter, linter, JSON lowering path, CLI check mode,
+\texttt{.pabi} parser, formatter, migration tool, linter, JSON lowering path, CLI check mode,
 and reviewable examples for LLM apps, fine-tuning datasets, RAG systems, and
 evaluation harnesses, now compiled into source-mapped finite obligations whose
 diagnostics preserve human rule names, rule-line spans, solver models, and proof
@@ -373,7 +373,8 @@ zero-based editor ranges, preserves fingerprints, suggestions, witnesses, and
 proof modes in diagnostic data, and publishes empty diagnostic arrays for watched
 local schemas, templates, stop policies, training manifests, and artifact bundles
 so editor shims can clear stale inline findings deterministically.
-The \texttt{promptabi contract} workflow parses, canonicalizes, and composes
+The \texttt{promptabi contract} workflow migrates deprecated syntax with
+automata/solver behavior notes, parses, canonicalizes, and composes
 human-authored \texttt{.pabi} contracts. It emits the lowered JSON artifact,
 enforces stable rule names, and merges organization policies, prompt-pack
 contracts, app configs, and training-manifest contracts with explicit precedence:

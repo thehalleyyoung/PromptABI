@@ -111,6 +111,7 @@ PROMPTABI_BUNDLE_KEY=local-audit-key promptabi bundle create --config examples/m
 promptabi matrix --format text
 promptabi graph --config examples/rag-chunking/promptabi.json --all-checks --format mermaid
 promptabi contract format examples/static-contract-language/app.pabi --check
+promptabi contract migrate examples/static-contract-language/app.pabi --check
 promptabi contract lint examples/static-contract-language/app.pabi
 promptabi contract compose --contract organization-policy=examples/static-contract-language/app.pabi --contract app-config=examples/static-contract-language/rag.pabi
 promptabi api-docs --format markdown
