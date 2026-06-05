@@ -39,6 +39,12 @@ from .contract_language import (
     parse_static_contract_file,
     render_static_contract_json,
 )
+from .contract_composition import (
+    compose_static_contracts,
+    contract_contributions_from_files,
+    render_contract_composition_json,
+    render_contract_composition_text,
+)
 from .compatibility_matrix import (
     build_compatibility_matrix,
     render_compatibility_matrix_json,
@@ -799,6 +805,34 @@ def build_parser() -> argparse.ArgumentParser:
         "--check",
         action="store_true",
         help="exit non-zero if the .pabi file is not already in canonical format",
+    )
+    contract_compose = contract_subparsers.add_parser(
+        "compose",
+        help="merge layered .pabi contracts with explicit precedence and conflict reporting",
+    )
+    contract_compose.add_argument(
+        "--contract",
+        action="append",
+        default=[],
+        metavar="LAYER=PATH",
+        required=True,
+        help=(
+            "contract file with layer organization-policy, prompt-pack, app-config, or "
+            "training-manifest; may be repeated"
+        ),
+    )
+    contract_compose.add_argument("--name", default="composed-contract", help="name for the composed artifact")
+    contract_compose.add_argument(
+        "--format",
+        choices=("text", "json", "pabi"),
+        default="text",
+        help="output format (default: text)",
+    )
+    contract_compose.add_argument("--output", help="write composition output to this path instead of stdout")
+    contract_compose.add_argument(
+        "--fail-on-conflict",
+        action="store_true",
+        help="exit with code 1 when composition reports precedence conflicts",
     )
 
     corpus = subparsers.add_parser("corpus", help="seed corpus maintenance commands")
@@ -2566,6 +2600,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         print(output, end="")
         return 0
+
+    if args.command == "contract" and args.contract_command == "compose":
+        try:
+            specs = contract_contributions_from_files(tuple(args.contract))
+            layered = tuple((layer, parse_static_contract_file(path)) for layer, path in specs)
+            result = compose_static_contracts(layered, name=args.name)
+            if args.format == "json":
+                rendered = render_contract_composition_json(result)
+            elif args.format == "pabi":
+                rendered = format_static_contract(result.artifact)
+            else:
+                rendered = render_contract_composition_text(result)
+        except (OSError, ContractLanguageError, ValueError) as exc:
+            print(f"promptabi: cannot compose static contracts: {exc}", file=sys.stderr)
+            return 2
+        if args.output:
+            output = Path(args.output)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(rendered, encoding="utf-8")
+        else:
+            print(rendered, end="")
+        return 1 if args.fail_on_conflict and result.conflicts else 0
 
     if args.command == "api-docs":
         try:

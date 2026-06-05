@@ -373,14 +373,14 @@ zero-based editor ranges, preserves fingerprints, suggestions, witnesses, and
 proof modes in diagnostic data, and publishes empty diagnostic arrays for watched
 local schemas, templates, stop policies, training manifests, and artifact bundles
 so editor shims can clear stale inline findings deterministically.
-A new \texttt{promptabi contract format} command parses and canonicalizes
-human-authored \texttt{.pabi} contracts, emits the exact lowered JSON artifact
-shape, and lets reviews enforce stable rule names, severities, allowed roles,
-required regions, forbidden delimiters, schema obligations, stop obligations,
-and finite invariants before those rules enter the same verification pipeline.
-Those same rule names and source spans now survive compilation into
-\texttt{static-contracts} diagnostics, so a warning- or error-level rule can
-point from a Z3/finite counterexample or proof directly back to the governing
+The \texttt{promptabi contract} workflow parses, canonicalizes, and composes
+human-authored \texttt{.pabi} contracts. It emits the lowered JSON artifact,
+enforces stable rule names, and merges organization policies, prompt-pack
+contracts, app configs, and training-manifest contracts with explicit precedence:
+role permissions narrow by intersection, required regions and forbidden
+delimiters tighten by union, and lower layers cannot silently downgrade policy
+severity. Rule names and source spans survive into \texttt{static-contracts}
+diagnostics, so a Z3/finite counterexample or proof points back to the governing
 \texttt{.pabi} line.
 A concrete VS Code extension now consumes that payload directly: it registers
 quick-check, explanation, and witness-preview commands, maps PromptABI spans to
@@ -659,7 +659,7 @@ The repository layout is designed to scale:
 \hline
 \textbf{Path} & \textbf{Purpose} \\
 \hline
-\texttt{src/promptabi} & Typed package, artifact model, formal automata, finite-state transducers, finite-contract core, offline loaders, CLI, configuration loading, diagnostic model, renderers, notebook reprs, scheduler, analysis cache, and verification session. \\
+\texttt{src/promptabi} & Typed package, artifact model, formal automata, finite-state transducers, finite-contract core, layered contract composition, offline loaders, CLI, configuration loading, diagnostic model, renderers, notebook reprs, scheduler, analysis cache, and verification session. \\
 \hline
 \texttt{src/promptabi/incremental.py} & Monorepo incremental verification planner, git changed-path collection, per-check diagnostic cache, dependency-closure selection, cache reuse diagnostics, and fail-closed cache-miss recomputation for \texttt{promptabi verify --changed-path/--changed-from-git}. \\
 \hline
@@ -1930,7 +1930,7 @@ Grammar emptiness & A real structured-schema fixture compiled to the bounded JSO
 \hline
 Stop checks & Stop-tokenizer alignment plus bounded stop-overreachability over structural JSON, markdown, XML-like tool-call, and provider-envelope regions. \\
 \hline
-Z3 static contracts & Declarative interface rules for allowed roles, required regions, forbidden delimiters, schema obligations, stop policies, and finite budget invariants lowered to the existing SMT layer or finite fallback. \\
+Z3 static contracts & Declarative interface rules for allowed roles, required regions, forbidden delimiters, schema obligations, stop policies, layered policy/app/pack/training composition, and finite budget invariants lowered to the existing SMT layer or finite fallback. \\
 \hline
 Budget checks & Segment accounting, tokenizer-derived content counts, vLLM-style reservations, truncation simulation, required-token overflow, and finding counts. \\
 \hline
