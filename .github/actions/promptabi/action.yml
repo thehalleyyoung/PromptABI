@@ -4,7 +4,20 @@ description: Verify PromptABI contracts with cache reuse, lockfile enforcement, 
 inputs:
   config:
     description: Path to the PromptABI config to verify.
-    required: true
+    required: false
+    default: ""
+  training-manifest:
+    description: Path to a training manifest to verify with promptabi verify-training instead of promptabi verify.
+    required: false
+    default: ""
+  tokenizers:
+    description: Newline-separated NAME=PATH tokenizer artifacts for training-manifest alignment.
+    required: false
+    default: ""
+  chat-templates:
+    description: Newline-separated NAME=PATH chat-template artifacts for training-manifest alignment.
+    required: false
+    default: ""
   lockfile:
     description: Path to the PromptABI lockfile. Defaults to promptabi.lock.json beside the config.
     required: false
@@ -77,7 +90,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: ${{ inputs.cache-dir }}
-        key: promptabi-${{ runner.os }}-${{ hashFiles(inputs.config, inputs.lockfile, '**/pyproject.toml') }}
+        key: promptabi-${{ runner.os }}-${{ hashFiles(inputs.config, inputs.training-manifest, inputs.lockfile, '**/pyproject.toml') }}
         restore-keys: |
           promptabi-${{ runner.os }}-
 
@@ -90,6 +103,9 @@ runs:
       shell: bash
       env:
         PROMPTABI_CONFIG: ${{ inputs.config }}
+        PROMPTABI_TRAINING_MANIFEST: ${{ inputs.training-manifest }}
+        PROMPTABI_TRAINING_TOKENIZERS: ${{ inputs.tokenizers }}
+        PROMPTABI_TRAINING_CHAT_TEMPLATES: ${{ inputs.chat-templates }}
         PROMPTABI_LOCKFILE: ${{ inputs.lockfile }}
         PROMPTABI_CACHE_DIR: ${{ inputs.cache-dir }}
         PROMPTABI_SARIF_OUTPUT: ${{ inputs.sarif-output }}
@@ -102,14 +118,27 @@ runs:
       run: |
         set -euo pipefail
         cmd=(promptabi github-action
-          --config "$PROMPTABI_CONFIG"
           --cache-dir "$PROMPTABI_CACHE_DIR"
           --sarif-output "$PROMPTABI_SARIF_OUTPUT"
           --fail-on "$PROMPTABI_FAIL_ON")
-        if [[ -n "$PROMPTABI_LOCKFILE" ]]; then
+        if [[ -n "$PROMPTABI_TRAINING_MANIFEST" ]]; then
+          cmd+=(--training-manifest "$PROMPTABI_TRAINING_MANIFEST")
+          while IFS= read -r item; do
+            [[ -n "$item" ]] && cmd+=(--tokenizer "$item")
+          done <<< "$PROMPTABI_TRAINING_TOKENIZERS"
+          while IFS= read -r item; do
+            [[ -n "$item" ]] && cmd+=(--chat-template "$item")
+          done <<< "$PROMPTABI_TRAINING_CHAT_TEMPLATES"
+        elif [[ -n "$PROMPTABI_CONFIG" ]]; then
+          cmd+=(--config "$PROMPTABI_CONFIG")
+        else
+          echo "Either config or training-manifest must be provided." >&2
+          exit 2
+        fi
+        if [[ -z "$PROMPTABI_TRAINING_MANIFEST" && -n "$PROMPTABI_LOCKFILE" ]]; then
           cmd+=(--lockfile "$PROMPTABI_LOCKFILE")
         fi
-        if [[ "$PROMPTABI_REQUIRE_LOCKFILE" == "true" ]]; then
+        if [[ -z "$PROMPTABI_TRAINING_MANIFEST" && "$PROMPTABI_REQUIRE_LOCKFILE" == "true" ]]; then
           cmd+=(--require-lockfile)
         fi
         if [[ "$PROMPTABI_CHANGED_ONLY" == "true" ]]; then

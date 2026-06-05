@@ -4,7 +4,7 @@ import subprocess
 from pathlib import Path
 
 from promptabi.cli import main
-from promptabi.github_action import changed_promptabi_paths, relevant_promptabi_paths
+from promptabi.github_action import changed_promptabi_paths, relevant_promptabi_paths, training_pr_relevant_paths
 
 
 def _copy_minimal_project(tmp_path: Path) -> Path:
@@ -147,3 +147,113 @@ def test_relevant_promptabi_paths_include_config_lockfile_and_local_artifacts(tm
     )
 
     assert paths == ("promptabi.json", "promptabi.lock.json", "schema.json")
+
+
+def test_training_pr_relevant_paths_include_manifest_dataset_and_alignment_artifacts(tmp_path: Path) -> None:
+    manifest = tmp_path / "sft.training-manifest.json"
+    dataset = tmp_path / "train.jsonl"
+    tokenizer = tmp_path / "tokenizer_config.json"
+    dataset.write_text('{"messages": []}\n', encoding="utf-8")
+    tokenizer.write_text('{"chat_template": "{{ messages }}"}', encoding="utf-8")
+    manifest.write_text(
+        json.dumps(
+            {
+                "dataset_format": "chat-jsonl",
+                "datasets": [
+                    {
+                        "name": "sft",
+                        "kind": "supervised",
+                        "path": dataset.name,
+                        "format": "chat-jsonl",
+                    }
+                ],
+                "loss_mask_policy": {"strategy": "assistant-only", "target_roles": ["assistant"]},
+                "packing_window": {"strategy": "sample-packing", "max_tokens": 128},
+                "chat_template_version": {
+                    "name": "quickstart-template",
+                    "tokenizer_name": "quickstart-tokenizer",
+                    "add_generation_prompt": False,
+                },
+                "pipeline_stages": [
+                    {
+                        "stage": "training",
+                        "tokenizer_name": "quickstart-tokenizer",
+                        "chat_template_name": "quickstart-template",
+                    }
+                ],
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+    paths = training_pr_relevant_paths(
+        manifest_path=manifest,
+        tokenizers=(("quickstart-tokenizer", tokenizer),),
+        chat_templates=(("quickstart-template", tokenizer),),
+    )
+
+    assert paths == tuple(sorted({manifest.resolve().as_posix(), dataset.resolve().as_posix(), tokenizer.resolve().as_posix()}))
+
+
+def test_github_action_training_manifest_writes_sarif_summary_and_watches_dataset_changes(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    project = tmp_path / "project"
+    shutil.copytree("examples/end-to-end/training-quickstart", project)
+    manifest = project / "fixed.training-manifest.json"
+    tokenizer = project / "tokenizer_config.json"
+    sarif = tmp_path / "training.sarif"
+    summary = tmp_path / "training.md"
+    output = tmp_path / "github-output.txt"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+
+    exit_code = main(
+        [
+            "github-action",
+            "--training-manifest",
+            str(manifest),
+            "--tokenizer",
+            f"quickstart-tokenizer={tokenizer}",
+            "--chat-template",
+            f"quickstart-chat-template={tokenizer}",
+            "--repo-root",
+            str(tmp_path),
+            "--cache-dir",
+            str(tmp_path / "cache"),
+            "--sarif-output",
+            str(sarif),
+            "--summary-output",
+            str(summary),
+            "--fail-on",
+            "error",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(sarif.read_text(encoding="utf-8"))
+    rule_ids = {result["ruleId"] for result in payload["runs"][0]["results"]}
+    watched = summary.read_text(encoding="utf-8")
+    outputs = output.read_text(encoding="utf-8")
+    assert exit_code == 0
+    assert "PromptABI GitHub Action: PASS" in captured.out
+    assert "training-workflow-verified" in rule_ids
+    assert "project/fixed.training-manifest.json" in watched
+    assert "project/train.jsonl" in watched
+    assert "skipped=false" in outputs
+    assert "ok=true" in outputs
+
+
+def test_training_data_workflow_example_uses_dedicated_training_gate() -> None:
+    workflow = Path(".github/workflows/promptabi-training-data.yml").read_text(encoding="utf-8")
+    action = Path(".github/actions/promptabi/action.yml").read_text(encoding="utf-8")
+
+    assert "**/*.training-manifest.json" in workflow
+    assert "**/*.jsonl" in workflow
+    assert "training-manifest: examples/end-to-end/training-quickstart/fixed.training-manifest.json" in workflow
+    assert 'require-lockfile: "false"' in workflow
+    assert "--training-manifest" in action
+    assert "promptabi verify-training" in action
+    assert '[[ -z "$PROMPTABI_TRAINING_MANIFEST" && "$PROMPTABI_REQUIRE_LOCKFILE" == "true" ]]' in action

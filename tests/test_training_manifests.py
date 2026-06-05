@@ -1003,6 +1003,7 @@ def test_verify_training_manifest_workflow_runs_real_training_checks(tmp_path: P
         "training-packing",
         "training-redaction",
         "training-invalid-interface",
+        "training-streaming",
         "training-bridge",
         "training-drift",
         "synthetic-generator-contracts",

@@ -240,8 +240,13 @@ Use PromptABI as a preflight gate:
 
 ```bash
 promptabi matrix --format text
-promptabi verify --config promptabi.json --fail-on warning
+promptabi verify-training --manifest training.training-manifest.json --fail-on warning
 ```
+
+The reusable GitHub Action can run the same dedicated workflow for data-only
+pull requests. The example in `.github/workflows/promptabi-training-data.yml`
+watches manifests and JSONL shards, skips unrelated diffs, and fails before an
+expensive fine-tuning job starts.
 
 At minimum, pin the tokenizer and chat template used for dataset preparation,
 training, evaluation, and serving. A useful manifest should make it impossible to

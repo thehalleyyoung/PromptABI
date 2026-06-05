@@ -1,0 +1,39 @@
+name: PromptABI training data
+
+on:
+  pull_request:
+    paths:
+      - "**/*.training-manifest.json"
+      - "**/*.jsonl"
+      - "examples/end-to-end/training-quickstart/**"
+      - ".github/actions/promptabi/action.yml"
+      - ".github/workflows/promptabi-training-data.yml"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  verify-training-data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - uses: ./.github/actions/promptabi
+        with:
+          training-manifest: examples/end-to-end/training-quickstart/fixed.training-manifest.json
+          tokenizers: |
+            quickstart-tokenizer=examples/end-to-end/training-quickstart/tokenizer_config.json
+          chat-templates: |
+            quickstart-chat-template=examples/end-to-end/training-quickstart/tokenizer_config.json
+          require-lockfile: "false"
+          changed-only: "true"
+          base-ref: ${{ github.event.pull_request.base.sha }}
+          head-ref: ${{ github.sha }}
+          install-command: python -m pip install -e ".[dev]"

@@ -1071,6 +1071,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="path to a PromptABI JSON config; defaults to discovering promptabi.json in the workspace",
     )
     github_action.add_argument(
+        "--training-manifest",
+        help="training manifest JSON path; runs the dedicated verify-training workflow for data PRs",
+    )
+    github_action.add_argument(
+        "--tokenizer",
+        action="append",
+        default=[],
+        metavar="NAME=PATH",
+        help="tokenizer artifact to align with a training manifest; may be repeated with --training-manifest",
+    )
+    github_action.add_argument(
+        "--chat-template",
+        action="append",
+        default=[],
+        metavar="NAME=PATH",
+        help="chat-template artifact to align with a training manifest; may be repeated with --training-manifest",
+    )
+    github_action.add_argument(
         "--lockfile",
         help="path to a PromptABI lockfile (default: promptabi.lock.json beside the config)",
     )
@@ -2047,8 +2065,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "github-action":
         try:
+            if (args.tokenizer or args.chat_template) and not args.training_manifest:
+                parser.error("--tokenizer/--chat-template are only supported with --training-manifest")
             run = run_github_action(
                 config_path=args.config,
+                training_manifest_path=args.training_manifest,
+                tokenizers=_parse_named_path_values(args.tokenizer, "--tokenizer", parser),
+                chat_templates=_parse_named_path_values(args.chat_template, "--chat-template", parser),
                 lockfile_path=args.lockfile,
                 cache_dir=args.cache_dir,
                 sarif_output=args.sarif_output,

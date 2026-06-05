@@ -13,6 +13,7 @@ from pathlib import Path
 from .config import ConfigError, discover_config, load_config
 from .diagnostics import Diagnostic
 from .first_party_plugins import create_first_party_plugin_registry
+from .loaders import ArtifactLoadError, ArtifactLoader
 from .lockfiles import (
     LockfileError,
     compare_lockfile,
@@ -21,6 +22,7 @@ from .lockfiles import (
 )
 from .render import SarifRenderOptions, render_github_annotations, render_sarif
 from .session import VerificationResult, VerificationSession
+from .training_workflow import build_training_config, run_training_verification
 
 
 class GitHubActionError(ValueError):
@@ -47,6 +49,9 @@ class GitHubActionRun:
 def run_github_action(
     *,
     config_path: str | Path | None = None,
+    training_manifest_path: str | Path | None = None,
+    tokenizers: Sequence[tuple[str, str | Path]] = (),
+    chat_templates: Sequence[tuple[str, str | Path]] = (),
     lockfile_path: str | Path | None = None,
     cache_dir: str | Path | None = None,
     sarif_output: str | Path = "promptabi.sarif",
@@ -63,8 +68,17 @@ def run_github_action(
     """Run verification with GitHub-specific outputs and changed-artifact gating."""
 
     workspace = _resolve_repo_root(repo_root)
-    resolved_config = Path(config_path).expanduser().resolve() if config_path else discover_config(workspace)
-    resolved_lockfile = _resolve_lockfile(lockfile_path, resolved_config)
+    if config_path is not None and training_manifest_path is not None:
+        raise GitHubActionError("--config cannot be combined with --training-manifest")
+    training_mode = training_manifest_path is not None
+    resolved_config = (
+        Path(training_manifest_path).expanduser().resolve()
+        if training_mode
+        else (Path(config_path).expanduser().resolve() if config_path else discover_config(workspace))
+    )
+    resolved_lockfile = None if training_mode else _resolve_lockfile(lockfile_path, resolved_config)
+    if training_mode and (require_lockfile or lockfile_path is not None):
+        raise GitHubActionError("training GitHub Action runs use verify-training and do not support lockfile enforcement")
     resolved_cache = _resolve_cache_dir(cache_dir, workspace)
     resolved_cache.mkdir(parents=True, exist_ok=True)
     resolved_sarif = Path(sarif_output).expanduser()
@@ -74,14 +88,32 @@ def run_github_action(
     resolved_summary = _resolve_summary_path(summary_output)
 
     try:
-        config = load_config(resolved_config)
+        if training_mode:
+            config = build_training_config(
+                resolved_config,
+                tokenizers=tokenizers,
+                chat_templates=chat_templates,
+            )
+        else:
+            config = load_config(resolved_config)
     except ConfigError:
         raise
 
     relevant = relevant_promptabi_paths(
         config_path=resolved_config,
         lockfile_path=resolved_lockfile if require_lockfile else None,
-        artifact_paths=(artifact.location.path for artifact in config.artifact_bundle if artifact.location.path),
+        artifact_paths=(
+            *(
+                training_pr_relevant_paths(
+                    manifest_path=resolved_config,
+                    tokenizers=tokenizers,
+                    chat_templates=chat_templates,
+                )
+                if training_mode
+                else ()
+            ),
+            *(artifact.location.path for artifact in config.artifact_bundle if artifact.location.path),
+        ),
         repo_root=workspace,
     )
     changed = ()
@@ -115,9 +147,13 @@ def run_github_action(
             )
 
     registry = create_first_party_plugin_registry()
-    session = VerificationSession(config, plugin_registry=registry)
-    result = session.run()
-    if require_lockfile:
+    if training_mode:
+        result = run_training_verification(config, plugin_registry=registry)
+        session: VerificationSession | None = None
+    else:
+        session = VerificationSession(config, plugin_registry=registry)
+        result = session.run()
+    if require_lockfile and session is not None and resolved_lockfile is not None:
         loaded_artifacts, _load_diagnostics = session.load_artifacts_with_diagnostics()
         try:
             lockfile = load_lockfile(resolved_lockfile)
@@ -193,6 +229,32 @@ def relevant_promptabi_paths(
         if artifact_path:
             paths.add(_repo_relative(Path(artifact_path), repo_root))
     return tuple(sorted(path for path in paths if path))
+
+
+def training_pr_relevant_paths(
+    *,
+    manifest_path: str | Path,
+    tokenizers: Sequence[tuple[str, str | Path]] = (),
+    chat_templates: Sequence[tuple[str, str | Path]] = (),
+) -> tuple[str, ...]:
+    """Return local training-manifest inputs that should trigger PR verification."""
+
+    manifest = Path(manifest_path).expanduser().resolve()
+    paths: set[str] = {manifest.as_posix()}
+    paths.update(Path(path).expanduser().resolve().as_posix() for _name, path in tokenizers)
+    paths.update(Path(path).expanduser().resolve().as_posix() for _name, path in chat_templates)
+    try:
+        loaded = ArtifactLoader().load(build_training_config(manifest).artifact_bundle.artifacts[0])
+    except (ArtifactLoadError, OSError, ValueError):
+        return tuple(sorted(paths))
+    artifact = loaded.artifact
+    for dataset in getattr(artifact, "datasets", ()):
+        if dataset.path:
+            dataset_path = Path(dataset.path).expanduser()
+            if not dataset_path.is_absolute():
+                dataset_path = manifest.parent / dataset_path
+            paths.add(dataset_path.resolve().as_posix())
+    return tuple(sorted(paths))
 
 
 def changed_promptabi_paths(

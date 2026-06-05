@@ -163,7 +163,9 @@ jobs:
 
 The action restores `.promptabi/cache`, skips unrelated pull requests, enforces
 lockfiles, emits workflow annotations, uploads SARIF to code scanning, and
-writes a markdown job summary.
+writes a markdown job summary. Training-data PRs can use the same action with
+`training-manifest:` to run `promptabi verify-training` before fine-tuning jobs
+start.
 
 ## Why the boundary matters
 
