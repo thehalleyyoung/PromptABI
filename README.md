@@ -89,6 +89,9 @@ promptabi bug-report --config examples/role-boundary/unsafe.promptabi.json --ind
 promptabi diff promptabi.baseline.json promptabi.json
 promptabi matrix --format text
 
+# In notebooks, inspect tokenizer/template/stop/grammar/SMT/budget witnesses as rich reprs.
+python -c "from promptabi import visualize_tokenization; from promptabi.tokenizers import ByteLevelTokenizer; print(visualize_tokenization('<|im_start|> hi', ByteLevelTokenizer(added_tokens=('<|im_start|>',))))"
+
 # Show pinned, verified real-world-style configs with proof/risk badges.
 promptabi gallery --format text
 

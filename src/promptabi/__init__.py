@@ -20,6 +20,8 @@ from .api import (
     fuzz_mutations,
     load_artifacts,
     minimize_failure_repro,
+    render_notebook_visualization_html,
+    render_notebook_visualization_text,
     render_compatibility_matrix,
     render_bug_report,
     render_explanation,
@@ -29,6 +31,12 @@ from .api import (
     render_result,
     refresh_maintainer_tooling,
     run_verification,
+    visualize_grammar_product,
+    visualize_smt_constraints,
+    visualize_stop_reachability,
+    visualize_template_rendering,
+    visualize_tokenization,
+    visualize_truncation,
     verify_corpora,
 )
 from .bug_reports import BugReport, BugReportError, generate_bug_report
@@ -232,6 +240,7 @@ from .json_schema import (
     normalize_json_schema_mapping,
 )
 from .loaders import ArtifactLoadError, ArtifactLoader, ArtifactLoadWarning, LoadedArtifact, load_artifact
+from .notebook import NotebookSection, NotebookVisualization
 from .lockfiles import (
     LOCKFILE_VERSION,
     Lockfile,

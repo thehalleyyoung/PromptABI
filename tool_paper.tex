@@ -353,6 +353,12 @@ tokens, generation-prompt tokens, model-specific special-token overhead, bounded
 truncation-policy survival proofs with minimized failing segment sets, and
 machine-readable budget visualizations that expose spans, dropped fields, and
 survival guarantees,
+ships a dependency-free notebook repr API whose rich HTML and plain-text views
+wrap the same tokenizer encoders, concrete and symbolic chat-template renderers,
+stop-policy reachability analyzer, lazy automata product search, finite
+SMT/contract solver, and token-budget visualization objects used by CLI checks,
+with escaped self-contained markup and explicit proof-mode labels for teaching,
+debugging, and paper artifact exploration,
 derives Z3-backed finite static contracts over cross-artifact obligations such as
 required-prompt-token budget survival, stop strings colliding with special or
 added control tokens, controlled prompt regions containing role/control boundary
@@ -423,7 +429,7 @@ The repository layout is designed to scale:
 \hline
 \textbf{Path} & \textbf{Purpose} \\
 \hline
-\texttt{src/promptabi} & Typed package, artifact model, formal automata, finite-state transducers, finite-contract core, offline loaders, CLI, configuration loading, diagnostic model, renderers, scheduler, analysis cache, and verification session. \\
+\texttt{src/promptabi} & Typed package, artifact model, formal automata, finite-state transducers, finite-contract core, offline loaders, CLI, configuration loading, diagnostic model, renderers, notebook reprs, scheduler, analysis cache, and verification session. \\
 \hline
 \texttt{src/promptabi/plugins.py} & Typed extension registry for artifact loaders, dependency-aware checks, diagnostic renderers, and capability metadata covering provider adapters, grammar backends, template dialects, truncation policies, and solver encodings. \\
 \hline
@@ -1086,6 +1092,23 @@ workflow milestone also establishes practical CI affordances---discovery,
 overrides, caches, verbosity, deterministic rendering, explicit failure
 thresholds, and plugin-style check registration---before expensive formal
 checkers arrive.
+
+The notebook surface makes that embedding path concrete for researchers and
+educators without adding a Jupyter dependency. \texttt{visualize\_tokenization}
+returns the exact adapter token IDs, byte spans, added-token flags, special-token
+flags, and normalization steps. \texttt{visualize\_template\_rendering} pairs a
+concrete supported-fragment render with bounded symbolic paths and visible
+abstentions. \texttt{visualize\_stop\_reachability} shows stop strings and token
+IDs through the real tokenizer-backed stop analyzer. \texttt{visualize\_grammar\_product}
+summarizes a lazy DFA intersection search and shortest witness.
+\texttt{visualize\_smt\_constraints} reports the finite contract problem, backend,
+assignment or unsat core, checked-assignment count, and conclusion.
+\texttt{visualize\_truncation} renders the existing budget visualization rows:
+kept or dropped segments, truncation boundary, overflow, and must-survive status.
+Each object implements \texttt{\_repr\_html\_}, \texttt{\_repr\_mimebundle\_},
+\texttt{render\_text}, \texttt{render\_html}, and \texttt{to\_dict}; the HTML is
+escaped and self-contained, so attacker-controlled prompt strings can be studied
+inside a notebook without becoming notebook HTML.
 
 The corpus maintenance workflow now has the same integration discipline:
 
