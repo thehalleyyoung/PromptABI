@@ -250,7 +250,11 @@ role-region non-forgeability, tool-schema required-parameter satisfiability,
 tool/provider compatibility, and supervised target-role alignment with concrete
 models, explicit proof classifications, or minimized unsat cores,
 a CPU-only benchmark suite, documentation, and contribution guidance, plus a
-\texttt{promptabi release readiness} gate that checks version metadata,
+\texttt{promptabi release compatibility-audit} gate that replays the full
+seed corpus plus provider, grammar, and parser/framework fixtures against
+explicitly pinned candidate versions---abstaining rather than certifying
+unpinned upstream releases---and a \texttt{promptabi release readiness} gate
+that checks version metadata,
 changelog, README command anchors, stable CLI paths, GitHub Action and release
 workflows, MkDocs navigation, seed-corpus manifests, formal/Z3-backed check
 registration, real-bug replay, the reproducibility bundle, and this paper
@@ -1733,6 +1737,8 @@ Z3 static contracts & Cross-artifact finite obligations over prompt budgets, sto
 Budget checks & Segment accounting, tokenizer-derived content counts, vLLM-style reservations, truncation simulation, required-token overflow, and finding counts. \\
 \hline
 Corpus verification & \texttt{promptabi corpus verify} release-gates the seed corpus, structured-schema corpus, provider fixture packs, real-bug benchmark, labeled evaluation, and optional runtime/Python-heap thresholds with explicit nonzero coverage checks. \\
+\hline
+Compatibility audit & \texttt{promptabi release compatibility-audit} composes the real corpus gate, provider fixture replay, grammar differential replay, and parser/framework compatibility fixtures for tokenizer, template, provider, grammar, and framework candidate-version surfaces, returning pass/fail/abstained evidence instead of treating an unpinned version label as proof. \\
 \hline
 Maintainer refresh & \texttt{promptabi maintain refresh} regenerates model/corpus/provider manifests, expected diagnostic baselines with portable fingerprints, corpus diffs, and release notes from real repository configs. \\
 \hline

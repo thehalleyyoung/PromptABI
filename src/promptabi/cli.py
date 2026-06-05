@@ -30,6 +30,12 @@ from .compatibility_matrix import (
     render_compatibility_matrix_json,
     render_compatibility_matrix_text,
 )
+from .compatibility_audit import (
+    CompatibilityAuditError,
+    render_compatibility_audit_json,
+    render_compatibility_audit_text,
+    run_compatibility_audit,
+)
 from .contributor_validation import (
     ContributorValidationError,
     render_contributor_validation_json,
@@ -628,6 +634,40 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     release_readiness.add_argument("--output", help="write release-readiness report to this path instead of stdout")
+    compatibility_audit = release_subparsers.add_parser(
+        "compatibility-audit",
+        help="run the post-1.0 fixture-backed compatibility audit before a minor release",
+    )
+    compatibility_audit.add_argument(
+        "--candidate-version",
+        action="append",
+        required=True,
+        metavar="SURFACE=VERSION",
+        help=(
+            "candidate version to certify for tokenizer, template, provider, grammar, or framework; "
+            "may be repeated, or use all=VERSION"
+        ),
+    )
+    compatibility_audit.add_argument("--seed-root", help="seed corpus root (default: repository fixtures/seed_corpus)")
+    compatibility_audit.add_argument(
+        "--provider-fixture-root",
+        help="provider fixture pack root (default: repository fixtures/provider_fixture_packs)",
+    )
+    compatibility_audit.add_argument(
+        "--structured-schema-root",
+        help="structured schema corpus root (default: repository fixtures/structured_schemas)",
+    )
+    compatibility_audit.add_argument(
+        "--grammar-differential-corpus",
+        help="grammar differential corpus JSON path (default: repository fixtures/grammar_differential/corpus.json)",
+    )
+    compatibility_audit.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    compatibility_audit.add_argument("--output", help="write compatibility audit report to this path instead of stdout")
 
     usage = subparsers.add_parser("usage", help="inspect telemetry-free local command summaries")
     usage_subparsers = usage.add_subparsers(dest="usage_command", required=True)
@@ -1440,6 +1480,42 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         return 0 if report.ok else 1
 
+    if args.command == "release" and args.release_command == "compatibility-audit":
+        try:
+            report = run_compatibility_audit(
+                _parse_candidate_versions(args.candidate_version, parser),
+                seed_root=args.seed_root,
+                provider_fixture_root=args.provider_fixture_root,
+                structured_schema_root=args.structured_schema_root,
+                grammar_differential_corpus=args.grammar_differential_corpus,
+            )
+            output = (
+                render_compatibility_audit_json(report)
+                if args.format == "json"
+                else render_compatibility_audit_text(report)
+            )
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                print(f"wrote compatibility audit report: {args.output} ({len(report.targets)} targets)")
+            else:
+                print(output, end="")
+        except (
+            CompatibilityAuditError,
+            CorpusVerificationError,
+            EvaluationError,
+            ProviderFixturePackError,
+            RealBugBenchmarkError,
+            SeedCorpusError,
+            StructuredSchemaCorpusError,
+            ValueError,
+        ) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write compatibility audit report: {exc}", file=sys.stderr)
+            return 2
+        return 0 if report.ok else 1
+
     if args.command == "usage" and args.usage_command == "summary":
         try:
             report = summarize_local_command_usage(args.path)
@@ -1616,6 +1692,16 @@ def _parse_artifact_overrides(values: Sequence[str], parser: argparse.ArgumentPa
             parser.error("--artifact values must use NAME=PATH_OR_URI")
         overrides[name] = location
     return overrides
+
+
+def _parse_candidate_versions(values: Sequence[str], parser: argparse.ArgumentParser) -> dict[str, str]:
+    versions: dict[str, str] = {}
+    for value in values:
+        surface, separator, version = value.partition("=")
+        if not separator or not surface or not version:
+            parser.error("--candidate-version values must use SURFACE=VERSION")
+        versions[surface] = version
+    return versions
 
 
 def _minimization_predicate(args, parser: argparse.ArgumentParser):

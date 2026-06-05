@@ -113,6 +113,7 @@ promptabi launch-assets --output-dir launch_assets --force
 promptabi fuzz mutations --format text
 promptabi maintain refresh --output-dir maintainer_artifact --force
 promptabi paper reproducibility --output-dir paper_artifact --force
+promptabi release compatibility-audit --candidate-version tokenizer=seed-v1 --candidate-version template=seed-v1 --candidate-version provider=provider-fixtures-v1 --candidate-version grammar=grammar-differential-v1 --candidate-version framework=structured-schemas-v1
 promptabi release readiness --format text
 
 # Local changed-artifact gate and local-only usage summaries; no telemetry.

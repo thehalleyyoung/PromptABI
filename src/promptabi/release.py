@@ -214,6 +214,7 @@ def _cli_check() -> ReleaseReadinessCheck:
         ("corpus", "evaluation"),
         ("paper", "reproducibility"),
         ("release", "readiness"),
+        ("release", "compatibility-audit"),
     )
     missing = tuple(" ".join(path) for path in required_paths if not _parser_accepts(parser, path))
     return _check(

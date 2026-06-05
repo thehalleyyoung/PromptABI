@@ -12,6 +12,12 @@ from .compatibility_matrix import (
     render_compatibility_matrix_json,
     render_compatibility_matrix_text,
 )
+from .compatibility_audit import (
+    CompatibilityAuditReport,
+    render_compatibility_audit_json,
+    render_compatibility_audit_text,
+    run_compatibility_audit,
+)
 from .contributor_validation import (
     ContributorValidationReport,
     render_contributor_validation_json,
@@ -406,6 +412,23 @@ def render_compatibility_matrix(
         return render_compatibility_matrix_text(resolved)
     if output_format == "json":
         return render_compatibility_matrix_json(resolved)
+    raise ValueError("output_format must be one of: text, json")
+
+
+def compatibility_audit(
+    candidate_versions: Mapping[str, str],
+    *,
+    output_format: str | None = None,
+) -> CompatibilityAuditReport | str:
+    """Run or render the post-1.0 fixture-backed compatibility audit."""
+
+    report = run_compatibility_audit(candidate_versions)
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_compatibility_audit_json(report)
+    if output_format == "text":
+        return render_compatibility_audit_text(report)
     raise ValueError("output_format must be one of: text, json")
 
 
