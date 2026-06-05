@@ -64,6 +64,14 @@ class PackingStrategy(StrEnum):
     PACKED_SEQUENCE = "packed-sequence"
 
 
+class TrainingRedactionMode(StrEnum):
+    """How training checks may materialize evidence in diagnostics."""
+
+    HASH_ONLY = "hash-only"
+    METADATA_ONLY = "metadata-only"
+    STRUCTURAL = "structural"
+
+
 class TrainingTextSourceKind(StrEnum):
     """Source categories that can contribute text to supervised target spans."""
 
@@ -734,6 +742,59 @@ class TrainingPipelineStageVersion:
 
 
 @dataclass(frozen=True, slots=True)
+class TrainingRedactionPolicy:
+    """Privacy contract for persisted training witnesses and reports."""
+
+    mode: TrainingRedactionMode = TrainingRedactionMode.HASH_ONLY
+    require_text_hashes: bool = True
+    allow_raw_text_in_witnesses: bool = False
+    allowed_report_fields: tuple[str, ...] = ()
+    forbidden_report_fields: tuple[str, ...] = ()
+    restricted_metadata_keys: tuple[str, ...] = ()
+    secret_patterns: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if isinstance(self.mode, str):
+            object.__setattr__(self, "mode", TrainingRedactionMode(self.mode))
+        object.__setattr__(
+            self,
+            "allowed_report_fields",
+            _unique_strings(self.allowed_report_fields, field_name="training redaction allowed_report_fields"),
+        )
+        object.__setattr__(
+            self,
+            "forbidden_report_fields",
+            _unique_strings(self.forbidden_report_fields, field_name="training redaction forbidden_report_fields"),
+        )
+        object.__setattr__(
+            self,
+            "restricted_metadata_keys",
+            _unique_strings(self.restricted_metadata_keys, field_name="training redaction restricted_metadata_keys"),
+        )
+        object.__setattr__(
+            self,
+            "secret_patterns",
+            _unique_strings(self.secret_patterns, field_name="training redaction secret_patterns"),
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {
+            "mode": self.mode.value,
+            "require_text_hashes": self.require_text_hashes,
+            "allow_raw_text_in_witnesses": self.allow_raw_text_in_witnesses,
+        }
+        if self.allowed_report_fields:
+            data["allowed_report_fields"] = list(self.allowed_report_fields)
+        if self.forbidden_report_fields:
+            data["forbidden_report_fields"] = list(self.forbidden_report_fields)
+        if self.restricted_metadata_keys:
+            data["restricted_metadata_keys"] = list(self.restricted_metadata_keys)
+        if self.secret_patterns:
+            data["secret_patterns"] = list(self.secret_patterns)
+        return data
+
+
+@dataclass(frozen=True, slots=True)
 class BaseArtifact:
     """Common artifact identity, location, provenance, and payload."""
 
@@ -1044,6 +1105,7 @@ class TrainingManifestArtifact(BaseArtifact):
     packing_window: PackingWindow | None = None
     chat_template_version: ChatTemplateVersion | None = None
     pipeline_stages: tuple[TrainingPipelineStageVersion, ...] = ()
+    redaction_policy: TrainingRedactionPolicy | None = None
 
     def __post_init__(self) -> None:
         BaseArtifact.__post_init__(self)
@@ -1109,6 +1171,8 @@ class TrainingManifestArtifact(BaseArtifact):
             data["chat_template_version"] = self.chat_template_version.to_dict()
         if self.pipeline_stages:
             data["pipeline_stages"] = [stage.to_dict() for stage in self.pipeline_stages]
+        if self.redaction_policy is not None:
+            data["redaction_policy"] = self.redaction_policy.to_dict()
         return data
 
 
@@ -1285,6 +1349,7 @@ def artifact_from_config(
             packing_window=_packing_window(spec),
             chat_template_version=_chat_template_version(spec),
             pipeline_stages=_training_pipeline_stages(spec),
+            redaction_policy=_training_redaction_policy(spec),
         )
     raise AssertionError(f"unhandled artifact kind: {kind}")
 
@@ -1737,6 +1802,23 @@ def _training_pipeline_stages(spec: dict[str, Any]) -> tuple[TrainingPipelineSta
             )
         )
     return tuple(stages)
+
+
+def _training_redaction_policy(spec: dict[str, Any]) -> TrainingRedactionPolicy | None:
+    raw_policy = spec.get("redaction_policy", spec.get("witness_redaction"))
+    if raw_policy is None:
+        return None
+    if not isinstance(raw_policy, dict):
+        raise ValueError("artifact field 'redaction_policy' must be an object")
+    return TrainingRedactionPolicy(
+        mode=TrainingRedactionMode(_str(raw_policy, "mode", default=TrainingRedactionMode.HASH_ONLY.value)),
+        require_text_hashes=_bool(raw_policy, "require_text_hashes", default=True),
+        allow_raw_text_in_witnesses=_bool(raw_policy, "allow_raw_text_in_witnesses", default=False),
+        allowed_report_fields=_tuple_of_str(raw_policy, "allowed_report_fields"),
+        forbidden_report_fields=_tuple_of_str(raw_policy, "forbidden_report_fields"),
+        restricted_metadata_keys=_tuple_of_str(raw_policy, "restricted_metadata_keys"),
+        secret_patterns=_tuple_of_str(raw_policy, "secret_patterns"),
+    )
 
 
 def _optional_text(spec: dict[str, Any], key: str) -> str | None:

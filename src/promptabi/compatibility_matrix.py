@@ -102,6 +102,13 @@ CHECK_RULE_IDS: dict[str, tuple[str, ...]] = {
     "tool-schema-ingestion": ("tool-schema-ingestion",),
     "tool-serialization": ("tool-serialization",),
     "training-packing": ("training-packing-boundary", "training-packing-mask", "training-packing-verified"),
+    "training-redaction": (
+        "training-redaction-hash-missing",
+        "training-redaction-policy-missing",
+        "training-redaction-raw-witness-field",
+        "training-redaction-secret-material",
+        "training-redaction-verified",
+    ),
     "tokenizer-config-drift": ("tokenizer-drift", "tokenizer-drift-abstained", "tokenizer-drift-clean"),
     "tokenizer-drift": ("tokenizer-drift", "tokenizer-drift-abstained", "tokenizer-drift-clean"),
 }
@@ -328,6 +335,11 @@ def _surfaces_for_check(check_name: str, artifact_kinds: tuple[ArtifactKind, ...
             _surface("training", "tokenizer-template-stage-consistency", ArtifactKind.TRAINING_MANIFEST, "covered", "fine-tuning preparation, training, evaluation, and serving tokenizer/template pins are compared by static-contracts"),
             _surface("training", "preference-pairs", ArtifactKind.TRAINING_MANIFEST, "bounded", "chosen/rejected pairs must share prompt prefix, role layout, tokenizer version, masking policy, and packing/truncation invariants"),
         ),
+        "training-redaction": (
+            _surface("training", "redaction-policy", ArtifactKind.TRAINING_MANIFEST, "covered", "stored witnesses and reports must be structural, hashed, and free of restricted metadata"),
+            _surface("training", "source-leakage", ArtifactKind.TRAINING_MANIFEST, "bounded", "source contributions are checked for hash-only evidence and provider-key-like values"),
+            _surface("training", "preference-pairs", ArtifactKind.TRAINING_MANIFEST, "bounded", "preference prompt/chosen/rejected evidence is required to be sha256-referenced"),
+        ),
         "token-budget-model": (*_tokenizer_surfaces(), *_framework_surfaces()),
         "tool-schema-ingestion": (_surface("provider", "mcp", ArtifactKind.TOOL_DEFINITION),),
         "tool-serialization": (*_provider_surfaces(), *_template_surfaces()),
@@ -371,6 +383,7 @@ def _notes_for_check(check_name: str) -> str:
     return {
         "enterprise-readiness": "declarative enterprise posture check for offline mirrors, private indexes, internal fixtures, policy packs, severity overrides, solver limits, and strict no-network operation",
         "static-contracts": "includes finite SMT obligations for supervised target/message role alignment, observed rendered/tokenized/loss-masked span contracts, source leakage, stage consistency, and preference-pair prefix/layout/tokenizer/mask invariants",
+        "training-redaction": "statically ensures training-manifest witnesses and reports use structural or hashed evidence instead of raw secrets, provider keys, restricted metadata, or dataset text",
         "tokenizer-config-drift": "alias retained for configs that select tokenizer drift under the older check name",
         "tokenizer-drift": "alias of tokenizer-config-drift for user-facing compatibility",
     }.get(check_name, "")
@@ -451,8 +464,9 @@ def _training_surfaces() -> tuple[CompatibilitySurface, ...]:
         _surface("training", "supervised-jsonl", ArtifactKind.TRAINING_MANIFEST, "covered", "finite target-role and supervised-span alignment are checked by static-contracts"),
         _surface("training", "loss-masks", ArtifactKind.TRAINING_MANIFEST, "covered", "observed supervised spans must be selected by the declared loss-mask contract"),
         _surface("training", "packed-datasets", ArtifactKind.TRAINING_MANIFEST, "bounded", "observed supervised spans are checked against declared preserved packing boundaries"),
+        _surface("training", "redaction-policy", ArtifactKind.TRAINING_MANIFEST, "covered", "stored witnesses and reports are constrained to structural or hashed training evidence"),
         _surface("training", "tokenizer-template-stage-consistency", ArtifactKind.TRAINING_MANIFEST, "covered", "dataset preparation, training, evaluation, and serving tokenizer/template pins are compared by static-contracts"),
-        _surface("training", "preference-pairs", ArtifactKind.TRAINING_MANIFEST, "planned-abstaining", "preference-pair prefix equivalence is not implemented yet"),
+        _surface("training", "preference-pairs", ArtifactKind.TRAINING_MANIFEST, "bounded", "preference-pair prefix equivalence and hash-only report evidence are checked"),
     )
 
 

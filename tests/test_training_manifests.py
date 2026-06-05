@@ -15,6 +15,7 @@ from promptabi import (
     TrainingDatasetKind,
     TrainingManifestArtifact,
     TrainingPipelineStageVersion,
+    TrainingRedactionMode,
     TrainingSourceContribution,
     TrainingTextSourceKind,
 )
@@ -503,3 +504,211 @@ def test_training_packing_check_catches_boundary_truncation_and_mask_defects(tmp
     assert "role-delimiter-drift" in kinds
     assert "bos-eos-ambiguous" in kinds
     assert {diagnostic.rule_id for diagnostic in diagnostics} == {"training-packing-boundary", "training-packing-mask"}
+
+
+def test_training_redaction_policy_model_and_loader_metadata(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "redacted-training-manifest.json"
+    text_hash = "a" * 64
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "dataset_format": "chat-jsonl",
+                "datasets": [{"name": "sft", "kind": "supervised", "format": "chat-jsonl"}],
+                "role_labels": [
+                    {"source_role": "assistant", "canonical_role": "assistant", "supervised_target": True},
+                ],
+                "redaction_policy": {
+                    "mode": "hash-only",
+                    "require_text_hashes": True,
+                    "allow_raw_text_in_witnesses": False,
+                    "allowed_report_fields": ["span_id", "source_id", "text_sha256", "token_range"],
+                    "forbidden_report_fields": ["raw_text", "content", "messages"],
+                    "restricted_metadata_keys": ["customer_email", "provider_key"],
+                    "secret_patterns": ["provider-key", "bearer-token"],
+                },
+                "supervised_spans": [
+                    {
+                        "span_id": "train-1.assistant",
+                        "target_role": "assistant",
+                        "rendered_region_role": "assistant",
+                        "start_token": 4,
+                        "end_token": 8,
+                        "region_start_token": 3,
+                        "region_end_token": 9,
+                        "source_contributions": [
+                            {
+                                "source_id": "assistant-answer",
+                                "source_kind": "assistant",
+                                "source_field": "messages.content_sha256",
+                                "start_token": 4,
+                                "end_token": 8,
+                                "transform": "chat-template-render",
+                                "text_sha256": f"sha256:{text_hash}",
+                            }
+                        ],
+                    }
+                ],
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    artifact = TrainingManifestArtifact(
+        kind=ArtifactKind.TRAINING_MANIFEST,
+        name="train",
+        location=ArtifactLocation(path=str(manifest_path)),
+    )
+
+    loaded = ArtifactLoader().load(artifact)
+
+    assert isinstance(loaded.artifact, TrainingManifestArtifact)
+    assert loaded.artifact.redaction_policy is not None
+    assert loaded.artifact.redaction_policy.mode is TrainingRedactionMode.HASH_ONLY
+    metadata = dict(loaded.metadata)
+    assert metadata["redaction_mode"] == "hash-only"
+    assert metadata["redaction_require_text_hashes"] is True
+    assert metadata["redaction_restricted_metadata_key_count"] == 2
+
+
+def test_training_redaction_check_proves_hash_only_evidence(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "clean-redaction.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "dataset_format": "chat-jsonl",
+                "datasets": [{"name": "sft", "kind": "supervised", "format": "chat-jsonl"}],
+                "redaction_policy": {"mode": "hash-only", "restricted_metadata_keys": ["customer_email"]},
+                "supervised_spans": [
+                    {
+                        "span_id": "train-0001.assistant",
+                        "target_role": "assistant",
+                        "rendered_region_role": "assistant",
+                        "start_token": 10,
+                        "end_token": 20,
+                        "region_start_token": 9,
+                        "region_end_token": 21,
+                        "source_contributions": [
+                            {
+                                "source_id": "assistant-answer",
+                                "source_kind": "assistant",
+                                "source_field": "messages.content_sha256",
+                                "start_token": 10,
+                                "end_token": 20,
+                                "transform": "chat-template-render",
+                                "text_sha256": "sha256:" + "b" * 64,
+                            }
+                        ],
+                    }
+                ],
+                "preference_pairs": [
+                    {
+                        "pair_id": "prefs-1",
+                        "prompt_sha256": "sha256:" + "c" * 64,
+                        "chosen_sha256": "sha256:" + "d" * 64,
+                        "rejected_sha256": "sha256:" + "e" * 64,
+                        "chosen_role_layout": ["user", "assistant"],
+                        "rejected_role_layout": ["user", "assistant"],
+                        "chosen_tokenizer": "tok@sha256",
+                        "rejected_tokenizer": "tok@sha256",
+                        "chosen_mask_policy": "dpo-response-only",
+                        "rejected_mask_policy": "dpo-response-only",
+                    }
+                ],
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "promptabi.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "name": "clean-redaction",
+                "checks": ["training-redaction"],
+                "artifacts": {"train": {"kind": "training-manifest", "path": manifest_path.name}},
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+    result = VerificationSession(load_config(config_path)).run()
+    diagnostics = [diagnostic for diagnostic in result.diagnostics if diagnostic.rule_id.startswith("training-redaction")]
+
+    assert result.ok
+    assert [diagnostic.rule_id for diagnostic in diagnostics] == ["training-redaction-verified"]
+    assert dict(diagnostics[0].properties)["kind"] == "verified"
+
+
+def test_training_redaction_check_rejects_secret_like_and_raw_report_evidence(tmp_path: Path) -> None:
+    secret = "sk-proj-abcdefghijklmnopqrstuvwxyz123456"
+    manifest_path = tmp_path / "leaky-redaction.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "dataset_format": "chat-jsonl",
+                "datasets": [{"name": "sft", "kind": "supervised", "format": "chat-jsonl"}],
+                "redaction_policy": {
+                    "mode": "hash-only",
+                    "allow_raw_text_in_witnesses": True,
+                    "allowed_report_fields": ["raw_text", "source_id"],
+                    "restricted_metadata_keys": ["customer_email", "provider_key"],
+                    "secret_patterns": ["provider-key"],
+                },
+                "metadata": {"provider_key": secret},
+                "supervised_spans": [
+                    {
+                        "span_id": "train-0002.assistant",
+                        "target_role": "assistant",
+                        "rendered_region_role": "assistant",
+                        "start_token": 1,
+                        "end_token": 2,
+                        "region_start_token": 0,
+                        "region_end_token": 3,
+                        "source_contributions": [
+                            {
+                                "source_id": secret,
+                                "source_kind": "assistant",
+                                "source_field": "metadata.provider_key",
+                                "start_token": 1,
+                                "end_token": 2,
+                                "transform": "copy",
+                            }
+                        ],
+                    }
+                ],
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "promptabi.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "name": "leaky-redaction",
+                "checks": ["training-redaction"],
+                "artifacts": {
+                    "train": {
+                        "kind": "training-manifest",
+                        "path": manifest_path.name,
+                    }
+                },
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+    result = VerificationSession(load_config(config_path)).run()
+    payload = json.dumps(result.to_dict(), sort_keys=True)
+    rule_ids = {diagnostic.rule_id for diagnostic in result.diagnostics}
+
+    assert not result.ok
+    assert {
+        "training-redaction-raw-witness-field",
+        "training-redaction-hash-missing",
+        "training-redaction-secret-material",
+    }.issubset(rule_ids)
+    assert secret not in payload
+    assert "sha256-prefix" in payload

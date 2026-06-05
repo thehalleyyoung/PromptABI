@@ -688,7 +688,7 @@ class ArtifactLoader:
                 parsed,
                 location=artifact.location,
                 provenance=artifact.provenance,
-                metadata=artifact.metadata,
+                metadata=_merge_metadata(artifact.metadata, parsed.metadata),
                 source_span=artifact.source_span,
             )
         metadata = _training_manifest_metadata(parsed_artifact)
@@ -1138,6 +1138,15 @@ def _training_manifest_metadata(artifact: Artifact) -> tuple[tuple[str, object],
                 ("pipeline_stages", tuple(stage.stage for stage in artifact.pipeline_stages)),
                 ("pipeline_tokenizer_pinned_count", sum(1 for stage in artifact.pipeline_stages if stage.tokenizer_pinned)),
                 ("pipeline_chat_template_pinned_count", sum(1 for stage in artifact.pipeline_stages if stage.chat_template_pinned)),
+            )
+        )
+    if artifact.redaction_policy is not None:
+        metadata.extend(
+            (
+                ("redaction_mode", artifact.redaction_policy.mode.value),
+                ("redaction_require_text_hashes", artifact.redaction_policy.require_text_hashes),
+                ("redaction_allow_raw_text_in_witnesses", artifact.redaction_policy.allow_raw_text_in_witnesses),
+                ("redaction_restricted_metadata_key_count", len(artifact.redaction_policy.restricted_metadata_keys)),
             )
         )
     return tuple(metadata)

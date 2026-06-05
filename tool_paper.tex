@@ -74,6 +74,10 @@ state, diagnostics, witness hashes, bounded artifact excerpts, solver metadata,
 and reproducibility hashes under a local HMAC signature for audit trails, plus
 supply-chain diagnostics for missing hashes, license metadata, trusted-source
 annotations, and non-reproducible remote revisions,
+a static training-redaction checker that proves training-manifest witnesses and
+reports remain structural or hash-only, rejects raw report fields, un-hashed
+source contributions, secret-like provider keys, and restricted metadata, and
+emits redacted deterministic evidence without materializing private datasets,
 a curated \texttt{promptabi gallery} that reruns real pinned configurations,
 emits compatibility badges, summarizes actual solver backends rather than merely
 advertised solver capability, and explains abstentions plus accepted risks,

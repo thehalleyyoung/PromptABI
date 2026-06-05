@@ -70,6 +70,7 @@ from .tool_serialization import ToolSerializationFinding, analyze_tool_call_seri
 from .tokenizer_drift import TokenizerDriftAbstention, TokenizerDriftFinding, analyze_tokenizer_config_drift
 from .tokenizers import TokenizerAdapter, TokenizerError, load_tokenizer
 from .training_packing import TrainingPackingFinding, analyze_training_packing
+from .training_redaction import TrainingRedactionFinding, analyze_training_redaction
 
 
 CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
@@ -138,6 +139,11 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "training-packing-boundary": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-packing-mask": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-packing-verified": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-redaction-hash-missing": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-redaction-policy-missing": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-redaction-raw-witness-field": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-redaction-secret-material": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-redaction-verified": (CheckMode.SOUND, CheckMode.BOUNDED),
     "tokenizer-drift": (CheckMode.SOUND, CheckMode.COMPLETE),
     "tokenizer-drift-abstained": (CheckMode.ABSTAINING, CheckMode.COMPLETE),
     "tokenizer-drift-clean": (CheckMode.SOUND, CheckMode.COMPLETE),
@@ -341,6 +347,7 @@ CHECK_DEPENDENCIES: dict[str, CheckDependency] = {
         ),
     ),
     "training-packing": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
+    "training-redaction": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "tokenizer-config-drift": CheckDependency(artifact_kinds=(ArtifactKind.TOKENIZER,)),
     "tokenizer-drift": CheckDependency(artifact_kinds=(ArtifactKind.TOKENIZER,)),
 }
@@ -528,6 +535,7 @@ class VerificationSession:
             "tool-schema-ingestion": self._tool_schema_ingestion_check,
             "tool-serialization": self._tool_serialization_check,
             "training-packing": self._training_packing_check,
+            "training-redaction": self._training_redaction_check,
             "tokenizer-config-drift": self._tokenizer_config_drift_check,
             "tokenizer-drift": self._tokenizer_config_drift_check,
         }
@@ -1018,6 +1026,15 @@ class VerificationSession:
                 continue
             report = analyze_training_packing(loaded.artifact)
             diagnostics.extend(_training_packing_finding_diagnostic(loaded, finding) for finding in report.findings)
+        return tuple(diagnostics)
+
+    def _training_redaction_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        diagnostics: list[Diagnostic] = []
+        for loaded in context.loaded_artifacts:
+            if not isinstance(loaded.artifact, TrainingManifestArtifact):
+                continue
+            report = analyze_training_redaction(loaded.artifact)
+            diagnostics.extend(_training_redaction_finding_diagnostic(loaded, finding) for finding in report.findings)
         return tuple(diagnostics)
 
     def _tokenizer_config_drift_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
@@ -1742,6 +1759,54 @@ def _training_packing_finding_diagnostic(
         else (),
         witness=WitnessTrace(
             summary="PromptABI replayed finite rendered/tokenized training span facts against the declared packing policy.",
+            steps=steps,
+            artifacts=(loaded.artifact.to_ref(),),
+        ),
+    )
+
+
+def _training_redaction_finding_diagnostic(
+    loaded: LoadedArtifact,
+    finding: TrainingRedactionFinding,
+) -> Diagnostic:
+    rule_id = f"training-redaction-{finding.kind.value}"
+    severity = {
+        "error": DiagnosticSeverity.ERROR,
+        "warning": DiagnosticSeverity.WARNING,
+        "info": DiagnosticSeverity.INFO,
+    }[finding.severity]
+    steps = tuple(
+        WitnessStep(action=action, input=input_value, output=output_value)
+        for action, input_value, output_value in finding.witness
+    )
+    properties: list[tuple[str, object]] = [("kind", finding.kind.value)]
+    if finding.subject is not None:
+        properties.append(("subject", finding.subject))
+    suggestions = {
+        "training-redaction-policy-missing": (
+            "Add redaction_policy with hash-only or metadata-only mode before persisting training witnesses.",
+        ),
+        "training-redaction-hash-missing": (
+            "Store sha256:<digest> for source and preference text, not raw dataset rows or prompt strings.",
+        ),
+        "training-redaction-raw-witness-field": (
+            "Remove raw text fields from allowed reports and keep persisted witnesses structural or hashed.",
+        ),
+        "training-redaction-secret-material": (
+            "Remove provider keys, credentials, and restricted metadata from training manifests before generating reports.",
+        ),
+    }.get(rule_id, ())
+    return Diagnostic(
+        rule_id=rule_id,
+        severity=severity,
+        message=finding.message,
+        artifact=loaded.artifact.to_ref(),
+        span=_artifact_span(loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG[rule_id],
+        properties=tuple(properties),
+        suggestions=suggestions,
+        witness=WitnessTrace(
+            summary="PromptABI statically checked that training evidence can be reported without raw sensitive content.",
             steps=steps,
             artifacts=(loaded.artifact.to_ref(),),
         ),
