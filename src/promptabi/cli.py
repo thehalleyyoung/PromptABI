@@ -70,6 +70,12 @@ from .evaluation import EvaluationError, render_evaluation_json, render_evaluati
 from .first_party_plugins import create_first_party_plugin_registry, render_plugin_capabilities
 from .github_action import GitHubActionError, run_github_action
 from .gallery import GalleryError, build_gallery, render_gallery_json, render_gallery_text
+from .incremental import (
+    IncrementalVerificationError,
+    explicit_changed_paths,
+    git_changed_paths,
+    run_incremental_verification,
+)
 from .init import InitError, available_stacks, scaffold_promptabi_project
 from .launch_assets import (
     LaunchAssetError,
@@ -223,6 +229,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--require-lockfile",
         action="store_true",
         help="fail verification if the current artifacts or diagnostic baseline drift from the lockfile",
+    )
+    verify.add_argument(
+        "--changed-path",
+        action="append",
+        default=[],
+        help="config-relative or absolute changed path for incremental monorepo verification; may be repeated",
+    )
+    verify.add_argument(
+        "--changed-from-git",
+        metavar="REF",
+        help="run incrementally from paths changed since this git ref, including untracked files",
     )
     _add_local_summary_argument(verify)
 
@@ -1013,11 +1030,30 @@ def main(argv: Sequence[str] | None = None) -> int:
             plugin_registry = _load_cli_plugins(args.plugin)
             overrides = _parse_artifact_overrides(args.artifact, parser)
             config = load_config(config_path).with_artifact_overrides(overrides, base_dir=Path.cwd())
+            incremental_requested = bool(args.changed_path or args.changed_from_git)
+            if incremental_requested and (args.write_lockfile or args.require_lockfile):
+                parser.error("--changed-path/--changed-from-git cannot be combined with lockfile read/write enforcement")
             if args.local_summary is not None and policy_forbids_local_summary(config.policy):
                 print("promptabi: organization policy pack forbids --local-summary writes", file=sys.stderr)
                 return 2
             session = VerificationSession(config, plugin_registry=plugin_registry)
-            result = session.run()
+            if incremental_requested:
+                changed_paths = (
+                    *explicit_changed_paths(args.changed_path, base_dir=config_path.parent),
+                    *(
+                        git_changed_paths(args.changed_from_git, cwd=config_path.parent)
+                        if args.changed_from_git
+                        else ()
+                    ),
+                )
+                result = run_incremental_verification(
+                    session,
+                    changed_paths=changed_paths,
+                    cache_dir=cache_dir,
+                    config_path=config_path,
+                )
+            else:
+                result = session.run()
             lockfile_path = _resolve_lockfile_path(args.lockfile, config_path)
             if args.write_lockfile:
                 loaded_artifacts, load_diagnostics = session.load_artifacts_with_diagnostics()
@@ -1052,6 +1088,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         except PluginError as exc:
             print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except IncrementalVerificationError as exc:
+            print(f"promptabi: cannot resolve incremental changes: {exc}", file=sys.stderr)
             return 2
         except OSError as exc:
             print(f"promptabi: cannot prepare cache directory: {exc}", file=sys.stderr)

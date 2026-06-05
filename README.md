@@ -18,6 +18,9 @@ promptabi explain --config examples/role-boundary/unsafe.promptabi.json --index 
 
 # Gate a repo with cache, lockfile drift checks, annotations, and SARIF upload.
 promptabi github-action --config examples/minimal/promptabi.json --require-lockfile
+
+# In monorepos, recompute only checks affected by changed PromptABI inputs.
+promptabi verify --config examples/minimal/promptabi.json --changed-from-git origin/main
 ```
 
 ```text
@@ -122,6 +125,9 @@ promptabi release readiness --format text
 promptabi pre-commit install --config examples/minimal/promptabi.json
 promptabi verify --config examples/minimal/promptabi.json --local-summary .promptabi/usage.jsonl
 promptabi usage privacy
+
+# Incremental monorepo mode reuses cached unchanged-check diagnostics and recomputes dependencies.
+promptabi verify --config examples/minimal/promptabi.json --changed-path examples/minimal/schema.json
 ```
 
 ## GitHub Actions

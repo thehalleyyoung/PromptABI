@@ -109,6 +109,20 @@ class ArtifactRef:
                 data[key] = value
         return data
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ArtifactRef":
+        return cls(
+            kind=str(data["kind"]),
+            name=str(data["name"]),
+            path=_optional_str_value(data.get("path")),
+            uri=_optional_str_value(data.get("uri")),
+            version=_optional_str_value(data.get("version")),
+            revision=_optional_str_value(data.get("revision")),
+            sha256=_optional_str_value(data.get("sha256")),
+            license=_optional_str_value(data.get("license")),
+            source=_optional_str_value(data.get("source")),
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class SourceSpan:
@@ -144,6 +158,16 @@ class SourceSpan:
             data["end_column"] = self.end_column
         return data
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SourceSpan":
+        return cls(
+            path=str(data["path"]),
+            start_line=int(data.get("start_line", 1)),
+            start_column=int(data.get("start_column", 1)),
+            end_line=_optional_int_value(data.get("end_line")),
+            end_column=_optional_int_value(data.get("end_column")),
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class WitnessStep:
@@ -169,6 +193,14 @@ class WitnessStep:
             data["output"] = self.output
         return data
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "WitnessStep":
+        return cls(
+            action=str(data["action"]),
+            input=_optional_str_value(data.get("input")),
+            output=_optional_str_value(data.get("output")),
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class WitnessTrace:
@@ -193,6 +225,14 @@ class WitnessTrace:
             "steps": [step.to_dict() for step in self.steps],
             "artifacts": [artifact.to_dict() for artifact in self.artifacts],
         }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "WitnessTrace":
+        return cls(
+            summary=str(data["summary"]),
+            steps=tuple(WitnessStep.from_dict(step) for step in data.get("steps", ())),
+            artifacts=tuple(ArtifactRef.from_dict(artifact) for artifact in data.get("artifacts", ())),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -288,6 +328,33 @@ class Diagnostic:
             }
         return data
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Diagnostic":
+        localization = data.get("localization")
+        message_id = None
+        message_args: tuple[tuple[str, Any], ...] = ()
+        if isinstance(localization, dict):
+            raw_message_id = localization.get("message_id")
+            message_id = str(raw_message_id) if raw_message_id is not None else None
+            raw_message_args = localization.get("message_args", {})
+            if isinstance(raw_message_args, dict):
+                message_args = tuple((str(key), value) for key, value in raw_message_args.items())
+        return cls(
+            rule_id=str(data["rule_id"]),
+            severity=DiagnosticSeverity(str(data["severity"])),
+            message=str(data["message"]),
+            artifact=ArtifactRef.from_dict(data["artifact"]) if isinstance(data.get("artifact"), dict) else None,
+            span=SourceSpan.from_dict(data["span"]) if isinstance(data.get("span"), dict) else None,
+            witness=WitnessTrace.from_dict(data["witness"]) if isinstance(data.get("witness"), dict) else None,
+            suggestions=tuple(str(item) for item in data.get("suggestions", ())),
+            check_modes=tuple(str(item) for item in data.get("check_modes", ())),
+            properties=tuple((str(key), value) for key, value in data.get("properties", {}).items())
+            if isinstance(data.get("properties"), dict)
+            else (),
+            message_id=message_id,
+            message_args=message_args,
+        )
+
 
 def diagnostic_sort_key(diagnostic: Diagnostic) -> tuple[int, str, str, str, str]:
     """Return the canonical ordering key for deterministic diagnostic output."""
@@ -303,3 +370,11 @@ def _coerce_check_mode(mode: CheckMode | str) -> CheckMode:
     except ValueError as exc:
         choices = ", ".join(item.value for item in CheckMode)
         raise ValueError(f"unknown check mode: {mode!r}; expected one of {choices}") from exc
+
+
+def _optional_str_value(value: object) -> str | None:
+    return str(value) if value is not None else None
+
+
+def _optional_int_value(value: object) -> int | None:
+    return int(value) if value is not None else None

@@ -94,6 +94,8 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "enterprise-readiness-verified": (CheckMode.SOUND, CheckMode.COMPLETE),
     "enterprise-solver-sandbox-incomplete": (CheckMode.SOUND, CheckMode.COMPLETE),
     "enterprise-solver-sandbox-unsafe": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "incremental-cache-miss": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "incremental-check-reused": (CheckMode.HEURISTIC,),
     "lockfile-artifact-added": LOCKFILE_CHECK_MODES,
     "lockfile-artifact-drift": LOCKFILE_CHECK_MODES,
     "lockfile-artifact-missing": LOCKFILE_CHECK_MODES,
@@ -577,6 +579,23 @@ class VerificationSession:
         scheduled_diagnostics.extend(self._check_diagnostics(context, checks or self.config.checks))
         scheduled_diagnostics.sort(key=_scheduled_diagnostic_sort_key)
         return tuple(item.diagnostic for item in scheduled_diagnostics)
+
+    def collect_scheduled_diagnostics(
+        self,
+        *,
+        checks: Sequence[str | CheckCallable] | None = None,
+    ) -> tuple[ScheduledDiagnostic, ...]:
+        """Run selected checks and preserve scheduler metadata for cache-aware integrations."""
+
+        loaded_artifacts, diagnostics_tuple = self.load_artifacts_with_diagnostics()
+        context = CheckContext(config=self.config, loaded_artifacts=loaded_artifacts)
+        scheduled_diagnostics = [
+            ScheduledDiagnostic(-1, index, diagnostic)
+            for index, diagnostic in enumerate(diagnostics_tuple)
+        ]
+        scheduled_diagnostics.extend(self._check_diagnostics(context, checks or self.config.checks))
+        scheduled_diagnostics.sort(key=_scheduled_diagnostic_sort_key)
+        return tuple(scheduled_diagnostics)
 
     def run(self, *, checks: Sequence[str | CheckCallable] | None = None) -> VerificationResult:
         selected_checks = tuple(

@@ -47,7 +47,11 @@ parallel check execution and a per-session analysis cache, a typed plugin
 registry for artifact loaders, checks, provider adapters, grammar backends,
 template dialects, truncation policies, solver encodings, and diagnostic
 renderers, CLI-loadable module plugins, entry-point plugin discovery, and
-mode-aware plugin checks that preserve deterministic scheduling, a generated
+mode-aware plugin checks that preserve deterministic scheduling, an incremental
+monorepo verifier that maps changed local artifact paths to check dependencies,
+reuses cached unchanged-check diagnostics, recomputes downstream dependents, and
+fails closed by recomputing cache misses rather than silently dropping findings,
+a generated
 public-API stability manifest with deprecation metadata, Markdown/JSON API docs,
 and downstream plugin compatibility tests, focused tests, examples, a fixture
 corpus layout, a curated ten-family seed corpus, a deterministic corpus manifest
@@ -382,7 +386,11 @@ and independently checks those witnesses with executable specifications,
 tracks check dependencies over artifact kinds, reuses cached tokenizer adapters,
 tokenizer/grammar analysis reports, budget reports, and static-contract query
 results, parallelizes independent embedded checks, serializes shared tokenizer and
-solver resources, fails closed on malformed JSON or UTF-8 artifacts, corrupt
+solver resources, exposes an incremental monorepo plan that resolves explicit or
+\texttt{git diff --relative} changed paths to local artifact kinds, forces full
+runs when config files change, reuses JSON-hydrated diagnostics for unchanged
+checks, recomputes cache misses to preserve CI correctness, and records
+structured reuse/cache-miss diagnostics in the same result stream, fails closed on malformed JSON or UTF-8 artifacts, corrupt
 fixture archives, partial provider snapshots, invalid schemas, missing or
 incompatible tokenizer backends, and unsupported solver fragments by emitting
 source-mapped loader diagnostics or explicit abstentions, emits deterministic
@@ -521,6 +529,8 @@ The repository layout is designed to scale:
 \textbf{Path} & \textbf{Purpose} \\
 \hline
 \texttt{src/promptabi} & Typed package, artifact model, formal automata, finite-state transducers, finite-contract core, offline loaders, CLI, configuration loading, diagnostic model, renderers, notebook reprs, scheduler, analysis cache, and verification session. \\
+\hline
+\texttt{src/promptabi/incremental.py} & Monorepo incremental verification planner, git changed-path collection, per-check diagnostic cache, dependency-closure selection, cache reuse diagnostics, and fail-closed cache-miss recomputation for \texttt{promptabi verify --changed-path/--changed-from-git}. \\
 \hline
 \texttt{src/promptabi/plugins.py} & Typed extension registry for artifact loaders, dependency-aware checks, diagnostic renderers, and capability metadata covering provider adapters, grammar backends, template dialects, truncation policies, and solver encodings. \\
 \hline
