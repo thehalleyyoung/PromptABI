@@ -218,6 +218,46 @@ def _write_manifest(path: Path) -> None:
     )
 
 
+def _add_training_corpus_contract(manifest: dict[str, object]) -> None:
+    metadata = manifest.setdefault("metadata", {})
+    assert isinstance(metadata, dict)
+    metadata.update(
+        {
+            "training_corpus_contract": {
+                "model_card": {
+                    "model_id": "llama-3.1-instruct",
+                    "dataset_revision": "dataset-v1",
+                    "tokenizer_sha256": "sha256:tok",
+                    "chat_template_sha256": "sha256:tmpl",
+                },
+                "tokenizer": {"name": "llama-tokenizer", "sha256": "sha256:tok"},
+                "chat_template": {
+                    "name": "llama-3.1-instruct",
+                    "sha256": "sha256:tmpl",
+                    "add_generation_prompt": False,
+                },
+                "serving_lockfile": {"name": "serving.promptabi.lock.json", "sha256": "sha256:lock"},
+            },
+            "model_card": {
+                "model_id": "llama-3.1-instruct",
+                "dataset_revision": "dataset-v1",
+                "tokenizer_sha256": "sha256:tok",
+                "chat_template_sha256": "sha256:tmpl",
+            },
+            "serving_lockfile": {
+                "name": "serving.promptabi.lock.json",
+                "sha256": "sha256:lock",
+                "tokenizer": {"name": "llama-tokenizer", "sha256": "sha256:tok"},
+                "chat_template": {
+                    "name": "llama-3.1-instruct",
+                    "sha256": "sha256:tmpl",
+                    "add_generation_prompt": False,
+                },
+            },
+        }
+    )
+
+
 def test_training_manifest_config_model_covers_training_pipeline_contracts(tmp_path: Path) -> None:
     manifest_path = tmp_path / "training-manifest.json"
     manifest_path.write_text("{}", encoding="utf-8")
@@ -772,6 +812,90 @@ def test_training_bridge_check_proves_training_serving_interface_match(tmp_path:
     assert "matches serving prompt-interface assumptions" in diagnostics[0].message
 
 
+def test_training_drift_check_proves_corpus_metadata_matches_serving_contract(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "training-drift-clean.json"
+    _write_manifest(manifest_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    _add_training_corpus_contract(manifest)
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True), encoding="utf-8")
+    config_path = tmp_path / "promptabi.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "name": "training-drift-clean",
+                "checks": ["training-drift"],
+                "artifacts": {"train": {"kind": "training-manifest", "path": manifest_path.name}},
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+    result = VerificationSession(load_config(config_path)).run()
+    diagnostics = [diagnostic for diagnostic in result.diagnostics if diagnostic.rule_id.startswith("training-drift")]
+
+    assert result.ok
+    assert [diagnostic.rule_id for diagnostic in diagnostics] == ["training-drift-verified"]
+    assert "matches model-card, tokenizer, template, and serving lockfile pins" in diagnostics[0].message
+    assert dict(diagnostics[0].properties)["kind"] == "verified"
+
+
+def test_training_drift_check_catches_model_card_tokenizer_template_and_lockfile_mismatches(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "training-drift-bad.json"
+    _write_manifest(manifest_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    _add_training_corpus_contract(manifest)
+    metadata = manifest["metadata"]
+    assert isinstance(metadata, dict)
+    model_card = metadata["model_card"]
+    serving_lockfile = metadata["serving_lockfile"]
+    assert isinstance(model_card, dict)
+    assert isinstance(serving_lockfile, dict)
+    model_card["dataset_revision"] = "dataset-v2"
+    serving_lockfile["sha256"] = "sha256:lock-new"
+    serving_tokenizer = serving_lockfile["tokenizer"]
+    serving_template = serving_lockfile["chat_template"]
+    assert isinstance(serving_tokenizer, dict)
+    assert isinstance(serving_template, dict)
+    serving_tokenizer["sha256"] = "sha256:tok-serving"
+    serving_template["sha256"] = "sha256:tmpl-serving"
+    pipeline_stages = manifest["pipeline_stages"]
+    assert isinstance(pipeline_stages, list)
+    training_stage = next(stage for stage in pipeline_stages if isinstance(stage, dict) and stage["stage"] == "training")
+    training_stage["tokenizer_sha256"] = "sha256:tok-train-new"
+    training_stage["chat_template_sha256"] = "sha256:tmpl-train-new"
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True), encoding="utf-8")
+    config_path = tmp_path / "promptabi.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "name": "training-drift-bad",
+                "checks": ["training-drift"],
+                "artifacts": {"train": {"kind": "training-manifest", "path": manifest_path.name}},
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+    result = VerificationSession(load_config(config_path)).run()
+    diagnostics = [diagnostic for diagnostic in result.diagnostics if diagnostic.rule_id.startswith("training-drift")]
+    rule_ids = {diagnostic.rule_id for diagnostic in diagnostics}
+    subjects = {dict(diagnostic.properties)["subject"] for diagnostic in diagnostics}
+
+    assert not result.ok
+    assert {
+        "training-drift-model-card-mismatch",
+        "training-drift-tokenizer-mismatch",
+        "training-drift-template-mismatch",
+        "training-drift-serving-lockfile-mismatch",
+    }.issubset(rule_ids)
+    assert "metadata.model_card.dataset_revision" in subjects
+    assert "pipeline_stages.training.tokenizer.sha256" in subjects
+    assert "pipeline_stages.training.chat_template.sha256" in subjects
+    assert "metadata.serving_lockfile.sha256" in subjects
+
+
 def test_training_bridge_check_catches_serving_contract_drift(tmp_path: Path) -> None:
     manifest_path = tmp_path / "bad-training-bridge.json"
     manifest_path.write_text(
@@ -865,6 +989,7 @@ def test_verify_training_manifest_workflow_runs_real_training_checks(tmp_path: P
     manifest["preference_pairs"][0]["prompt_sha256"] = "sha256:" + "b" * 64
     manifest["preference_pairs"][0]["chosen_sha256"] = "sha256:" + "c" * 64
     manifest["preference_pairs"][0]["rejected_sha256"] = "sha256:" + "d" * 64
+    _add_training_corpus_contract(manifest)
     manifest_path.write_text(json.dumps(manifest, sort_keys=True), encoding="utf-8")
 
     exit_code = main(["verify-training", "--manifest", str(manifest_path), "--format", "json"])
@@ -873,12 +998,19 @@ def test_verify_training_manifest_workflow_runs_real_training_checks(tmp_path: P
     payload = json.loads(captured.out)
     rule_ids = {diagnostic["rule_id"] for diagnostic in payload["diagnostics"]}
     assert exit_code == 0
-    assert payload["config"]["checks"] == ["training-workflow", "training-packing", "training-redaction", "training-bridge"]
+    assert payload["config"]["checks"] == [
+        "training-workflow",
+        "training-packing",
+        "training-redaction",
+        "training-bridge",
+        "training-drift",
+    ]
     assert payload["ok"] is True
     assert "training-workflow-verified" in rule_ids
     assert "training-packing-verified" in rule_ids
     assert "training-redaction-verified" in rule_ids
     assert "training-bridge-verified" in rule_ids
+    assert "training-drift-verified" in rule_ids
     assert captured.err == ""
 
 

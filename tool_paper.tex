@@ -76,9 +76,9 @@ supply-chain diagnostics for missing hashes, license metadata, trusted-source
 annotations, and non-reproducible remote revisions,
 a dedicated \texttt{promptabi verify-training} workflow for training manifests,
 dataset declarations, tokenizer and chat-template pins, packing windows, loss
-masks, redaction policy, and training-to-serving bridge facts, including checks
-that trained role delimiters, special tokens, generation-prompt behavior, and
-tool-call formats match serving assumptions while stored witnesses remain
+masks, redaction policy, training-to-serving bridge facts, and corpus-metadata
+drift checks that compare training baselines against model-card facts,
+tokenizer/template pins, and serving lockfile summaries while keeping witnesses
 structural or hash-only rather than raw private dataset material,
 a curated \texttt{promptabi gallery} that reruns real pinned configurations,
 emits compatibility badges, summarizes actual solver backends rather than merely
@@ -281,7 +281,8 @@ tokenizer pins, mask policies, response starts, truncation, and preserved packin
 boundaries, including a CPU-only RLHF/DPO fixture pack with synthetic and
 anonymized clean, prompt-mismatched, mask/truncation-defective, and
 role-layout/packing-defective manifests, plus tokenizer, chat-template,
-role-delimiter, special-token, generation-prompt, and tool-format consistency from training through serving, with concrete models,
+model-card, serving-lockfile, role-delimiter, special-token, generation-prompt,
+and tool-format consistency from training through serving, with concrete models,
 explicit proof classifications, or minimized unsat cores,
 a \texttt{promptabi solver replay} maintainer path that verifies such reduced
 solver obligations from portable JSON and treats solver backends, query hashes,

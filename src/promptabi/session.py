@@ -70,6 +70,7 @@ from .tool_serialization import ToolSerializationFinding, analyze_tool_call_seri
 from .tokenizer_drift import TokenizerDriftAbstention, TokenizerDriftFinding, analyze_tokenizer_config_drift
 from .tokenizers import TokenizerAdapter, TokenizerError, load_tokenizer
 from .training_bridge import TrainingBridgeFinding, analyze_training_inference_bridge
+from .training_drift import TrainingDriftFinding, analyze_training_metadata_drift
 from .training_packing import TrainingPackingFinding, analyze_training_packing
 from .training_redaction import TrainingRedactionFinding, analyze_training_redaction
 
@@ -147,6 +148,12 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "training-bridge-tokenizer-mismatch": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-bridge-tool-format-mismatch": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-bridge-verified": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-drift-metadata-missing": (CheckMode.ABSTAINING, CheckMode.BOUNDED),
+    "training-drift-model-card-mismatch": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-drift-serving-lockfile-mismatch": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-drift-template-mismatch": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-drift-tokenizer-mismatch": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-drift-verified": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-redaction-hash-missing": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-redaction-policy-missing": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-redaction-raw-witness-field": (CheckMode.SOUND, CheckMode.BOUNDED),
@@ -355,6 +362,7 @@ CHECK_DEPENDENCIES: dict[str, CheckDependency] = {
         ),
     ),
     "training-bridge": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
+    "training-drift": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "training-packing": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "training-redaction": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "tokenizer-config-drift": CheckDependency(artifact_kinds=(ArtifactKind.TOKENIZER,)),
@@ -544,6 +552,7 @@ class VerificationSession:
             "tool-schema-ingestion": self._tool_schema_ingestion_check,
             "tool-serialization": self._tool_serialization_check,
             "training-bridge": self._training_bridge_check,
+            "training-drift": self._training_drift_check,
             "training-packing": self._training_packing_check,
             "training-redaction": self._training_redaction_check,
             "tokenizer-config-drift": self._tokenizer_config_drift_check,
@@ -1045,6 +1054,15 @@ class VerificationSession:
                 continue
             report = analyze_training_inference_bridge(loaded.artifact)
             diagnostics.extend(_training_bridge_finding_diagnostic(loaded, finding) for finding in report.findings)
+        return tuple(diagnostics)
+
+    def _training_drift_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        diagnostics: list[Diagnostic] = []
+        for loaded in context.loaded_artifacts:
+            if not isinstance(loaded.artifact, TrainingManifestArtifact):
+                continue
+            report = analyze_training_metadata_drift(loaded.artifact)
+            diagnostics.extend(_training_drift_finding_diagnostic(loaded, finding) for finding in report.findings)
         return tuple(diagnostics)
 
     def _training_redaction_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
@@ -1880,6 +1898,57 @@ def _training_bridge_finding_diagnostic(
         suggestions=suggestions,
         witness=WitnessTrace(
             summary="PromptABI compared training-time prompt-interface facts against serving-time assumptions.",
+            steps=steps,
+            artifacts=(loaded.artifact.to_ref(),),
+        ),
+    )
+
+
+def _training_drift_finding_diagnostic(
+    loaded: LoadedArtifact,
+    finding: TrainingDriftFinding,
+) -> Diagnostic:
+    rule_id = f"training-drift-{finding.kind.value}"
+    severity = {
+        "error": DiagnosticSeverity.ERROR,
+        "warning": DiagnosticSeverity.WARNING,
+        "info": DiagnosticSeverity.INFO,
+    }[finding.severity]
+    steps = tuple(
+        WitnessStep(action=action, input=input_value, output=output_value)
+        for action, input_value, output_value in finding.witness
+    )
+    properties: list[tuple[str, object]] = [("kind", finding.kind.value)]
+    if finding.subject is not None:
+        properties.append(("subject", finding.subject))
+    suggestions = {
+        "training-drift-metadata-missing": (
+            "Add metadata.training_corpus_contract with model_card, tokenizer, chat_template, and serving_lockfile pins to enable drift checks.",
+        ),
+        "training-drift-model-card-mismatch": (
+            "Update the model-card training-corpus metadata or regenerate the corpus against the documented model-card revision.",
+        ),
+        "training-drift-tokenizer-mismatch": (
+            "Regenerate training corpus metadata with the tokenizer pin used by training and serving, or intentionally reverify after tokenizer migration.",
+        ),
+        "training-drift-template-mismatch": (
+            "Regenerate rendered training examples with the chat-template pin used by serving, or update the serving/template lockfile after review.",
+        ),
+        "training-drift-serving-lockfile-mismatch": (
+            "Refresh the serving lockfile after verifying that its tokenizer and template pins match the training corpus baseline.",
+        ),
+    }.get(rule_id, ())
+    return Diagnostic(
+        rule_id=rule_id,
+        severity=severity,
+        message=finding.message,
+        artifact=loaded.artifact.to_ref(),
+        span=_artifact_span(loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG[rule_id],
+        properties=tuple(properties),
+        suggestions=suggestions,
+        witness=WitnessTrace(
+            summary="PromptABI compared training-corpus metadata against model-card, tokenizer, template, and serving lockfile pins.",
             steps=steps,
             artifacts=(loaded.artifact.to_ref(),),
         ),

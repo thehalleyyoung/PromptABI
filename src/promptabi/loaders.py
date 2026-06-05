@@ -1140,6 +1140,18 @@ def _training_manifest_metadata(artifact: Artifact) -> tuple[tuple[str, object],
                 ("pipeline_chat_template_pinned_count", sum(1 for stage in artifact.pipeline_stages if stage.chat_template_pinned)),
             )
         )
+    manifest_metadata = dict(artifact.metadata)
+    corpus_contract = manifest_metadata.get("training_corpus_contract")
+    if isinstance(corpus_contract, dict):
+        metadata.extend(
+            (
+                ("training_corpus_contract_present", True),
+                ("training_corpus_contract_sections", tuple(sorted(key for key in corpus_contract if isinstance(key, str)))),
+            )
+        )
+    serving_lockfile = manifest_metadata.get("serving_lockfile")
+    if isinstance(serving_lockfile, dict):
+        metadata.append(("serving_lockfile_present", True))
     if artifact.redaction_policy is not None:
         metadata.extend(
             (

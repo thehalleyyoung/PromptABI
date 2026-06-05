@@ -20,7 +20,13 @@ from .loaders import LoadedArtifact
 from .plugins import PluginRegistry
 from .session import CheckContext, VerificationResult, VerificationSession
 
-TRAINING_WORKFLOW_CHECKS = ("training-workflow", "training-packing", "training-redaction", "training-bridge")
+TRAINING_WORKFLOW_CHECKS = (
+    "training-workflow",
+    "training-packing",
+    "training-redaction",
+    "training-bridge",
+    "training-drift",
+)
 
 
 def build_training_config(
