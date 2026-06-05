@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .adversarial_corpus import build_adversarial_corpus_manifest
 from .evaluation import EvaluationError, EvaluationReport, run_evaluation
 from .evaluation_fixture_packs import build_evaluation_fixture_pack_manifest
 from .loaders import ArtifactLoader
@@ -135,6 +136,7 @@ def run_corpus_verification(
             _verify_evaluation_fixture_pack(evaluation_fixture_pack_path),
             _verify_labeled_evaluation(evaluation_corpus_path, resolved_thresholds),
             _verify_smt_benchmark(smt_benchmark_path),
+            _verify_adversarial_corpus(),
         ]
         if tracemalloc.is_tracing():
             _current, peak_memory_bytes = tracemalloc.get_traced_memory()
@@ -391,6 +393,29 @@ def _verify_smt_benchmark(path: str | Path | None) -> CorpusVerificationCheck:
         metrics={
             "manifest_sha256": manifest["manifest_sha256"],
             "categories": list(categories),
+        },
+    )
+
+
+def _verify_adversarial_corpus() -> CorpusVerificationCheck:
+    manifest = build_adversarial_corpus_manifest()
+    case_count = _int_metric(manifest, "case_count")
+    failures = []
+    if case_count <= 0:
+        failures.append("adversarial corpus has no generated cases")
+    if not manifest.get("all_cases_passed"):
+        failures.append("one or more adversarial corpus cases failed")
+    surfaces = tuple(manifest.get("surfaces", ()))
+    return CorpusVerificationCheck(
+        name="adversarial-corpus",
+        passed=not failures,
+        summary=f"{case_count} generated adversarial cases across {len(surfaces)} surfaces",
+        coverage_count=case_count,
+        expected_count=case_count,
+        failures=tuple(failures),
+        metrics={
+            "manifest_sha256": manifest["manifest_sha256"],
+            "surfaces": list(surfaces),
         },
     )
 

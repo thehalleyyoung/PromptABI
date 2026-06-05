@@ -146,6 +146,7 @@ promptabi corpus evaluation-reproducibility --config examples/evaluation-harness
 promptabi verify --config examples/evaluation-harness/safe.promptabi.json
 promptabi corpus smt-benchmark --format text
 promptabi corpus leaderboard --format text
+promptabi corpus adversarial --format text
 promptabi solver replay fixtures/solver_replays/role-region-forgery.solver-replay.json
 promptabi launch-assets --output-dir launch_assets --force
 promptabi fuzz mutations --format text

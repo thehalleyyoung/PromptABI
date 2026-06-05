@@ -5,6 +5,13 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
+from .adversarial_corpus import (
+    AdversarialCorpusReport,
+    generate_adversarial_corpus,
+    render_adversarial_corpus_json,
+    render_adversarial_corpus_text,
+    replay_adversarial_corpus,
+)
 from .config import VerificationConfig, load_config
 from .compatibility_matrix import (
     CompatibilityMatrix,
@@ -298,6 +305,20 @@ def local_metrics(
         return render_local_metrics_json(report)
     if output_format == "text":
         return render_local_metrics_text(report)
+    raise ValueError("output_format must be 'json' or 'text'")
+
+
+def generate_adversarial_cases(*, output_format: str | None = None) -> AdversarialCorpusReport | str:
+    """Generate and replay adversarial prompt-interface corpus cases."""
+
+    cases = generate_adversarial_corpus()
+    report = AdversarialCorpusReport(cases=cases, replays=replay_adversarial_corpus(cases))
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_adversarial_corpus_json(report)
+    if output_format == "text":
+        return render_adversarial_corpus_text(report)
     raise ValueError("output_format must be 'json' or 'text'")
 
 

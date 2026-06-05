@@ -12,6 +12,15 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ._version import __version__
+from .adversarial_corpus import (
+    AdversarialCorpusError,
+    AdversarialCorpusReport,
+    generate_adversarial_corpus,
+    render_adversarial_corpus_json,
+    render_adversarial_corpus_text,
+    replay_adversarial_corpus,
+    write_adversarial_corpus_manifest,
+)
 from .api_stability import (
     build_public_api_manifest,
     render_public_api_manifest_json,
@@ -1090,6 +1099,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         help="write manifest to this path instead of stdout",
     )
+    adversarial_corpus = corpus_subparsers.add_parser(
+        "adversarial",
+        help="generate and replay adversarial prompt-interface corpus cases",
+    )
+    adversarial_corpus.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="json",
+        help="output format (default: json)",
+    )
+    adversarial_corpus.add_argument("--output", help="write adversarial corpus manifest to this path instead of stdout")
     evaluation = corpus_subparsers.add_parser(
         "evaluation",
         help="run labeled-corpus evaluation metrics over real PromptABI analyzers",
@@ -3121,6 +3141,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"promptabi: cannot write SMT benchmark manifest: {exc}", file=sys.stderr)
             return 2
         return 0 if manifest["all_cases_passed"] else 1
+
+    if args.command == "corpus" and args.corpus_command == "adversarial":
+        try:
+            cases = generate_adversarial_corpus()
+            report = AdversarialCorpusReport(cases=cases, replays=replay_adversarial_corpus(cases))
+            output = (
+                render_adversarial_corpus_json(report)
+                if args.format == "json"
+                else render_adversarial_corpus_text(report)
+            )
+            if args.output:
+                if args.format == "json":
+                    write_adversarial_corpus_manifest(args.output)
+                else:
+                    Path(args.output).write_text(output, encoding="utf-8")
+                print(f"wrote adversarial corpus manifest: {args.output} ({len(report.cases)} cases)")
+            else:
+                print(output, end="")
+        except (AdversarialCorpusError, OSError, ValueError) as exc:
+            print(f"promptabi: cannot build adversarial corpus: {exc}", file=sys.stderr)
+            return 2
+        return 0 if report.all_cases_passed else 1
 
     if args.command == "corpus" and args.corpus_command == "verify":
         try:

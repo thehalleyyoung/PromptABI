@@ -217,7 +217,11 @@ local workarounds, redacted length-limited witness traces,
 minimized input summaries when supplied, and privacy guarantees suitable for
 filing with tokenizer, template, framework, or provider maintainers,
 a maintainer refresh workflow that regenerates model-artifact manifests,
-structured-schema manifests, provider fixture pack manifests, real-bug benchmark
+structured-schema manifests, provider fixture pack manifests, generated
+adversarial-corpus manifests for role delimiters, special tokens, Unicode
+normalization, JSON escaping, markdown fences, XML-ish tool tags, and provider
+envelopes, replaying each generated case through real PromptABI analyzers before
+release, real-bug benchmark
 manifests, portable expected-diagnostic baselines, corpus diffs, and release
 notes from real verification output,
 a contributor-infrastructure gate that validates structured GitHub issue
@@ -1989,6 +1993,8 @@ Maintainer refresh & \texttt{promptabi maintain refresh} regenerates model/corpu
 Cold/warm cache & Direct measurement of token-budget analysis before and after per-session cache reuse, including an explicit cache-reused metric. \\
 \hline
 Real-bug benchmark & \texttt{promptabi corpus real-bug-benchmark} validates and replays the labeled real-bug suite across popular templates, tokenizers, tool schemas, provider migrations, structured-output parsers, RAG truncation, and training manifests, including target-role, source-leakage, synthetic-generator, and stage-drift contracts, emitting observed rule IDs and a stable manifest hash. \\
+\hline
+Adversarial corpus & \texttt{promptabi corpus adversarial} deterministically generates role-delimiter, special-token, Unicode-normalization, JSON-escaping, markdown-fence, XML-ish tool-tag, and provider-envelope attacks, then replays each case through real PromptABI analyzers before producing a hashed manifest. \\
 \hline
 Public bug gallery & \texttt{promptabi corpus bug-gallery} reruns the same benchmark cases, then emits a public-facing text, JSON, or Markdown gallery with sanitized artifact digests, minimized repro metadata, replay hashes, root-cause explanations, concrete fixes, and public GitHub patch or issue links without copying upstream source or private payloads. \\
 \hline

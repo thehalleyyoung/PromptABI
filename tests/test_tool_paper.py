@@ -59,6 +59,7 @@ def test_tool_paper_names_real_deployed_benchlines_and_commands() -> None:
         r"benchmarks/benchmark\_smoke.py",
         "promptabi corpus verify",
         "promptabi corpus real-bug-benchmark",
+        "promptabi corpus adversarial",
         "promptabi corpus evaluation",
         "promptabi maintain refresh",
         "fixtures/evaluation/labeled\\_corpus.json",
