@@ -38,6 +38,13 @@ from .beta import (
     run_beta_program,
 )
 from .diagnostics import Diagnostic
+from .dependency_graph import (
+    DependencyGraphReport,
+    build_dependency_graph,
+    render_dependency_graph_json,
+    render_dependency_graph_mermaid,
+    render_dependency_graph_text,
+)
 from .enterprise import (
     EnterpriseSettings,
     enterprise_readiness_diagnostics,
@@ -480,6 +487,39 @@ def render_compatibility_matrix(
     if output_format == "json":
         return render_compatibility_matrix_json(resolved)
     raise ValueError("output_format must be one of: text, json")
+
+
+def dependency_graph(
+    config: str | Path | VerificationConfig,
+    *,
+    artifact_overrides: Mapping[str, str] | None = None,
+    override_base_dir: str | Path | None = None,
+    plugin_registry: PluginRegistry | None = None,
+    include_all_checks: bool = False,
+    output_format: str | None = None,
+) -> DependencyGraphReport | str:
+    """Build or render the artifact/check dependency graph for a config."""
+
+    session = create_session(
+        config,
+        artifact_overrides=artifact_overrides,
+        override_base_dir=override_base_dir,
+        plugin_registry=plugin_registry,
+    )
+    report = build_dependency_graph(
+        session.config,
+        plugin_registry=session.plugin_registry,
+        include_all_checks=include_all_checks,
+    )
+    if output_format is None:
+        return report
+    if output_format == "text":
+        return render_dependency_graph_text(report)
+    if output_format == "json":
+        return render_dependency_graph_json(report)
+    if output_format == "mermaid":
+        return render_dependency_graph_mermaid(report)
+    raise ValueError("output_format must be one of: text, json, mermaid")
 
 
 def compatibility_audit(

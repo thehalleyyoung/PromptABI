@@ -59,6 +59,12 @@ from .corpus_verification import (
 )
 from .diff import diff_config_files
 from .doctor import render_doctor_json, render_doctor_text, run_doctor
+from .dependency_graph import (
+    build_dependency_graph,
+    render_dependency_graph_json,
+    render_dependency_graph_mermaid,
+    render_dependency_graph_text,
+)
 from .editor_protocol import (
     EditorProtocolError,
     build_editor_diagnostic_report,
@@ -579,6 +585,40 @@ def build_parser() -> argparse.ArgumentParser:
     matrix.add_argument(
         "--format",
         choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+
+    graph = subparsers.add_parser(
+        "graph",
+        help="visualize artifact, checker, prerequisite, and analysis-resource dependencies",
+    )
+    graph.add_argument(
+        "--config",
+        help="path to a PromptABI JSON config; defaults to discovering promptabi.json upward from cwd",
+    )
+    graph.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        metavar="NAME=PATH_OR_URI",
+        help="override or add an artifact location before graphing; may be repeated",
+    )
+    graph.add_argument(
+        "--plugin",
+        action="append",
+        default=[],
+        metavar="MODULE[:OBJECT]",
+        help="import an additional PromptABI plugin before graphing; may be repeated",
+    )
+    graph.add_argument(
+        "--all-checks",
+        action="store_true",
+        help="include every registered checker instead of only checks selected by the config",
+    )
+    graph.add_argument(
+        "--format",
+        choices=("text", "json", "mermaid"),
         default="text",
         help="output format (default: text)",
     )
@@ -1533,6 +1573,29 @@ def main(argv: Sequence[str] | None = None) -> int:
             else:
                 output = render_compatibility_matrix_text(matrix)
         except (PluginError, ValueError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        print(output, end="")
+        return 0
+
+    if args.command == "graph":
+        try:
+            config_path = Path(args.config).resolve() if args.config else discover_config()
+            registry = _load_cli_plugins(args.plugin)
+            overrides = _parse_artifact_overrides(args.artifact, parser)
+            config = load_config(config_path).with_artifact_overrides(overrides, base_dir=Path.cwd())
+            graph_report = build_dependency_graph(
+                config,
+                plugin_registry=registry,
+                include_all_checks=args.all_checks,
+            )
+            if args.format == "json":
+                output = render_dependency_graph_json(graph_report)
+            elif args.format == "mermaid":
+                output = render_dependency_graph_mermaid(graph_report)
+            else:
+                output = render_dependency_graph_text(graph_report)
+        except (ConfigError, PluginError, ValueError) as exc:
             print(f"promptabi: {exc}", file=sys.stderr)
             return 2
         print(output, end="")

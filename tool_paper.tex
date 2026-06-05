@@ -51,6 +51,9 @@ mode-aware plugin checks that preserve deterministic scheduling, an incremental
 monorepo verifier that maps changed local artifact paths to check dependencies,
 reuses cached unchanged-check diagnostics, recomputes downstream dependents, and
 fails closed by recomputing cache misses rather than silently dropping findings,
+and a dependency graph reporter that renders configured artifacts, missing
+artifact-kind surfaces, checker prerequisites, and shared analysis resources as
+text, JSON, or GitHub-compatible Mermaid diagrams,
 a generated
 public-API stability manifest with deprecation metadata, Markdown/JSON API docs,
 and downstream plugin compatibility tests, focused tests, examples, a fixture
@@ -386,7 +389,10 @@ and independently checks those witnesses with executable specifications,
 tracks check dependencies over artifact kinds, reuses cached tokenizer adapters,
 tokenizer/grammar analysis reports, budget reports, and static-contract query
 results, parallelizes independent embedded checks, serializes shared tokenizer and
-solver resources, exposes an incremental monorepo plan that resolves explicit or
+solver resources, renders the same scheduler metadata as an artifact-to-check
+dependency graph for configured and missing tokenizer, template, schema, tool,
+stop-policy, truncation-policy, provider, prompt-segment, and training-manifest
+surfaces, exposes an incremental monorepo plan that resolves explicit or
 \texttt{git diff --relative} changed paths to local artifact kinds, forces full
 runs when config files change, reuses JSON-hydrated diagnostics for unchanged
 checks, recomputes cache misses to preserve CI correctness, and records
@@ -531,6 +537,8 @@ The repository layout is designed to scale:
 \texttt{src/promptabi} & Typed package, artifact model, formal automata, finite-state transducers, finite-contract core, offline loaders, CLI, configuration loading, diagnostic model, renderers, notebook reprs, scheduler, analysis cache, and verification session. \\
 \hline
 \texttt{src/promptabi/incremental.py} & Monorepo incremental verification planner, git changed-path collection, per-check diagnostic cache, dependency-closure selection, cache reuse diagnostics, and fail-closed cache-miss recomputation for \texttt{promptabi verify --changed-path/--changed-from-git}. \\
+\hline
+\texttt{src/promptabi/dependency\_graph.py} & Deterministic artifact/check graph builder and text, JSON, and Mermaid renderers for configured artifacts, missing artifact-kind requirements, checker prerequisites, and shared analysis resources exposed through \texttt{promptabi graph}. \\
 \hline
 \texttt{src/promptabi/plugins.py} & Typed extension registry for artifact loaders, dependency-aware checks, diagnostic renderers, and capability metadata covering provider adapters, grammar backends, template dialects, truncation policies, and solver encodings. \\
 \hline
@@ -2013,99 +2021,45 @@ for researchers to reproduce.
 \clearpage
 \section{Current Smoke Results}
 
-The current codebase was validated with focused tests for the package, artifact
-model, formal core, tokenizer abstraction, source-span mapping, configuration loader, public API, and CLI workflow.
-The tokenizer tests exercise normalization, added tokens, special tokens,
-round-trip metadata, Hugging Face ByteLevel BPE behavior, \texttt{tiktoken}
-\texttt{cl100k\_base}, and a trained SentencePiece model. The CLI tests exercise
-config discovery from nested directories, artifact-location overrides,
-deterministic JSON output, SARIF output, missing-artifact failures, cache
-directory preparation, quiet/verbose text controls, and configurable exit-code
-thresholds. Structured snapshot tests now lock representative error, warning, and
-info diagnostics across text, JSON, and SARIF, including artifacts, spans,
-witnesses, suggestions, fingerprints, and check modes. The public API and CLI
-tests also prove that check-mode metadata is
-preserved across diagnostic objects, JSON, human text, and SARIF. New source-span
-tests prove that PromptABI config declarations, tokenizer \texttt{chat\_template}
-fields, JSON Schema fields, tool definition names, and malformed JSON parse
-errors produce exact line-oriented spans against real files. The formal tests exercise automata intersection, difference,
-emptiness, shortest witnesses, transducer composition, projection,
-over-approximation, finite-domain counterexample extraction, minimal
-unsat cores, and the installed Z3 backend. The new corpus tests validate required
-family coverage, sentinel/template consistency, metadata hashes, reproducibility
-metadata, artifact materialization through the real offline loader, manifest
-generation, manifest writing, and the \texttt{promptabi corpus manifest} CLI.
-The structured-schema corpus tests validate required source categories,
-schema/grammar/tool-definition artifact materialization, tool-schema ingestion,
-labeled parser-compatibility replay, tool-serialization fixture replay, per-fixture CLI diagnostics, manifest
-writing, and the \texttt{promptabi corpus structured-schema-manifest} CLI.
-Stop differential tests replay recorded provider-style chunks through CPU-only
-OpenAI-compatible and Hugging Face simulators, assert delimiter-retention behavior,
-exercise mismatch diagnostics through the real CLI, and the
-\texttt{examples/stop-policies} workflow emits a concrete
-\texttt{stop-differential-agreement} diagnostic for a vLLM-compatible fixture.
-The real-world bug corpus tests load eight public GitHub bug reductions and prove
-that the current role-boundary and stop-overreachability implementations emit the
-expected minimized witnesses against executable code, including the new
-array-of-object tool-parameter witness path.
-The CLI was also run against the minimal typed-artifact example
-configuration, producing a passing informational diagnostic. The smoke benchmark
-runs the skeleton verifier repeatedly on the example config and reports a
-deterministic JSON result. These are small but important baselines: they prove
-that the repository can already execute code, not just describe a future tool.
+The current codebase is validated by focused executable tests rather than a
+single end-to-end smoke. They cover the typed package, artifact loaders,
+source-span mapping, diagnostics, renderers, public API, CLI, tokenizer adapters,
+formal automata/transducer/SMT primitives, corpus manifests, provider fixtures,
+budget/RAG checks, dependency graph visualization, release gates, and paper
+artifact. The table below names the concrete benchlines that matter for
+reproducibility; each row is backed by checked-in fixtures or examples and runs
+without GPUs or provider calls.
 
 \begin{center}
 \begin{tabular}{|p{0.30\linewidth}|p{0.50\linewidth}|}
 \hline
 \textbf{Line} & \textbf{Current status} \\
 \hline
-Focused tests & Artifact model, public API, config loading, and CLI workflow behavior pass in isolation. \\
+Focused tests & Artifact model, public API, config loading, CLI behavior, dependency graph rendering, source spans, diagnostics, and render snapshots pass in isolation. \\
 \hline
-CI and release automation tests & Workflow fixtures prove Python/OS/backend matrix coverage, optional dependency slices, semantic-version gates, checked PyPI builds, standalone executables, Docker images, signed release assets, and changelog presence. \\
+CI/release tests & Workflow fixtures cover Python/OS/backend matrices, optional dependency slices, semantic-version gates, PyPI builds, standalone executables, Docker images, signed release assets, and changelog checks. \\
 \hline
-Formal core tests & Automata reachability and difference, transducer composition/projection/over-approximation, finite-domain solving, unsat-core extraction, and Z3-backed assignment extraction pass against executable code. \\
+Formal core tests & Automata reachability/difference, transducer composition/projection, over-approximation, finite-domain solving, unsat cores, and Z3-backed assignment extraction pass against executable code. \\
 \hline
 Check-mode taxonomy tests & Diagnostic objects, JSON output, text output, and SARIF output preserve sound/complete/bounded/Z3-backed/heuristic/abstaining metadata deterministically. \\
 \hline
-Tokenizer differential tests & Byte-level normalization and added-token behavior, Hugging Face ByteLevel BPE, \texttt{tiktoken}, and SentencePiece adapters match real backend behavior. \\
+Tokenizer/template tests & Byte-level normalization, added/special tokens, Hugging Face ByteLevel BPE, \texttt{tiktoken}, SentencePiece, and ten-family Hugging Face chat-template symbolic execution match real backend behavior. \\
 \hline
-Chat-template symbolic tests & Hugging Face \texttt{tokenizer\_config.json} templates across ten seed families expose template source, special tokens, generation prompts, roles, fields, tools, filters, whitespace controls, bounded symbolic paths, and unsupported constructs. \\
+Role-boundary checker tests & Bounded non-forgeability catches dynamic role-header and delimiter forgery across ChatML, Llama, Mistral, XML tool tags, markdown fences, and fine-tune hash headers with minimized witnesses and sanitizer-aware false-positive suppression. \\
 \hline
-Role-boundary checker tests & Bounded non-forgeability diagnostics catch dynamic role-header forgery and user-content delimiter forgery across ChatML, Llama, Mistral, XML tool tags, markdown fences, and fine-tune hash headers; witnesses include minimized inputs, rendered excerpts, centered token evidence, and exact offsets, while sanitizer tests prove JSON/escape filters plus sanitizer-preserving bindings suppress only protected-expression false positives. \\
+Real-world bugs & Eight public llama.cpp/vLLM/Hugging Face bug patterns plus the real-bug benchmark suite are reduced to synthetic offline fixtures and detected with concrete witnesses. \\
 \hline
-Real-world bug corpus & Eight public llama.cpp/vLLM/Hugging Face bug patterns are reduced to synthetic offline fixtures and detected by the role-boundary and stop-overreachability checkers with concrete witnesses. \\
+Stop/provider/structured-output tests & Recorded provider chunks replay through CPU-only simulators; parser compatibility, tool-schema ingestion, tool serialization, grammar emptiness, grammar ambiguity, and stop overreachability run through real CLI fixtures. \\
 \hline
-Real-bug benchmark suite & \texttt{promptabi corpus real-bug-benchmark} replays labeled failures for popular templates, tokenizers, tool schemas, provider migrations, structured-output parsers, RAG truncation, and training manifests; tests assert coverage, provenance, observed rule IDs, manifest hashing, and CLI output. \\
+Corpus commands & \texttt{promptabi corpus manifest}, \texttt{promptabi corpus structured-schema-manifest}, \texttt{promptabi corpus real-bug-benchmark}, \texttt{promptabi corpus verify}, \texttt{promptabi corpus evaluation}, and \texttt{promptabi corpus beta-report} validate fixture coverage, metrics, witness quality, hashes, and CLI/public-API renderers. \\
 \hline
-Stop differential tests & Recorded provider/framework chunks replay through CPU-only stop simulators; OpenAI-compatible/vLLM traces exclude delimiters, Hugging Face traces retain them, and CLI diagnostics flag mismatches with witness steps. \\
+Budget/RAG/drift tests & \texttt{examples/token-budget/promptabi.json} and \texttt{examples/rag-chunking/promptabi.json} cover must-survive segments, framework reservations, truncation decisions, citation loss, overlap errors, metadata inflation, tokenizer mismatch, and config/tokenizer drift. \\
 \hline
-CLI smoke & \texttt{promptabi verify --config examples/minimal/promptabi.json} returns pass, and \texttt{--fail-on}, \texttt{--artifact}, \texttt{--cache-dir}, \texttt{--quiet}, and \texttt{--verbose} are covered. \\
-\hline
-Corpus smoke & \texttt{promptabi corpus manifest} validates ten minimized instruct-template families and emits stable per-entry hashes without downloads. \\
-\hline
-Structured-schema corpus & \texttt{promptabi corpus structured-schema-manifest} validates labeled structured-output/tool-calling fixtures from OSS reductions, anonymized contracts, and synthetic stress cases; tests replay parser compatibility, tool-schema ingestion, tool serialization, and CLI configs. \\
-\hline
-Token-budget and RAG modeling & \texttt{promptabi verify --config examples/token-budget/promptabi.json} models named must-survive segments, framework context reservations, config/artifact context-window precedence, required-token overflow, framework truncation decisions, bounded survival proofs, and minimized counterexamples; \texttt{examples/rag-chunking/promptabi.json} adds deterministic chunking diagnostics for tokenizer mismatch, boundary drift, citation loss, overlap errors, metadata inflation, prompt-template overhead, and retrieval payload truncation. \\
-\hline
-Tokenizer/config drift & Focused analyzer and CLI tests compare baseline/current tokenizer directories and flag special-token ID, added-token, normalizer, chat-template, BOS/EOS, and stop-policy deltas with revision witnesses. \\
-\hline
-Performance benchmarks & \texttt{benchmarks/benchmark\_smoke.py} emits JSON for tokenizer analysis, symbolic template execution, grammar emptiness, stop checks, SMT static contracts, budget checks, corpus-wide verification, and cold/warm cache behavior, with focused tests asserting real fixture-backed metrics and wrapper behavior. \\
-\hline
-Evaluation runner & \texttt{promptabi corpus evaluation} reports labeled precision/recall/F1, abstention rate, runtime, peak memory, witness quality, solver decisiveness, and differential agreement for fixture-backed configs plus the expanded real-bug benchmark suite; tests assert expansion, metric shape, CLI output, public API access, and validation failures without snapshotting nondeterministic timings. \\
-\hline
-Beta report & \texttt{promptabi corpus beta-report} replays seven beta case studies over real configs, records upstream issue evidence, checks tuned-absent false-positive rules, and requires actionable abstention witnesses; tests cover manifest validation, real-code replay, JSON/text rendering, CLI output, and public API access. \\
-\hline
-Maintainer tooling & \texttt{promptabi maintain refresh} writes seed, structured-schema, provider-fixture, real-bug, corpus-verification, expected-diagnostic, diff, snapshot, and release-note artifacts; focused tests run the workflow against real corpora, assert repository-relative diagnostic paths, compare mutated snapshots, and exercise the CLI baseline mode. \\
+Benchmark and maintainer lines & \texttt{benchmarks/benchmark\_smoke.py} emits JSON for cold/warm cache and checker families; \texttt{promptabi maintain refresh} writes seed, structured-schema, provider-fixture, real-bug, corpus-verification, expected-diagnostic, diff, snapshot, and release-note artifacts. \\
 \hline
 Verified configuration gallery & \texttt{promptabi gallery} reruns five curated configurations covering pinned OpenAI-style tools, sanitized ChatML role boundaries, training-to-serving static contracts, RAG truncation budgets, and audited accepted-risk suppressions; focused tests assert deterministic JSON/text renderers, actual solver-backend summaries, lockfile/pin badges, and risk explanations. \\
 \hline
-Supply-chain provenance & \texttt{artifact-provenance} focused tests verify local sha256/license/source/trust metadata, flag missing reproducibility fields, reject movable Hugging Face revisions through the real CLI, and assert compatibility-matrix registration. \\
-\hline
-Editor diagnostics & \texttt{promptabi diagnostics lsp} emits stable LSP-style \texttt{publishDiagnostics} JSON for configs and local artifacts; focused tests verify URI grouping, zero-based ranges, invalid-JSON config failures, watched-artifact clearing, public API rendering, and CLI exit codes against real PromptABI configs. \\
-\hline
-Public API stability & \texttt{promptabi api-docs} generates Markdown/JSON manifests from \texttt{promptabi.\_\_all\_\_}; focused tests assert stable plugin imports, downstream check registration, deprecation warnings and metadata, manifest compatibility failures for removed stable symbols, and CLI generation of API docs. \\
-\hline
-Docs smoke & MkDocs-ready navigation includes architecture, checks, concepts, and the security model; focused tests assert that the security model references real CLI privacy, bug-report, minimization, and provider-fixture safety behavior. \\
+Supply chain, editor, API, docs & \texttt{artifact-provenance}, \texttt{promptabi diagnostics lsp}, \texttt{promptabi api-docs}, MkDocs navigation, and security-model tests cover provenance, LSP ranges, public API compatibility, privacy, bug-report, minimization, and provider-fixture safety behavior. \\
 \hline
 \end{tabular}
 \end{center}
@@ -2115,7 +2069,6 @@ experiments will extend: every new checker should add focused tests, fixture
 cases, corpus cases where relevant, and a benchmark line that can be compared
 across revisions.
 
-\clearpage
 \section{Why CPU-Only Is a Strength}
 
 Many LLM quality questions are inherently behavioral and require model access.
@@ -2138,7 +2091,6 @@ delimiter is forgeable" or "this stop sequence can truncate valid JSON" with a
 structural witness. It should not say "the model is safe." That honesty is a
 competitive advantage.
 
-\clearpage
 \section{Conclusion}
 
 PromptABI verifies a fragile and under-tooled layer of LLM systems: the discrete
