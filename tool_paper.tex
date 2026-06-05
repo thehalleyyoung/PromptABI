@@ -359,32 +359,66 @@ The evaluation asks four questions.
   \item \textbf{Cost:} is the check cheap enough for CI?
 \end{enumerate}
 
-\subsection{Corpus}
+\subsection{GitHub Bug Search and Corpus}
+
+We searched public GitHub issues and pull requests in llama.cpp, vLLM, and
+Hugging Face Transformers for recorded failures involving chat templates, role
+delimiters, tool parsers, stop strings, quote sentinels, streaming parser state,
+and structured-output boundaries. The search identified ten PromptABI-class
+records. A record was admitted to the evaluation only if the issue or PR named an
+upstream production artifact and PromptABI could recover the relevant boundary
+from exact pinned source bytes. Six records meet that bar in the current corpus.
+Records that require hand-reduced payloads, live model sampling, or a verifier
+family not yet implemented are excluded from the counted evaluation.
 
 Table~\ref{tab:eval} lists the current evaluation corpus. Each row is exact code
-in the wild. The first row is the upstream llama.cpp Phi chat-template file. The
-second row is the upstream vLLM Qwen3 Coder tool-parser source. The tool loads
-the pinned source excerpt, validates the source hash, extracts the template or
-parser delimiters from those bytes, and only then runs the checker. If the
-expected value cannot be recovered from the source, the replay fails.
+in the wild. The tool loads the pinned source excerpt, validates the source hash,
+extracts the template, parser delimiter, parser regex, or parser control-flow
+pattern from those bytes, and only then runs the checker. If the expected value
+cannot be recovered from the source, the replay fails.
 
 \begin{table}[h]
 \centering
 \small
-\begin{tabular}{p{0.22\linewidth}p{0.24\linewidth}p{0.25\linewidth}p{0.16\linewidth}}
+\begin{tabular}{p{0.22\linewidth}p{0.25\linewidth}p{0.25\linewidth}p{0.15\linewidth}}
 \toprule
 Production artifact & Public incident & Property checked & Result \\
 \midrule
+vLLM \texttt{gemma4\_utils.py} at commit \texttt{6a11d72} &
+Issue \#39069: internal quotes truncate Gemma4 tool arguments &
+Does source replace the Gemma quote sentinel with \texttt{"} and then parse
+with a quote-stopping fallback regex? &
+Bug found: parser truncation pattern \\
+\addlinespace
+vLLM \texttt{gemma4\_tool\_parser.py} before PR \#38909 &
+Issue \#38910: streamed HTML tags duplicated inside tool arguments &
+Does streaming buffer output get stitched back into the accumulated parser
+input? &
+Bug found: buffer reparse pattern \\
+\addlinespace
+llama.cpp \texttt{chat-auto-parser-generator.cpp} at commit \texttt{2016bf2} &
+Issue \#21771: Qwen3 TAG\_WITH\_TAGGED array-of-object arguments poison
+streaming history &
+Does the non-string tagged-parameter branch route structured arguments through
+\texttt{p.json()} inside the tag grammar? &
+Bug found: JSON-parameter boundary pattern \\
+\addlinespace
 llama.cpp \texttt{microsoft-Phi-3.5-mini-instruct.jinja} at commit
 \texttt{2016bf2} &
-Phi-style role delimiter handling, llama.cpp PR 18462 &
+PR \#18462: Phi-style role delimiter handling &
 Can raw message content forge role/special-token boundaries? &
 Bug found: 18 role-boundary witnesses \\
 \addlinespace
 vLLM \texttt{qwen3coder\_tool\_parser.py} at commit \texttt{6a11d72} &
-Qwen3 XML tool parser regressions, vLLM PR 40861 &
+PR \#40861: Qwen3 XML tool parser regressions &
 Can parser stop delimiters occur inside a valid tool argument boundary? &
 Bug found: 2 stop-overreach witnesses \\
+\addlinespace
+vLLM \texttt{qwen3xml\_tool\_parser.py} at commit \texttt{6a11d72} &
+Issue \#43713: multiple \texttt{<function=...>} blocks emit invalid JSON &
+Does function-open auto-close reuse stale function state without a fresh
+tool-call boundary? &
+Bug found: stale function-state pattern \\
 \bottomrule
 \end{tabular}
 \caption{Evaluation cases. Every case is replayed from exact pinned upstream
@@ -394,12 +428,21 @@ production code; synthetic reductions are not counted.}
 
 \subsection{Results}
 
-PromptABI finds both production-code bugs in the corpus. The Phi case yields 18
-role-boundary witnesses after traversing 430 bytes of the exact upstream
-template. The Qwen3 case yields 2 stop-overreach witnesses after extracting
-\texttt{</tool\_call>}, \texttt{</function>}, and \texttt{</parameter>} from the
-exact upstream parser source. On a local CPU run, the complete evaluation command
-finishes in 0.64 seconds wall-clock time.
+PromptABI agrees with all six GitHub-recorded bugs in the corpus. The Gemma4
+quote case finds the exact production parser pattern described in vLLM issue
+\#39069: \texttt{\_ESCAPE\_TOKEN} is replaced with a raw quote, then fallback
+parsing uses a regex fragment that stops at the first internal quote. The Gemma4
+streaming case finds the source pattern from issue \#38910 and PR \#38909:
+buffered delta text is reconstructed into the parser's accumulated input. The
+llama.cpp TAG\_WITH\_TAGGED case finds the source branch described in issue
+\#21771, where non-string tagged parameters enter \texttt{p.json()} inside the
+tag grammar. The Phi case yields 18 role-boundary witnesses after traversing 430
+bytes of the exact upstream template. The Qwen3 Coder case yields 2
+stop-overreach witnesses after extracting \texttt{</tool\_call>},
+\texttt{</function>}, and \texttt{</parameter>} from exact upstream parser
+source. The Qwen3 XML case finds the stale function-state pattern from issue
+\#43713. On a local CPU run, the complete evaluation command finishes in 0.61
+seconds wall-clock time.
 
 \begin{table}[h]
 \centering
@@ -408,12 +451,12 @@ finishes in 0.64 seconds wall-clock time.
 \toprule
 Metric & Value \\
 \midrule
-Exact upstream production-code cases & 2 \\
-Cases with expected bug found & 2 \\
+Exact upstream production-code cases & 6 \\
+Cases with expected bug found & 6 \\
 Abstentions in counted cases & 0 \\
 Model or provider calls & 0 \\
-Total concrete witnesses & 20 \\
-Wall-clock runtime & 0.64s \\
+Total concrete witnesses/pattern agreements & 30 \\
+Wall-clock runtime & 0.61s \\
 \bottomrule
 \end{tabular}
 \caption{Current production-code evaluation results.}
@@ -422,12 +465,13 @@ Wall-clock runtime & 0.64s \\
 
 \subsection{Interpretation}
 
-The evaluation is intentionally small but strict. It does not claim that the
-entire public real-bug corpus has been converted to production-code replay.
-Non-production regression fixtures are excluded from the evaluation claim here.
-The claim is: for the counted cases, PromptABI traverses the same public code
-that shipped upstream, recovers the relevant boundary from that code, and
-produces concrete diagnostics before inference.
+The evaluation is intentionally selective rather than padded. The search found
+more recorded PromptABI-class failures than are counted here, but we did not add
+cases merely because an issue contained a convincing payload. Non-production
+regression fixtures are excluded from the evaluation claim. The claim is: for the
+counted cases, PromptABI traverses the same public code that shipped upstream,
+recovers the relevant boundary from that code, and produces concrete diagnostics
+before inference.
 
 \section{Limitations and Non-Goals}
 

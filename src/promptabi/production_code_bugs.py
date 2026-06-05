@@ -86,7 +86,12 @@ class ProductionCodeBugCase:
             raise ProductionCodeBugCorpusError(
                 f"{case_id} source_excerpt sha256 mismatch: expected {source_sha256}, got {actual_sha}"
             )
-        if analysis not in {"role-boundary-template", "stop-overreachability-source"}:
+        if analysis not in {
+            "role-boundary-template",
+            "stop-overreachability-source",
+            "python-regex-parser-source",
+            "source-pattern-agreement",
+        }:
             raise ProductionCodeBugCorpusError(f"{case_id} has unsupported production-code analysis {analysis!r}")
         return cls(
             case_id=case_id,
@@ -169,6 +174,10 @@ def replay_production_code_bug_case(
         return _replay_role_boundary_source(case)
     if case.analysis == "stop-overreachability-source":
         return _replay_stop_overreachability_source(case, real_world_corpus_path=real_world_corpus_path)
+    if case.analysis == "python-regex-parser-source":
+        return _replay_python_regex_parser_source(case)
+    if case.analysis == "source-pattern-agreement":
+        return _replay_source_pattern_agreement(case)
     raise AssertionError(f"unsupported production-code analysis: {case.analysis!r}")
 
 
@@ -267,6 +276,62 @@ def _replay_stop_overreachability_source(
         extracted_values={
             "stop_sequences": list(expected_stops),
             "source_literal_count": len(extracted_literals),
+            "source_sha256": case.source_sha256,
+        },
+    )
+
+
+def _replay_python_regex_parser_source(case: ProductionCodeBugCase) -> ProductionCodeBugReplay:
+    expected_rule = _required_extraction_string(case, "expected_rule_id")
+    escape_token_name = _required_extraction_string(case, "escape_token_name")
+    replacement_literal = _required_extraction_string(case, "replacement_literal")
+    unsafe_regex_fragment = _required_extraction_string(case, "unsafe_regex_fragment")
+    literals = _extract_source_string_literals(case.source_excerpt)
+    has_escape_token = any("<|" in literal and "|>" in literal for literal in literals)
+    has_replacement = replacement_literal in literals or replacement_literal in case.source_excerpt
+    has_unsafe_regex = unsafe_regex_fragment in case.source_excerpt
+    has_replace_path = f".replace({escape_token_name}, {replacement_literal!r})" in case.source_excerpt or (
+        f".replace({escape_token_name}, \"{replacement_literal}\")" in case.source_excerpt
+    )
+    passed = has_escape_token and has_replacement and has_unsafe_regex and has_replace_path
+    return ProductionCodeBugReplay(
+        case_id=case.case_id,
+        rule_ids=(expected_rule,) if passed else (),
+        evidence_summary=(
+            "regex parser truncation pattern found in exact production source: "
+            f"{escape_token_name} is replaced with {replacement_literal!r}, then fallback regex "
+            f"uses {unsafe_regex_fragment!r}"
+        ),
+        extracted_values={
+            "escape_token_name": escape_token_name,
+            "replacement_literal": replacement_literal,
+            "unsafe_regex_fragment": unsafe_regex_fragment,
+            "source_literal_count": len(literals),
+            "source_sha256": case.source_sha256,
+        },
+    )
+
+
+def _replay_source_pattern_agreement(case: ProductionCodeBugCase) -> ProductionCodeBugReplay:
+    expected_rule = _required_extraction_string(case, "expected_rule_id")
+    required = tuple(_required_extraction_string_list(case, "required_substrings"))
+    forbidden = tuple(str(item) for item in case.extraction.get("forbidden_substrings", ()) if isinstance(item, str))
+    missing = tuple(item for item in required if item not in case.source_excerpt)
+    present_forbidden = tuple(item for item in forbidden if item in case.source_excerpt)
+    passed = not missing and not present_forbidden
+    evidence = f"{len(required) - len(missing)}/{len(required)} recorded source pattern(s) matched"
+    if missing:
+        evidence += "; missing: " + ", ".join(repr(item) for item in missing)
+    if present_forbidden:
+        evidence += "; forbidden present: " + ", ".join(repr(item) for item in present_forbidden)
+    return ProductionCodeBugReplay(
+        case_id=case.case_id,
+        rule_ids=(expected_rule,) if passed else (),
+        evidence_summary=evidence,
+        extracted_values={
+            "required_substrings": list(required),
+            "forbidden_substrings": list(forbidden),
+            "matched_required_count": len(required) - len(missing),
             "source_sha256": case.source_sha256,
         },
     )

@@ -1,6 +1,89 @@
 {
   "cases": [
     {
+      "analysis": "python-regex-parser-source",
+      "extraction": {
+        "escape_token_name": "_ESCAPE_TOKEN",
+        "expected_rule_id": "parser-quote-truncation",
+        "replacement_literal": "\"",
+        "unsafe_regex_fragment": "([^\"]*)"
+      },
+      "id": "gemma4_quote_sentinel_truncation",
+      "recorded_bug": {
+        "record_type": "issue",
+        "state": "open",
+        "title": "[Bug]: gemma4_utils._parse_tool_arguments truncates string values containing internal quotes",
+        "url": "https://github.com/vllm-project/vllm/issues/39069"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/tool_parsers/gemma4_utils.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/6a11d72df7f15b39d76570dba5f415ff2b0292b3/vllm/tool_parsers/gemma4_utils.py#L49-L91",
+        "ref": "6a11d72df7f15b39d76570dba5f415ff2b0292b3",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "439ad1125ce28000daff708dfa6021d5d7dad894"
+      },
+      "source_excerpt": "_ESCAPE_TOKEN = '<|\"|>'\n\n\ndef _parse_tool_arguments(args_str: str) -> dict[str, str]:\n    \"\"\"Parse tool call arguments from the Gemma4 compact format.\n\n    Handles the ``key:<|\"|>value<|\"|>`` format used by Gemma4, with fallback\n    to heuristic key-value extraction. Also tolerates the slightly different\n    ``key: \"value\"`` format (space + plain quotes) that some chat templates\n    produce.\n\n    Args:\n        args_str: Raw argument string from inside ``call:name{...}``.\n\n    Returns:\n        Dictionary of argument name \u2192 value.\n    \"\"\"\n    if not args_str or not args_str.strip():\n        return {}\n\n    # Replace Gemma4 escape tokens with standard quotes.\n    cleaned = args_str.replace(_ESCAPE_TOKEN, '\"')\n\n    # Try JSON parsing first (handles nested values, arrays, etc.).\n    try:\n        parsed = json.loads(\"{\" + cleaned + \"}\")\n        # Ensure all values are strings for consistency.\n        return {k: str(v) if not isinstance(v, str) else v for k, v in parsed.items()}\n    except (json.JSONDecodeError, ValueError):\n        pass\n\n    # Fallback: extract key:\"value\" pairs (allow optional space after colon).\n    arguments = {}\n    for key, value in re.findall(r'(\\w+):\\s*\"([^\"]*)\"', cleaned):\n        arguments[key] = value\n\n    if not arguments:\n        # Last resort: extract key:value pairs (unquoted).\n        for key, value in re.findall(r\"(\\w+):\\s*([^,}]+)\", args_str):\n            arguments[key] = value.strip().strip('\"').replace(_ESCAPE_TOKEN, \"\")\n\n    return arguments\n\n\n",
+      "source_sha256": "1b0fbd81357d24a129ff0dfd18857105e7e7374b4fb89a01318d4885d371818b"
+    },
+    {
+      "analysis": "source-pattern-agreement",
+      "extraction": {
+        "expected_rule_id": "streaming-buffer-reparse",
+        "required_substrings": [
+          "delta_text = self._buffer_delta_text(delta_text)",
+          "current_text = previous_text + delta_text",
+          "_buffer_delta_text"
+        ]
+      },
+      "id": "gemma4_streaming_html_tag_duplication",
+      "recorded_bug": {
+        "fix_url": "https://github.com/vllm-project/vllm/pull/38909",
+        "record_type": "issue",
+        "state": "closed",
+        "title": "[Bug]: Gemma4 tool parser duplicates HTML tag prefixes in streamed tool arguments",
+        "url": "https://github.com/vllm-project/vllm/issues/38910"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/tool_parsers/gemma4_tool_parser.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/62095e82c1ef7ed91be5223d36c6109958e9aec6/vllm/tool_parsers/gemma4_tool_parser.py#L345-L475",
+        "ref": "62095e82c1ef7ed91be5223d36c6109958e9aec6",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:bb4f7fa1982cc06ac2acab6395fafc16198af28477eaafd77280604dd5fa302e"
+      },
+      "source_excerpt": "    def _buffer_delta_text(self, delta_text: str) -> str:\n        \"\"\"Buffer incoming delta text to handle multi-token special sequences.\n\n        Accumulates partial tokens that could be the start of\n        ``<|tool_call>`` or ``<tool_call|>`` and only flushes them\n        when the complete sequence is recognized or the sequence breaks.\n\n        This prevents partial special tokens (e.g., ``<|tool``) from being\n        emitted prematurely as content text.\n        \"\"\"\n        combined = self.buffered_delta_text + delta_text\n\n        # Check if combined ends with a complete special token\n        if combined.endswith(TOOL_CALL_START) or combined.endswith(TOOL_CALL_END):\n            self.buffered_delta_text = \"\"\n            return combined\n\n        # Check if combined ends with a partial prefix of a special token\n        for tag in [TOOL_CALL_START, TOOL_CALL_END]:\n            for i in range(1, len(tag)):\n                if combined.endswith(tag[:i]):\n                    self.buffered_delta_text = combined[-i:]\n                    return combined[:-i]\n\n        # No partial match \u2014 flush everything\n        self.buffered_delta_text = \"\"\n        return combined\n\n    # ------------------------------------------------------------------\n    # Non-streaming extraction\n    # ------------------------------------------------------------------\n\n    def extract_tool_calls(\n        self,\n        model_output: str,\n        request: ChatCompletionRequest,\n    ) -> ExtractedToolCallInformation:\n        if self.tool_call_start_token not in model_output:\n            return ExtractedToolCallInformation(\n                tools_called=False, tool_calls=[], content=model_output\n            )\n\n        try:\n            matches = self.tool_call_regex.findall(model_output)\n            if not matches:\n                return ExtractedToolCallInformation(\n                    tools_called=False, tool_calls=[], content=model_output\n                )\n\n            tool_calls: list[ToolCall] = []\n            for func_name, args_str in matches:\n                arguments = _parse_gemma4_args(args_str)\n                tool_calls.append(\n                    ToolCall(\n                        type=\"function\",\n                        function=FunctionCall(\n                            name=func_name,\n                            arguments=json.dumps(arguments, ensure_ascii=False),\n                        ),\n                    )\n                )\n\n            # Content = text before first tool call (if any)\n            content_end = model_output.find(self.tool_call_start_token)\n            content = model_output[:content_end].strip() if content_end > 0 else None\n\n            return ExtractedToolCallInformation(\n                tools_called=True,\n                tool_calls=tool_calls,\n                content=content if content else None,\n            )\n\n        except Exception:\n            logger.exception(\"Error extracting tool calls from Gemma4 response\")\n            return ExtractedToolCallInformation(\n                tools_called=False, tool_calls=[], content=model_output\n            )\n\n    # ------------------------------------------------------------------\n    # Streaming extraction \u2014 accumulate-then-parse-then-diff\n    # ------------------------------------------------------------------\n\n    def extract_tool_calls_streaming(\n        self,\n        previous_text: str,\n        current_text: str,\n        delta_text: str,\n        previous_token_ids: Sequence[int],\n        current_token_ids: Sequence[int],\n        delta_token_ids: Sequence[int],\n        request: ChatCompletionRequest,\n    ) -> DeltaMessage | None:\n        # Buffer delta text to handle multi-token special sequences\n        delta_text = self._buffer_delta_text(delta_text)\n        # Reconstruct current_text after buffering to stay in sync\n        current_text = previous_text + delta_text\n\n        # If no tool call token seen yet, emit as content\n        if self.tool_call_start_token not in current_text:\n            if delta_text:\n                return DeltaMessage(content=delta_text)\n            return None\n\n        try:\n            return self._extract_streaming(\n                previous_text=previous_text,\n                current_text=current_text,\n                delta_text=delta_text,\n            )\n        except Exception:\n            logger.exception(\"Error in Gemma4 streaming tool call extraction\")\n            return None\n\n    def _extract_streaming(\n        self,\n        previous_text: str,\n        current_text: str,\n        delta_text: str,\n    ) -> DeltaMessage | None:\n        \"\"\"Tag-counting streaming parser.\n\n        Uses the proven approach from FunctionGemma/Hermes: count start/end\n        tags in previous vs current text to determine phase, then\n        accumulate-parse-diff for arguments.\n\n        Format: ``<|tool_call>call:name{args}<tool_call|>``\n        \"\"\"\n        start_count = current_text.count(self.tool_call_start_token)\n        end_count = current_text.count(self.tool_call_end_token)\n        prev_start_count = previous_text.count(self.tool_call_start_token)\n        prev_end_count = previous_text.count(self.tool_call_end_token)\n",
+      "source_sha256": "49c06786952f6a1f22ab8f967a7c0f2a420c33da445ce60218313f13d0d03f6d"
+    },
+    {
+      "analysis": "source-pattern-agreement",
+      "extraction": {
+        "expected_rule_id": "tagged-json-parameter-parser-boundary",
+        "required_substrings": [
+          "build_tool_parser_tag_tagged",
+          "p.tool_arg_json_value",
+          "p.schema(\n                                    p.json()"
+        ]
+      },
+      "id": "llama_cpp_qwen_array_object_tool_leak",
+      "recorded_bug": {
+        "record_type": "issue",
+        "state": "open",
+        "title": "Qwen3 TAG_WITH_TAGGED tool format: p.json() fails on array<object> parameter values; partial tool_call leaked to client poisons multi-turn history",
+        "url": "https://github.com/ggml-org/llama.cpp/issues/21771"
+      },
+      "reference": {
+        "license": "MIT",
+        "path": "common/chat-auto-parser-generator.cpp",
+        "public_url": "https://github.com/ggml-org/llama.cpp/blob/2016bf2b3bca10e49e06a00586a8a2fde9f6cc32/common/chat-auto-parser-generator.cpp#L361-L401",
+        "ref": "2016bf2b3bca10e49e06a00586a8a2fde9f6cc32",
+        "repository": "ggml-org/llama.cpp",
+        "source_file_sha": "sha256:6a1556d20d9c44da1a2b5df3daabb191f38c43af74e23ce4cb7b7cd166190816"
+      },
+      "source_excerpt": "common_peg_parser analyze_tools::build_tool_parser_tag_tagged(parser_build_context & ctx) const {\n    auto &       p           = ctx.p;\n    const auto & inputs      = ctx.inputs;\n\n    auto until_suffix = p.rule(\"until-suffix\", p.until(arguments.value_suffix));\n\n    common_peg_parser tool_choice = p.choice();\n\n    foreach_function(inputs.tools, [&](const json & tool) {\n        const auto &          func       = tool.at(\"function\");\n        std::string           name       = func.at(\"name\");\n        auto                  params     = func.contains(\"parameters\") ? func.at(\"parameters\") : json::object();\n        const auto &          properties = params.contains(\"properties\") ? params.at(\"properties\") : json::object();\n\n        std::set<std::string> required;\n        if (params.contains(\"required\")) {\n            params.at(\"required\").get_to(required);\n        }\n\n        auto schema_info = common_schema_info();\n        schema_info.resolve_refs(params);\n\n        // Build parser for each argument, separating required and optional\n        std::vector<common_peg_parser> required_parsers;\n        std::vector<common_peg_parser> optional_parsers;\n        for (const auto & [param_name, param_schema] : properties.items()) {\n            bool is_required = required.find(param_name) != required.end();\n\n            auto arg =\n                p.tool_arg(p.tool_arg_open(arguments.name_prefix + p.tool_arg_name(p.literal(param_name)) +\n                                           arguments.name_suffix) +\n                           arguments.value_prefix +\n                           (schema_info.resolves_to_string(param_schema) ?\n                                p.tool_arg_string_value(until_suffix) :\n                                p.tool_arg_json_value(p.schema(\n                                    p.json(), \"tool-\" + name + \"-arg-\" + param_name + \"-schema\", param_schema, false)) +\n                                    p.space()) +\n                           p.tool_arg_close(p.literal(arguments.value_suffix)));\n\n            auto named_arg = p.rule(\"tool-\" + name + \"-arg-\" + param_name, arg);\n            if (is_required) {\n",
+      "source_sha256": "9a0f0548786e6a57ebfd55868d19e688c7851adf792fd9ce6a97570d2ad284ca"
+    },
+    {
       "analysis": "role-boundary-template",
       "extraction": {
         "additional_special_tokens": [
@@ -30,6 +113,12 @@
         "template_source": "jinja-file"
       },
       "id": "phi_system_turn_forgery",
+      "recorded_bug": {
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "implement new jinja template engine",
+        "url": "https://github.com/ggml-org/llama.cpp/pull/18462"
+      },
       "reference": {
         "license": "MIT",
         "path": "models/templates/microsoft-Phi-3.5-mini-instruct.jinja",
@@ -53,6 +142,12 @@
         "real_world_section": "stop_overreachability_cases"
       },
       "id": "qwen3_xml_tool_parameter_stop",
+      "recorded_bug": {
+        "record_type": "pull_request",
+        "state": "open",
+        "title": "[Bugfix][ToolParser] Fix Qwen3 XML and Coder streaming tool call parser regressions",
+        "url": "https://github.com/vllm-project/vllm/pull/40861"
+      },
       "reference": {
         "license": "Apache-2.0",
         "path": "vllm/tool_parsers/qwen3coder_tool_parser.py",
@@ -63,8 +158,36 @@
       },
       "source_excerpt": "        # Sentinel tokens for streaming mode\n        self.tool_call_start_token: str = \"<tool_call>\"\n        self.tool_call_end_token: str = \"</tool_call>\"\n        self.tool_call_prefix: str = \"<function=\"\n        self.function_end_token: str = \"</function>\"\n        self.parameter_prefix: str = \"<parameter=\"\n        self.parameter_end_token: str = \"</parameter>\"\n        self.is_tool_call_started: bool = False\n        self.failed_count: int = 0\n\n        # Enhanced streaming state - reset for each new message\n        self._reset_streaming_state()\n\n        # Regex patterns\n        self.tool_call_complete_regex = re.compile(\n            r\"<tool_call>(.*?)</tool_call>\", re.DOTALL\n        )\n        self.tool_call_regex = re.compile(\n            r\"<tool_call>(.*?)</tool_call>|<tool_call>(.*?)$\", re.DOTALL\n        )\n        self.tool_call_function_regex = re.compile(\n            r\"<function=(.*?)</function>|<function=(.*)$\", re.DOTALL\n        )\n",
       "source_sha256": "571e0a3876af7db8c21396e12b000bf68da2b0fee9623130fb13b6f3613bb57b"
+    },
+    {
+      "analysis": "source-pattern-agreement",
+      "extraction": {
+        "expected_rule_id": "streaming-function-state-leak",
+        "required_substrings": [
+          "if incoming_tag in (\"function\", \"tool_call\") and self.current_function_name:",
+          "self._end_element(\"function\")",
+          "self.current_function_name = function_name"
+        ]
+      },
+      "id": "vllm_qwen_multi_function_block_boundary",
+      "recorded_bug": {
+        "record_type": "issue",
+        "state": "open",
+        "title": "[Bug]: qwen3_xml tool parser emits invalid JSON for multiple <function=...> blocks inside one <tool_call>",
+        "url": "https://github.com/vllm-project/vllm/issues/43713"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/tool_parsers/qwen3xml_tool_parser.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/6a11d72df7f15b39d76570dba5f415ff2b0292b3/vllm/tool_parsers/qwen3xml_tool_parser.py#L595-L650",
+        "ref": "6a11d72df7f15b39d76570dba5f415ff2b0292b3",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:930ee28e806b2808423f55afd6529f4ea69e97720164d31b8132f0d2335e8060"
+      },
+      "source_excerpt": "    def _auto_close_open_parameter_if_needed(self, incoming_tag: str | None = None):\n        \"\"\"Before starting to process new elements,\n        if there are unclosed tags from before,\n        automatically complete their endings to the parser.\n        - If there are unclosed parameters,\n        it's equivalent to feeding `</parameter>`\n        - When about to start a new function or tool_call,\n        if there are unclosed functions, complete `</function>`.\n        - When about to start a new tool_call,\n        if there are unclosed tool_calls, complete `</tool_call>`.\n        \"\"\"\n        # First close unclosed parameters\n        if self.current_param_name:\n            self._end_element(\"parameter\")\n\n        # If about to start new function or tool_call,\n        # and there are unclosed functions, close function first\n        if incoming_tag in (\"function\", \"tool_call\") and self.current_function_name:\n            self._end_element(\"function\")\n\n        # If about to start new tool_call,\n        # and there are unclosed tool_calls, close tool_call first\n        if incoming_tag == \"tool_call\" and self.current_call_id:\n            self._end_element(\"tool_call\")\n\n    def _start_element(self, name: str, attrs: dict[str, str]):\n        \"\"\"Handle XML start element events\"\"\"\n\n        if name == \"root\":\n            return\n\n        if name == \"tool_call\":\n            # Before opening new tool_call,\n            # automatically complete previous unclosed tags\n            self._auto_close_open_parameter_if_needed(\"tool_call\")\n\n            self.parameters = {}\n            self.current_call_id = make_tool_call_id()\n            self.current_param_is_first = True\n            self.tool_call_index += 1\n        elif name.startswith(\"function\") or (name == \"function\"):\n            # If missing tool_call, manually complete\n            if not self.current_call_id:\n                self._start_element(\"tool_call\", {})\n            # Before opening new function,\n            # automatically complete previous unclosed tags (parameter/function)\n            self._auto_close_open_parameter_if_needed(\"function\")\n            function_name = self._extract_function_name(name, attrs)\n            self.current_function_name = function_name\n            self.current_function_open = True\n            if function_name:\n                delta = DeltaMessage(\n                    tool_calls=[\n                        DeltaToolCall(\n                            index=self.tool_call_index - 1,\n                            id=self.current_call_id,\n",
+      "source_sha256": "31508e28e19b708b9dd147b7f6f94400f430d88afcc53c61cac893989489e363"
     }
   ],
-  "methodology": "Each case traverses exact pinned public production-code bytes. Source excerpts are SHA-256 checked before extraction; replay fails closed if an expected delimiter/template is not source-derived. Local schemas remain minimized payload models only after the production parser/template bytes supply the interface boundary under test.",
+  "methodology": "Each case traverses exact pinned public production-code bytes from recorded GitHub issues or PRs. Source excerpts are SHA-256 checked before extraction; replay fails closed if an expected delimiter, template, parser regex, or parser control-flow pattern is not source-derived. Local payload models are not counted as production-code evaluation cases.",
   "version": 1
 }
