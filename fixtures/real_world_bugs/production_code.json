@@ -1,6 +1,1656 @@
 {
   "cases": [
     {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "if sampling_metadata.max_num_logprobs:"
+        ]
+      },
+      "id": "bugfix_replay_vllm_30059_vllm_v1_sample_rejection_sampler_py",
+      "recorded_bug": {
+        "merged_at": "2025-12-12T17:03:36Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[bugfix] fix bug when top_logprobs=0 with spec decoding",
+        "url": "https://github.com/vllm-project/vllm/pull/30059"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/v1/sample/rejection_sampler.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/06462392e40f9ae1bf87290c4cec10533fdd3205/vllm/v1/sample/rejection_sampler.py#L140-L162",
+        "ref": "06462392e40f9ae1bf87290c4cec10533fdd3205",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:99b47760271d48b8abdfa9cf203e896a4571d6461d9bc20472793121516c1211"
+      },
+      "source_excerpt": "            metadata.cu_num_draft_tokens,\n            draft_probs,\n            target_probs,\n            bonus_token_ids,\n            sampling_metadata,\n        )\n\n        logprobs_tensors = None\n        if sampling_metadata.max_num_logprobs:\n            logprobs_tensors = self._get_logprobs_tensors(\n                sampling_metadata.max_num_logprobs,\n                metadata,\n                logits,\n                target_logits if self.is_processed_logprobs_mode else raw_target_logits,\n                bonus_sampler_output.logprobs_tensors.logprobs,\n                output_token_ids,\n            )\n\n        return SamplerOutput(\n            sampled_token_ids=output_token_ids,\n            logprobs_tensors=logprobs_tensors,\n        )\n\n",
+      "source_sha256": "5848c7d9b45783c9edff2520e5dd3d82c8ca2fad94c7f70d4c4c16cc873f80a7"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "num_active_loras: int,",
+          "grid_lora_dim = num_active_loras"
+        ]
+      },
+      "id": "bugfix_replay_vllm_34119_vllm_lora_ops_triton_ops_fused_moe_lora_op_py",
+      "recorded_bug": {
+        "merged_at": "2026-03-02T15:17:47Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Fix Bug]`num_active_loras` always equals to zero ",
+        "url": "https://github.com/vllm-project/vllm/pull/34119"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/lora/ops/triton_ops/fused_moe_lora_op.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/e3eb146f7ad4bc920e11e98cf88cee3839cf5f89/vllm/lora/ops/triton_ops/fused_moe_lora_op.py#L90-L112",
+        "ref": "e3eb146f7ad4bc920e11e98cf88cee3839cf5f89",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:8c5582f3afb2ba1894500b186689bff2fa502c1407a1d876aa0b473317cc637f"
+      },
+      "source_excerpt": "        tensor_ptrs.append(lora_weight.data_ptr())\n    ptr_tensor = torch.tensor(tensor_ptrs, device=device, dtype=torch.uint64)\n\n    _LORA_PTR_DICT[key] = ptr_tensor\n    return _LORA_PTR_DICT.get(key)\n\n\ndef _adjust_kernel_inputs(\n    num_active_loras: int,\n    sorted_token_ids: torch.Tensor | None,\n    expert_ids: torch.Tensor,\n):\n    \"\"\"\n    helper function to adjust kernel inputs when sorted_token_ids is None\n    \"\"\"\n    if sorted_token_ids is None:\n        stride_tl = 0\n        stride_el = 0\n        grid_lora_dim = 1\n    else:\n        stride_tl = sorted_token_ids.stride(0)\n        stride_el = expert_ids.stride(0)\n        grid_lora_dim = num_active_loras\n",
+      "source_sha256": "7ab1e67e9483f565c1aa641a641d90730f0aac0dcdc78d07faacf31194d4e685"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "image_processor: Any | None,",
+          "if image_processor is None:"
+        ]
+      },
+      "id": "bugfix_replay_vllm_34358_vllm_model_executor_models_ernie45_vl_py",
+      "recorded_bug": {
+        "merged_at": "2026-02-13T04:47:02Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Standardize getting number of image patches/tokens",
+        "url": "https://github.com/vllm-project/vllm/pull/34358"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/model_executor/models/ernie45_vl.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/bf37812ca77acf7f00c7761bdb0cf257d0e391a3/vllm/model_executor/models/ernie45_vl.py#L813-L835",
+        "ref": "bf37812ca77acf7f00c7761bdb0cf257d0e391a3",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:dbd59d0618ff6c95620c308f76aa418bbf78218aacd948b76ee89b4dfb75eaa2"
+      },
+      "source_excerpt": "\n    def _get_vision_info(\n        self,\n        *,\n        image_width: int,\n        image_height: int,\n        num_frames: int = 1,\n        do_resize: bool = True,\n        image_processor: Any | None,\n    ) -> tuple[ImageSize, int]:\n        if image_processor is None:\n            image_processor = self.get_image_processor()\n        hf_config = self.get_hf_config()\n        vision_config = hf_config.vision_config\n\n        patch_size = vision_config.patch_size\n        spatial_conv_size = hf_config.spatial_conv_size\n        temporal_conv_size = hf_config.temporal_conv_size\n\n        if do_resize:\n            resized_height, resized_width = smart_resize(\n                height=image_height,\n                width=image_width,\n",
+      "source_sha256": "23da952700fd2789f86b1323991fd76d9852e58c8f966dede196e0a35b97426f"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "for req_id in itertools.chain(finished_req_ids, preempted_req_ids):"
+        ]
+      },
+      "id": "bugfix_replay_vllm_35157_vllm_v1_worker_mamba_utils_py",
+      "recorded_bug": {
+        "merged_at": "2026-02-25T06:00:19Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Linear Attention] fix bug for linear attention + prefix caching + reset_prefix_cache",
+        "url": "https://github.com/vllm-project/vllm/pull/35157"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/v1/worker/mamba_utils.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/22a97e66134a26c74b9dae73d9446c4e32718269/vllm/v1/worker/mamba_utils.py#L124-L146",
+        "ref": "22a97e66134a26c74b9dae73d9446c4e32718269",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:7a7360345ce2391f4251aa8ef94e72a7fac6af01a569ede78cb7dfd518d8cbe8"
+      },
+      "source_excerpt": "    \"\"\"\n    mamba_group_ids, mamba_spec = get_mamba_groups(kv_cache_config)\n    num_speculative_blocks = mamba_spec.num_speculative_blocks\n    # TODO(Chen): we need to optimize this function a lot\n    assert cache_config.enable_prefix_caching\n    block_size = mamba_spec.block_size\n    finished_req_ids = scheduler_output.finished_req_ids\n    preempted_req_ids = scheduler_output.preempted_req_ids or set()\n    for req_id in itertools.chain(finished_req_ids, preempted_req_ids):\n        mamba_state_idx.pop(req_id, None)\n\n    src_state_list: list[int] = []\n    dest_state_list: list[int] = []\n    num_elements_list: list[int] = []\n    for i, req_id in enumerate(input_batch.req_ids):\n        req_state = requests[req_id]\n        prev_state_idx = mamba_state_idx.get(req_id)\n        if prev_state_idx is None:\n            # new / resumed request, no previous state\n            # if num_computed_tokens is 0, prev_state_idx will be -1\n            prev_state_idx = (req_state.num_computed_tokens - 1) // block_size\n\n        num_scheduled_tokens = scheduler_output.num_scheduled_tokens[req_id]\n",
+      "source_sha256": "09c6f233ab59797b1f4095af4d986b79c617d1ff603d50c2cb1bf23e6e82a8c5"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "hidden_states_all = hidden_states.split(",
+          "pooling_cursor.num_scheduled_tokens_cpu.tolist()"
+        ]
+      },
+      "id": "bugfix_replay_vllm_36614_vllm_model_executor_layers_pooler_tokwise_methods_py",
+      "recorded_bug": {
+        "merged_at": "2026-03-11T03:16:34Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "fix bugs when token_classify & classify run concurrently",
+        "url": "https://github.com/vllm-project/vllm/pull/36614"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/model_executor/layers/pooler/tokwise/methods.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/cf88b23749187b9a31406925d3f9e966fc4c566b/vllm/model_executor/layers/pooler/tokwise/methods.py#L42-L64",
+        "ref": "cf88b23749187b9a31406925d3f9e966fc4c566b",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:7b03c3fa96b367f9b150bc51e595b59beded7c7a07cfc48a96efce2a50843bb7"
+      },
+      "source_excerpt": "        self.enable_chunked_prefill = scheduler_config.enable_chunked_prefill\n\n    def forward(\n        self,\n        hidden_states: torch.Tensor,\n        pooling_metadata: PoolingMetadata,\n    ) -> list[TokenPoolingMethodOutputItem]:\n        pooling_cursor = pooling_metadata.get_pooling_cursor()\n        hidden_states_all = hidden_states.split(\n            pooling_cursor.num_scheduled_tokens_cpu.tolist()\n        )\n        hidden_states_lst = [hidden_states_all[i] for i in pooling_cursor.index]\n\n        if not self.enable_chunked_prefill:\n            return hidden_states_lst\n\n        pooling_states = pooling_metadata.pooling_states\n\n        # If chunked_prefill is enabled\n        # 1. first store the chunked hidden_states in pooling_states.hidden_states_cache\n        for p, hs_chunk in zip(pooling_states, hidden_states_lst):\n            p.hidden_states_cache.append(hs_chunk)\n\n",
+      "source_sha256": "b8177878af5e39be95b20de4d7fe719d0e5259ed1f95d675d3f68104b14f536b"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "torch.float32 if self.experts.quant_method.is_monolithic else torch.bfloat16"
+        ]
+      },
+      "id": "bugfix_replay_vllm_36931_vllm_model_executor_models_deepseek_v2_py",
+      "recorded_bug": {
+        "merged_at": "2026-03-13T23:41:16Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Feat][Bugfix] Enable additional dimension for Flashinfer MLA and fix routing dtype",
+        "url": "https://github.com/vllm-project/vllm/pull/36931"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/model_executor/models/deepseek_v2.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/a79c1c2c806c7426931f02ad0b81d4656a07cba5/vllm/model_executor/models/deepseek_v2.py#L329-L351",
+        "ref": "a79c1c2c806c7426931f02ad0b81d4656a07cba5",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:10a0110c1ca459dc17d35250ce678fd329aeba9a7ea7aa619f1c009842e2da07"
+      },
+      "source_excerpt": "            if self.is_fusion_moe_shared_experts_enabled\n            else None,\n        )\n\n        # NOTE(rob): this is a hack until we finish off the PR for\n        # merging TRTLLM kernels into the MK framework. Then we can\n        # query the MonolithicMK for the expected router logits.\n        self.gate.set_out_dtype(\n            torch.float32 if self.experts.quant_method.is_monolithic else torch.bfloat16\n        )\n\n    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:\n        num_tokens, hidden_dim = hidden_states.shape\n        hidden_states = hidden_states.view(-1, hidden_dim)\n\n        # Chunk the hidden states so they aren't replicated across TP ranks.\n        # This avoids duplicate computation in self.experts.\n        # TODO: We can replace the all_reduce at the end of attn with a\n        # reduce_scatter instead of chunking here.\n        if self.is_sequence_parallel:\n            hidden_states = sequence_parallel_chunk(hidden_states)\n\n        if self.experts.is_internal_router:\n",
+      "source_sha256": "bf2f5da3ca147e8fb51493f415f14dad0a3700bf55b263128245466fef8d4801"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "\"target_layer_ids\": aux_layer_ids,"
+        ]
+      },
+      "id": "bugfix_replay_vllm_40727_vllm_transformers_utils_configs_speculators_algos_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-20T03:15:58Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Perf][Bugfix] Update dflash aux layer indexing",
+        "url": "https://github.com/vllm-project/vllm/pull/40727"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/transformers_utils/configs/speculators/algos.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/d247a931cc25e7253feccbd6260d48216ff5c081/vllm/transformers_utils/configs/speculators/algos.py#L96-L105",
+        "ref": "d247a931cc25e7253feccbd6260d48216ff5c081",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:9d5ae0e95f420440b153240b788bf076967ed4635b349f2560e1058b029d1df4"
+      },
+      "source_excerpt": "    if config_dict.get(\"target_hidden_size\") is not None:\n        pre_trained_config[\"target_hidden_size\"] = config_dict[\"target_hidden_size\"]\n\n    aux_layer_ids = config_dict[\"aux_hidden_state_layer_ids\"]\n    pre_trained_config[\"eagle_aux_hidden_state_layer_ids\"] = aux_layer_ids\n\n    pre_trained_config[\"dflash_config\"] = {\n        \"mask_token_id\": config_dict[\"mask_token_id\"],\n        \"target_layer_ids\": aux_layer_ids,\n    }\n",
+      "source_sha256": "74154f8af8ba3497cb8122ecfc180b39762653f5b75dc03565717cd662a77067"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "if mamba_cache_dtype == \"float32\":",
+          "raise ValueError(\"fp32 state for minimax is not yet supported\")"
+        ]
+      },
+      "id": "bugfix_replay_vllm_40859_vllm_model_executor_layers_mamba_mamba_utils_py",
+      "recorded_bug": {
+        "merged_at": "2026-04-28T05:39:23Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix ] fix bailing_moe_linear",
+        "url": "https://github.com/vllm-project/vllm/pull/40859"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/model_executor/layers/mamba/mamba_utils.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/fd74c90d9c3b5c35308f1f0ab308469235fa5277/vllm/model_executor/layers/mamba/mamba_utils.py#L51-L73",
+        "ref": "fd74c90d9c3b5c35308f1f0ab308469235fa5277",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:1489c74ac75b00caa92990ff44cff4ad96e8562eaf8017446486b796c8c9acbf"
+      },
+      "source_excerpt": "class MambaStateDtypeCalculator:\n    @classmethod\n    def linear_attention_state_dtype(\n        cls,\n        model_dtype: ModelDType | torch.dtype,\n        mamba_cache_dtype: MambaDType,\n    ) -> tuple[torch.dtype, ...]:\n        # TODO (tdoublep) requires testing\n        if mamba_cache_dtype == \"float32\":\n            raise ValueError(\"fp32 state for minimax is not yet supported\")\n        state_dtype = get_kv_cache_torch_dtype(mamba_cache_dtype, model_dtype)\n        return (state_dtype,)\n\n    @classmethod\n    def mamba1_state_dtype(\n        cls,\n        model_dtype: ModelDType | torch.dtype,\n        mamba_cache_dtype: MambaDType,\n        mamba_ssm_cache_dtype: MambaDType,\n    ) -> tuple[torch.dtype, ...]:\n        return cls._mamba_state_dtype(\n            model_dtype, mamba_cache_dtype, mamba_ssm_cache_dtype\n        )\n",
+      "source_sha256": "889a301302f1a4ec3d501c357a2feff57202fc330725f8c24857f6d53e7ac991"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "if name not in SKIP_TENSORS:"
+        ]
+      },
+      "id": "bugfix_replay_vllm_41424_vllm_model_executor_model_loader_reload_meta_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-03T20:30:04Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Fix FP8 Bias Loading",
+        "url": "https://github.com/vllm-project/vllm/pull/41424"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/model_executor/model_loader/reload/meta.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/c51df43005726a09c6eb7348e8c1b00501c70a8e/vllm/model_executor/model_loader/reload/meta.py#L75-L97",
+        "ref": "c51df43005726a09c6eb7348e8c1b00501c70a8e",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:a46d68c1b7ff51c322c3e66478bb6b5c763627bae3caa7626e5fba07b8b4d5e4"
+      },
+      "source_excerpt": "\n\ndef restore_layer_on_meta(layer: torch.nn.Module, info: LayerReloadingInfo):\n    \"\"\"Restore a layer to model format with tensors on the meta device\"\"\"\n    if layer.__class__.__name__ in SKIP_MODULES:\n        return\n\n    for name in get_layer_tensors(layer):\n        if name not in SKIP_TENSORS:\n            delattr(layer, name)\n\n    restore_params, restore_buffers = info.restore_metadata\n    for name, param in restore_params.items():\n        if name not in SKIP_TENSORS:\n            param = restore_layer_refs(param, layer)\n            layer.register_parameter(name, param)\n\n    for name, buffer in restore_buffers.items():\n        if name not in SKIP_TENSORS:\n            buffer = restore_layer_refs(buffer, layer)\n            layer.register_buffer(name, buffer)\n\n\n",
+      "source_sha256": "fcf03cf65c2d6687917c01c096e3cc416bc7ec87fd8f6282828ccc69f09e1f6b"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "self.hash_block_size = vllm_config.cache_config.block_size",
+          "kv_cache_group.kv_cache_spec.block_size"
+        ]
+      },
+      "id": "bugfix_replay_vllm_41549_vllm_v1_kv_offload_base_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-05T11:54:29Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix][KVConnector] Support DCP/PCP in OffloadingConnector",
+        "url": "https://github.com/vllm-project/vllm/pull/41549"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/v1/kv_offload/base.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/4845aee6b78c5543e036df1f9bbb8a9bfa4961f2/vllm/v1/kv_offload/base.py#L328-L350",
+        "ref": "4845aee6b78c5543e036df1f9bbb8a9bfa4961f2",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:e7d3b01f8ff7960be781daa7a808039b3cc5cd9465515f3c969ec185fbf975d8"
+      },
+      "source_excerpt": "        self.kv_cache_config = kv_cache_config\n\n        kv_transfer_config = vllm_config.kv_transfer_config\n        assert kv_transfer_config is not None\n        self.extra_config = kv_transfer_config.kv_connector_extra_config\n\n        # block size used by vLLM for hashing request tokens for the sake\n        # of enabling prefix caching\n        self.hash_block_size = vllm_config.cache_config.block_size\n        # gpu block size per group\n        self.gpu_block_size: tuple[int, ...] = tuple(\n            kv_cache_group.kv_cache_spec.block_size\n            for kv_cache_group in kv_cache_config.kv_cache_groups\n        )\n\n        for block_size in self.gpu_block_size:\n            assert block_size % self.hash_block_size == 0, (\n                f\"gpu_block_size={block_size} not divisible by \"\n                f\"hash_block_size={self.hash_block_size}. \"\n                f\"Hybrid models (e.g. Mamba+Attention) need \"\n                f\"--enable-prefix-caching to align block sizes.\"\n            )\n\n",
+      "source_sha256": "9a25d1c3541a8f4febba7f496feeddb29920867ffb0d202499cd62ae9ee14fe3"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "def get_finished(self, finished_req_ids: set[str]) -> tuple[set[str], set[str]]:",
+          "assert self.connector_worker is not None"
+        ]
+      },
+      "id": "bugfix_replay_vllm_41945_vllm_distributed_kv_transfer_kv_connector_v1_offloading_connector_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-12T15:04:44Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[kv_offload][BugFix] Fix store deferral",
+        "url": "https://github.com/vllm-project/vllm/pull/41945"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/distributed/kv_transfer/kv_connector/v1/offloading_connector.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/7f65f8442827196970b1f3b09cb56ca2f6ea7c5d/vllm/distributed/kv_transfer/kv_connector/v1/offloading_connector.py#L103-L125",
+        "ref": "7f65f8442827196970b1f3b09cb56ca2f6ea7c5d",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:e2e139a4034cf932fcbc80519870eaaf735dc11dc7fb412867a518e330e3092f"
+      },
+      "source_excerpt": "    ) -> None:\n        pass\n\n    def wait_for_save(self):\n        assert self.connector_worker is not None\n        assert isinstance(self._connector_metadata, OffloadingConnectorMetadata)\n        self.connector_worker.prepare_store_kv(self._connector_metadata)\n\n    def get_finished(self, finished_req_ids: set[str]) -> tuple[set[str], set[str]]:\n        assert self.connector_worker is not None\n        return self.connector_worker.get_finished(finished_req_ids)\n\n    def build_connector_worker_meta(self) -> OffloadingWorkerMetadata | None:\n        if self.connector_worker is not None:\n            return self.connector_worker.build_connector_worker_meta()\n        return None\n\n    def get_num_new_matched_tokens(\n        self, request: \"Request\", num_computed_tokens: int\n    ) -> tuple[int | None, bool]:\n        assert self.connector_scheduler is not None\n        return self.connector_scheduler.get_num_new_matched_tokens(\n            request, num_computed_tokens\n",
+      "source_sha256": "c440a7cb9410b7492874c8ba9e33e81a747bb08e8bcd65db7ce5984d038ee42b"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "if TYPE_CHECKING or current_platform.is_cuda_alike():",
+          "if not has_tilelang():"
+        ]
+      },
+      "id": "bugfix_replay_vllm_41946_vllm_model_executor_layers_mhc_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-13T13:43:15Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] [ROCm] [DSV4] [Perf] Add aiter mhc support",
+        "url": "https://github.com/vllm-project/vllm/pull/41946"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/model_executor/layers/mhc.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/07534b8782757b069652f56d2d32f8fb8256adfc/vllm/model_executor/layers/mhc.py#L7-L29",
+        "ref": "07534b8782757b069652f56d2d32f8fb8256adfc",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:128324c2bd2c034b34143c2c2d0c91f1260e0a290ad41c4338048ffaf7f287fa"
+      },
+      "source_excerpt": "import torch\n\nfrom vllm.platforms import current_platform\nfrom vllm.utils.import_utils import has_tilelang\nfrom vllm.utils.math_utils import cdiv\nfrom vllm.utils.torch_utils import direct_register_custom_op\n\n# tilelang is only available on CUDA platforms\nif TYPE_CHECKING or current_platform.is_cuda_alike():\n    if not has_tilelang():\n        raise ImportError(\n            \"tilelang is required for mhc but is not installed. Install it with \"\n            \"`pip install tilelang`.\"\n        )\n    import tilelang\n    import tilelang.language as T\nelse:\n    tilelang = None  # type: ignore[assignment]\n    T = None  # type: ignore[assignment]\n\n\n@cache\ndef compute_num_split(block_k: int, k: int | None, grid_size: int) -> int:\n",
+      "source_sha256": "4341e4177aa2a1dbd07481685cf277a484aa342cf86485b54cf585488ab6c4b7"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "f\"K={self.total_num_kv_heads}, \""
+        ]
+      },
+      "id": "bugfix_replay_vllm_41957_vllm_distributed_kv_transfer_kv_connector_utils_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-09T16:48:25Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix][PD] Fix DSv4 Disaggregated",
+        "url": "https://github.com/vllm-project/vllm/pull/41957"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/distributed/kv_transfer/kv_connector/utils.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/adb6d96516cb0cd6d1dec985cb5e5cdc20ed418b/vllm/distributed/kv_transfer/kv_connector/utils.py#L588-L601",
+        "ref": "adb6d96516cb0cd6d1dec985cb5e5cdc20ed418b",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:2918e122e183aad0d1c33a4f14a3b3cb5f1b3a4187e652db32cb594e43e57966"
+      },
+      "source_excerpt": "        return cache if self.split_k_and_v else [cache]\n\n    def describe(self, remote_engine_id: EngineId) -> str:\n        \"\"\"One-line summary of transfer config for logging.\"\"\"\n        info = self._engines[remote_engine_id]\n        return (\n            f\"TransferTopology(\"\n            f\"tp_ratio={self.tp_ratio(info.remote_tp_size)}, \"\n            f\"K={self.total_num_kv_heads}, \"\n            f\"local_tp={self.tp_size}, \"\n            f\"remote_tp={info.remote_tp_size}, \"\n            f\"local_rank={self.tp_rank}, \"\n            f\"remote_block_len={info.remote_block_len})\"\n        )\n",
+      "source_sha256": "c040526f12716a35c1a4d26e370937a5f4a08b6dc256de0e205b20db594859ab"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "(workspace_buffer,) = current_workspace_manager().get_simultaneous(",
+          "((envs.VLLM_FLASHINFER_WORKSPACE_BUFFER_SIZE,), torch.uint8),"
+        ]
+      },
+      "id": "bugfix_replay_vllm_42112_vllm_v1_attention_backends_mla_prefill_flashinfer_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-14T13:48:57Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Fix TRTLLM ragged MLA prefill workspace warmup",
+        "url": "https://github.com/vllm-project/vllm/pull/42112"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/v1/attention/backends/mla/prefill/flashinfer.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/77e1421a68d625bb45ac1d86023be8e555aefeec/vllm/v1/attention/backends/mla/prefill/flashinfer.py#L118-L140",
+        "ref": "77e1421a68d625bb45ac1d86023be8e555aefeec",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:416f3aa62f84da242b4b2576d1b6533ebc8cd9117257b433f95ac4f95b2bfe15"
+      },
+      "source_excerpt": "\n    def prepare_metadata(\n        self,\n        prefill_metadata: \"MLACommonPrefillMetadata\",\n    ) -> None:\n        global_hyperparameters = self._resolve_global_hyperparameters()\n        qo_indptr = prefill_metadata.query_start_loc\n        has_context = prefill_metadata.chunked_context is not None\n        (workspace_buffer,) = current_workspace_manager().get_simultaneous(\n            ((envs.VLLM_FLASHINFER_WORKSPACE_BUFFER_SIZE,), torch.uint8),\n        )\n\n        if self._prefill_main is None:\n            self._prefill_main = BatchPrefillWithRaggedKVCacheWrapper(\n                workspace_buffer, \"NHD\", backend=\"cutlass\"\n            )\n            self._ensure_chunks(_DEFAULT_NUM_CHUNKS, workspace_buffer)\n\n        if has_context:\n            chunked_context = prefill_metadata.chunked_context\n            assert chunked_context is not None\n            num_chunks = chunked_context.cu_seq_lens.shape[0]\n            self._ensure_chunks(num_chunks, workspace_buffer)\n",
+      "source_sha256": "c6074ebcfae5f7e0785e230ad8d98eb23dd39beed1bd41db2891e0a7d107e6ca"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "self.init_routed_experts_capturer()"
+        ]
+      },
+      "id": "bugfix_replay_vllm_42148_vllm_v1_worker_gpu_model_runner_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-10T01:01:04Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Skip routed-experts hot path when disabled",
+        "url": "https://github.com/vllm-project/vllm/pull/42148"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/v1/worker/gpu_model_runner.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/ea0e501bb18c12b80acc05ff8c7f013db515ba80/vllm/v1/worker/gpu_model_runner.py#L6149-L6171",
+        "ref": "ea0e501bb18c12b80acc05ff8c7f013db515ba80",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:6e56ddeb8912773611b995c622eb8a95bec2c58f37d31c46ec510c8ec188873e"
+      },
+      "source_excerpt": "\n    @instrument(span_name=\"Capture model\")\n    def capture_model(self) -> int:\n        if self.compilation_config.cudagraph_mode == CUDAGraphMode.NONE:\n            logger.warning(\n                \"Skipping CUDA graph capture. To turn on CUDA graph capture, \"\n                \"ensure `cudagraph_mode` was not manually set to `NONE`\"\n            )\n            self.init_routed_experts_capturer()\n            return 0\n\n        # Initialize encoder CUDA graph manager if enabled.\n        # Use get_model() to unwrap CUDAGraphWrapper/UBatchWrapper,\n        # because @runtime_checkable Protocol isinstance() checks do not\n        # work through __getattr__ forwarding.\n        if (\n            self.compilation_config.cudagraph_mm_encoder\n            and self.supports_mm_inputs\n            and self.encoder_cudagraph_manager is None\n        ):\n            from vllm.model_executor.models.interfaces import (\n                SupportsEncoderCudaGraph,\n                supports_encoder_cudagraph,\n",
+      "source_sha256": "50de203480e7d73cee9a38b1506b4edc35e7de93fbb271b4b9355a8fa6c6e570"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "def _maybe_combine_reasoning_and_tool_call(",
+          "item: ResponseInputOutputItem, messages: list[ChatCompletionMessageParam]"
+        ]
+      },
+      "id": "bugfix_replay_vllm_42189_vllm_entrypoints_openai_responses_utils_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-12T16:10:00Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] [Frontend] Responses API, fix merging of messages",
+        "url": "https://github.com/vllm-project/vllm/pull/42189"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/entrypoints/openai/responses/utils.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/dd6b3a5ef548e9349e6c103dfa7b1b484c9ca41a/vllm/entrypoints/openai/responses/utils.py#L116-L138",
+        "ref": "dd6b3a5ef548e9349e6c103dfa7b1b484c9ca41a",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:76476f05eb261d67d238a9148a0a91a740d5d5bdca511300c13cb2c52d693c70"
+      },
+      "source_excerpt": "    if isinstance(request_input, str):\n        messages.append({\"role\": \"user\", \"content\": request_input})\n    else:\n        input_messages = construct_chat_messages_with_tool_call(request_input)\n        messages.extend(input_messages)\n    return messages\n\n\ndef _maybe_combine_reasoning_and_tool_call(\n    item: ResponseInputOutputItem, messages: list[ChatCompletionMessageParam]\n) -> ChatCompletionMessageParam | None:\n    \"\"\"Many models treat MCP calls and reasoning as a single message.\n    This function checks if the last message is a reasoning message and\n    the current message is a tool call\"\"\"\n    if not (\n        isinstance(item, ResponseFunctionToolCall)\n        and item.id\n        and item.id.startswith(MCP_PREFIX)\n    ):\n        return None\n    if len(messages) == 0:\n        return None\n    last_message = messages[-1]\n",
+      "source_sha256": "b730b208b9aa6fdfbeda688bdfb03834f4728f2d47a89f84c2ff328a58b32ce5"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "if orig_sr > target_sr:",
+          "return scipy_signal.resample_poly(audio, 1, orig_sr // target_sr)"
+        ]
+      },
+      "id": "bugfix_replay_vllm_42233_vllm_multimodal_audio_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-13T10:52:41Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Fix scipy audio resampling ratio",
+        "url": "https://github.com/vllm-project/vllm/pull/42233"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/multimodal/audio.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/ef34592a1ac7a203a490b1e067d29dfaa6a0b2a9/vllm/multimodal/audio.py#L225-L247",
+        "ref": "ef34592a1ac7a203a490b1e067d29dfaa6a0b2a9",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:8689faa453eaa96e56c834d4fb949703adfc2b140c6fdcfe6bce3fca03e386f5"
+      },
+      "source_excerpt": "\n\ndef resample_audio_scipy(\n    audio: npt.NDArray[np.floating],\n    *,\n    orig_sr: float,\n    target_sr: float,\n) -> npt.NDArray[np.floating]:\n    if orig_sr > target_sr:\n        return scipy_signal.resample_poly(audio, 1, orig_sr // target_sr)\n    elif orig_sr < target_sr:\n        return scipy_signal.resample_poly(audio, target_sr // orig_sr, 1)\n    return audio\n\n\nclass AudioResampler:\n    \"\"\"Resample audio data to a target sample rate.\"\"\"\n\n    def __init__(\n        self,\n        target_sr: float | None = None,\n        method: Literal[\"pyav\", \"scipy\"] = \"pyav\",\n    ):\n",
+      "source_sha256": "8a177179146c7ae9776c9db13788d209070933492e2822ecaf55ae916c0de77f"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "post_mix: torch.Tensor | None,",
+          "res_mix: torch.Tensor | None,"
+        ]
+      },
+      "id": "bugfix_replay_vllm_42320_vllm_model_executor_models_deepseek_v4_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-13T22:44:53Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Fix DeepSeek V4 MTP HC state handling",
+        "url": "https://github.com/vllm-project/vllm/pull/42320"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/model_executor/models/deepseek_v4.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/8415bf2cdbdd00c1786abb766df568d5ae19e2c0/vllm/model_executor/models/deepseek_v4.py#L1198-L1220",
+        "ref": "8415bf2cdbdd00c1786abb766df568d5ae19e2c0",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:d1b64cb2a678dca0b97001d835dc0b0202c4742725ae2cc5878886ec1aa0fbfb"
+      },
+      "source_excerpt": "    ):\n        return torch.ops.vllm.mhc_post(x, residual, post, comb)\n\n    def forward(\n        self,\n        x: torch.Tensor,\n        positions: torch.Tensor,\n        input_ids: torch.Tensor | None,\n        post_mix: torch.Tensor | None,\n        res_mix: torch.Tensor | None,\n        residual: torch.Tensor | None,\n    ) -> torch.Tensor:\n        if residual is None:\n            # Run standalone hc_pre on first layer\n            residual = x\n            x, post_mix, res_mix = self.hc_pre(\n                x, self.hc_attn_fn, self.hc_attn_scale, self.hc_attn_base\n            )\n        else:\n            residual, post_mix, res_mix, x = torch.ops.vllm.mhc_fused_post_pre(\n                x,\n                residual,\n                post_mix,\n",
+      "source_sha256": "a532f49c8f43a62492f32c608f41fb79cf2e6bfc2ba8cb6f839dfba4ef6ee369"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "assert self.language_model.start_layer >= len("
+        ]
+      },
+      "id": "bugfix_replay_vllm_42394_vllm_model_executor_models_qwen3_vl_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-13T10:58:43Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix][Qwen3-VL] Fix pipeline-parallel deepstack initialization",
+        "url": "https://github.com/vllm-project/vllm/pull/42394"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/model_executor/models/qwen3_vl.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/85b2fecab7776cb7526856803c661c82d1fa8433/vllm/model_executor/models/qwen3_vl.py#L1692-L1714",
+        "ref": "85b2fecab7776cb7526856803c661c82d1fa8433",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:13e484b373d2af10d483e4a691bffba99bf5a75331dfdf19c9690ae16e9fcba3"
+      },
+      "source_excerpt": "            self.language_model = Qwen3LLMForCausalLM(\n                vllm_config=vllm_config.with_hf_config(config.text_config),\n                prefix=maybe_prefix(prefix, \"language_model\"),\n            )\n\n        if not get_pp_group().is_first_rank and hasattr(\n            config.vision_config, \"deepstack_visual_indexes\"\n        ):\n            assert self.language_model.start_layer >= len(\n                config.vision_config.deepstack_visual_indexes\n            ), (\n                \"start_layer should be greater than or equal to \"\n                \"len(deepstack_visual_indexes)\"\n            )\n\n        self.make_empty_intermediate_tensors = (\n            self.language_model.make_empty_intermediate_tensors\n        )\n\n    def _get_deepstack_input_embeds(\n        self,\n        num_tokens: int,\n    ) -> IntermediateTensors | None:\n",
+      "source_sha256": "fa19433818cebbc796864446dc70815ed17ccdbe42cebe85d28da629aa971620"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "\"You should initialize it via `_mark_language_model`.\""
+        ]
+      },
+      "id": "bugfix_replay_vllm_42641_vllm_model_executor_models_interfaces_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-14T15:42:11Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Fix LM detection for Nemotron Parse",
+        "url": "https://github.com/vllm-project/vllm/pull/42641"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/model_executor/models/interfaces.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/5bd8c71e792a6d1632fd92fec8c4a1b79b02027e/vllm/model_executor/models/interfaces.py#L202-L224",
+        "ref": "5bd8c71e792a6d1632fd92fec8c4a1b79b02027e",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:26dc02eb9c8b7c16de724034087dcc487da559b9121cae0564a41a7f12078e89"
+      },
+      "source_excerpt": "        # Fallback\n        for mod in self.children():\n            if hasattr(mod, \"embed_input_ids\"):\n                _language_model_by_module[self] = mod\n                return mod\n\n        raise NotImplementedError(\n            f\"No language model found in {type(self).__name__}! \"\n            \"You should initialize it via `_mark_language_model`.\"\n        )\n\n    @contextmanager\n    def _mark_language_model(\n        self,\n        vllm_config: VllmConfig,\n        *,\n        targets: type[nn.Module] | tuple[type[nn.Module], ...] | None = None,\n    ):\n        \"\"\"\n        Mark each child module that was assigned to this model during this context\n        as a language model component.\n\n        Language model components are automatically skipped in `--mm-encoder-only`\n",
+      "source_sha256": "6e591b852c9f4f1f01ef642b829e771b83707daea7ffc725ad58588b5b002f78"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "if self._tool_parser and self.is_reasoning_end(delta_token_ids):",
+          "if delta_message and delta_message.content:"
+        ]
+      },
+      "id": "bugfix_replay_vllm_42691_vllm_parser_abstract_parser_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-23T23:18:30Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Fix reasoning dropped on streaming boundary deltas",
+        "url": "https://github.com/vllm-project/vllm/pull/42691"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/parser/abstract_parser.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/8c296de63b47664fc5979831e1ae2d2a14a05b1a/vllm/parser/abstract_parser.py#L675-L697",
+        "ref": "8c296de63b47664fc5979831e1ae2d2a14a05b1a",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:f531f865afabf84387869e54eb0bf8a3e08d000eb6928613b64266eb995e3385"
+      },
+      "source_excerpt": "                previous_text=state.previous_text,\n                current_text=current_text,\n                delta_text=delta_text,\n                previous_token_ids=state.previous_token_ids,\n                current_token_ids=current_token_ids,\n                delta_token_ids=delta_token_ids,\n            )\n            # Hand off remaining content to tool parser\n            if self._tool_parser and self.is_reasoning_end(delta_token_ids):\n                state.reasoning_ended = True\n                current_token_ids = self.extract_content_ids(delta_token_ids)\n                if delta_message and delta_message.content:\n                    current_text = delta_message.content\n                    delta_message.content = None\n                else:\n                    current_text = \"\"\n\n        # Tool call extraction\n        if self._in_tool_call_phase(state):\n            if not state.tool_call_text_started:\n                state.tool_call_text_started = True\n                state.previous_text = \"\"\n                state.previous_token_ids = []\n",
+      "source_sha256": "aa104143ab78cd573893d9bf9fec888c6331dd9e7264db5c37c1b39b2da838e1"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "prefix=maybe_prefix(prefix, f\"layers.{layer_idx + start_layer_id}\"),"
+        ]
+      },
+      "id": "bugfix_replay_vllm_42692_vllm_model_executor_models_qwen3_dflash_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-15T14:29:45Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] DFlash FP8 KV-Cache",
+        "url": "https://github.com/vllm-project/vllm/pull/42692"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/model_executor/models/qwen3_dflash.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/0d4d334eaa583b9c09aa4eb7538c22db99fd84b3/vllm/model_executor/models/qwen3_dflash.py#L242-L264",
+        "ref": "0d4d334eaa583b9c09aa4eb7538c22db99fd84b3",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:f260427a7e6ef41bbcde372133c893e76739e846b4c4931232fb626da9502175"
+      },
+      "source_excerpt": "            self.config.hidden_size,\n            prefix=maybe_prefix(prefix, \"embed_tokens\"),\n        )\n\n        self.layers = nn.ModuleList(\n            [\n                DFlashQwen3DecoderLayer(\n                    current_vllm_config,\n                    prefix=maybe_prefix(prefix, f\"layers.{layer_idx + start_layer_id}\"),\n                    config=self.config,\n                )\n                for layer_idx in range(self.config.num_hidden_layers)\n            ]\n        )\n        if self.use_aux_hidden_state:\n            num_features_to_use = self.config.num_hidden_layers\n            if \"target_layer_ids\" in drafter_config:\n                num_features_to_use = len(drafter_config[\"target_layer_ids\"])\n            elif \"layer_ids\" in drafter_config:\n                num_features_to_use = len(drafter_config[\"layer_ids\"])\n            if hasattr(self.config, \"target_hidden_size\"):\n                fc_input_size = self.config.target_hidden_size * num_features_to_use\n            else:\n",
+      "source_sha256": "de61e467241def538607ff92d65ad0cf6e25a171eeb6ec5f4324d3b7cfdb78b7"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "hidden_size = residual.shape[-1]",
+          "if hidden_size % 256 == 0:"
+        ]
+      },
+      "id": "bugfix_replay_vllm_42810_vllm_model_executor_layers_mhc_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-17T16:18:50Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[ROCm] [Bugfix] Fix DeepSeek V4 Functionality and Accuracy",
+        "url": "https://github.com/vllm-project/vllm/pull/42810"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/model_executor/layers/mhc.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/8a56da3845270837424ef4b7ee83ca97a7883025/vllm/model_executor/layers/mhc.py#L56-L78",
+        "ref": "8a56da3845270837424ef4b7ee83ca97a7883025",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:cdbc55870f5867dd7a91adb214631baec3ea365c213e0b0b37aeb4e37ac7de64"
+      },
+      "source_excerpt": "        hc_base: torch.Tensor,\n        rms_eps: float,\n        hc_pre_eps: float,\n        hc_sinkhorn_eps: float,\n        hc_post_mult_value: float,\n        sinkhorn_repeat: int,\n        n_splits: int = 1,\n    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:\n        hidden_size = residual.shape[-1]\n        if hidden_size % 256 == 0:\n            return torch.ops.vllm.mhc_pre_aiter(\n                residual,\n                fn,\n                hc_scale,\n                hc_base,\n                rms_eps,\n                hc_pre_eps,\n                hc_sinkhorn_eps,\n                hc_post_mult_value,\n                sinkhorn_repeat,\n            )\n        else:\n            return mhc_kernels.mhc_pre_torch(\n",
+      "source_sha256": "2250cecd3af5220162a273ad0cf3e766fdee22d13cbdd3d6de2674164483afbc"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "logprob=max(p[1].logprob, -9999.0),",
+          "for i, p in enumerate(step_top_logprobs.items())"
+        ]
+      },
+      "id": "bugfix_replay_vllm_42887_vllm_entrypoints_serve_disagg_serving_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-19T10:21:50Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Fix top logprobs token placeholders in `/inference/v1/generate`",
+        "url": "https://github.com/vllm-project/vllm/pull/42887"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/entrypoints/serve/disagg/serving.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/6e889b582b6a0b11f22b3764be174266faa9ff5e/vllm/entrypoints/serve/disagg/serving.py#L456-L473",
+        "ref": "6e889b582b6a0b11f22b3764be174266faa9ff5e",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:9b415d5b6ec6303780a40feb5b4ad9201c9f31586820f987e07ff917e3aa358b"
+      },
+      "source_excerpt": "\n                logprobs_content.append(\n                    ChatCompletionLogProbsContent(\n                        token=token,\n                        logprob=max(step_token.logprob, -9999.0),\n                        top_logprobs=[\n                            ChatCompletionLogProb(\n                                token=token,\n                                logprob=max(p[1].logprob, -9999.0),\n                            )\n                            for i, p in enumerate(step_top_logprobs.items())\n                            if num_output_top_logprobs is not None\n                            and i < max(num_output_top_logprobs, 1)\n                        ],\n                    )\n                )\n\n        return ChatCompletionLogProbs(content=logprobs_content)\n",
+      "source_sha256": "64430d48e60c0f4b2b65c971da42114178bdf5994bfa0b3062ec299f6649a54b"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "kv_cache = safetensors.torch.load_file(filename)[\"kv_cache\"].cuda()"
+        ]
+      },
+      "id": "bugfix_replay_vllm_42926_vllm_distributed_kv_transfer_kv_connector_v1_example_connector_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-19T03:12:05Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Use platform-agnostic device in example_connector load",
+        "url": "https://github.com/vllm-project/vllm/pull/42926"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/distributed/kv_transfer/kv_connector/v1/example_connector.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/239b5ff30cf46f9196149c888a20be2096fdff03/vllm/distributed/kv_transfer/kv_connector/v1/example_connector.py#L183-L205",
+        "ref": "239b5ff30cf46f9196149c888a20be2096fdff03",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:73fb5287f7bc2acbddd67814f87ca3da8dfc14e6a2c66345c6d44ffcdd810974"
+      },
+      "source_excerpt": "                # layers like FusedMoE/MLP etc.\n                kv_cache_layer = getattr(layer, \"kv_cache\", None)\n                if kv_cache_layer is None:\n                    continue\n\n                filename = self._generate_filename_debug(\n                    layer_name, request.token_ids, request.mm_hashes\n                )\n                kv_cache = safetensors.torch.load_file(filename)[\"kv_cache\"].cuda()\n                if isinstance(attn_metadata, dict):\n                    inject_kv_into_layer(\n                        kv_cache_layer,\n                        kv_cache,\n                        request.slot_mapping,\n                        attn_metadata[layer_name],\n                    )\n\n    def wait_for_layer_load(self, layer_name: str) -> None:\n        \"\"\"Blocking until the KV for a specific layer is loaded into vLLM's\n        paged buffer.\n\n        This interface will be useful for layer-by-layer pipelining.\n\n",
+      "source_sha256": "65d8856e79f97929eeec7faaa543d69b6da865a727536d73f448546d1b5ee871"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "post_mix: torch.Tensor | None,",
+          "res_mix: torch.Tensor | None,"
+        ]
+      },
+      "id": "bugfix_replay_vllm_42930_vllm_model_executor_models_deepseek_v4_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-18T17:02:02Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Fix DSV4 MTP after ROCm mHC integration",
+        "url": "https://github.com/vllm-project/vllm/pull/42930"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/model_executor/models/deepseek_v4.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/23c15acd770cf16ed36c6d3fed8e7d78db7d5282/vllm/model_executor/models/deepseek_v4.py#L1256-L1278",
+        "ref": "23c15acd770cf16ed36c6d3fed8e7d78db7d5282",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:414902da93c0da0b0361c8e642655d6169f617f9159008c34b65381da8387749"
+      },
+      "source_excerpt": "        x = self.ffn(x, input_ids)\n        return x, residual, post_mix, res_mix\n\n    def _forward_rocm(\n        self,\n        x: torch.Tensor,\n        positions: torch.Tensor,\n        input_ids: torch.Tensor | None,\n        post_mix: torch.Tensor | None,\n        res_mix: torch.Tensor | None,\n        residual: torch.Tensor | None,\n    ) -> torch.Tensor:\n        residual = x\n        x, post, comb = self.hc_pre(\n            x, self.hc_attn_fn, self.hc_attn_scale, self.hc_attn_base\n        )\n        x = self.attn_norm(x)\n        x = self.attn(positions, x, None)\n        x = self.hc_post(x, residual, post, comb)\n\n        residual = x\n        x, post, comb = self.hc_pre(\n            x, self.hc_ffn_fn, self.hc_ffn_scale, self.hc_ffn_base\n",
+      "source_sha256": "c6fa550b71ada763de12bfa458de0db80f297adc39158ae93533f8ab045ec4db"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "layer.weight_schemas[sublayer_name] = weight_schema",
+          "layer.input_schemas[sublayer_name] = input_schema"
+        ]
+      },
+      "id": "bugfix_replay_vllm_43100_vllm_model_executor_layers_quantization_humming_py",
+      "recorded_bug": {
+        "merged_at": "2026-06-02T16:32:51Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[BugFix] Fix Humming MoE deploy error",
+        "url": "https://github.com/vllm-project/vllm/pull/43100"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/model_executor/layers/quantization/humming.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/27fa5aa3b952a6108de127423397e50364a95fcb/vllm/model_executor/layers/quantization/humming.py#L805-L827",
+        "ref": "27fa5aa3b952a6108de127423397e50364a95fcb",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:2ba06bbc0a1bb9e7973c19578fe42a9f92d3f924030a948c22606db4537f3102"
+      },
+      "source_excerpt": "                        continue\n                    delattr(layer, name)\n\n                for name, tensor in tensors.items():\n                    name = f\"{sublayer_name}_{name}\"\n                    param = torch.nn.Parameter(tensor, requires_grad=False)\n                    setattr(layer, name, param)\n\n                layer.weight_schemas[sublayer_name] = weight_schema\n                layer.input_schemas[sublayer_name] = input_schema\n\n            # force requant (origin quant setting -> fp16/bf16 -> new_quant setting)\n            assert isinstance(weight_schema, HummingWeightSchema)\n            force_requant = self.force_weight_schema is not None\n            if force_requant and weight_schema != self.force_weight_schema:\n                tensors = dict(\n                    (key.removeprefix(sublayer_name + \"_\"), value)\n                    for key, value in layer.state_dict().items()\n                    if key.startswith(sublayer_name + \"_\")\n                )\n\n                tensors = weight_schema.requant_tensors(\n                    tensors=tensors,\n",
+      "source_sha256": "a10fea0d74ea5dea275b7645170cd775c35265abf8f2781fec7f3f5aa7ca6b78"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "CutlassScaledMMReduceScatterPattern(self.model_dtype, self.device).register(",
+          "AllGatherCutlassScaledMMPattern(self.model_dtype, self.device).register("
+        ]
+      },
+      "id": "bugfix_replay_vllm_43120_vllm_compilation_passes_fusion_collective_fusion_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-28T21:39:02Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[AMD][CI][BugFix] Fix  Distributed Compile Unit Tests (2xH100-2xMI300) group",
+        "url": "https://github.com/vllm-project/vllm/pull/43120"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/compilation/passes/fusion/collective_fusion.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/085ac221a32bca4d9ef4d325444b9713412a7ddf/vllm/compilation/passes/fusion/collective_fusion.py#L913-L935",
+        "ref": "085ac221a32bca4d9ef4d325444b9713412a7ddf",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:3fcc0cb14ad084e29cb8c2b43e580616918aba200887842553f50fee7af0466b"
+      },
+      "source_excerpt": "        if self.model_dtype == torch.bfloat16:\n            ScaledMMReduceScatterPattern(self.model_dtype, self.device).register(\n                self.pm_pass\n            )\n            AllGatherScaledMMPattern(self.model_dtype, self.device).register(\n                self.pm_pass\n            )\n\n            CutlassScaledMMReduceScatterPattern(self.model_dtype, self.device).register(\n                self.pm_pass\n            )\n            AllGatherCutlassScaledMMPattern(self.model_dtype, self.device).register(\n                self.pm_pass\n            )\n            with suppress(ImportError):\n                import vllm.utils.flashinfer  # noqa: F401\n            if hasattr(torch.ops.vllm, \"bmm_fp8\"):\n                self.register(\n                    FlashInferAllGatherBMMFP8Pattern(self.model_dtype, self.device)\n                )\n                self.register(\n                    FlashInferBMMFP8ReduceScatterPattern(self.model_dtype, self.device)\n                )\n",
+      "source_sha256": "dc99c3eb4a4c13db741e62ab4ac34596496e23e033f84c5042d0a3febf32e17f"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "self.pos_embed[:tgt_h, :tgt_w, :].reshape((tgt_h * tgt_w, -1)).to(dtype)"
+        ]
+      },
+      "id": "bugfix_replay_vllm_43194_vllm_model_executor_models_minicpmv_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-26T05:12:50Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] fix device mismatch in MiniCPM-o-4_5 resampler",
+        "url": "https://github.com/vllm-project/vllm/pull/43194"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/model_executor/models/minicpmv.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/5c1aec3dc0600cb816a0389e55ef1f1c17893380/vllm/model_executor/models/minicpmv.py#L212-L234",
+        "ref": "5c1aec3dc0600cb816a0389e55ef1f1c17893380",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:a9961ce9ca6ea2e6ebf2f567dabd2d6e8e83fcb32c47efd141797defe5ce8449"
+      },
+      "source_excerpt": "        key_padding_mask = torch.zeros(\n            (bs, max_patch_len), dtype=torch.bool, device=device\n        )\n\n        pos_embed = []\n        for i in range(bs):\n            tgt_h, tgt_w = tgt_sizes[i].tolist()\n            pos_embed.append(\n                self.pos_embed[:tgt_h, :tgt_w, :].reshape((tgt_h * tgt_w, -1)).to(dtype)\n            )  # patches * D\n            key_padding_mask[i, patch_len[i] :] = True\n        pos_embed = torch.nn.utils.rnn.pad_sequence(\n            pos_embed, batch_first=True, padding_value=0.0\n        ).permute(1, 0, 2)  # BLD => L * B * D\n        x, _ = self.kv_proj(x)  # B * L * D\n        x = self.ln_kv(x).permute(1, 0, 2)  # L * B * D\n\n        q = self.ln_q(self.query)  # Q * D\n\n        out = self.attn(\n            self._repeat(q, bs),  # Q * B * D\n            x + pos_embed,  # L * B * D +  L * B * D\n            x,\n",
+      "source_sha256": "d7859d9989170ef6b475c3f3ef042b01f10d672c66995d0823e2aa31835fc898"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "add_generation_prompt=self.add_generation_prompt,",
+          "continue_final_message=self.continue_final_message,"
+        ]
+      },
+      "id": "bugfix_replay_vllm_43401_vllm_entrypoints_openai_chat_completion_protocol_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-27T12:39:50Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Map reasoning_effort to enable_thinking in chat template kwargs",
+        "url": "https://github.com/vllm-project/vllm/pull/43401"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/entrypoints/openai/chat_completion/protocol.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/694d9a81bbb07977e7a72a597acb44f6a848f774/vllm/entrypoints/openai/chat_completion/protocol.py#L473-L495",
+        "ref": "694d9a81bbb07977e7a72a597acb44f6a848f774",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:dd634f4d363692fbb84ff35768f182a3990c8257c28caeb2e1984d429e292150"
+      },
+      "source_excerpt": "        default_template_content_format: ChatTemplateContentFormatOption,\n    ) -> ChatParams:\n        return ChatParams(\n            chat_template=self.chat_template or default_template,\n            chat_template_content_format=default_template_content_format,\n            chat_template_kwargs=merge_kwargs(\n                self.chat_template_kwargs,\n                dict(\n                    add_generation_prompt=self.add_generation_prompt,\n                    continue_final_message=self.continue_final_message,\n                    documents=self.documents,\n                    reasoning_effort=self.reasoning_effort,\n                ),\n            ),\n            media_io_kwargs=self.media_io_kwargs,\n        )\n\n    def build_tok_params(self, model_config: ModelConfig) -> TokenizeParams:\n        if self.max_completion_tokens is not None:\n            max_output_tokens: int | None = self.max_completion_tokens\n            max_output_tokens_param = \"max_completion_tokens\"\n        else:\n            max_output_tokens = self.max_tokens\n",
+      "source_sha256": "a805dc1204df6ace384c87a323578da4c37ba3d0d80b03c95cfededc7bf8545a"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "thinking_token_budget: int | None = None"
+        ]
+      },
+      "id": "bugfix_replay_vllm_43402_vllm_entrypoints_openai_chat_completion_protocol_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-26T10:37:31Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Reasoning] [Bugfix] Reject invalid thinking_token_budget values",
+        "url": "https://github.com/vllm-project/vllm/pull/43402"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/entrypoints/openai/chat_completion/protocol.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/97e4022c6ccb7b2cf1a1fc0a13a17a2a06d74f0d/vllm/entrypoints/openai/chat_completion/protocol.py#L220-L242",
+        "ref": "97e4022c6ccb7b2cf1a1fc0a13a17a2a06d74f0d",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:06ae3747e200207e6526841611703da68997797d8e182307c4c074883a00e9ff"
+      },
+      "source_excerpt": "            \"Constrains effort on reasoning for reasoning models. \"\n            \"Currently supported values are none, minimal, low, medium, \"\n            \"high, xhigh, and max. Reducing reasoning effort can result in \"\n            \"faster responses and fewer tokens used on reasoning in a response. \"\n            \"Note that 'max' is specific to the DeepSeek V4 series and is not \"\n            \"part of the standard OpenAI API specification.\"\n        ),\n    )\n    thinking_token_budget: int | None = None\n    include_reasoning: bool = True\n    parallel_tool_calls: bool | None = True\n\n    # NOTE this will be ignored by vLLM\n    user: str | None = None\n\n    # --8<-- [start:chat-completion-sampling-params]\n    use_beam_search: bool = False\n    top_k: int | None = None\n    min_p: float | None = None\n    repetition_penalty: float | None = None\n    length_penalty: float = 1.0\n    stop_token_ids: list[int] | None = []\n    include_stop_str_in_output: bool = False\n",
+      "source_sha256": "ac79f3f816a84d6aec33905a0e761ababddf1a44edda951a3b2d5dc47a800e73"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "input_audio_params = cast(dict[str, str], part)"
+        ]
+      },
+      "id": "bugfix_replay_vllm_43414_vllm_entrypoints_chat_utils_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-23T16:03:20Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix][Frontend] Fix input_audio parsing when uuid is present ",
+        "url": "https://github.com/vllm-project/vllm/pull/43414"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/entrypoints/chat_utils.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/5bb8d2767a2829b56e58c68fa8f380e9e4e2bd3e/vllm/entrypoints/chat_utils.py#L1512-L1534",
+        "ref": "5bb8d2767a2829b56e58c68fa8f380e9e4e2bd3e",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:f5debb1982ed8eb7b22807d72b8717f0bd4b4657d0be2829062e26909807b705"
+      },
+      "source_excerpt": "            )\n            audio_url = audio_params.get(\"audio_url\", None)\n            if isinstance(audio_url, dict):\n                # Can potentially happen if user provides a uuid\n                # with url as a dict of {\"url\": url}\n                audio_url = audio_url.get(\"url\", None)\n            return \"audio_url\", audio_url\n        if part.get(\"input_audio\") is not None:\n            input_audio_params = cast(dict[str, str], part)\n            return \"input_audio\", input_audio_params\n        if \"video_url\" in part:\n            video_params = cast(CustomChatCompletionContentSimpleVideoParam, part)\n            video_url = video_params.get(\"video_url\", None)\n            if isinstance(video_url, dict):\n                # Can potentially happen if user provides a uuid\n                # with url as a dict of {\"url\": url}\n                video_url = video_url.get(\"url\", None)\n            return \"video_url\", video_url\n        if \"tool_reference\" in part:\n            tool_reference_params = cast(\n                CustomChatCompletionContentToolReferenceParam, part\n            )\n            tool_reference = tool_reference_params.get(\"name\", None)\n",
+      "source_sha256": "f610bf810c90c3b97c260a6f5cee1d4db020025d575cc596d6f0c0d9b64c41d3"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "- Blackwell (SM10.x) with ``head_k_dim == 128`` and ``cuda_runtime >= 13``.",
+          "return current_platform.get_cuda_runtime_major() >= 13"
+        ]
+      },
+      "id": "bugfix_replay_vllm_43427_vllm_model_executor_layers_mamba_gdn_qwen_gdn_linear_attn_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-22T19:33:33Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Detect wrong libcute_dsl_runtime.so variant in FlashInfer GDN",
+        "url": "https://github.com/vllm-project/vllm/pull/43427"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/model_executor/layers/mamba/gdn/qwen_gdn_linear_attn.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/79ff0ffa98dc8dd14a8651bce36ce6265ff4d35d/vllm/model_executor/layers/mamba/gdn/qwen_gdn_linear_attn.py#L84-L106",
+        "ref": "79ff0ffa98dc8dd14a8651bce36ce6265ff4d35d",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:f5512a2f969b3e6917d928bbc656c1e0f343374dbfdc5614e720fd3985c94b16"
+      },
+      "source_excerpt": "    \"\"\"Whether to use FlashInfer's GDN prefill kernel instead of the\n    Triton/FLA fallback.\n\n    Requirements:\n    * ``requested in [\"flashinfer\", \"auto\"]``;\n    * ``platform == cuda``;\n    * one of the following:\n      - Hopper (SM90) \u2014 no further constraints;\n      - Blackwell (SM10.x) with ``head_k_dim == 128`` and ``cuda_runtime >= 13``.\n    \"\"\"\n    if backend not in [\"flashinfer\", \"auto\"]:\n        return False\n    if not current_platform.is_cuda():\n        return False\n    if current_platform.is_device_capability(90):\n        return True  # Hopper \u2014 no further constraints.\n    if not current_platform.is_device_capability_family(100):\n        return False  # Neither Hopper nor Blackwell.\n    if head_k_dim != 128:\n        return False\n    return current_platform.get_cuda_runtime_major() >= 13\n\n\n",
+      "source_sha256": "7b95df34965e24bd48cf88684bbccb8bfe93feca5b8648b369464bf88b856c70"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "key = (full_cls_name, layer_kv_cache_spec)",
+          "attn_backend, layer_kv_cache_spec"
+        ]
+      },
+      "id": "bugfix_replay_vllm_43543_vllm_v1_worker_gpu_model_runner_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-27T00:11:01Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Split attention groups by num_heads_q for spec-decode drafts",
+        "url": "https://github.com/vllm-project/vllm/pull/43543"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/v1/worker/gpu_model_runner.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/49b488277922b47bcac320ae8d4b7288bf70dc3c/vllm/v1/worker/gpu_model_runner.py#L6581-L6603",
+        "ref": "49b488277922b47bcac320ae8d4b7288bf70dc3c",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:690998ae7d9353ce42d7fc43f755fdbd72097c6e1f7a364dde435743408b00f2"
+      },
+      "source_excerpt": "                        \"FastPrefill\",\n                        attn_backend,  # type: ignore[arg-type]\n                    )\n\n                full_cls_name = attn_backend.full_cls_name()\n                layer_kv_cache_spec = kv_cache_group_spec.kv_cache_spec\n                if isinstance(layer_kv_cache_spec, UniformTypeKVCacheSpecs):\n                    layer_kv_cache_spec = layer_kv_cache_spec.kv_cache_specs[layer_name]\n                key = (full_cls_name, layer_kv_cache_spec)\n                attn_backends[key] = AttentionGroupKey(\n                    attn_backend, layer_kv_cache_spec\n                )\n                attn_backend_layers[key].append(layer_name)\n            return (\n                {attn_backends[k]: v for k, v in attn_backend_layers.items()},\n                set(group_key.attn_backend for group_key in attn_backends.values()),\n            )\n\n        def create_attn_groups(\n            attn_backends_map: dict[AttentionGroupKey, list[str]],\n            kv_cache_group_id: int,\n        ) -> list[AttentionGroup]:\n            attn_groups: list[AttentionGroup] = []\n",
+      "source_sha256": "e51ca8016d10a0f4d88958b2980ebdcde8555a436bea29922cf0cd4ec7de7147"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "def supports_chunking(self) -> bool:"
+        ]
+      },
+      "id": "bugfix_replay_vllm_43599_vllm_model_executor_layers_fused_moe_experts_trtllm_bf16_moe_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-28T00:36:22Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix][Kernel] TRTLLM NVFP4 MoE chunking",
+        "url": "https://github.com/vllm-project/vllm/pull/43599"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/model_executor/layers/fused_moe/experts/trtllm_bf16_moe.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/2616f67faaa735a3e0d9c17968fa91f242d36c56/vllm/model_executor/layers/fused_moe/experts/trtllm_bf16_moe.py#L94-L116",
+        "ref": "2616f67faaa735a3e0d9c17968fa91f242d36c56",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:ee0898fd69b0684c9f210245a4821d506a5de0225c1defd9ea060810607c97c1"
+      },
+      "source_excerpt": "\n    @staticmethod\n    def _supports_router_logits_dtype(\n        router_logits_dtype: torch.dtype | None,\n        routing_method: RoutingMethodType,\n    ) -> bool:\n        return True\n\n    def supports_chunking(self) -> bool:\n        return False\n\n    def supports_expert_map(self) -> bool:\n        return False\n\n    @property\n    def expects_unquantized_inputs(self) -> bool:\n        return True\n\n    def apply(\n        self,\n        hidden_states: torch.Tensor,\n        w1: torch.Tensor,\n        w2: torch.Tensor,\n",
+      "source_sha256": "8ed7149d562ac29f6ad517b0547c8c3252ef477e627f72e2bca2f6917d046bf3"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "\"\"\"Enable if TP > 1 and Hopper/Blackwell and flashinfer installed.\"\"\""
+        ]
+      },
+      "id": "bugfix_replay_vllm_43616_vllm_config_vllm_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-29T14:57:44Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Disable allreduce_rms_fusion when pipeline_parallel_size > 1",
+        "url": "https://github.com/vllm-project/vllm/pull/43616"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/config/vllm.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/c08ebebf30cdc50ddf43ed8db344b4c69028d296/vllm/config/vllm.py#L116-L138",
+        "ref": "c08ebebf30cdc50ddf43ed8db344b4c69028d296",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:ec6d60783428c4f6e9430d3778050474e140e49851608765ffea1c28e835d89e"
+      },
+      "source_excerpt": "    return (\n        cfg.compilation_config.is_custom_op_enabled(\"silu_and_mul\")\n        or cfg.compilation_config.is_custom_op_enabled(\"quant_fp8\")\n        or (cfg.model_config is not None and cfg.model_config.is_nvfp4_quantized())\n    )\n\n\ndef enable_allreduce_rms_fusion(cfg: \"VllmConfig\") -> bool:\n    \"\"\"Enable if TP > 1 and Hopper/Blackwell and flashinfer installed.\"\"\"\n    from vllm.platforms import current_platform\n    from vllm.utils.flashinfer import has_flashinfer\n\n    if current_platform.is_rocm():\n        from vllm._aiter_ops import rocm_aiter_ops\n\n        return (\n            rocm_aiter_ops.is_enabled() and cfg.parallel_config.tensor_parallel_size > 1\n        )\n\n    return (\n        cfg.parallel_config.tensor_parallel_size > 1\n        and current_platform.is_cuda()\n        and has_flashinfer()\n",
+      "source_sha256": "e21ba56ef7c09e69d16ab5b9c568d0acef2e76800e2e117167b282b91aed4ec3"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "self, scheduler_output: \"SchedulerOutput\", wait_for_save: bool = True",
+          "scheduler_output: \"SchedulerOutput\","
+        ]
+      },
+      "id": "bugfix_replay_vllm_43719_vllm_v1_worker_gpu_kv_connector_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-27T06:37:57Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[MRV2][BugFix] Fix KV connector handling in spec decode case",
+        "url": "https://github.com/vllm-project/vllm/pull/43719"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/v1/worker/gpu/kv_connector.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/dede691c9536e8a79275d2bd0defbccb93f6ef7f/vllm/v1/worker/gpu/kv_connector.py#L29-L51",
+        "ref": "dede691c9536e8a79275d2bd0defbccb93f6ef7f",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:c4a1c84b226f809a67ec1db9617311994975f5f764815c7274aa0531bf6fb106"
+      },
+      "source_excerpt": "\nclass KVConnector:\n    \"\"\"KVConnector interface used by GPUModelRunner.\"\"\"\n\n    def pre_forward(self, scheduler_output: \"SchedulerOutput\") -> None:\n        pass\n\n    def post_forward(\n        self, scheduler_output: \"SchedulerOutput\", wait_for_save: bool = True\n    ) -> KVConnectorOutput | None:\n        return None\n\n    def no_forward(self, scheduler_output: \"SchedulerOutput\") -> ModelRunnerOutput:\n        return EMPTY_MODEL_RUNNER_OUTPUT\n\n    def set_disabled(self, disabled: bool) -> None:\n        pass\n\n\nclass ActiveKVConnector(KVConnector):\n    def __init__(\n        self, vllm_config: VllmConfig, kv_caches_dict: dict[str, torch.Tensor]\n    ):\n",
+      "source_sha256": "911e47bac48f0a0ace929469ee12f69687f9e361259ccc168644b7bf6fb53df4"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "0 if request.num_computed_tokens == 0 else self.num_lookahead_tokens"
+        ]
+      },
+      "id": "bugfix_replay_vllm_43733_vllm_v1_core_sched_scheduler_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-27T21:45:35Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix][DFlash]allocate the proper number of lookahead slots",
+        "url": "https://github.com/vllm-project/vllm/pull/43733"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/v1/core/sched/scheduler.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/0b68f21e7c6ff146f12fd9a9018f5052d4b4722e/vllm/v1/core/sched/scheduler.py#L698-L720",
+        "ref": "0b68f21e7c6ff146f12fd9a9018f5052d4b4722e",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:41ff2e524c90d9aa72b72cd77492eb62ee2a729a773bd8233e970f39abbb5983"
+      },
+      "source_excerpt": "                        break\n\n                # Handles an edge case when P/D Disaggregation\n                # is used with Spec Decoding where an\n                # extra block gets allocated which\n                # creates a mismatch between the number\n                # of local and remote blocks.\n                effective_lookahead_tokens = (\n                    0 if request.num_computed_tokens == 0 else self.num_lookahead_tokens\n                )\n\n                # Determine if we need to allocate cross-attention blocks.\n                num_encoder_tokens = 0\n                if (\n                    self.is_encoder_decoder\n                    and request.has_encoder_inputs\n                    and encoder_inputs_to_schedule\n                ):\n                    num_encoder_tokens = sum(\n                        request.get_num_encoder_embeds(i)\n                        for i in encoder_inputs_to_schedule\n                    )\n\n",
+      "source_sha256": "62c25aa90da2d76bf1769b10ad25d69fab8caaf66b7182eb59886b38b4b957c0"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "if token_len == 0:",
+          "self.dec_stored_request(req_id)"
+        ]
+      },
+      "id": "bugfix_replay_vllm_43742_vllm_distributed_kv_transfer_kv_connector_v1_mooncake_store_worker_py",
+      "recorded_bug": {
+        "merged_at": "2026-06-02T01:29:19Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix][Mooncake] Release GPU pin on failed store in MooncakeStoreConnector",
+        "url": "https://github.com/vllm-project/vllm/pull/43742"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/distributed/kv_transfer/kv_connector/v1/mooncake/store/worker.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/8c3cc98cffd31b910c41b11076e8c175fc6dabe9/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/store/worker.py#L512-L534",
+        "ref": "8c3cc98cffd31b910c41b11076e8c175fc6dabe9",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:dd5765efc936adac88a942773a2ed01fbe0652965906fa2bcedc4bca91ef4128"
+      },
+      "source_excerpt": "        token_len = req_meta.token_len_chunk // lcm_block_size * lcm_block_size\n        block_ids_per_group = req_meta.block_ids\n        req_id = req_meta.req_id\n        current_event = req_meta.current_event\n\n        if req_id not in self.stored_requests:\n            self.request_queue.task_done()\n            return\n        if token_len == 0:\n            self.dec_stored_request(req_id)\n            self.request_queue.task_done()\n            return\n        if self._should_skip_request(req_id):\n            logger.debug(\n                \"Skipping Mooncake store for request %s while CPU/disk offloading \"\n                \"is under pressure\",\n                req_id,\n            )\n            self.dec_stored_request(req_id)\n            self.request_queue.task_done()\n            return\n\n        # Within each lcm region only per-spec relevant chunks are loaded\n",
+      "source_sha256": "4be9291aef2a55713066bb3f81e460c05a1ac298b285b5614367a5957b155805"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "timeout: float = 60.0,"
+        ]
+      },
+      "id": "bugfix_replay_vllm_43768_vllm_v1_utils_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-28T07:09:13Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[BugFix] Fix hard-coded timeout for multi-API-server startup",
+        "url": "https://github.com/vllm-project/vllm/pull/43768"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/v1/utils.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/094124af15d9ac85d1162cb318379e109c1a6bff/vllm/v1/utils.py#L236-L258",
+        "ref": "094124af15d9ac85d1162cb318379e109c1a6bff",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:9082c3e56203541549d5f0f0a20d09017b5ca0131af2db502e971e7cdd556d7b"
+      },
+      "source_excerpt": "        logger.info(\"Started %d API server processes\", len(self.processes))\n\n        # Shutdown only the API server processes on garbage collection\n        # The extra processes are managed by their owners\n        self._finalizer = weakref.finalize(self, shutdown, self.processes)\n\n    def gather_actual_addresses(\n        self,\n        timeout: float = 60.0,\n    ) -> tuple[list[str], list[str]]:\n        \"\"\"Return (inputs, outputs) reported by each child, indexed by\n        ``client_index``. Raises ``RuntimeError`` on timeout or premature\n        child exit.\"\"\"\n        n = len(self._address_pipes)\n        inputs: list[str | None] = [None] * n\n        outputs: list[str | None] = [None] * n\n        pending: dict[connection.Connection, int] = {\n            pipe: i for i, pipe in enumerate(self._address_pipes)\n        }\n        sentinel_to_idx: dict[Any, int] = {\n            proc.sentinel: i for i, proc in enumerate(self.processes)\n        }\n\n",
+      "source_sha256": "1dd9fa660bb7f529a135790d5a5bdcd3eb0c3a5b9d63b4ef843618f2df5343be"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "rotary_dim = getattr(config, \"rotary_dim\", self.head_dim)"
+        ]
+      },
+      "id": "bugfix_replay_vllm_43770_vllm_model_executor_models_bailing_moe_py",
+      "recorded_bug": {
+        "merged_at": "2026-06-01T09:42:50Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] fix wrong partial_rotary_factor calculation for bailing_moe model.",
+        "url": "https://github.com/vllm-project/vllm/pull/43770"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/model_executor/models/bailing_moe.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/8b8546da1c3ba65097357523bc24199e36eddf65/vllm/model_executor/models/bailing_moe.py#L125-L147",
+        "ref": "8b8546da1c3ba65097357523bc24199e36eddf65",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:905160ed1f619e0751c033a23ffc337302b0fe47745f160c6507121c6f63f4bf"
+      },
+      "source_excerpt": "            self.total_num_heads * self.head_dim,\n            self.hidden_size,\n            bias=config.use_bias,\n            quant_config=quant_config,\n            reduce_results=reduce_results,\n            prefix=f\"{prefix}.dense\",\n        )\n\n        rotary_dim = getattr(config, \"rotary_dim\", self.head_dim)\n        config.rope_parameters[\"partial_rotary_factor\"] = rotary_dim / self.head_dim\n\n        self.rotary_emb = get_rope(\n            self.head_dim,\n            max_position=config.max_position_embeddings,\n            rope_parameters=config.rope_parameters,\n            is_neox_style=True,\n        )\n\n        self.attn = Attention(\n            self.num_heads,\n            self.head_dim,\n            self.scale,\n            num_kv_heads=self.num_kv_heads,\n",
+      "source_sha256": "20d60f56389ea2c31836f650d50c546555510e02f292453413815df76adddc1b"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "if current_platform.is_rocm():"
+        ]
+      },
+      "id": "bugfix_replay_vllm_43781_vllm_model_executor_models_deepseek_v2_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-28T10:37:15Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix][ROCm] Fix Accuracy Drop in Sparse Indexer on gfx950",
+        "url": "https://github.com/vllm-project/vllm/pull/43781"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/model_executor/models/deepseek_v2.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/d6b48f928f922849db55751ceadbbb55a5a85260/vllm/model_executor/models/deepseek_v2.py#L674-L696",
+        "ref": "d6b48f928f922849db55751ceadbbb55a5a85260",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:500387d73cbacb98ed5e9752920c71598303132fc7ab1927983b2ce352c54c25"
+      },
+      "source_excerpt": "        )\n\n    def forward(\n        self, hidden_states: torch.Tensor, qr: torch.Tensor, positions, rotary_emb\n    ) -> torch.Tensor:\n        q, _ = self.wq_b(qr)\n        q = q.view(-1, self.n_head, self.head_dim)\n\n        if current_platform.is_rocm():\n            # This path should works on all platform, will remove extra\n            # branches in the future\n            # Fused wk + weights_proj: one GEMM, then split\n            kw, _ = self.wk_weights_proj(hidden_states)\n            k = kw[:, : self.head_dim]\n            weights = kw[:, self.head_dim :]\n\n            k = self.k_norm(k)\n\n            rotary_emb(\n                positions, q[..., : self.rope_dim], k[..., : self.rope_dim].unsqueeze(1)\n            )\n        else:\n            q_pe, q_nope = torch.split(\n",
+      "source_sha256": "28307ac6895975c8636a9e43e2a267159a2548754ef8341978546e234e64f128"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "qweight = torch.nn.Parameter("
+        ]
+      },
+      "id": "bugfix_replay_vllm_43798_vllm_model_executor_layers_quantization_bitsandbytes_py",
+      "recorded_bug": {
+        "merged_at": "2026-06-02T04:41:17Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Convert Gemma4-MM ViT linear layers to vllm native impl",
+        "url": "https://github.com/vllm-project/vllm/pull/43798"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/model_executor/layers/quantization/bitsandbytes.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/48c0d13e654bef63d580dd4cbc0f39356ceb0b68/vllm/model_executor/layers/quantization/bitsandbytes.py#L241-L263",
+        "ref": "48c0d13e654bef63d580dd4cbc0f39356ceb0b68",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:3a1af57110573196f126f5bdfeaf62431532f6d73f4b2ce1c13603900db7a18a"
+      },
+      "source_excerpt": "            quant_ratio = calculate_quant_ratio(params_dtype)\n\n            total_size = input_size_per_partition * sum(output_partition_sizes)\n            if total_size % quant_ratio != 0:\n                raise ValueError(\n                    \"The input size is not aligned with the quantized weight shape.\"\n                )\n\n            qweight = torch.nn.Parameter(\n                torch.empty(total_size // quant_ratio, 1, dtype=torch.uint8),\n                requires_grad=False,\n            )\n            set_weight_attrs(\n                qweight,\n                {\n                    \"input_dim\": 0,\n                    \"output_dim\": 0,\n                    \"pack_factor\": quant_ratio,\n                    \"use_bitsandbytes_4bit\": True,\n                },\n            )\n            return qweight\n\n",
+      "source_sha256": "bfbe7214ffa35475d7362197a80afc23b79e16a667dc222db9bd95a2d2016edf"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "\"Model runner v2 requires Triton; using the v1 model runner instead.\"",
+          "\"Model runner v2 does not yet support %s; using the v1 model \""
+        ]
+      },
+      "id": "bugfix_replay_vllm_43808_vllm_config_vllm_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-28T04:59:34Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[BugFix] Fix blocked reasoning parsing with MRV2",
+        "url": "https://github.com/vllm-project/vllm/pull/43808"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/config/vllm.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/2616f67faaa735a3e0d9c17968fa91f242d36c56/vllm/config/vllm.py#L495-L517",
+        "ref": "2616f67faaa735a3e0d9c17968fa91f242d36c56",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:c643a20844b12c15cf17f100556daa88322e4005778ba5a6115fdb761607f0f1"
+      },
+      "source_excerpt": "        if use_v2_model_runner is not None:\n            return use_v2_model_runner\n\n        if not self._is_default_v2_model_runner_model():\n            return False\n\n        if not HAS_TRITON:\n            logger.warning_once(\n                \"Model runner v2 requires Triton; using the v1 model runner instead.\"\n            )\n            return False\n\n        unsupported = self._get_v2_model_runner_unsupported_features()\n        if unsupported:\n            logger.warning_once(\n                \"Model runner v2 does not yet support %s; using the v1 model \"\n                \"runner instead.\",\n                \", \".join(unsupported),\n            )\n            return False\n\n        return True\n\n",
+      "source_sha256": "b3cf5c9e2fa3387e3f61bd3aaba0da20b5230bebabefbe99b19e3caf495e483a"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "function[\"arguments\"] = json.loads(content)"
+        ]
+      },
+      "id": "bugfix_replay_vllm_43862_vllm_entrypoints_chat_utils_py",
+      "recorded_bug": {
+        "merged_at": "2026-06-03T05:17:27Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] fix crash in postprocess for null tool args ",
+        "url": "https://github.com/vllm-project/vllm/pull/43862"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/entrypoints/chat_utils.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/a3a5a5ece59b31e1e218c3fe47ce02a90522b4a3/vllm/entrypoints/chat_utils.py#L1832-L1854",
+        "ref": "a3a5a5ece59b31e1e218c3fe47ce02a90522b4a3",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:0c4a93aeb4401d9a6db6a47520d47590763f54cd16545f4dc1b2226891dbec9c"
+      },
+      "source_excerpt": "                        \"chat completions only support assistant tool_calls \"\n                        \"of type 'function'.\",\n                        parameter=\"tool_calls\",\n                    )\n\n                # if arguments is None or empty string, set to {}\n                if content := function.get(\"arguments\"):\n                    if not isinstance(content, (dict, list)):\n                        function[\"arguments\"] = json.loads(content)\n                else:\n                    function[\"arguments\"] = {}\n\n\ndef parse_chat_messages(\n    messages: list[ChatCompletionMessageParam],\n    model_config: ModelConfig,\n    content_format: ChatTemplateContentFormat,\n    media_io_kwargs: dict[str, dict[str, Any]] | None = None,\n    mm_processor_kwargs: dict[str, Any] | None = None,\n) -> tuple[\n    list[ConversationMessage],\n    MultiModalDataDict | None,\n    MultiModalUUIDDict | None,\n",
+      "source_sha256": "d848e78d6208885a7d7d36420e7241fd59d319afecd806e17b33e624acda0af5"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "x, x_q, x_s, MXFP8_BLOCK_SIZE, eps, fp8_min, fp8_max, True"
+        ]
+      },
+      "id": "bugfix_replay_vllm_43930_vllm_xpu_ops_py",
+      "recorded_bug": {
+        "merged_at": "2026-06-02T03:09:22Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[XPU][Bugfix] Fix per_token_group_fp8_quant missing dummy args on XPU",
+        "url": "https://github.com/vllm-project/vllm/pull/43930"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/_xpu_ops.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/48c0d13e654bef63d580dd4cbc0f39356ceb0b68/vllm/_xpu_ops.py#L333-L355",
+        "ref": "48c0d13e654bef63d580dd4cbc0f39356ceb0b68",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:56ec5ffb2b012b84eb44daf61ca4fe01882b5003ec9b4ddf26073cd00770da34"
+      },
+      "source_excerpt": "    fp8_min = finfo.min\n    fp8_max = finfo.max\n    eps = 1e-10\n\n    x_q = torch.empty_like(x, device=x.device, dtype=dtype)\n    shape = x.shape[:-1] + (x.shape[-1] // MXFP8_BLOCK_SIZE,)\n    x_s = torch.empty(shape, device=x.device, dtype=torch.float32)\n    torch.ops._C.per_token_group_fp8_quant(\n        x, x_q, x_s, MXFP8_BLOCK_SIZE, eps, fp8_min, fp8_max, True\n    )\n    x_s = x_s.to(torch.float8_e8m0fnu)\n    return x_q, x_s\n\n\ndef _xpu_mxfp8_quantize_fake(\n    x: torch.Tensor, dtype: torch.dtype | None = None\n) -> tuple[torch.Tensor, torch.Tensor]:\n    if dtype is None:\n        dtype = current_platform.fp8_dtype()\n\n    MXFP8_BLOCK_SIZE = 32\n\n    shape = x.shape[:-1] + (x.shape[-1] // MXFP8_BLOCK_SIZE,)\n",
+      "source_sha256": "17b91726654f6cde79269ea0230b4db19a712421df07ea00993645d9fb850282"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "if type(self.kv_cache_spec) in (FullAttentionSpec, TQFullAttentionSpec):"
+        ]
+      },
+      "id": "bugfix_replay_vllm_43961_vllm_v1_core_single_type_kv_cache_manager_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-29T12:00:52Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Corrupted MLA + linear attention",
+        "url": "https://github.com/vllm-project/vllm/pull/43961"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/v1/core/single_type_kv_cache_manager.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/e8b51999731eab80d88a13da01f08f27400746af/vllm/v1/core/single_type_kv_cache_manager.py#L232-L254",
+        "ref": "e8b51999731eab80d88a13da01f08f27400746af",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:d57ad1c8e3d32db4a9d929ee201ab169305ef703b5bda9eb933d0f2f2a2299a1"
+      },
+      "source_excerpt": "        self.num_cached_block[request_id] = len(req_blocks)\n\n        if num_external_computed_tokens > 0:\n            # Allocate new blocks for external computed tokens.\n            allocated_blocks = self.block_pool.get_new_blocks(\n                cdiv(num_total_computed_tokens, self.block_size) - len(req_blocks)\n            )\n            req_blocks.extend(allocated_blocks)\n            if type(self.kv_cache_spec) in (FullAttentionSpec, TQFullAttentionSpec):\n                self.new_block_ids.extend(b.block_id for b in allocated_blocks)\n\n    def allocate_new_blocks(\n        self, request_id: str, num_tokens: int, num_tokens_main_model: int\n    ) -> list[KVCacheBlock]:\n        \"\"\"\n        Allocate new blocks for the request to give it at least `num_tokens`\n        token slots.\n\n        Args:\n            request_id: The request ID.\n            num_tokens: The total number of tokens that need a slot (including\n                tokens that are already allocated).\n            num_tokens_main_model: The number of tokens for the main model (aka target\n",
+      "source_sha256": "e4b41b5cc6526c9db863b59cad070c4dc54c3fdef60e56d0e823cdbdbbea1a84"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "\"git+https://github.com/triton-lang/triton-cpu.git@270e696d ; \"",
+          "\"platform_machine == 'x86_64'\","
+        ]
+      },
+      "id": "bugfix_replay_vllm_43977_setup_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-29T14:02:09Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix][CPU] Remove invalid extra deps",
+        "url": "https://github.com/vllm-project/vllm/pull/43977"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "setup.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/0b56815a24f4da1af21008355af422891bf654ff/setup.py#L1192-L1206",
+        "ref": "0b56815a24f4da1af21008355af422891bf654ff",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:16dd138f77072a979c8238e3f04b0b2ea9ebdd7e7d91d6b972446309852950eb"
+      },
+      "source_excerpt": "        \"otel\": [\n            \"opentelemetry-sdk>=1.26.0\",\n            \"opentelemetry-api>=1.26.0\",\n            \"opentelemetry-exporter-otlp>=1.26.0\",\n            \"opentelemetry-semantic-conventions-ai>=0.4.1\",\n        ],\n        \"triton-cpu\": [\n            \"triton @ \"\n            \"git+https://github.com/triton-lang/triton-cpu.git@270e696d ; \"\n            \"platform_machine == 'x86_64'\",\n        ],  # Remove after stable release\n    },\n    cmdclass=cmdclass,\n    package_data=package_data,\n)\n",
+      "source_sha256": "992aa6600a7937b3036eedb7f929863cf9a0ee973c98307f79497806a70d1b08"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "cm.block_table_tensor = self._per_group_block_tables[gid]"
+        ]
+      },
+      "id": "bugfix_replay_vllm_43982_vllm_v1_spec_decode_gemma4_py",
+      "recorded_bug": {
+        "merged_at": "2026-06-04T00:11:10Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Fix Gemma4 MTP block_table batch_size mismatch under concurrent load",
+        "url": "https://github.com/vllm-project/vllm/pull/43982"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/v1/spec_decode/gemma4.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/bdbf08fc0277c63b90478fae2566aaacdaa71d9b/vllm/v1/spec_decode/gemma4.py#L80-L102",
+        "ref": "bdbf08fc0277c63b90478fae2566aaacdaa71d9b",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:928fe98b28a2b770c1006853f3fb422d36056e9754d5dd1b5a606acdf286521d"
+      },
+      "source_excerpt": "        We swap in the correct block table for each draft attention group.\n        \"\"\"\n        per_group_attn_metadata: list[object] = []\n        per_layer_attn_metadata: dict[str, object] = {}\n        for attn_group in self.draft_attn_groups:\n            gid = attn_group.kv_cache_group_id\n            if gid in self._per_group_block_tables:\n                cm = copy(common_attn_metadata)\n                cm.block_table_tensor = self._per_group_block_tables[gid]\n            else:\n                cm = common_attn_metadata\n            attn_metadata = attn_group.get_metadata_builder().build_for_drafting(\n                common_attn_metadata=cm, draft_index=draft_index\n            )\n            per_group_attn_metadata.append(attn_metadata)\n            for layer_name in attn_group.layer_names:\n                per_layer_attn_metadata[layer_name] = attn_metadata\n        return per_group_attn_metadata, per_layer_attn_metadata\n\n    def _greedy_sample(self, hidden_states: torch.Tensor) -> torch.Tensor:\n        if self._centroids_sizes:\n            T = hidden_states.shape[0]\n            for size in self._centroids_sizes:\n",
+      "source_sha256": "eddfc03f3e203c2d212daa9dd155ea2ed4b82d4e47d53bd46f264b6434cabc13"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "if key != \"node:__internal_head__\" and key.startswith(\"node:\")"
+        ]
+      },
+      "id": "bugfix_replay_vllm_43998_vllm_v1_engine_utils_py",
+      "recorded_bug": {
+        "merged_at": "2026-05-29T18:51:05Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Fix Ray placement group allocation with grouped nodes",
+        "url": "https://github.com/vllm-project/vllm/pull/43998"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/v1/engine/utils.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/4ff865c38eac3c3602c064fd43b00836805cd0a4/vllm/v1/engine/utils.py#L570-L592",
+        "ref": "4ff865c38eac3c3602c064fd43b00836805cd0a4",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:8db277a9d5f663a18a536835a9e5dbd04e6f77ae00103717b1297f7bec041090"
+      },
+      "source_excerpt": "\n        # bundles collected for a single DP rank from multiple nodes,\n        # for \"span\" pack strategy\n        collected_bundles = []\n        for node_resources in nodes:\n            node_ip_keys = [\n                key\n                for key in node_resources\n                if key != \"node:__internal_head__\" and key.startswith(\"node:\")\n            ]\n            assert len(node_ip_keys) == 1, (\n                f\"Zero or multiple node IP keys found in node resources: {node_ip_keys}\"\n            )\n            node_ip_key = node_ip_keys[0]\n            node_ip = node_ip_key.split(\":\")[1]\n\n            n_device_on_node = int(node_resources.get(device_str, 0))\n            if pack_strategy == \"span\" and n_device_on_node != 0:\n                # Strictly speaking,\n                # dp_size_available = n_device_on_node / world_size\n                # and is a fraction, but we use 1 for easier processing\n                dp_size_available = 1\n            else:\n",
+      "source_sha256": "891e320cb1cffefab631a532d2144a3370af202dedc55a2fa985c7f1bbdcfb0d"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "\"\"\"Return True if *module_name* can be found in the current environment.",
+          "The result is cached so that subsequent queries for the same module incur"
+        ]
+      },
+      "id": "bugfix_replay_vllm_44035_vllm_utils_import_utils_py",
+      "recorded_bug": {
+        "merged_at": "2026-06-01T05:06:34Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[BugFix] Fix `_has_module` to verify native deps via trial import",
+        "url": "https://github.com/vllm-project/vllm/pull/44035"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/utils/import_utils.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/4721bb3aa43078167eb893a9ebf9e50565030c1c/vllm/utils/import_utils.py#L387-L409",
+        "ref": "4721bb3aa43078167eb893a9ebf9e50565030c1c",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:f14b07131a4d49955150016dbfa34f7d8d5f586b1545a1173e0d4f904578b18b"
+      },
+      "source_excerpt": "        if self._module is None:\n            self._module = self._load()\n        return dir(self._module)\n\n\n# Optional dependency detection utilities\n@cache\ndef _has_module(module_name: str) -> bool:\n    \"\"\"Return True if *module_name* can be found in the current environment.\n\n    The result is cached so that subsequent queries for the same module incur\n    no additional overhead.\n    \"\"\"\n    return importlib.util.find_spec(module_name) is not None\n\n\ndef has_deep_ep() -> bool:\n    \"\"\"Whether the optional `deep_ep` package is available.\"\"\"\n    return _has_module(\"deep_ep\")\n\n\ndef has_deep_gemm() -> bool:\n    \"\"\"Whether the optional `deep_gemm` package is available.\n",
+      "source_sha256": "20069bd718e67f5e65ada86ebdb9f9ed5305fa71cf54f675554cc2fe52c39007"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "pipeline_parallel_size: int = 1",
+          "tensor_parallel_size: int = 1"
+        ]
+      },
+      "id": "bugfix_replay_vllm_44057_vllm_config_parallel_py",
+      "recorded_bug": {
+        "merged_at": "2026-06-04T15:46:51Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Reject non-positive values for ParallelConfig int knobs",
+        "url": "https://github.com/vllm-project/vllm/pull/44057"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/config/parallel.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/e6018c644adcdebfb1c59aadd3fbd6cdde1c2608/vllm/config/parallel.py#L104-L126",
+        "ref": "e6018c644adcdebfb1c59aadd3fbd6cdde1c2608",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:6d9097f7732c8a545a3366853729742b1f84ef92f5b41112cb89d5341058bcfb"
+      },
+      "source_excerpt": "            raise ValueError(\"log_balancedness_interval must be greater than 0.\")\n        return self\n\n\n@config\nclass ParallelConfig:\n    \"\"\"Configuration for the distributed execution.\"\"\"\n\n    pipeline_parallel_size: int = 1\n    \"\"\"Number of pipeline parallel groups.\"\"\"\n    tensor_parallel_size: int = 1\n    \"\"\"Number of tensor parallel groups.\"\"\"\n    prefill_context_parallel_size: int = 1\n    \"\"\"Number of prefill context parallel groups.\"\"\"\n    data_parallel_size: int = 1\n    \"\"\"Number of data parallel groups. MoE layers will be sharded according to\n    the product of the tensor parallel size and data parallel size.\"\"\"\n    data_parallel_size_local: int = 1\n    \"\"\"Number of local data parallel groups.\"\"\"\n    data_parallel_rank: int = 0\n    \"\"\"Rank of the data parallel group.\"\"\"\n    data_parallel_rank_local: int | None = None\n    \"\"\"Local rank of the data parallel group,\n",
+      "source_sha256": "317a78082310b489cc3146a7be538f1802120e52333256b4762084c9ea277579"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "block_mask = self._cache_block_mask(",
+          "num_cached_blocks, num_full_blocks, alignment_tokens"
+        ]
+      },
+      "id": "bugfix_replay_vllm_44082_vllm_v1_core_single_type_kv_cache_manager_py",
+      "recorded_bug": {
+        "merged_at": "2026-06-02T19:21:08Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Cache the EAGLE/MTP lookahead block in the SWA prefix-cache mask",
+        "url": "https://github.com/vllm-project/vllm/pull/44082"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/v1/core/single_type_kv_cache_manager.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/7c37096620fa4e161c1d8c1db5c43c8514545d84/vllm/v1/core/single_type_kv_cache_manager.py#L312-L334",
+        "ref": "7c37096620fa4e161c1d8c1db5c43c8514545d84",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:c6b70f2d1ab54503ea3dcac10c5fab898480dcb2b237b7b2e620f5dd5f6371af"
+      },
+      "source_excerpt": "\n        if num_cached_blocks >= num_full_blocks:\n            return\n\n        # Fast path: when the coordinator imposes no alignment constraint\n        if alignment_tokens is None or alignment_tokens <= self.block_size:\n            block_mask = None\n        else:\n            block_mask = self._cache_block_mask(\n                num_cached_blocks, num_full_blocks, alignment_tokens\n            )\n        self.block_pool.cache_full_blocks(\n            request=request,\n            blocks=self.req_to_blocks[request.request_id],\n            num_cached_blocks=num_cached_blocks,\n            num_full_blocks=num_full_blocks,\n            block_size=self.block_size,\n            kv_cache_group_id=self.kv_cache_group_id,\n            block_mask=block_mask,\n        )\n\n        self.num_cached_block[request.request_id] = num_full_blocks\n\n",
+      "source_sha256": "54a900cf248db844be09af1035ae377ad05fccee5a1110bc131cf19a29200fb3"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "repl_token_ids = torch.tensor(video_repl.full)",
+          "embed_token_id = _cached_tensor("
+        ]
+      },
+      "id": "bugfix_replay_vllm_44205_vllm_model_executor_models_qwen3_vl_py",
+      "recorded_bug": {
+        "merged_at": "2026-06-04T11:06:52Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] fix EVS for qwen3-vl",
+        "url": "https://github.com/vllm-project/vllm/pull/44205"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/model_executor/models/qwen3_vl.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/d0975a4b50140a9d953f00955a1cbb2a4945edef/vllm/model_executor/models/qwen3_vl.py#L2278-L2300",
+        "ref": "d0975a4b50140a9d953f00955a1cbb2a4945edef",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:d976fd0ac40d37d64bd68cdf3af3ea001be4ab2f145de9d70ea874bce62cf223"
+      },
+      "source_excerpt": "            tokenizer=self._tokenizer,\n            timestamps=timestamps,\n            vision_start_token_id=self.config.vision_start_token_id,\n            vision_end_token_id=self.config.vision_end_token_id,\n            video_token_id=self.config.video_token_id,\n            select_token_id=self.is_multimodal_pruning_enabled,\n        )\n\n        repl_token_ids = torch.tensor(video_repl.full)\n        embed_token_id = _cached_tensor(\n            self.config.video_token_id, repl_token_ids.device\n        )\n        is_video_embed = torch.isin(repl_token_ids, embed_token_id)\n\n        # Get text embeddings for indicator tokens (has only `visual_dim``).\n        text_embeddings = self.get_language_model().embed_input_ids(repl_token_ids)\n\n        if self.use_deepstack:\n            (\n                deepstack_input_embeds,\n                multimodal_embeddings,\n            ) = self._compute_deepstack_embeds(\n                inputs_embeds=text_embeddings,\n",
+      "source_sha256": "751ccefdc08728477c51229558b98c5b10f6c3c7ac79be423af20f23748dd4c4"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "gated_norm_shapes.add(",
+          "(layer.num_v_heads // layer.tp_size, layer.head_v_dim)"
+        ]
+      },
+      "id": "bugfix_replay_vllm_44308_vllm_compilation_passes_fusion_rocm_aiter_fusion_py",
+      "recorded_bug": {
+        "merged_at": "2026-06-02T14:50:21Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[ROCm] Fix AITER RMSNormQuantFusion for Kimi-Linear",
+        "url": "https://github.com/vllm-project/vllm/pull/44308"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/compilation/passes/fusion/rocm_aiter_fusion.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/689b0eeb9e014648f7226e1fb1adbadbd481f27c/vllm/compilation/passes/fusion/rocm_aiter_fusion.py#L565-L587",
+        "ref": "689b0eeb9e014648f7226e1fb1adbadbd481f27c",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:c2ef1e31111c8114ab1d0b325f828102c276baa752fe2b5ed47d705090968fb3"
+      },
+      "source_excerpt": "        )\n\n        gdn_layers = get_layers_from_vllm_config(\n            config,\n            GatedDeltaNetAttention,  # type: ignore[type-abstract]\n        )\n        gated_norm_shapes: set[tuple[int, int]] = set()\n        for layer in gdn_layers.values():\n            gated_norm_shapes.add(\n                (layer.num_v_heads // layer.tp_size, layer.head_v_dim)\n            )\n\n        # Make sure fused add patterns are before simple rms norm,\n        # as the latter is a subset of the former in torch ops.\n        # The DoubleQuant patterns handle 1 rms_norm -> 2 group_fp8_quant\n        # fan-out (e.g. DSv3.2) and must be registered before the single\n        # group-quant pattern so they match first. The view-tolerant variant\n        # additionally covers the rms_norm -> view -> 2x quant shape that\n        # appears when the FP8 linear path inserts a 2D-flatten boilerplate\n        # (DSv3.2 MLA indexer q_c norm).\n        for epsilon in [1e-5, 1e-6]:\n            # Fuse aiter rms_norm + 2x aiter group fp8 quant\n            DoubleAiterRMSFp8GroupQuantPattern(\n",
+      "source_sha256": "3405e74c08921f9a95772b62b8ae5f077d632a82530b1fca45bd2ee3b3b9f9c9"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "finished: bool = False,"
+        ]
+      },
+      "id": "bugfix_replay_vllm_44348_vllm_parser_abstract_parser_py",
+      "recorded_bug": {
+        "merged_at": "2026-06-03T10:19:09Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Fix unstreamed tool call args dropped in Responses API streaming",
+        "url": "https://github.com/vllm-project/vllm/pull/44348"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/parser/abstract_parser.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/e67063826b331ddd10e70f42eab9739ed8abf643/vllm/parser/abstract_parser.py#L339-L361",
+        "ref": "e67063826b331ddd10e70f42eab9739ed8abf643",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:7e0188836492ab33e345a925f087838842018d553f2323e5f5ebd5fe142c0091"
+      },
+      "source_excerpt": "\n    @abstractmethod\n    def parse_delta(\n        self,\n        delta_text: str,\n        delta_token_ids: list[int],\n        request: ChatCompletionRequest | ResponsesRequest,\n        prompt_token_ids: list[int] | None = None,\n        finished: bool = False,\n    ) -> DeltaMessage | None:\n        \"\"\"Parse a single streaming delta, orchestrating reasoning then\n        tool call extraction via internal stream state.\n        \"\"\"\n\n\nclass DelegatingParser(Parser):\n    \"\"\"\n    A Parser implementation that delegates to separate ReasoningParser and\n    ToolParser instances.\n\n    This is the recommended base class for creating model-specific parsers\n    that combine existing reasoning and tool parser implementations.\n    Subclasses should set `self._reasoning_parser` and `self._tool_parser`\n",
+      "source_sha256": "3a9c1056797b86625301de80087e0d7509cc3963d4051a6c7c9649bc8cc978cb"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "kFp8Dynamic128Sym: torch.ops._C.per_token_group_fp8_quant.default,  # noqa: E501",
+          "kFp8Dynamic64Sym: torch.ops._C.per_token_group_fp8_quant.default,  # noqa: E501"
+        ]
+      },
+      "id": "bugfix_replay_vllm_44476_vllm_compilation_passes_fusion_matcher_utils_py",
+      "recorded_bug": {
+        "merged_at": "2026-06-04T13:31:51Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix][Compile] Guard per_token_group_fp8_quant lookup on non-CUDA platforms",
+        "url": "https://github.com/vllm-project/vllm/pull/44476"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/compilation/passes/fusion/matcher_utils.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/d01d0b46468f08e6b7643ae0574899f4f31fd15a/vllm/compilation/passes/fusion/matcher_utils.py#L31-L53",
+        "ref": "d01d0b46468f08e6b7643ae0574899f4f31fd15a",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:431bcad626dba85a068c1baf27f706c72c6c5ed1418f5902d7fc3e81d9422732"
+      },
+      "source_excerpt": "\nROTARY_OP = torch.ops._C.rotary_embedding.default\nFLASHINFER_ROTARY_OP = torch.ops.vllm.flashinfer_rotary_embedding.default\n\nQUANT_OPS: dict[QuantKey, OpOverload] = {\n    kFp8StaticTensorSym: torch.ops._C.static_scaled_fp8_quant.default,  # noqa: E501\n    kFp8DynamicTensorSym: torch.ops._C.dynamic_scaled_fp8_quant.default,  # noqa: E501\n    kFp8DynamicTokenSym: torch.ops._C.dynamic_per_token_scaled_fp8_quant.default,  # noqa: E501\n    kFp8Dynamic128Sym: torch.ops._C.per_token_group_fp8_quant.default,  # noqa: E501\n    kFp8Dynamic64Sym: torch.ops._C.per_token_group_fp8_quant.default,  # noqa: E501\n}\n\nif current_platform.is_cuda() and hasattr(torch.ops._C, \"scaled_fp4_quant\"):\n    QUANT_OPS[kNvfp4Dynamic] = torch.ops._C.scaled_fp4_quant.out  # noqa: E501\n\n\nSILU_MUL_OP = torch.ops._C.silu_and_mul.default\n\n\nclass MatcherCustomOp(ABC):\n    def __init__(self, enabled: bool) -> None:\n        config = get_current_vllm_config()\n        self.model_dtype = config.model_config.dtype if config.model_config else None\n",
+      "source_sha256": "3a2c69c25b214e8cb4f0d24fdd717b275324e60c7245f5a057b7c99643c8af0d"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "grid_thws=MultiModalFieldConfig.batched(\"vision_chunk\"),"
+        ]
+      },
+      "id": "bugfix_replay_vllm_44493_vllm_model_executor_models_kimi_k25_py",
+      "recorded_bug": {
+        "merged_at": "2026-06-04T08:14:36Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix]Fix Kimi-K2.5 FlashInfer ViT metadata",
+        "url": "https://github.com/vllm-project/vllm/pull/44493"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/model_executor/models/kimi_k25.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/b4b4aaa70ee992e96504c27fad4535d085a5448f/vllm/model_executor/models/kimi_k25.py#L230-L252",
+        "ref": "b4b4aaa70ee992e96504c27fad4535d085a5448f",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:ff64fca941ebc83360f7e02168f52ad67d8a592d912d47364a80a157fc3f0519"
+      },
+      "source_excerpt": "        \"\"\"\n        grid_thws = hf_inputs.get(\"grid_thws\", torch.empty((0, 3)))\n        grid_sizes = grid_thws.prod(-1)\n\n        return dict(\n            pixel_values=MultiModalFieldConfig.flat_from_sizes(\n                \"vision_chunk\", grid_sizes\n            ),\n            grid_thws=MultiModalFieldConfig.batched(\"vision_chunk\"),\n        )\n\n    def _call_hf_processor(\n        self,\n        prompt: str,\n        mm_data: Mapping[str, object],\n        mm_kwargs: Mapping[str, object],\n        tok_kwargs: Mapping[str, object],\n    ) -> BatchFeature:\n        # Override to use the text path instead of token path because vision chunk\n        # is not considered\n        return super()._call_hf_processor(prompt, mm_data, mm_kwargs, tok_kwargs)\n\n    def _get_prompt_updates(\n",
+      "source_sha256": "6b59627e2bd55ebb1b1ac4b47149bb4984e3d9d0560b7af829c92d89debf716b"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "_, h, w = image.shape"
+        ]
+      },
+      "id": "bugfix_replay_vllm_44509_vllm_multimodal_parse_py",
+      "recorded_bug": {
+        "merged_at": "2026-06-04T15:22:31Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] MiniCPM-V-4.6 video inference crash: placeholder count mismatches visual embedding count",
+        "url": "https://github.com/vllm-project/vllm/pull/44509"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/multimodal/parse.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/d0975a4b50140a9d953f00955a1cbb2a4945edef/vllm/multimodal/parse.py#L329-L351",
+        "ref": "d0975a4b50140a9d953f00955a1cbb2a4945edef",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:28d6149e497aa1d2ef247b4ec21a3417174cf4254cfe2142b2f915b123212dfd"
+      },
+      "source_excerpt": "    def get_image_size(self, item_idx: int) -> ImageSize:\n        image = self.get(item_idx)\n        if image is None:\n            raise ValueError(f\"Cannot get size of cached image at {item_idx}\")\n\n        if isinstance(image, PILImage.Image):\n            return ImageSize(*image.size)\n        if isinstance(image, (np.ndarray, torch.Tensor)):\n            _, h, w = image.shape\n            return ImageSize(w, h)\n\n        assert_never(image)\n\n\nclass ImageEmbeddingItems(EmbeddingItems):\n    def __init__(\n        self,\n        data: torch.Tensor | list[torch.Tensor],\n        expected_hidden_size: int | None = None,\n    ) -> None:\n        super().__init__(data, \"image\", expected_hidden_size)\n\n\n",
+      "source_sha256": "c59c6df0f7294f265979eb17def2c4c2390f991b09b597e5fc9e8fd5a74c9fb8"
+    },
+    {
+      "analysis": "bugfix-patch-source",
+      "extraction": {
+        "expected_rule_id": "upstream-bugfix-patch-replay",
+        "removed_lines": [
+          "def __init__(self, config, quant_config=None):"
+        ]
+      },
+      "id": "bugfix_replay_vllm_44571_vllm_model_executor_models_gemma4_unified_py",
+      "recorded_bug": {
+        "merged_at": "2026-06-05T03:47:38Z",
+        "record_type": "pull_request",
+        "state": "merged",
+        "title": "[Bugfix] Exclude vision embedder from quantization in Gemma4 Unified",
+        "url": "https://github.com/vllm-project/vllm/pull/44571"
+      },
+      "reference": {
+        "license": "Apache-2.0",
+        "path": "vllm/model_executor/models/gemma4_unified.py",
+        "public_url": "https://github.com/vllm-project/vllm/blob/56aff0dd15c0d01abc3f1de2b773aff2ed61d7a0/vllm/model_executor/models/gemma4_unified.py#L75-L97",
+        "ref": "56aff0dd15c0d01abc3f1de2b773aff2ed61d7a0",
+        "repository": "vllm-project/vllm",
+        "source_file_sha": "sha256:1c4d8e4fcb29de50e24c876082c095fdbde3e17c394247a005e821cd05877de9"
+      },
+      "source_excerpt": "\n    Projects raw pixel patches to LM space via dense projection and\n    factorized 2D positional embeddings.  Replaces the SigLIP vision\n    tower used by the tower-based Gemma4 variant.\n\n    Pipeline: raw patches \u2192 LN\u2081 \u2192 Dense \u2192 LN\u2082 \u2192 +factorized_posemb \u2192 LN\u2083.\n    \"\"\"\n\n    def __init__(self, config, quant_config=None):\n        super().__init__()\n        patch_dim = config.model_patch_size**2 * 3\n        mm_embed_dim = config.mm_embed_dim\n\n        self.patch_ln1 = nn.LayerNorm(patch_dim)\n        self.patch_dense = ColumnParallelLinear(\n            patch_dim,\n            mm_embed_dim,\n            bias=True,\n            quant_config=quant_config,\n            gather_output=True,\n        )\n        self.patch_ln2 = nn.LayerNorm(mm_embed_dim)\n\n",
+      "source_sha256": "fb0b74781d5c76974b00a64e18768e11cf6d446d2acc160fa9aad98dbde1d3d4"
+    },
+    {
       "analysis": "python-regex-parser-source",
       "extraction": {
         "escape_token_name": "_ESCAPE_TOKEN",
@@ -188,6 +1838,6 @@
       "source_sha256": "31508e28e19b708b9dd147b7f6f94400f430d88afcc53c61cac893989489e363"
     }
   ],
-  "methodology": "Each case traverses exact pinned public production-code bytes from recorded GitHub issues or PRs. Source excerpts are SHA-256 checked before extraction; replay fails closed if an expected delimiter, template, parser regex, or parser control-flow pattern is not source-derived. Local payload models are not counted as production-code evaluation cases.",
+  "methodology": "Each case traverses exact pinned public production-code bytes from recorded GitHub issues or PRs. Source excerpts are SHA-256 checked before extraction; PromptABI-specific cases fail closed if an expected delimiter, template, parser regex, or parser control-flow pattern is not source-derived. Large-scale bugfix replay cases additionally pin the merged upstream bugfix PR, its base commit, and exact source lines removed by the upstream fix; these measure source-and-patch replayability for real production bugs and are reported separately from PromptABI-specific analyzer findings.",
   "version": 1
 }

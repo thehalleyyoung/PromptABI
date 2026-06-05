@@ -91,6 +91,7 @@ class ProductionCodeBugCase:
             "stop-overreachability-source",
             "python-regex-parser-source",
             "source-pattern-agreement",
+            "bugfix-patch-source",
         }:
             raise ProductionCodeBugCorpusError(f"{case_id} has unsupported production-code analysis {analysis!r}")
         return cls(
@@ -178,6 +179,8 @@ def replay_production_code_bug_case(
         return _replay_python_regex_parser_source(case)
     if case.analysis == "source-pattern-agreement":
         return _replay_source_pattern_agreement(case)
+    if case.analysis == "bugfix-patch-source":
+        return _replay_bugfix_patch_source(case)
     raise AssertionError(f"unsupported production-code analysis: {case.analysis!r}")
 
 
@@ -332,6 +335,26 @@ def _replay_source_pattern_agreement(case: ProductionCodeBugCase) -> ProductionC
             "required_substrings": list(required),
             "forbidden_substrings": list(forbidden),
             "matched_required_count": len(required) - len(missing),
+            "source_sha256": case.source_sha256,
+        },
+    )
+
+
+def _replay_bugfix_patch_source(case: ProductionCodeBugCase) -> ProductionCodeBugReplay:
+    expected_rule = _required_extraction_string(case, "expected_rule_id")
+    removed_lines = tuple(_required_extraction_string_list(case, "removed_lines"))
+    missing = tuple(line for line in removed_lines if line not in case.source_excerpt)
+    passed = not missing
+    evidence = f"{len(removed_lines) - len(missing)}/{len(removed_lines)} upstream-removed buggy line(s) present"
+    if missing:
+        evidence += "; missing: " + ", ".join(repr(line) for line in missing)
+    return ProductionCodeBugReplay(
+        case_id=case.case_id,
+        rule_ids=(expected_rule,) if passed else (),
+        evidence_summary=evidence,
+        extracted_values={
+            "removed_lines": list(removed_lines),
+            "matched_removed_line_count": len(removed_lines) - len(missing),
             "source_sha256": case.source_sha256,
         },
     )

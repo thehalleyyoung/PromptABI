@@ -18,6 +18,14 @@ from promptabi.production_code_bugs import ProductionCodeBugCorpusError, load_pr
 
 CORPUS_PATH = Path("fixtures/real_world_bugs/corpus.json")
 PRODUCTION_CODE_PATH = Path("fixtures/real_world_bugs/production_code.json")
+PROMPTABI_PRODUCTION_CASE_IDS = {
+    "gemma4_quote_sentinel_truncation",
+    "gemma4_streaming_html_tag_duplication",
+    "llama_cpp_qwen_array_object_tool_leak",
+    "phi_system_turn_forgery",
+    "qwen3_xml_tool_parameter_stop",
+    "vllm_qwen_multi_function_block_boundary",
+}
 
 
 def _load_corpus() -> dict[str, Any]:
@@ -40,15 +48,12 @@ def test_production_code_bug_corpus_traverses_exact_pinned_source() -> None:
     corpus = load_production_code_bug_corpus(PRODUCTION_CODE_PATH)
     replays = {replay.case_id: replay for replay in corpus.replay(real_world_corpus_path=CORPUS_PATH)}
 
-    assert set(replays) == {
-        "gemma4_quote_sentinel_truncation",
-        "gemma4_streaming_html_tag_duplication",
-        "llama_cpp_qwen_array_object_tool_leak",
-        "phi_system_turn_forgery",
-        "qwen3_xml_tool_parameter_stop",
-        "vllm_qwen_multi_function_block_boundary",
-    }
+    assert len(replays) >= 50
+    assert PROMPTABI_PRODUCTION_CASE_IDS <= set(replays)
     assert all(replay.passed for replay in replays.values())
+    bugfix_replays = [replay for replay in replays.values() if replay.case_id.startswith("bugfix_replay_")]
+    assert len(bugfix_replays) >= 50
+    assert {replay.rule_ids for replay in bugfix_replays} == {("upstream-bugfix-patch-replay",)}
     assert replays["gemma4_quote_sentinel_truncation"].rule_ids == ("parser-quote-truncation",)
     assert replays["gemma4_streaming_html_tag_duplication"].rule_ids == ("streaming-buffer-reparse",)
     assert replays["llama_cpp_qwen_array_object_tool_leak"].rule_ids == ("tagged-json-parameter-parser-boundary",)
@@ -66,6 +71,11 @@ def test_production_code_bug_corpus_traverses_exact_pinned_source() -> None:
         raw_case = next(item for item in json.loads(PRODUCTION_CODE_PATH.read_text(encoding="utf-8"))["cases"] if item["id"] == case.case_id)
         assert raw_case["recorded_bug"]["url"].startswith("https://github.com/")
         assert raw_case["recorded_bug"]["record_type"] in {"issue", "pull_request"}
+        if case.case_id.startswith("bugfix_replay_"):
+            assert case.analysis == "bugfix-patch-source"
+            assert raw_case["recorded_bug"]["state"] == "merged"
+            assert raw_case["recorded_bug"]["record_type"] == "pull_request"
+            assert raw_case["extraction"]["removed_lines"]
 
 
 def test_production_code_bug_corpus_rejects_tampered_source_excerpt(tmp_path: Path) -> None:

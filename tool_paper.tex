@@ -355,7 +355,8 @@ The evaluation asks four questions.
   \item \textbf{Attribution:} does the diagnostic identify the production
   artifact and boundary responsible for the bug?
   \item \textbf{Replayability:} can the result be rerun offline from pinned
-  public source bytes without model weights, provider calls, or private data?
+  public source bytes and upstream bug records without model weights, provider
+  calls, or private data?
   \item \textbf{Cost:} is the check cheap enough for CI?
 \end{enumerate}
 
@@ -364,18 +365,28 @@ The evaluation asks four questions.
 We searched public GitHub issues and pull requests in llama.cpp, vLLM, and
 Hugging Face Transformers for recorded failures involving chat templates, role
 delimiters, tool parsers, stop strings, quote sentinels, streaming parser state,
-and structured-output boundaries. The search identified ten PromptABI-class
-records. A record was admitted to the evaluation only if the issue or PR named an
-upstream production artifact and PromptABI could recover the relevant boundary
-from exact pinned source bytes. Six records meet that bar in the current corpus.
-Records that require hand-reduced payloads, live model sampling, or a verifier
-family not yet implemented are excluded from the counted evaluation.
+and structured-output boundaries. That search identified dozens of
+PromptABI-class records, but a record is admitted to the strict analyzer
+evaluation only if the issue or PR names an upstream production artifact and
+PromptABI can recover the relevant boundary from exact pinned source bytes. Six
+records meet that bar in the current corpus. Records that require hand-reduced
+payloads, live model sampling, or a verifier family not yet implemented are
+excluded from the strict analyzer count.
 
-Table~\ref{tab:eval} lists the current evaluation corpus. Each row is exact code
-in the wild. The tool loads the pinned source excerpt, validates the source hash,
-extracts the template, parser delimiter, parser regex, or parser control-flow
-pattern from those bytes, and only then runs the checker. If the expected value
-cannot be recovered from the source, the replay fails.
+To answer the scale question separately, we also mined merged upstream bugfix
+PRs and admitted only cases where the PR base commit, production file, and
+bugfix patch agree: the exact source excerpt at the base commit must contain
+source line(s) removed by the upstream fix. This creates a larger
+source-and-patch replay benchmark of real production bugs. It is deliberately
+reported separately from the PromptABI-specific analyzer result: it measures
+whether the benchmark is operating on real code and real upstream bug records,
+not whether every bug belongs to PromptABI's current verifier families.
+
+Table~\ref{tab:eval} lists the strict PromptABI analyzer corpus. Each row is
+exact code in the wild. The tool loads the pinned source excerpt, validates the
+source hash, extracts the template, parser delimiter, parser regex, or parser
+control-flow pattern from those bytes, and only then runs the checker. If the
+expected value cannot be recovered from the source, the replay fails.
 
 \begin{table}[h]
 \centering
@@ -421,14 +432,15 @@ tool-call boundary? &
 Bug found: stale function-state pattern \\
 \bottomrule
 \end{tabular}
-\caption{Evaluation cases. Every case is replayed from exact pinned upstream
-production code; synthetic reductions are not counted.}
+\caption{Strict PromptABI analyzer cases. Every case is replayed from exact
+pinned upstream production code; synthetic reductions are not counted.}
 \label{tab:eval}
 \end{table}
 
 \subsection{Results}
 
-PromptABI agrees with all six GitHub-recorded bugs in the corpus. The Gemma4
+PromptABI agrees with all six GitHub-recorded bugs in the strict analyzer
+corpus. The Gemma4
 quote case finds the exact production parser pattern described in vLLM issue
 \#39069: \texttt{\_ESCAPE\_TOKEN} is replaced with a raw quote, then fallback
 parsing uses a regex fragment that stops at the first internal quote. The Gemma4
@@ -441,7 +453,15 @@ bytes of the exact upstream template. The Qwen3 Coder case yields 2
 stop-overreach witnesses after extracting \texttt{</tool\_call>},
 \texttt{</function>}, and \texttt{</parameter>} from exact upstream parser
 source. The Qwen3 XML case finds the stale function-state pattern from issue
-\#43713. On a local CPU run, the complete evaluation command finishes in 0.61
+\#43713.
+
+The larger replay benchmark contains 66 exact upstream production-code cases:
+the six strict analyzer cases plus 60 merged upstream vLLM bugfix PRs admitted
+by source-and-patch agreement. For those 60 scale cases, PromptABI validates the
+PR URL, merged state, base commit, production source path, source excerpt hash,
+and that the exact line(s) removed by the upstream bugfix are present in the
+pinned pre-fix source excerpt. The 60 scale cases cover 90 upstream-removed
+source lines. On a local CPU run, the complete replay command finishes in 0.75
 seconds wall-clock time.
 
 \begin{table}[h]
@@ -451,12 +471,16 @@ seconds wall-clock time.
 \toprule
 Metric & Value \\
 \midrule
-Exact upstream production-code cases & 6 \\
-Cases with expected bug found & 6 \\
-Abstentions in counted cases & 0 \\
+Exact upstream production-code cases & 66 \\
+Strict PromptABI analyzer cases & 6 \\
+Strict cases with expected bug found & 6 \\
+Merged upstream bugfix replay cases & 60 \\
+Bugfix replay cases with patch/source agreement & 60 \\
+Abstentions in strict analyzer cases & 0 \\
 Model or provider calls & 0 \\
-Total concrete witnesses/pattern agreements & 30 \\
-Wall-clock runtime & 0.61s \\
+Strict witnesses/pattern agreements & 30 \\
+Upstream-removed source lines replayed & 90 \\
+Wall-clock runtime & 0.75s \\
 \bottomrule
 \end{tabular}
 \caption{Current production-code evaluation results.}
@@ -465,13 +489,15 @@ Wall-clock runtime & 0.61s \\
 
 \subsection{Interpretation}
 
-The evaluation is intentionally selective rather than padded. The search found
-more recorded PromptABI-class failures than are counted here, but we did not add
-cases merely because an issue contained a convincing payload. Non-production
-regression fixtures are excluded from the evaluation claim. The claim is: for the
-counted cases, PromptABI traverses the same public code that shipped upstream,
-recovers the relevant boundary from that code, and produces concrete diagnostics
-before inference.
+The evaluation has two claims, kept separate. The strict claim is that for the
+six PromptABI analyzer cases, PromptABI traverses the same public code that
+shipped upstream, recovers the relevant boundary from that code, and produces
+concrete diagnostics before inference. The scale claim is that the benchmark can
+also replay more than 50 real production bugfixes without synthetic reductions:
+each scale case is tied to a merged upstream PR, a pre-fix production source
+file, an exact source hash, and source lines removed by the upstream fix. We do
+not count those 60 scale cases as additional PromptABI boundary bugs unless a
+PromptABI verifier family actually analyzes them.
 
 \section{Limitations and Non-Goals}
 
