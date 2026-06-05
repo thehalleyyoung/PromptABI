@@ -327,6 +327,12 @@ from .compositional_proof_benchmarks import (
     render_compositional_proof_benchmark_text,
     run_compositional_proof_benchmarks,
 )
+from .upstream_bug_campaign import (
+    UpstreamBugCampaignError,
+    render_campaign_json,
+    render_campaign_text,
+    run_campaign,
+)
 from .provider_downgrade_paths import (
     render_provider_downgrade_paths_json,
     render_provider_downgrade_paths_text,
@@ -865,6 +871,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     _add_local_summary_argument(compositional_bench)
+
+    upstream_campaign = subparsers.add_parser(
+        "upstream-bug-campaign",
+        help="run the auditable campaign that triages candidate upstream interface-safety bugs",
+    )
+    upstream_campaign.add_argument(
+        "--dossier",
+        help="path to the campaign dossier JSON (default: bundled fixture)",
+    )
+    upstream_campaign.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    _add_local_summary_argument(upstream_campaign)
 
     provider_downgrade = subparsers.add_parser(
         "provider-downgrade",
@@ -3822,6 +3844,32 @@ def main(argv: Sequence[str] | None = None) -> int:
         ):
             return 2
         print(output, end="")
+        return exit_code
+
+    if args.command == "upstream-bug-campaign":
+        started_at = time.perf_counter()
+        try:
+            kwargs = {"dossier_path": args.dossier} if args.dossier else {}
+            result = run_campaign(**kwargs)
+        except (OSError, UpstreamBugCampaignError, ValueError) as exc:
+            print(f"promptabi: cannot run upstream bug campaign: {exc}", file=sys.stderr)
+            return 2
+        output = render_campaign_json(result) if args.format == "json" else render_campaign_text(result)
+        exit_code = 0
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="upstream-bug-campaign",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={
+                "format": args.format,
+                "candidates": result.candidates,
+                "reportable": len(result.reportable),
+                **{f"outcome_{k}": v for k, v in result.outcome_counts.items()},
+            },
+        ):
+            return 2
+        print(output)
         return exit_code
 
     if args.command == "provider-downgrade":

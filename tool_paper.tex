@@ -1077,6 +1077,7 @@ silent false proofs.
 
 \newpage
 \section{Evaluation Design}
+\label{sec:eval}
 
 PromptABI's evaluation separates verifier-maintenance tests from real-world
 claims. Unit tests, property tests, and small local fixtures are useful for
@@ -1237,6 +1238,64 @@ each scale case is tied to a merged upstream PR, a pre-fix production source
 file, an exact source hash, and source lines removed by the upstream fix. We do
 not count those 60 scale cases as additional PromptABI boundary bugs unless a
 PromptABI verifier family actually analyzes them.
+
+\section{Confirming New Upstream Bugs}
+\label{sec:campaign}
+
+The benchmarks of Section~\ref{sec:eval} replay \emph{already known} upstream
+incidents. A harder, higher-value question is whether the same analyzers can be
+driven as a disciplined campaign to surface a \emph{new} interface-safety bug in
+live upstream code, triage it honestly, and route it to a responsible report.
+PromptABI ships this campaign as a first-class, auditable engine
+(\texttt{promptabi upstream-bug-campaign}) rather than an ad hoc bug hunt.
+
+\paragraph{Methodology as the artifact.} The campaign fixes its scope before
+searching: it defines the target outcome as a maintainer-confirmed interface bug,
+enumerates the admissible bug classes (role-boundary forgery, delimiter leakage,
+parser boundary confusion, tool-call corruption, malformed structured output,
+unsafe stop behavior, reasoning/tool boundary loss, response-shape violation),
+and excludes model-quality, hallucination, performance, and hardware regressions.
+It then selects active upstream targets (vLLM, llama.cpp, Hugging Face
+Transformers by default), records each project's branch, release, contribution
+guide, and security policy, and pins every scanned file by repository, commit
+SHA, public URL, license, and content hash. A library of \emph{flag rules}
+encodes the structural smells of each bug class (e.g.\ a template that renders
+content adjacent to role headers, a parser that reuses a tool-call index across
+function blocks, or a reasoning parser that decides the reasoning/content
+transition from token-id membership alone).
+
+\paragraph{A flag is only a candidate.} The defining property of the campaign is
+its conservatism: a structural flag, or a substring match, is never a bug. Each
+candidate carries a one-sentence contract-violation claim, the expected and
+actual behavior, a duplicate search, a minimal offline reproduction plan, and a
+disclosure route, and is then driven through deterministic PromptABI analysis of
+the \emph{exact pinned source} before any claim is permitted. The engine
+re-verifies every captured file against its recorded hash on each run and emits
+one of four honest outcomes per candidate: \textbf{confirmed} (the analyzer
+deterministically reproduces a contract violation on the real code),
+\textbf{rejected} (the flag fires but the violation is not triggerable on the
+real path), \textbf{abstained} (the source lies outside a supported decidable
+fragment), or \textbf{duplicate} (the symptom is already tracked upstream). A
+candidate may be declared confirmed only when its dossier expectation matches the
+analyzer's outcome; an overclaimed severity or a fabricated source hash is a hard
+error.
+
+\paragraph{A worked, honest scan.} A pinned scan of vLLM HEAD illustrates the
+discipline. The DeepSeek-R1 streaming reasoning parser decides its
+reasoning/content transition from \texttt{token\_id} membership; the flag fires,
+but because \texttt{<think>}/\texttt{</think>} are atomic added tokens for that
+model the boundary cannot be forged, so the candidate is \emph{rejected} on the
+real source. The Hermes tool template renders content next to role delimiters,
+but uses Jinja macros outside the supported fragment, so the engine
+\emph{abstains} rather than guess. A streaming tool-call index-reuse symptom is
+recognized as a \emph{duplicate} of an existing upstream issue, to which the
+campaign contributes a deterministic regression test instead of filing noise. No
+new bug is claimed from this particular scan---an honest result---while the run
+simultaneously replays public, already-confirmed exemplars (e.g.\ the Phi
+role-delimiter forgery behind llama.cpp PR~\#18462, recovered with dozens of
+witnesses) to demonstrate that the analyzer does reproduce real interface-safety
+bugs. The campaign thus turns ``find a new bug'' into a reproducible,
+peer-reviewable audit trail whose value does not depend on any single lucky find.
 
 \section{Threat Model, Limitations, and Non-Goals}
 

@@ -1,0 +1,314 @@
+{
+ "version": 1,
+ "definitions": {
+  "target_outcome": "A newly discovered LLM interface-safety bug confirmed by upstream contributors, not merely a local PromptABI finding.",
+  "confirmed_criteria": [
+   "maintainer acknowledgement",
+   "accepted regression test",
+   "linked fix PR",
+   "merged fix",
+   "security advisory triage",
+   "explicit project-member comment that the behavior is a bug"
+  ],
+  "bug_class_taxonomy": [
+   "role-boundary-forgery",
+   "delimiter-leakage",
+   "parser-boundary-confusion",
+   "tool-call-corruption",
+   "malformed-structured-output",
+   "unsafe-stop-behavior",
+   "reasoning-tool-boundary-loss",
+   "response-shape-violation"
+  ],
+  "excluded_classes": [
+   "model-quality",
+   "hallucination",
+   "benchmark-score-regression",
+   "performance-only",
+   "hardware-only",
+   "generic-runtime"
+  ],
+  "working_notes_path": "~/.promptabi-campaign/notes.md"
+ },
+ "targets": [
+  {
+   "target_id": "vllm",
+   "repository_url": "https://github.com/vllm-project/vllm",
+   "default_branch": "main",
+   "latest_release": "v0.22.1",
+   "contribution_guide_url": "https://github.com/vllm-project/vllm/blob/main/CONTRIBUTING.md",
+   "security_policy_url": "https://github.com/vllm-project/vllm/blob/main/SECURITY.md",
+   "accepts_public_parser_issues": true,
+   "requires_security_disclosure": false,
+   "selection_rationale": "Active maintainers, frequent tool-call and reasoning-parser changes, existing tests for chat templates and tool parsers.",
+   "activity_signals": [
+    "recent parser PRs",
+    "merged tool-call bugfixes",
+    "tests/entrypoints/openai tool-parser suite"
+   ]
+  },
+  {
+   "target_id": "llama_cpp",
+   "repository_url": "https://github.com/ggml-org/llama.cpp",
+   "default_branch": "master",
+   "latest_release": "b9534",
+   "contribution_guide_url": "https://github.com/ggml-org/llama.cpp/blob/master/CONTRIBUTING.md",
+   "security_policy_url": "https://github.com/ggml-org/llama.cpp/blob/master/SECURITY.md",
+   "accepts_public_parser_issues": true,
+   "requires_security_disclosure": false,
+   "selection_rationale": "Active server with chat-template and tool-call parsing, prior accepted interface-boundary fixes (e.g. PR 18462).",
+   "activity_signals": [
+    "server chat-template parser",
+    "merged role-delimiter fix PR 18462",
+    "tool-call parser boundary issues"
+   ]
+  },
+  {
+   "target_id": "transformers",
+   "repository_url": "https://github.com/huggingface/transformers",
+   "default_branch": "main",
+   "latest_release": "v5.10.2",
+   "contribution_guide_url": "https://github.com/huggingface/transformers/blob/main/CONTRIBUTING.md",
+   "security_policy_url": "https://github.com/huggingface/transformers/blob/main/SECURITY.md",
+   "accepts_public_parser_issues": true,
+   "requires_security_disclosure": false,
+   "selection_rationale": "Canonical source of chat templates and tokenizer configs; tokenizer/template changes frequently affect downstream interface contracts.",
+   "activity_signals": [
+    "chat_template tooling",
+    "tokenizer special-token handling",
+    "apply_chat_template tests"
+   ]
+  }
+ ],
+ "scanned_sources": [
+  {
+   "source_id": "vllm_deepseek_r1_reasoning",
+   "target_id": "vllm",
+   "repository": "vllm-project/vllm",
+   "commit_sha": "fefce49807a52fc94678e336fc5d1f3b7ebe2daf",
+   "package_version": "vllm @ main (pinned commit)",
+   "path": "vllm/reasoning/deepseek_r1_reasoning_parser.py",
+   "public_url": "https://github.com/vllm-project/vllm/blob/fefce49807a52fc94678e336fc5d1f3b7ebe2daf/vllm/reasoning/deepseek_r1_reasoning_parser.py",
+   "license": "Apache-2.0",
+   "captured_file": "sources/deepseek_r1_reasoning_parser.py",
+   "full_file_sha256": "sha256:164fb1b442e89dcde07531690c1aafa510b5f34d018c235388c4913e2e6fd57b",
+   "excerpt": "# SPDX-License-Identifier: Apache-2.0\n# SPDX-FileCopyrightText: Copyright contributors to the vLLM project\n\nfrom collections.abc import Sequence\n\nfrom vllm.entrypoints.openai.engine.protocol import DeltaMessage\nfrom vllm.reasoning.basic_parsers import BaseThinkingReasoningParser\n\n\nclass DeepSeekR1ReasoningParser(BaseThinkingReasoningParser):\n    \"\"\"\n    Reasoning parser for DeepSeek R1 model.\n\n    The DeepSeek R1 model uses <think>...</think> tokens to denote reasoning\n    text. This parser extracts the reasoning content from the model output.\n    \"\"\"\n\n    @property\n    def start_token(self) -> str:\n        \"\"\"The token that starts reasoning content.\"\"\"\n        return \"<think>\"\n\n    @property\n    def end_token(self) -> str:\n        \"\"\"The token that ends reasoning content.\"\"\"\n        return \"</think>\"\n\n    def extract_reasoning_streaming(\n        self,\n        previous_text: str,\n        current_text: str,\n        delta_text: str,\n        previous_token_ids: Sequence[int],\n        current_token_ids: Sequence[int],\n        delta_token_ids: Sequence[int],\n    ) -> DeltaMessage | None:\n        ret = super().extract_reasoning_streaming(\n            previous_text,\n            current_text,\n            delta_text,\n            previous_token_ids,\n            current_token_ids,\n            delta_token_ids,\n        )\n        if (\n            ret is not None\n            and self.start_token_id not in previous_token_ids\n            and self.start_token_id not in delta_token_ids\n        ):\n            if self.end_token_id in delta_token_ids:\n                # end token in delta with more tokens,\n                # extract reasoning content and content\n                end_index = delta_text.find(self.end_token)\n                reasoning = delta_text[:end_index]\n                content = delta_text[end_index + len(self.end_token) :]\n                return DeltaMessage(\n                    reasoning=reasoning,\n                    content=content if content else None,\n                )\n            elif self.end_token_id in previous_token_ids:\n                # end token in previous, thinking content ends\n                return DeltaMessage(content=delta_text)\n            else:\n                # no end token in previous or delta, reasoning content continues\n                return DeltaMessage(reasoning=delta_text)\n\n        return ret\n",
+   "excerpt_sha256": "sha256:164fb1b442e89dcde07531690c1aafa510b5f34d018c235388c4913e2e6fd57b"
+  },
+  {
+   "source_id": "vllm_hermes_tool_template",
+   "target_id": "vllm",
+   "repository": "vllm-project/vllm",
+   "commit_sha": "41e95c5247c9703c3e11f3b563d8bba70ed31aca",
+   "package_version": "vllm @ main (pinned commit)",
+   "path": "examples/tool_chat_template_hermes.jinja",
+   "public_url": "https://github.com/vllm-project/vllm/blob/41e95c5247c9703c3e11f3b563d8bba70ed31aca/examples/tool_chat_template_hermes.jinja",
+   "license": "Apache-2.0",
+   "captured_file": "sources/tool_chat_template_hermes.jinja",
+   "full_file_sha256": "sha256:9d08161b0665b9d3459943bb57c7a680f42e77cdbc97d4f87b9426b03c8bab89",
+   "excerpt": "{%- macro json_to_python_type(json_spec) %}\n    {%- set basic_type_map = {\n    \"string\": \"str\",\n    \"number\": \"float\",\n    \"integer\": \"int\",\n    \"boolean\": \"bool\"\n} %}\n\n    {%- if basic_type_map[json_spec.type] is defined %}\n        {{- basic_type_map[json_spec.type] }}\n    {%- elif json_spec.type == \"array\" %}\n        {{- \"list[\" +  json_to_python_type(json_spec|items) + \"]\" }}\n    {%- elif json_spec.type == \"object\" %}\n        {%- if json_spec.additionalProperties is defined %}\n            {{- \"dict[str, \" + json_to_python_type(json_spec.additionalProperties) + ']' }}\n        {%- else %}\n            {{- \"dict\" }}\n        {%- endif %}\n    {%- elif json_spec.type is iterable %}\n        {{- \"Union[\" }}\n        {%- for t in json_spec.type %}\n            {{- json_to_python_type({\"type\": t}) }}\n            {%- if not loop.last %}\n                {{- \",\" }}\n            {%- endif %}\n        {%- endfor %}\n        {{- \"]\" }}\n    {%- else %}\n        {{- \"Any\" }}\n    {%- endif %}\n{%- endmacro %}\n\n\n{{- bos_token }}\n{{- \"<|im_start|>system\\nYou are a function calling AI model. You are provided with function signatures within <tools></tools> XML tags. You may call one or more functions to assist with the user query. Don't make assumptions about what values to plug into functions. Here are the available tools: <tools> \" }}\n{%- if tools is iterable and tools | length > 0 %}\n    {%- for tool in tools %}\n        {%- if tool.function is defined %}\n            {%- set tool = tool.function %}\n        {%- endif %}\n        {{- '{\"type\": \"function\", \"function\": ' }}\n        {{- '{\"name\": \"' + tool.name + '\", ' }}\n        {{- '\"description\": \"' + tool.name + '(' }}\n        {%- for param_name, param_fields in tool.parameters.properties|items %}\n            {{- param_name + \": \" + json_to_python_type(param_fields) }}\n            {%- if not loop.last %}\n                {{- \", \" }}\n            {%- endif %}\n        {%- endfor %}\n        {{- \")\" }}\n        {%- if tool.return is defined %}\n            {{- \" -> \" + json_to_python_type(tool.return) }}\n        {%- endif %}\n        {{- \" - \" + tool.description + \"\\n\\n\" }}\n        {%- for param_name, param_fields in tool.parameters.properties|items %}\n            {%- if loop.first %}\n                {{- \"    Args:\\n\" }}\n            {%- endif %}\n            {{- \"        \" + param_name + \"(\" + json_to_python_type(param_fields) + \"): \" + param_fields.description|trim }}\n        {%- endfor %}\n        {%- if tool.return is defined and tool.return.description is defined %}\n            {{- \"\\n    Returns:\\n        \" + tool.return.description }}\n        {%- endif %}\n        {{- '\"' }}\n        {{- ', \"parameters\": ' }}\n        {%- if tool.parameters.properties | length == 0 %}\n            {{- \"{}\" }}\n        {%- else %}\n            {{- tool.parameters|tojson }}\n        {%- endif %}\n        {{- \"}\" }}\n        {%- if not loop.last %}\n            {{- \"\\n\" }}\n        {%- endif %}\n    {%- endfor %}\n{%- endif %}\n{{- \" </tools>\" }}\n{{- 'Use the following pydantic model json schema for each tool call you will make: {\"properties\": {\"name\": {\"title\": \"Name\", \"type\": \"string\"}, \"arguments\": {\"title\": \"Arguments\", \"type\": \"object\"}}, \"required\": [\"name\", \"arguments\"], \"title\": \"FunctionCall\", \"type\": \"object\"}}\n' }}\n{{- \"For each function call return a json object with function name and arguments within <tool_call></tool_call> XML tags as follows:\n\" }}\n{{- \"<tool_call>\n\" }}\n{{- '{\"name\": <function-name>, \"arguments\": <args-dict>}\n' }}\n{{- '</tool_call><|im_end|>' }}\n{%- for message in messages %}\n    {%- if message.role == \"user\" or message.role == \"system\" or (message.role == \"assistant\" and message.tool_calls is not defined) %}\n        {{- '<|im_start|>' + message.role + '\\n' + message.content + '<|im_end|>' + '\\n' }}\n    {%- elif message.role == \"assistant\" and message.tool_calls is defined %}\n        {{- '<|im_start|>' + message.role }}\n        {%- for tool_call in message.tool_calls %}\n            {{- '\\n<tool_call>\\n' }}\n            {%- if tool_call.function is defined %}\n                {%- set tool_call = tool_call.function %}\n            {%- endif %}\n            {{- '{' }}\n            {{- '\"name\": \"' }}\n            {{- tool_call.name }}\n            {{- '\"' }}\n            {%- if tool_call.arguments is defined %}\n                {{- ', ' }}\n                {{- '\"arguments\": ' }}\n                {{- tool_call.arguments|tojson }}\n            {%- endif %}\n            {{- '}' }}\n            {{- '\\n</tool_call>' }}\n        {%- endfor %}\n        {{- '<|im_end|>\\n' }}\n    {%- elif message.role == \"tool\" %}\n        {%- if loop.previtem and loop.previtem.role != \"tool\" %}\n            {{- '<|im_start|>tool\\n' }}\n        {%- endif %}\n        {{- '<tool_response>\\n' }}\n        {{- message.content }}\n        {%- if not loop.last %}\n            {{- '\\n</tool_response>\\n' }}\n        {%- else %}\n            {{- '\\n</tool_response>' }}\n        {%- endif %}\n        {%- if not loop.last and loop.nextitem.role != \"tool\" %}\n            {{- '<|im_end|>' }}\n        {%- elif loop.last %}\n            {{- '<|im_end|>' }}\n        {%- endif %}\n    {%- endif %}\n{%- endfor %}\n{%- if add_generation_prompt %}\n    {{- '<|im_start|>assistant\\n' }}\n{%- endif %}\n",
+   "excerpt_sha256": "sha256:9d08161b0665b9d3459943bb57c7a680f42e77cdbc97d4f87b9426b03c8bab89"
+  }
+ ],
+ "inventories": {
+  "prompt_facing_files": [
+   "vllm/reasoning/deepseek_r1_reasoning_parser.py",
+   "vllm/reasoning/basic_parsers.py",
+   "examples/tool_chat_template_hermes.jinja",
+   "vllm/entrypoints/openai/tool_parsers/"
+  ],
+  "response_models": [
+   "DeltaMessage",
+   "DeltaToolCall",
+   "ChatCompletionResponse",
+   "finish_reason",
+   "tool_calls"
+  ],
+  "parser_boundary_constants": [
+   "<think>",
+   "</think>",
+   "<|im_start|>",
+   "<|im_end|>",
+   "<tool_call>",
+   "</tool_call>"
+  ],
+  "request_mutation": [
+   "skip_special_tokens",
+   "adjust_request",
+   "tool_choice",
+   "decode options"
+  ],
+  "reasoning_parsers": [
+   "DeepSeekR1ReasoningParser",
+   "BaseThinkingReasoningParser",
+   "extract_reasoning_streaming"
+  ],
+  "streaming_state_machines": [
+   "previous_text",
+   "current_text",
+   "delta_text",
+   "previous_token_ids",
+   "current_token_ids",
+   "delta_token_ids"
+  ],
+  "schema_grammar_adapters": [
+   "json schema -> grammar",
+   "guided decoding backends",
+   "tool argument grammar"
+  ],
+  "existing_tests": [
+   "tests/reasoning/",
+   "tests/entrypoints/openai/tool_parsers/",
+   "tests/test_chat_templates"
+  ]
+ },
+ "candidates": [
+  {
+   "candidate_id": "vllm_deepseek_reasoning_tokenid",
+   "source_id": "vllm_deepseek_r1_reasoning",
+   "flag_rule_id": "reasoning-token-id-only-transition",
+   "bug_class": "reasoning-tool-boundary-loss",
+   "analysis_kind": "reasoning-token-transition",
+   "contract_violation_claim": "The DeepSeek-R1 streaming reasoning parser decides the reasoning/content transition from token-id membership rather than decoded marker text.",
+   "expected_behavior": "A reasoning parser should detect the end-of-reasoning boundary robustly even if the marker is emitted as ordinary text tokens.",
+   "actual_behavior": "extract_reasoning_streaming branches on start_token_id/end_token_id membership in *_token_ids.",
+   "triggerable": false,
+   "triggerability_reason": "<think> and </think> are atomic added special tokens for DeepSeek-R1, so the marker cannot be fragmented into ordinary text tokens; the id-only check is sound for this model.",
+   "uses_exact_upstream_path": true,
+   "deterministic_parser_failure": false,
+   "already_fixed_on_branch": false,
+   "expected_outcome": "rejected",
+   "duplicate_search": {
+    "queries": [
+     "deepseek reasoning parser token id",
+     "extract_reasoning_streaming <think>"
+    ],
+    "is_duplicate": false,
+    "matches": [],
+    "action": "No upstream duplicate; candidate rejected on triage because the marker is atomic for this model family."
+   },
+   "repro": {
+    "kind": "parser-invocation",
+    "invocation": "python -c 'from vllm.reasoning.deepseek_r1_reasoning_parser import DeepSeekR1ReasoningParser'",
+    "install_command": "pip install -e . (vllm @ fefce49)",
+    "runtime_requirement": "CPU-only; no GPU needed for the parser path",
+    "model_identifier": "deepseek-ai/DeepSeek-R1 tokenizer (special tokens only)",
+    "regression_test": "tests/reasoning/test_deepseek_r1_token_fragmentation.py",
+    "fails_on_pinned_commit": false,
+    "offline": true,
+    "no_large_download": true,
+    "deterministic_two_runs": true,
+    "survives_cache_clear": true,
+    "not_promptabi_local": true
+   },
+   "disclosure": {
+    "sensitivity": "low",
+    "channel": "public_issue",
+    "redaction_ok": true,
+    "factual_impact": "Hypothetical interface concern only; not triggerable for this model family, so no report is filed."
+   }
+  },
+  {
+   "candidate_id": "vllm_hermes_tool_template_abstain",
+   "source_id": "vllm_hermes_tool_template",
+   "flag_rule_id": "template-content-adjacent-role-header",
+   "bug_class": "role-boundary-forgery",
+   "analysis_kind": "role-boundary",
+   "contract_violation_claim": "The Hermes tool chat template renders message content adjacent to role delimiters and might allow role-boundary forgery.",
+   "expected_behavior": "User-controlled content must not be able to forge assistant/system role headers or special tokens.",
+   "actual_behavior": "Template uses macros and item-iteration constructs that exceed the supported analysis fragment.",
+   "triggerable": false,
+   "triggerability_reason": "PromptABI abstains: the template uses Jinja macros/filters outside the supported decidable fragment, so no soundness claim can be made.",
+   "uses_exact_upstream_path": true,
+   "deterministic_parser_failure": false,
+   "already_fixed_on_branch": false,
+   "expected_outcome": "abstained",
+   "duplicate_search": {
+    "queries": [
+     "hermes tool template role forgery",
+     "tool_chat_template_hermes"
+    ],
+    "is_duplicate": false,
+    "matches": [],
+    "action": "No claim filed; routed to the manual-review queue because automated analysis abstains."
+   },
+   "repro": {
+    "kind": "template-render",
+    "invocation": "python -m promptabi analyze-template examples/tool_chat_template_hermes.jinja",
+    "install_command": "pip install -e . (vllm @ 41e95c5)",
+    "runtime_requirement": "CPU-only",
+    "model_identifier": "NousResearch/Hermes tool template",
+    "regression_test": "n/a (abstained)",
+    "fails_on_pinned_commit": false,
+    "offline": true,
+    "no_large_download": true,
+    "deterministic_two_runs": true,
+    "survives_cache_clear": true,
+    "not_promptabi_local": true
+   },
+   "disclosure": {
+    "sensitivity": "informational",
+    "channel": "public_issue",
+    "redaction_ok": true,
+    "factual_impact": "No finding; abstention recorded for auditability."
+   }
+  },
+  {
+   "candidate_id": "vllm_qwen_multi_function_block_dup",
+   "source_id": "vllm_deepseek_r1_reasoning",
+   "flag_rule_id": "parser-reused-tool-call-index",
+   "bug_class": "tool-call-corruption",
+   "analysis_kind": "duplicate-only",
+   "contract_violation_claim": "Multiple XML-like function blocks can reuse a tool-call index and produce invalid streaming tool-call deltas.",
+   "expected_behavior": "Each emitted function block should receive a distinct tool-call index/id in streaming deltas.",
+   "actual_behavior": "Reduced PromptABI witness shows index reuse across consecutive function blocks (matches the existing upstream report).",
+   "triggerable": true,
+   "triggerability_reason": "Already demonstrated upstream; PromptABI reproduces it deterministically as a benchmark case.",
+   "uses_exact_upstream_path": true,
+   "deterministic_parser_failure": true,
+   "already_fixed_on_branch": false,
+   "expected_outcome": "duplicate",
+   "duplicate_search": {
+    "queries": [
+     "multiple function blocks tool call index",
+     "qwen xml tool parser index reuse"
+    ],
+    "is_duplicate": true,
+    "matches": [
+     "https://github.com/vllm-project/vllm/issues/43713"
+    ],
+    "action": "Existing upstream issue 43713 covers this symptom; contribute the deterministic PromptABI-reduced regression test to that issue rather than opening a duplicate."
+   },
+   "repro": {
+    "kind": "parser-invocation",
+    "invocation": "pytest tests/test_real_world_bugs.py -k multi_function_block",
+    "install_command": "pip install -e .",
+    "runtime_requirement": "CPU-only",
+    "model_identifier": "Qwen tool-call XML parser",
+    "regression_test": "tests/test_real_world_bugs.py::vllm_qwen_multi_function_block_boundary",
+    "fails_on_pinned_commit": true,
+    "offline": true,
+    "no_large_download": true,
+    "deterministic_two_runs": true,
+    "survives_cache_clear": true,
+    "not_promptabi_local": true
+   },
+   "disclosure": {
+    "sensitivity": "low",
+    "channel": "public_issue",
+    "redaction_ok": true,
+    "factual_impact": "Interface-contract violation in streaming tool-call deltas; already tracked upstream."
+   },
+   "report": {
+    "title": "[tool-parser] Deterministic regression test for reused tool-call index across function blocks (Qwen XML)",
+    "summary": "Expected: each streamed function block gets a distinct tool-call index. Actual: consecutive XML-like function blocks can reuse an index, producing invalid deltas. This is a deterministic regression test contributed to the existing upstream issue.",
+    "why_it_matters": "Clients reconstruct tool calls by index; reuse corrupts multi-tool calls and breaks OpenAI-compatible streaming consumers.",
+    "actual_output": "Two function blocks emit DeltaToolCall(index=0,...) twice.",
+    "expected_output": "Second block emits DeltaToolCall(index=1,...).",
+    "proposed_fix": "Allocate the tool-call index at function open rather than tool-call close.",
+    "promptabi_attribution": "Reduced by PromptABI's parser-boundary analysis from the public reproduction; included to help maintainers, not as a severity claim.",
+    "severity_claim": "defer-to-maintainers"
+   }
+  }
+ ]
+}

@@ -120,6 +120,10 @@ promptabi verify-training --manifest examples/end-to-end/training-quickstart/fix
 promptabi minimize repro.json --keep-substring "<|im_start|>" --format json
 promptabi bug-report --config examples/role-boundary/unsafe.promptabi.json --index 1 > upstream-issue.md
 
+# Run the auditable campaign that triages candidate upstream interface-safety bugs
+# against pinned real source (vLLM/llama.cpp/HF), with honest confirm/reject/abstain/dup outcomes.
+promptabi upstream-bug-campaign --format text
+
 # Compare an upgrade before merge and audit supported guarantees.
 promptabi diff promptabi.baseline.json promptabi.json
 promptabi version-gate promptabi.baseline.json promptabi.json --allowed-impact patch-safe
