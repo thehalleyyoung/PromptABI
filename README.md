@@ -117,6 +117,7 @@ promptabi diagnostics lsp --config examples/minimal/promptabi.json --format json
 promptabi corpus verify --format text
 promptabi corpus beta-report --format text
 promptabi corpus evaluation --format text
+promptabi corpus smt-benchmark --format text
 promptabi solver replay fixtures/solver_replays/role-region-forgery.solver-replay.json
 promptabi launch-assets --output-dir launch_assets --force
 promptabi fuzz mutations --format text

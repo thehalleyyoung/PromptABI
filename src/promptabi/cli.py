@@ -137,6 +137,12 @@ from .proof_sketches import (
 from .render import SarifRenderOptions, render_github_annotations, render_html, render_json, render_sarif, render_text
 from .seed_corpus import SeedCorpusError, build_seed_corpus_manifest, write_seed_corpus_manifest
 from .session import VerificationSession
+from .smt_benchmarks import (
+    SmtBenchmarkError,
+    build_smt_benchmark_manifest,
+    render_smt_benchmark_text,
+    write_smt_benchmark_manifest,
+)
 from .structured_schema_corpus import (
     StructuredSchemaCorpusError,
     build_structured_schema_corpus_manifest,
@@ -467,6 +473,24 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         help="write manifest JSON to this path instead of stdout",
     )
+    smt_benchmark = corpus_subparsers.add_parser(
+        "smt-benchmark",
+        help="validate and replay minimized SMT benchmark obligations, then emit their manifest",
+    )
+    smt_benchmark.add_argument(
+        "--path",
+        help="SMT benchmark JSON path (default: repository fixtures/smt_benchmarks/benchmark.json)",
+    )
+    smt_benchmark.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="json",
+        help="output format (default: json)",
+    )
+    smt_benchmark.add_argument(
+        "--output",
+        help="write manifest to this path instead of stdout",
+    )
     evaluation = corpus_subparsers.add_parser(
         "evaluation",
         help="run labeled-corpus evaluation metrics over real PromptABI analyzers",
@@ -505,6 +529,10 @@ def build_parser() -> argparse.ArgumentParser:
     corpus_verify.add_argument(
         "--evaluation-corpus",
         help="labeled evaluation corpus JSON path (default: repository fixtures/evaluation/labeled_corpus.json)",
+    )
+    corpus_verify.add_argument(
+        "--smt-benchmark",
+        help="SMT benchmark JSON path (default: repository fixtures/smt_benchmarks/benchmark.json)",
     )
     corpus_verify.add_argument(
         "--min-witness-quality",
@@ -1490,6 +1518,30 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         return 0 if all(result.passed for result in report.results) else 1
 
+    if args.command == "corpus" and args.corpus_command == "smt-benchmark":
+        try:
+            manifest = build_smt_benchmark_manifest(args.path)
+            output = (
+                json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+                if args.format == "json"
+                else render_smt_benchmark_text(manifest)
+            )
+            if args.output:
+                if args.format == "json":
+                    write_smt_benchmark_manifest(args.output, path=args.path)
+                else:
+                    Path(args.output).write_text(output, encoding="utf-8")
+                print(f"wrote SMT benchmark manifest: {args.output} ({manifest['case_count']} cases)")
+            else:
+                print(output, end="")
+        except SmtBenchmarkError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write SMT benchmark manifest: {exc}", file=sys.stderr)
+            return 2
+        return 0 if manifest["all_cases_passed"] else 1
+
     if args.command == "corpus" and args.corpus_command == "verify":
         try:
             thresholds = CorpusVerificationThresholds(
@@ -1508,6 +1560,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 provider_fixture_root=args.provider_fixture_root,
                 real_bug_benchmark_path=args.real_bug_benchmark,
                 evaluation_corpus_path=args.evaluation_corpus,
+                smt_benchmark_path=args.smt_benchmark,
                 thresholds=thresholds,
             )
             output = (
@@ -1526,6 +1579,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             ProviderFixturePackError,
             RealBugBenchmarkError,
             SeedCorpusError,
+            SmtBenchmarkError,
             StructuredSchemaCorpusError,
         ) as exc:
             print(f"promptabi: {exc}", file=sys.stderr)

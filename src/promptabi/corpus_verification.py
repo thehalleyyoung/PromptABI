@@ -15,6 +15,7 @@ from .provider_fixture_packs import ProviderFixturePackError, load_provider_fixt
 from .provider_fixture_replay import analyze_provider_fixture_replay
 from .real_bug_benchmarks import RealBugBenchmarkError, build_real_bug_benchmark_manifest
 from .seed_corpus import SeedCorpusError, build_seed_corpus_manifest
+from .smt_benchmarks import SmtBenchmarkError, build_smt_benchmark_manifest
 from .session import VerificationSession
 from .structured_schema_corpus import (
     StructuredSchemaCorpusError,
@@ -115,6 +116,7 @@ def run_corpus_verification(
     provider_fixture_root: str | Path | None = None,
     real_bug_benchmark_path: str | Path | None = None,
     evaluation_corpus_path: str | Path | None = None,
+    smt_benchmark_path: str | Path | None = None,
     thresholds: CorpusVerificationThresholds | None = None,
 ) -> CorpusVerificationReport:
     """Verify all maintained corpora as a release-blocking gate."""
@@ -129,6 +131,7 @@ def run_corpus_verification(
             _verify_provider_fixture_corpus(provider_fixture_root),
             _verify_real_bug_benchmark(real_bug_benchmark_path),
             _verify_labeled_evaluation(evaluation_corpus_path, resolved_thresholds),
+            _verify_smt_benchmark(smt_benchmark_path),
         ]
         if tracemalloc.is_tracing():
             _current, peak_memory_bytes = tracemalloc.get_traced_memory()
@@ -340,6 +343,29 @@ def _verify_labeled_evaluation(
             "differential_cases": differential_denominator,
             "z3_backed_results": solver_quality["z3_backed_results"],
             "peak_memory_bytes": payload["peak_memory_bytes"],
+        },
+    )
+
+
+def _verify_smt_benchmark(path: str | Path | None) -> CorpusVerificationCheck:
+    manifest = build_smt_benchmark_manifest(path)
+    case_count = _int_metric(manifest, "case_count")
+    failures = []
+    if case_count <= 0:
+        failures.append("SMT benchmark has no cases")
+    if not manifest.get("all_cases_passed"):
+        failures.append("one or more SMT benchmark cases failed")
+    categories = tuple(manifest.get("categories", ()))
+    return CorpusVerificationCheck(
+        name="smt-benchmark",
+        passed=not failures,
+        summary=f"{case_count} minimized SMT obligations across {len(categories)} categories",
+        coverage_count=case_count,
+        expected_count=case_count,
+        failures=tuple(failures),
+        metrics={
+            "manifest_sha256": manifest["manifest_sha256"],
+            "categories": list(categories),
         },
     )
 

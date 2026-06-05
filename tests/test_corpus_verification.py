@@ -25,6 +25,13 @@ def test_corpus_verification_release_gate_runs_full_real_corpora() -> None:
     assert checks["labeled-evaluation"]["metrics"]["f1"] == 1.0
     assert checks["labeled-evaluation"]["metrics"]["differential_cases"] > 0
     assert checks["labeled-evaluation"]["metrics"]["z3_backed_results"] > 0
+    assert checks["smt-benchmark"]["coverage_count"] == 4
+    assert set(checks["smt-benchmark"]["metrics"]["categories"]) == {
+        "satisfiable",
+        "timeout-prone",
+        "unsatisfiable",
+        "unsupported",
+    }
     assert checks["performance-thresholds"]["passed"] is True
 
 
@@ -36,7 +43,7 @@ def test_corpus_verification_renderers_and_cli_shape(tmp_path: Path, capsys) -> 
     assert "PromptABI corpus verification" in text
     assert "seed-corpus" in text
     assert payload["ok"] is True
-    assert payload["check_count"] == 6
+    assert payload["check_count"] == 7
 
     exit_code = main(["corpus", "verify", "--format", "json"])
     captured = capsys.readouterr()
@@ -74,4 +81,3 @@ def test_public_api_verifies_corpora_and_renders() -> None:
     assert isinstance(report, promptabi.CorpusVerificationReport)
     assert report.ok is True
     assert json.loads(rendered)["ok"] is True
-
