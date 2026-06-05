@@ -2160,6 +2160,16 @@ def build_parser() -> argparse.ArgumentParser:
         default="text",
         help="output format (default: text)",
     )
+    red_team = subparsers.add_parser(
+        "red-team",
+        help="run the security + red-team research surfaces (taxonomy, CTF, attestation; steps 361-375)",
+    )
+    red_team.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
     soundness_audit = subparsers.add_parser(
         "soundness-audit",
         help="review each built-in check family's soundness boundary, evidence, and blind spots",
@@ -5245,6 +5255,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             render_devex_ecosystem_json(report)
             if args.format == "json"
             else render_devex_ecosystem_text(report)
+        )
+        print(output, end="" if output.endswith("\n") else "\n")
+        return 0 if report.passed else 1
+
+    if args.command == "red-team":
+        from .red_team_research import (
+            render_red_team_research_json,
+            render_red_team_research_text,
+            run_red_team_research,
+        )
+
+        report = run_red_team_research()
+        output = (
+            render_red_team_research_json(report)
+            if args.format == "json"
+            else render_red_team_research_text(report)
         )
         print(output, end="" if output.endswith("\n") else "\n")
         return 0 if report.passed else 1

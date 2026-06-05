@@ -296,6 +296,12 @@ from .devex_ecosystem import (
     render_devex_ecosystem_text,
     run_devex_ecosystem,
 )
+from .red_team_research import (
+    RedTeamReport,
+    render_red_team_research_json,
+    render_red_team_research_text,
+    run_red_team_research,
+)
 from .soundness_audits import (
     SoundnessAuditReport,
     build_soundness_audit_report,
@@ -658,6 +664,26 @@ def devex_ecosystem(*, output_format: str | None = None) -> DevexEcosystemReport
         return render_devex_ecosystem_json(report)
     if output_format == "text":
         return render_devex_ecosystem_text(report)
+    raise ValueError("output_format must be 'json' or 'text'")
+
+
+def red_team_research(*, output_format: str | None = None) -> RedTeamReport | str:
+    """Run the security and red-team research surfaces (roadmap steps 361-375):
+    an attack taxonomy, a cross-provider differential harness, a responsible-
+    disclosure record, detectors for template injection, tokenizer-boundary
+    smuggling, and unicode-homoglyph control tokens, a proven hardened reference
+    prompt-assembly library, an escalating CTF benchmark, defense-in-depth
+    coverage, supply-chain attestation, refusal-channel confusion, multi-agent
+    tool-call confusion, streaming-desync detection, a security whitepaper, and a
+    coordinated-disclosure policy. Every detection runs a real analyzer."""
+
+    report = run_red_team_research()
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_red_team_research_json(report)
+    if output_format == "text":
+        return render_red_team_research_text(report)
     raise ValueError("output_format must be 'json' or 'text'")
 
 

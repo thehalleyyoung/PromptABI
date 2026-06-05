@@ -150,6 +150,9 @@ promptabi ci --format sarif --output conformance.sarif
 # Project results onto the full developer ecosystem from one real run: LSP
 # diagnostics, four-language SDK readers, plugins, org policy profiles, badge.
 promptabi devex --format text
+# Offensive-security research from real analyzers: attack taxonomy, CTF, proven
+# hardened prompt-assembly library, homoglyph/smuggling detection, attestation.
+promptabi red-team --format text
 promptabi maintain health --format text
 promptabi graph --config examples/rag-chunking/promptabi.json --all-checks --format mermaid
 promptabi contract format examples/static-contract-language/app.pabi --check

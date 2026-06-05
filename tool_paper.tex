@@ -1426,6 +1426,77 @@ adoptable ecosystem component without sacrificing determinism or its CPU-only,
 offline guarantees.
 
 
+\section{Security and Red-Team Research}
+\label{sec:redteam}
+
+PromptABI is, at its core, a defensive security tool, and this section turns its
+analyzers into an offensive research artifact (\texttt{promptabi red-team}, module
+\texttt{promptabi.red\_team\_research}). Every detection below is produced by
+running a \emph{real} analyzer over real fixtures or constructed adversarial
+vectors; the layer is CPU-only, offline, and deterministic.
+
+\paragraph{Attack taxonomy and cross-provider differential.}
+We catalog six prompt-interface attack classes---role-boundary forgery,
+tokenizer-boundary control-token smuggling, unicode-homoglyph control
+impersonation, refusal-channel confusion, multi-agent tool-call confusion, and
+streaming-parser desynchronization---and prove each one detectable by a named
+analyzer. A differential harness replays the role-boundary analyzer over all nine
+seed provider families: every raw-interpolation template is flagged
+(\emph{zero false negatives}) and every hardened (\texttt{tojson}) template is
+cleared, isolating the vulnerability to the field-handling strategy rather than
+the provider (Table~\ref{tab:redteam}).
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+Capability (roadmap step) & Analyzer & Result \\
+\midrule
+Attack taxonomy (361) & six analyzers & all detectable \\
+Differential harness (362) & role-boundary & $9/9$ raw caught, $9/9$ hardened safe \\
+Disclosure record (363) & role-boundary & reproduced advisory \\
+Template injection (364) & role-boundary & $9$ forgeable raw families \\
+Tokenizer smuggling (365) & round-trip & marker survives; escape neutralizes \\
+Homoglyph control (366) & confusable fold & disguised tokens flagged \\
+Hardened library (367) & role-boundary & $9$ families \emph{proven} safe \\
+CTF benchmark (368) & role-boundary & $5/5$ sound, no false negatives \\
+Defense coverage (369) & taxonomy & $1.00$ \\
+Supply-chain attestation (370) & keyed digest & signed + tamper-evident \\
+Refusal confusion (371) & refusal envelope & ambiguous bypass flagged \\
+Multi-agent confusion (372) & handoff analyzer & $4$ violations \\
+Streaming desync (373) & parser product & desync over split chunks \\
+\bottomrule
+\end{tabular}
+\caption{Security and red-team research surfaces. Each result is produced by a
+real PromptABI analyzer over fixtures or constructed adversarial vectors.}
+\label{tab:redteam}
+\end{table}
+
+\paragraph{Detectors, a proven hardened library, and a CTF.}
+Dedicated detectors confirm that a special-token marker survives a naive
+byte-level tokenizer round trip (smuggling) while an escaping defense neutralizes
+it, and that unicode-homoglyph and confusable impersonations of control-token
+fragments (e.g.\ fullwidth and Cyrillic look-alikes of \texttt{<|im\_start|>})
+are caught by NFKC-folding without flagging benign ASCII text. We then ship a
+\emph{hardened reference prompt-assembly library} and \emph{prove} it
+unforgeable: the role-boundary analyzer certifies its emitted template as safe
+across all nine families. An escalating CTF benchmark of five injection
+challenges is solved soundly (every genuinely vulnerable level is flagged), and a
+defense-in-depth measurement reports full taxonomy coverage.
+
+\paragraph{Confusion attacks, supply chain, and disclosure.}
+The real refusal classifier flags refusal-channel confusion (an empty parsed
+payload with no refusal channel), the multi-agent handoff analyzer reports four
+tool-call confusion violations on a real manifest, and the streaming parser
+product detects desynchronization when a tool-call JSON is split across stream
+chunks. Prompt packs are attested with a keyed digest that is verifiable and
+tamper-evident, and the layer emits a security whitepaper with an attack taxonomy
+and a coordinated-disclosure timeline plus a responsible-disclosure policy and
+contact. The result is a research-grade offensive complement to the defensive
+verifier, with every claim backed by an executable, deterministic analyzer run.
+
+
 A PromptABI diagnostic is designed to answer five questions in one artifact:
 what invariant failed, where the source of the invariant lives, which semantic
 mode was used, what witness demonstrates the issue, and what low-blast-radius
