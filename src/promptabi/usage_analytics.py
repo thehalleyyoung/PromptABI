@@ -172,6 +172,7 @@ def privacy_guarantees() -> tuple[str, ...]:
         "Summaries are opt-in and written only to a local JSONL file.",
         "Records contain command names, exit codes, durations, and aggregate counts only.",
         "Prompts, schemas, configs, constraints, witnesses, artifact contents, and file paths are never recorded.",
+        "No network sends are performed by local usage summaries.",
         "The summary path is controlled by --local-summary, PROMPTABI_USAGE_SUMMARY_PATH, or local state defaults.",
     )
 

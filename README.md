@@ -59,6 +59,10 @@ possible, impossible, ambiguous, or unsafe.
 `promptabi explain` turns any single diagnostic fingerprint/index into the
 source snippet, formal property, witness trace, likely production symptom, and
 concrete fix guidance needed to debug it locally.
+The security model is deliberately local and non-telemetric: provider fixtures
+are validated for credential-like values, solver inputs stay on the runner,
+bug reports are sanitized markdown, and usage summaries record only opt-in local
+aggregate command metadata.
 
 ```text
 messages -> chat template -> byte/string prompt -> tokenizer -> token stream

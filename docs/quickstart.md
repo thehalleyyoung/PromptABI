@@ -29,3 +29,7 @@ For a concrete structural security check, run the role-boundary example. The
 unsafe ChatML-style template fails because raw message fields can render as
 role/control delimiters; the paired sanitized config shows the same template
 shape with JSON-encoded dynamic fields.
+
+Before sharing diagnostics outside your team, read the security model. PromptABI
+is local and telemetry-free by default, but rendered reports and witnesses can
+still contain sensitive artifact structure unless you minimize and sanitize them.

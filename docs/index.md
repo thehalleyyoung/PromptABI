@@ -8,6 +8,11 @@ The repository includes the public Python package, CLI entrypoint, GitHub Action
 tests, examples, fixture corpus layout, benchmark layout, and docs structure
 needed for formal PromptABI checks to run in real CI.
 
+Its security model is intentionally local and structural: PromptABI does not
+claim semantic model safety, and it does not need live provider calls to prove
+role-boundary, stop-policy, grammar, tool-call, provider-migration, or
+must-survive prompt-budget interface failures.
+
 ## Quick shape
 
 ```bash

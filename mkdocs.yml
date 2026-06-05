@@ -4,6 +4,7 @@ nav:
   - Home: index.md
   - Quickstart: quickstart.md
   - Architecture: architecture.md
+  - Security model: security-model.md
   - Check families: checks.md
   - Concepts:
       - Artifact model: concepts/artifact-model.md

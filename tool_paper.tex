@@ -62,7 +62,10 @@ an opt-in \texttt{--local-summary} usage analytics path that appends only
 sanitized command names, exit codes, durations, diagnostic counts, and aggregate
 artifact/check counts to local JSONL while \texttt{promptabi usage privacy}
 explicitly states that prompts, schemas, configs, constraints, witnesses,
-artifact contents, paths, and network sends are excluded,
+artifact contents, paths, and network sends are excluded, a checked security
+model that documents structural prompt-interface risks, non-goals,
+secret-handling behavior, artifact privacy, solver-input privacy, provider
+fixture safety, suppressions, and a responsible disclosure workflow,
 policy and suppression files that match diagnostics by stable fingerprints,
 artifacts, or paths; require reviewed justifications, owners, accepted-risk
 statements, and expiration dates; enforce repository severity thresholds; and
@@ -325,6 +328,9 @@ templates, tokenizers, tools, training manifests, configs, and lockfiles while
 failing closed when staged content differs from the working tree,
 records optional telemetry-free local command summaries with no artifact paths,
 prompt text, schema bodies, solver constraints, witnesses, or network transport,
+documents the local trust boundary, structural security claims, non-goals, solver
+privacy, provider-fixture secret rejection, sanitized upstream reporting, and
+responsible disclosure path in a MkDocs-linked security model,
 packages releases as checked PyPI distributions, standalone executables,
 Docker images, signed/attested GitHub assets, changelogged semantic-version tags,
 and GHCR container images,
@@ -377,7 +383,7 @@ The repository layout is designed to scale:
 \hline
 \texttt{benchmarks} and \texttt{promptabi fuzz} & CPU-only benchmark entrypoints plus deterministic mutation fuzzing for tokenizer analysis, symbolic template execution, grammar products, stop checks, SMT contracts, budget modeling, corpus verification, cache reuse, and cross-artifact violation discovery. \\
 \hline
-\texttt{docs} & MkDocs-ready documentation for architecture, concepts, and check families. \\
+\texttt{docs} & MkDocs-ready documentation for architecture, concepts, check families, role-boundary non-forgeability, and the local structural security model. \\
 \hline
 \end{tabular}
 \end{center}
@@ -1494,7 +1500,10 @@ it. The README now leads with a concrete CLI command, a CPU-only explanation,
 and the three high-value check families. The docs tree explains architecture,
 quickstart, check families, the artifact model, and a focused role-boundary page
 that separates structural non-forgeability from semantic prompt-injection
-resistance while linking to the runnable unsafe/sanitized example. The contribution guide
+resistance while linking to the runnable unsafe/sanitized example. It now also
+ships a security model that tells users exactly what is local, what is sensitive,
+what is outside scope, how provider fixtures and solver inputs are handled, and
+how to prepare a responsible upstream disclosure. The contribution guide
 states the central norms: deterministic output, CPU-only tests, minimized
 fixtures, typed public APIs, and explicit soundness boundaries.
 
@@ -1512,7 +1521,8 @@ and gives maintainers stable regression tests.
 The CLI should remain terse by default and expandable on demand. A CI run needs
 deterministic diagnostics and exit codes. A local debugging session needs
 witnesses, rendered excerpts, token tables, exact boundary locations, and fix
-suggestions. \texttt{promptabi explain} bridges those modes, and
+suggestions. \texttt{promptabi explain} bridges those modes, \texttt{promptabi
+bug-report} turns one finding into reviewed sanitized markdown, and
 \texttt{--local-summary} gives maintainers privacy-preserving local adoption
 signals without ever serializing user artifacts or transmitting telemetry.
 
@@ -1602,6 +1612,33 @@ fields. The verifier asks whether that content can be represented as control
 structure, whether output can be truncated in a way that changes parser
 semantics, whether a requested structured-output language is empty or
 ambiguous, and whether required prompt segments survive budget policies.
+
+The implemented security model makes the trust boundary explicit. PromptABI runs
+on a local developer machine or CI runner, treats prompt-interface artifacts and
+rendered witnesses as sensitive, and does not require live providers, model
+weights, GPUs, or remote solvers for the core verification claims. Provider
+fixture packs are required to be deterministic, anonymized or explicitly labeled,
+download-free, and secret-free; the loader rejects credential-like keys and values
+such as API keys, authorization headers, bearer tokens, cloud access keys, and
+passwords before those fixtures become benchmark evidence. Solver-backed checks
+lower bounded strings, enums, lengths, parser states, role regions, and budget
+facts into local Z3 formulas or finite enumeration; those formulas are treated as
+local artifacts, not telemetry. Usage summaries are opt-in local JSONL records
+containing command names, durations, exit codes, and aggregate counts, and the CLI
+privacy command now states that prompts, schemas, configs, constraints,
+witnesses, artifact contents, file paths, and network sends are excluded.
+
+Artifact privacy also shapes the reporting workflows. SARIF, HTML, text, JSON,
+and markdown bug reports are local outputs that may contain source spans or
+structural witnesses and should be handled like build artifacts. The
+\texttt{promptabi bug-report} path generates sanitized, length-limited markdown
+with pinned artifact metadata and an explicit no-network privacy note, but it
+does not file issues or transmit data. The recommended responsible-disclosure
+path is therefore reproduce locally, explain the diagnostic, minimize the
+artifact where possible, review the sanitized report for private names or business
+logic, and coordinate privately first for vulnerabilities that could expose
+credentials, cross-tenant data, unsafe tool execution, or broadly deployed
+prompt-interface bypasses.
 
 The non-goals are equally important. PromptABI does not prove that a model will
 resist prompt injection. It does not prove that a model will choose a safe tool.
@@ -1748,7 +1785,7 @@ Performance benchmarks & \texttt{benchmarks/benchmark\_smoke.py} emits JSON for 
 \hline
 Evaluation runner & \texttt{promptabi corpus evaluation} reports labeled precision/recall/F1, abstention rate, runtime, peak memory, witness quality, solver decisiveness, and differential agreement for fixture-backed configs plus the expanded real-bug benchmark suite; tests assert expansion, metric shape, CLI output, public API access, and validation failures without snapshotting nondeterministic timings. \\
 \hline
-Docs smoke & MkDocs-ready navigation and pages exist for the initial structure. \\
+Docs smoke & MkDocs-ready navigation includes architecture, checks, concepts, and the security model; focused tests assert that the security model references real CLI privacy, bug-report, minimization, and provider-fixture safety behavior. \\
 \hline
 \end{tabular}
 \end{center}
