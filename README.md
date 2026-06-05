@@ -77,6 +77,9 @@ shrunk to minimal strings, token paths, and solver assignments, so CI can
 distinguish proof from best-effort evidence.
 The [formal methods guide](docs/formal-methods.md) explains exactly when these
 claims use automata, Z3, composed products, or principled abstention.
+For disconnected deployments, the [air-gapped installation guide](docs/air-gapped.md)
+shows how to vendor wheels, Z3, corpora, provider fixtures, prompt-pack mirrors,
+and reproducibility checks without live network access.
 
 ## Daily workflows
 

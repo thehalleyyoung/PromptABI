@@ -23,3 +23,7 @@ promptabi verify --config examples/minimal/promptabi.json
 PromptABI treats LLM interface artifacts as composable protocol objects:
 tokenizer metadata, chat templates, tool schemas, stop policies, grammar
 fragments, provider request contracts, and framework truncation policies.
+
+For isolated deployments, the air-gapped installation guide shows how to vendor
+dependencies, Z3, offline corpora, provider fixture mirrors, prompt-pack mirrors,
+and reproducibility checks without weakening the verifier's local guarantees.

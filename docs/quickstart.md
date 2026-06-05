@@ -30,6 +30,10 @@ For stack-specific setup, see the integration guides for LangChain, LlamaIndex,
 vLLM, llama.cpp, Hugging Face Transformers, OpenAI-compatible servers, LiteLLM,
 MCP tools, custom agent frameworks, and training pipelines.
 
+For disconnected CI or regulated environments, see the air-gapped installation
+guide. It covers vendored wheels, pinned Z3 packages, offline corpora, provider
+fixture mirrors, prompt-pack mirrors, and reproducibility gates.
+
 For fine-tuning data, the training quickstart verifies a one-row chat SFT
 dataset end to end from rendered roles through token spans, packing boundaries,
 loss masks, tokenizer/template stage pins, and redacted witness hashes without

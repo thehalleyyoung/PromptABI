@@ -17,6 +17,12 @@ fine-tuning data. The common pattern is:
 promptabi verify --config promptabi.json
 ```
 
+When the target environment has no network access, stage the same artifacts with
+the air-gapped installation guide: vendored wheels, pinned Z3 packages, local
+corpora, provider fixture mirrors, prompt-pack mirrors, and reproducibility
+manifests are all verified by repository commands rather than live provider
+calls.
+
 Use `promptabi init` when starting from a known stack. Every scaffold writes local
 fixture stubs and a config that the repository tests verify through the real
 PromptABI loader and checker scheduler:

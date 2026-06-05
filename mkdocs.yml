@@ -4,6 +4,7 @@ nav:
   - Home: index.md
   - Quickstart: quickstart.md
   - Integration guides: integrations.md
+  - Air-gapped installation: air-gapped.md
   - Public API: public-api.md
   - Contributing:
       - Plugin author guide: contributing/plugin-author-guide.md
