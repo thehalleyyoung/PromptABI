@@ -676,7 +676,10 @@ The public API now provides \texttt{ArtifactKind}, \texttt{ArtifactLocation},
 \texttt{ArtifactProvenance}, \texttt{ArtifactBundle}, and typed artifacts for
 tokenizers, chat templates, special-token maps, stop policies, schemas,
 grammars, tool definitions, prompt segments, provider configs, framework
-truncation configs, and training/fine-tuning manifests. It also provides \texttt{ArtifactRef},
+truncation configs, and training/fine-tuning manifests that explicitly model
+supervised and preference datasets, system-message policies, role-label
+canonicalization, loss-mask construction, packing windows, and pinned
+chat-template versions. It also provides \texttt{ArtifactRef},
 \texttt{SourceSpan}, \texttt{WitnessTrace}, \texttt{Diagnostic},
 \texttt{VerificationConfig}, \texttt{VerificationSession}, and
 \texttt{VerificationResult}. The API surface is now governed by a generated
@@ -689,7 +692,7 @@ contract:
 
 \begin{itemize}
 \item artifacts have stable kinds, names, local paths or URIs, provenance, optional versions, revisions, hashes, licenses, sources, and trusted-source metadata;
-\item kind-specific fields capture stop strings, schema dialects, grammar types, tool names, prompt segment requirements, provider families, truncation strategies, and training message/target roles;
+\item kind-specific fields capture stop strings, schema dialects, grammar types, tool names, prompt segment requirements, provider families, truncation strategies, and training dataset/mask/packing/template contracts;
 \item spans are one-based, validated at construction time, and source-mapped from PromptABI configs plus tokenizer, schema, tool, provider, and fixture JSON artifacts;
 \item witnesses are explicit traces, not prose hidden in the message string;
 \item diagnostics have rule IDs, severities, artifacts, spans, witnesses, suggestions, and explicit verification modes;

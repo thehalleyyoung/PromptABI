@@ -39,6 +39,31 @@ class TruncationStrategy(StrEnum):
     CUSTOM = "custom"
 
 
+class TrainingDatasetKind(StrEnum):
+    """Training data families represented by training manifests."""
+
+    SUPERVISED = "supervised"
+    PREFERENCE = "preference"
+
+
+class LossMaskStrategy(StrEnum):
+    """How a training pipeline constructs labels/loss masks."""
+
+    ASSISTANT_ONLY = "assistant-only"
+    COMPLETION_ONLY = "completion-only"
+    ALL_TOKENS = "all-tokens"
+    EXPLICIT = "explicit"
+
+
+class PackingStrategy(StrEnum):
+    """How training examples are packed into finite windows."""
+
+    NONE = "none"
+    SAMPLE_PACKING = "sample-packing"
+    CONCATENATE = "concatenate"
+    PACKED_SEQUENCE = "packed-sequence"
+
+
 @dataclass(frozen=True, slots=True)
 class ArtifactLocation:
     """Where an artifact came from.
@@ -223,6 +248,210 @@ class PromptSegment:
             data["metadata_tokens"] = self.metadata_tokens
         if self.template_overhead_tokens:
             data["template_overhead_tokens"] = self.template_overhead_tokens
+        return data
+
+
+@dataclass(frozen=True, slots=True)
+class TrainingDatasetSpec:
+    """One supervised or preference dataset declared by a training manifest."""
+
+    name: str
+    kind: TrainingDatasetKind = TrainingDatasetKind.SUPERVISED
+    path: str | None = None
+    split: str | None = None
+    format: str = "chat-jsonl"
+    example_count: int | None = None
+    content_fields: tuple[str, ...] = ()
+    preference_fields: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if isinstance(self.kind, str):
+            object.__setattr__(self, "kind", TrainingDatasetKind(self.kind))
+        _require_non_empty("training dataset name", self.name)
+        _optional_non_empty("training dataset path", self.path)
+        _optional_non_empty("training dataset split", self.split)
+        _require_non_empty("training dataset format", self.format)
+        _optional_non_negative("training dataset example_count", self.example_count)
+        object.__setattr__(self, "content_fields", _unique_strings(self.content_fields, field_name="training dataset content_fields"))
+        object.__setattr__(
+            self,
+            "preference_fields",
+            _unique_strings(self.preference_fields, field_name="training dataset preference_fields"),
+        )
+        if self.kind is TrainingDatasetKind.PREFERENCE and not self.preference_fields:
+            raise ValueError("preference training datasets must declare preference_fields")
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {
+            "name": self.name,
+            "kind": self.kind.value,
+            "format": self.format,
+        }
+        if self.path is not None:
+            data["path"] = self.path
+        if self.split is not None:
+            data["split"] = self.split
+        if self.example_count is not None:
+            data["example_count"] = self.example_count
+        if self.content_fields:
+            data["content_fields"] = list(self.content_fields)
+        if self.preference_fields:
+            data["preference_fields"] = list(self.preference_fields)
+        return data
+
+
+@dataclass(frozen=True, slots=True)
+class SystemMessagePolicy:
+    """Policy for system/developer messages in training examples."""
+
+    required: bool = False
+    allow_override: bool = False
+    default: str | None = None
+    allowed_hashes: tuple[str, ...] = ()
+    max_tokens: int | None = None
+
+    def __post_init__(self) -> None:
+        _optional_non_empty("system message default", self.default)
+        _optional_non_negative("system message max_tokens", self.max_tokens)
+        object.__setattr__(self, "allowed_hashes", _unique_strings(self.allowed_hashes, field_name="system message allowed_hashes"))
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {
+            "required": self.required,
+            "allow_override": self.allow_override,
+        }
+        if self.default is not None:
+            data["default"] = self.default
+        if self.allowed_hashes:
+            data["allowed_hashes"] = list(self.allowed_hashes)
+        if self.max_tokens is not None:
+            data["max_tokens"] = self.max_tokens
+        return data
+
+
+@dataclass(frozen=True, slots=True)
+class RoleLabel:
+    """Mapping from dataset role labels to canonical chat-template roles."""
+
+    source_role: str
+    canonical_role: str
+    supervised_target: bool = False
+    trainable: bool = True
+    required: bool = False
+
+    def __post_init__(self) -> None:
+        _require_non_empty("role label source_role", self.source_role)
+        _require_non_empty("role label canonical_role", self.canonical_role)
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {
+            "source_role": self.source_role,
+            "canonical_role": self.canonical_role,
+            "supervised_target": self.supervised_target,
+            "trainable": self.trainable,
+        }
+        if self.required:
+            data["required"] = self.required
+        return data
+
+
+@dataclass(frozen=True, slots=True)
+class LossMaskPolicy:
+    """Finite loss-mask contract for supervised target construction."""
+
+    strategy: LossMaskStrategy = LossMaskStrategy.ASSISTANT_ONLY
+    target_roles: tuple[str, ...] = ()
+    ignored_roles: tuple[str, ...] = ()
+    explicit_mask_field: str | None = None
+    label_pad_token_id: int = -100
+
+    def __post_init__(self) -> None:
+        if isinstance(self.strategy, str):
+            object.__setattr__(self, "strategy", LossMaskStrategy(self.strategy))
+        _optional_non_empty("loss mask explicit_mask_field", self.explicit_mask_field)
+        object.__setattr__(self, "target_roles", _unique_strings(self.target_roles, field_name="loss mask target_roles"))
+        object.__setattr__(self, "ignored_roles", _unique_strings(self.ignored_roles, field_name="loss mask ignored_roles"))
+        if self.strategy is LossMaskStrategy.EXPLICIT and self.explicit_mask_field is None:
+            raise ValueError("explicit loss-mask policies must declare explicit_mask_field")
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {
+            "strategy": self.strategy.value,
+            "label_pad_token_id": self.label_pad_token_id,
+        }
+        if self.target_roles:
+            data["target_roles"] = list(self.target_roles)
+        if self.ignored_roles:
+            data["ignored_roles"] = list(self.ignored_roles)
+        if self.explicit_mask_field is not None:
+            data["explicit_mask_field"] = self.explicit_mask_field
+        return data
+
+
+@dataclass(frozen=True, slots=True)
+class PackingWindow:
+    """Finite sequence-packing window for training examples."""
+
+    strategy: PackingStrategy = PackingStrategy.NONE
+    max_tokens: int | None = None
+    stride_tokens: int = 0
+    boundary_token: str | None = None
+    preserve_example_boundaries: bool = True
+    reset_position_ids: bool = True
+
+    def __post_init__(self) -> None:
+        if isinstance(self.strategy, str):
+            object.__setattr__(self, "strategy", PackingStrategy(self.strategy))
+        if self.max_tokens is not None and self.max_tokens <= 0:
+            raise ValueError("packing max_tokens must be positive")
+        _optional_non_negative("packing stride_tokens", self.stride_tokens)
+        _optional_non_empty("packing boundary_token", self.boundary_token)
+        if self.strategy is not PackingStrategy.NONE and self.max_tokens is None:
+            raise ValueError("non-empty packing strategies must declare max_tokens")
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {
+            "strategy": self.strategy.value,
+            "preserve_example_boundaries": self.preserve_example_boundaries,
+            "reset_position_ids": self.reset_position_ids,
+        }
+        if self.max_tokens is not None:
+            data["max_tokens"] = self.max_tokens
+        if self.stride_tokens:
+            data["stride_tokens"] = self.stride_tokens
+        if self.boundary_token is not None:
+            data["boundary_token"] = self.boundary_token
+        return data
+
+
+@dataclass(frozen=True, slots=True)
+class ChatTemplateVersion:
+    """Pinned chat-template contract used when materializing training data."""
+
+    name: str
+    version: str | None = None
+    revision: str | None = None
+    sha256: str | None = None
+    tokenizer_name: str | None = None
+    add_generation_prompt: bool | None = None
+
+    def __post_init__(self) -> None:
+        _require_non_empty("chat-template version name", self.name)
+        for field_name in ("version", "revision", "sha256", "tokenizer_name"):
+            _optional_non_empty(f"chat-template {field_name}", getattr(self, field_name))
+
+    @property
+    def pinned(self) -> bool:
+        return self.version is not None or self.revision is not None or self.sha256 is not None
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {"name": self.name}
+        for key in ("version", "revision", "sha256", "tokenizer_name"):
+            value = getattr(self, key)
+            if value is not None:
+                data[key] = value
+        if self.add_generation_prompt is not None:
+            data["add_generation_prompt"] = self.add_generation_prompt
         return data
 
 
@@ -528,6 +757,12 @@ class TrainingManifestArtifact(BaseArtifact):
     target_roles: tuple[str, ...] = ()
     example_count: int | None = None
     packed: bool = False
+    datasets: tuple[TrainingDatasetSpec, ...] = ()
+    system_message_policy: SystemMessagePolicy | None = None
+    role_labels: tuple[RoleLabel, ...] = ()
+    loss_mask_policy: LossMaskPolicy | None = None
+    packing_window: PackingWindow | None = None
+    chat_template_version: ChatTemplateVersion | None = None
 
     def __post_init__(self) -> None:
         BaseArtifact.__post_init__(self)
@@ -536,8 +771,21 @@ class TrainingManifestArtifact(BaseArtifact):
             raise ValueError("training manifest dataset_format must be non-empty")
         if self.example_count is not None and self.example_count < 0:
             raise ValueError("training manifest example_count must be non-negative")
-        object.__setattr__(self, "message_roles", tuple(sorted(dict.fromkeys(self.message_roles))))
-        object.__setattr__(self, "target_roles", tuple(sorted(dict.fromkeys(self.target_roles))))
+        object.__setattr__(self, "message_roles", _unique_strings(self.message_roles, field_name="training manifest message_roles"))
+        object.__setattr__(self, "target_roles", _unique_strings(self.target_roles, field_name="training manifest target_roles"))
+        object.__setattr__(self, "datasets", tuple(self.datasets))
+        object.__setattr__(self, "role_labels", tuple(sorted(self.role_labels, key=lambda label: (label.source_role, label.canonical_role))))
+        if not self.target_roles and self.loss_mask_policy is not None and self.loss_mask_policy.target_roles:
+            object.__setattr__(self, "target_roles", self.loss_mask_policy.target_roles)
+        if not self.message_roles and self.role_labels:
+            object.__setattr__(
+                self,
+                "message_roles",
+                _unique_strings(
+                    (label.canonical_role for label in self.role_labels),
+                    field_name="training manifest message_roles",
+                ),
+            )
 
     def to_dict(self) -> dict[str, object]:
         data = BaseArtifact.to_dict(self)
@@ -550,6 +798,18 @@ class TrainingManifestArtifact(BaseArtifact):
             data["example_count"] = self.example_count
         if self.packed:
             data["packed"] = self.packed
+        if self.datasets:
+            data["datasets"] = [dataset.to_dict() for dataset in self.datasets]
+        if self.system_message_policy is not None:
+            data["system_message_policy"] = self.system_message_policy.to_dict()
+        if self.role_labels:
+            data["role_labels"] = [label.to_dict() for label in self.role_labels]
+        if self.loss_mask_policy is not None:
+            data["loss_mask_policy"] = self.loss_mask_policy.to_dict()
+        if self.packing_window is not None:
+            data["packing_window"] = self.packing_window.to_dict()
+        if self.chat_template_version is not None:
+            data["chat_template_version"] = self.chat_template_version.to_dict()
         return data
 
 
@@ -717,6 +977,12 @@ def artifact_from_config(
             target_roles=_tuple_of_str(spec, "target_roles"),
             example_count=_optional_int(spec, "example_count"),
             packed=_bool(spec, "packed", default=False),
+            datasets=_training_datasets(spec),
+            system_message_policy=_system_message_policy(spec),
+            role_labels=_role_labels(spec),
+            loss_mask_policy=_loss_mask_policy(spec),
+            packing_window=_packing_window(spec),
+            chat_template_version=_chat_template_version(spec),
         )
     raise AssertionError(f"unhandled artifact kind: {kind}")
 
@@ -751,6 +1017,30 @@ def local_artifact_paths(bundle: ArtifactBundle) -> dict[str, str]:
 def _require_kind(actual: ArtifactKind, expected: ArtifactKind) -> None:
     if actual != expected:
         raise ValueError(f"expected artifact kind {expected.value}, got {actual.value}")
+
+
+def _require_non_empty(field_name: str, value: str) -> None:
+    if not value:
+        raise ValueError(f"{field_name} must be non-empty")
+
+
+def _optional_non_empty(field_name: str, value: str | None) -> None:
+    if value is not None and not value:
+        raise ValueError(f"{field_name} must be non-empty")
+
+
+def _optional_non_negative(field_name: str, value: int | None) -> None:
+    if value is not None and value < 0:
+        raise ValueError(f"{field_name} must be non-negative")
+
+
+def _unique_strings(values, *, field_name: str) -> tuple[str, ...]:
+    result: list[str] = []
+    for value in values:
+        if not isinstance(value, str) or not value:
+            raise ValueError(f"{field_name} values must be non-empty strings")
+        result.append(value)
+    return tuple(sorted(dict.fromkeys(result)))
 
 
 def _location_from_spec(name: str, spec: dict[str, Any], base_dir: Path) -> ArtifactLocation:
@@ -918,6 +1208,113 @@ def _prompt_segments(spec: dict[str, Any]) -> tuple[PromptSegment, ...]:
             )
         )
     return tuple(segments)
+
+
+def _training_datasets(spec: dict[str, Any]) -> tuple[TrainingDatasetSpec, ...]:
+    raw_datasets = spec.get("datasets", [])
+    if not isinstance(raw_datasets, list):
+        raise ValueError("artifact field 'datasets' must be a list")
+    datasets: list[TrainingDatasetSpec] = []
+    for item in raw_datasets:
+        if not isinstance(item, dict):
+            raise ValueError("training dataset entries must be objects")
+        datasets.append(
+            TrainingDatasetSpec(
+                name=_str(item, "name"),
+                kind=TrainingDatasetKind(_str(item, "kind", default=TrainingDatasetKind.SUPERVISED.value)),
+                path=_optional_str(item, "path"),
+                split=_optional_str(item, "split"),
+                format=_str(item, "format", default=_str(spec, "dataset_format", default="chat-jsonl")),
+                example_count=_optional_int(item, "example_count"),
+                content_fields=_tuple_of_str(item, "content_fields"),
+                preference_fields=_tuple_of_str(item, "preference_fields"),
+            )
+        )
+    return tuple(datasets)
+
+
+def _system_message_policy(spec: dict[str, Any]) -> SystemMessagePolicy | None:
+    raw_policy = spec.get("system_message_policy", spec.get("system_policy"))
+    if raw_policy is None:
+        return None
+    if not isinstance(raw_policy, dict):
+        raise ValueError("artifact field 'system_message_policy' must be an object")
+    return SystemMessagePolicy(
+        required=_bool(raw_policy, "required", default=False),
+        allow_override=_bool(raw_policy, "allow_override", default=False),
+        default=_optional_text(raw_policy, "default"),
+        allowed_hashes=_tuple_of_str(raw_policy, "allowed_hashes"),
+        max_tokens=_optional_int(raw_policy, "max_tokens"),
+    )
+
+
+def _role_labels(spec: dict[str, Any]) -> tuple[RoleLabel, ...]:
+    raw_labels = spec.get("role_labels", [])
+    if not isinstance(raw_labels, list):
+        raise ValueError("artifact field 'role_labels' must be a list")
+    labels: list[RoleLabel] = []
+    for item in raw_labels:
+        if not isinstance(item, dict):
+            raise ValueError("role label entries must be objects")
+        labels.append(
+            RoleLabel(
+                source_role=_str(item, "source_role"),
+                canonical_role=_str(item, "canonical_role"),
+                supervised_target=_bool(item, "supervised_target", default=False),
+                trainable=_bool(item, "trainable", default=True),
+                required=_bool(item, "required", default=False),
+            )
+        )
+    return tuple(labels)
+
+
+def _loss_mask_policy(spec: dict[str, Any]) -> LossMaskPolicy | None:
+    raw_policy = spec.get("loss_mask_policy", spec.get("loss_mask"))
+    if raw_policy is None:
+        if "target_roles" not in spec:
+            return None
+        return LossMaskPolicy(target_roles=_tuple_of_str(spec, "target_roles"))
+    if not isinstance(raw_policy, dict):
+        raise ValueError("artifact field 'loss_mask_policy' must be an object")
+    return LossMaskPolicy(
+        strategy=LossMaskStrategy(_str(raw_policy, "strategy", default=LossMaskStrategy.ASSISTANT_ONLY.value)),
+        target_roles=_tuple_of_str(raw_policy, "target_roles"),
+        ignored_roles=_tuple_of_str(raw_policy, "ignored_roles"),
+        explicit_mask_field=_optional_str(raw_policy, "explicit_mask_field"),
+        label_pad_token_id=_int(raw_policy, "label_pad_token_id", default=-100),
+    )
+
+
+def _packing_window(spec: dict[str, Any]) -> PackingWindow | None:
+    raw_window = spec.get("packing_window", spec.get("packing"))
+    if raw_window is None:
+        return None
+    if not isinstance(raw_window, dict):
+        raise ValueError("artifact field 'packing_window' must be an object")
+    return PackingWindow(
+        strategy=PackingStrategy(_str(raw_window, "strategy", default=PackingStrategy.NONE.value)),
+        max_tokens=_optional_int(raw_window, "max_tokens"),
+        stride_tokens=_int(raw_window, "stride_tokens", default=0),
+        boundary_token=_optional_str(raw_window, "boundary_token"),
+        preserve_example_boundaries=_bool(raw_window, "preserve_example_boundaries", default=True),
+        reset_position_ids=_bool(raw_window, "reset_position_ids", default=True),
+    )
+
+
+def _chat_template_version(spec: dict[str, Any]) -> ChatTemplateVersion | None:
+    raw_version = spec.get("chat_template_version", spec.get("chat_template"))
+    if raw_version is None:
+        return None
+    if not isinstance(raw_version, dict):
+        raise ValueError("artifact field 'chat_template_version' must be an object")
+    return ChatTemplateVersion(
+        name=_str(raw_version, "name"),
+        version=_optional_str(raw_version, "version"),
+        revision=_optional_str(raw_version, "revision"),
+        sha256=_optional_str(raw_version, "sha256"),
+        tokenizer_name=_optional_str(raw_version, "tokenizer_name"),
+        add_generation_prompt=_optional_bool(raw_version, "add_generation_prompt"),
+    )
 
 
 def _optional_text(spec: dict[str, Any], key: str) -> str | None:

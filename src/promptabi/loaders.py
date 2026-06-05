@@ -21,6 +21,8 @@ from .artifacts import (
     SchemaArtifact,
     StopPolicyArtifact,
     ToolDefinitionArtifact,
+    TrainingManifestArtifact,
+    artifact_from_config,
 )
 from .chat_templates import ChatTemplateParseError, parse_hf_tokenizer_config_chat_template, symbolically_execute_chat_template
 from .diagnostics import SourceSpan
@@ -198,6 +200,8 @@ class ArtifactLoader:
             return self._load_tool_definition(artifact, path)
         if artifact.kind is ArtifactKind.PROMPT_SEGMENT:
             return self._load_prompt_segments(artifact, path)
+        if artifact.kind is ArtifactKind.TRAINING_MANIFEST:
+            return self._load_training_manifest(artifact, path)
         if artifact.kind is ArtifactKind.PROVIDER_CONFIG:
             return self._load_provider_snapshot(artifact, path)
         return self._load_file(artifact, path, source_type="local-file")
@@ -642,6 +646,64 @@ class ArtifactLoader:
             warnings=loaded.warnings,
         )
 
+    def _load_training_manifest(self, artifact: Artifact, path: Path) -> LoadedArtifact:
+        if path.suffix.lower() != ".json":
+            return self._load_file(artifact, path, source_type="training-manifest-file")
+        try:
+            text = path.read_text(encoding="utf-8")
+            raw = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"training-manifest artifact '{artifact.name}' is not valid JSON",
+                suggestion="Store training manifests as deterministic JSON objects.",
+                steps=(("parse training manifest JSON", str(path), exc.msg),),
+                span=SourceSpan(path=str(path), start_line=exc.lineno, start_column=exc.colno),
+            ) from exc
+        if not isinstance(raw, dict):
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"training-manifest artifact '{artifact.name}' must be a JSON object",
+                suggestion="Use an object with datasets, role_labels, loss_mask_policy, packing_window, and chat_template_version.",
+                steps=(("parse training manifest root", str(path), type(raw).__name__),),
+            )
+        try:
+            source_map = build_json_source_map(text, path)
+            parsed = artifact_from_config(
+                artifact.name,
+                {**raw, "kind": ArtifactKind.TRAINING_MANIFEST.value, "path": str(path)},
+                base_dir=Path("."),
+            )
+        except ValueError as exc:
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"training-manifest artifact '{artifact.name}' could not be parsed",
+                suggestion="Declare supervised/preference datasets, role labels, loss masks, packing windows, and chat-template versions with supported PromptABI fields.",
+                steps=(("parse training manifest fields", str(path), str(exc)),),
+            ) from exc
+        loaded = self._load_file(artifact, path, source_type="training-manifest")
+        parsed_artifact = artifact
+        if isinstance(artifact, TrainingManifestArtifact) and isinstance(parsed, TrainingManifestArtifact):
+            parsed_artifact = replace(
+                parsed,
+                location=artifact.location,
+                provenance=artifact.provenance,
+                metadata=artifact.metadata,
+                source_span=artifact.source_span,
+            )
+        metadata = _training_manifest_metadata(parsed_artifact)
+        return LoadedArtifact(
+            artifact=parsed_artifact,
+            source_type="training-manifest",
+            pinned=loaded.pinned,
+            resolved=loaded.resolved,
+            actual_sha256=loaded.actual_sha256,
+            size_bytes=loaded.size_bytes,
+            metadata=metadata,
+            source_spans=source_map.prefixed(()) or loaded.source_spans,
+            warnings=loaded.warnings,
+        )
+
     def _load_grammar(self, artifact: Artifact, path: Path) -> LoadedArtifact:
         declared_type = artifact.grammar_type if isinstance(artifact, GrammarArtifact) else "promptabi"
         if declared_type.strip().lower().replace("_", "-") == "grammar-differential":
@@ -1009,6 +1071,64 @@ def _optional_segment_str(raw: dict[str, object], key: str) -> str | None:
     if not isinstance(value, str) or not value:
         raise ValueError(f"segment {key} must be a non-empty string")
     return value
+
+
+def _training_manifest_metadata(artifact: Artifact) -> tuple[tuple[str, object], ...]:
+    if not isinstance(artifact, TrainingManifestArtifact):
+        return ()
+    dataset_kinds = tuple(sorted({dataset.kind.value for dataset in artifact.datasets}))
+    supervised_count = sum(1 for dataset in artifact.datasets if dataset.kind.value == "supervised")
+    preference_count = sum(1 for dataset in artifact.datasets if dataset.kind.value == "preference")
+    total_examples = artifact.example_count
+    if total_examples is None and artifact.datasets:
+        counts = [dataset.example_count for dataset in artifact.datasets]
+        if all(count is not None for count in counts):
+            total_examples = sum(count for count in counts if count is not None)
+    metadata: list[tuple[str, object]] = [
+        ("dataset_format", artifact.dataset_format),
+        ("dataset_count", len(artifact.datasets)),
+        ("supervised_dataset_count", supervised_count),
+        ("preference_dataset_count", preference_count),
+        ("role_label_count", len(artifact.role_labels)),
+        ("message_roles", artifact.message_roles),
+        ("target_roles", artifact.target_roles),
+        ("packed", artifact.packed),
+    ]
+    if dataset_kinds:
+        metadata.append(("dataset_kinds", dataset_kinds))
+    if total_examples is not None:
+        metadata.append(("example_count", total_examples))
+    if artifact.system_message_policy is not None:
+        metadata.extend(
+            (
+                ("system_message_required", artifact.system_message_policy.required),
+                ("system_message_allow_override", artifact.system_message_policy.allow_override),
+            )
+        )
+    if artifact.loss_mask_policy is not None:
+        metadata.extend(
+            (
+                ("loss_mask_strategy", artifact.loss_mask_policy.strategy.value),
+                ("loss_mask_target_roles", artifact.loss_mask_policy.target_roles),
+                ("loss_mask_ignored_roles", artifact.loss_mask_policy.ignored_roles),
+            )
+        )
+    if artifact.packing_window is not None:
+        metadata.append(("packing_strategy", artifact.packing_window.strategy.value))
+        if artifact.packing_window.max_tokens is not None:
+            metadata.append(("packing_max_tokens", artifact.packing_window.max_tokens))
+    if artifact.chat_template_version is not None:
+        metadata.extend(
+            (
+                ("chat_template_name", artifact.chat_template_version.name),
+                ("chat_template_pinned", artifact.chat_template_version.pinned),
+            )
+        )
+        if artifact.chat_template_version.version is not None:
+            metadata.append(("chat_template_version", artifact.chat_template_version.version))
+        if artifact.chat_template_version.revision is not None:
+            metadata.append(("chat_template_revision", artifact.chat_template_version.revision))
+    return tuple(metadata)
 
 
 def _bool(raw: dict[str, object], key: str, *, default: bool) -> bool:
