@@ -1,0 +1,22 @@
+{
+  "name": "training-rlhf-dpo-fixtures",
+  "checks": ["static-contracts"],
+  "artifacts": {
+    "clean-dpo": {
+      "kind": "training-manifest",
+      "path": "clean-dpo.json"
+    },
+    "prompt-hash-mismatch": {
+      "kind": "training-manifest",
+      "path": "prompt-hash-mismatch.json"
+    },
+    "mask-truncation-defect": {
+      "kind": "training-manifest",
+      "path": "mask-truncation-defect.json"
+    },
+    "role-boundary-packing-defect": {
+      "kind": "training-manifest",
+      "path": "role-boundary-packing-defect.json"
+    }
+  }
+}

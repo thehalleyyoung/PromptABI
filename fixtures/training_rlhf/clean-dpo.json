@@ -1,0 +1,51 @@
+{
+  "dataset_format": "preference-jsonl",
+  "datasets": [
+    {
+      "name": "dpo-clean",
+      "kind": "preference",
+      "path": "dpo-clean.jsonl",
+      "format": "trl-dpo-jsonl",
+      "example_count": 12,
+      "content_fields": ["prompt"],
+      "preference_fields": ["chosen", "rejected"]
+    }
+  ],
+  "loss_mask_policy": {
+    "strategy": "explicit",
+    "target_roles": ["assistant"],
+    "ignored_roles": ["system", "user"],
+    "explicit_mask_field": "response_loss_mask"
+  },
+  "packing_window": {
+    "strategy": "sample-packing",
+    "max_tokens": 1024,
+    "boundary_token": "<|endoftext|>",
+    "preserve_example_boundaries": true,
+    "reset_position_ids": true
+  },
+  "preference_pairs": [
+    {
+      "pair_id": "dpo-clean-0001",
+      "prompt_sha256": "sha256:shared-prompt-0001",
+      "chosen_prompt_sha256": "sha256:shared-prompt-0001",
+      "rejected_prompt_sha256": "sha256:shared-prompt-0001",
+      "chosen_sha256": "sha256:chosen-response-0001",
+      "rejected_sha256": "sha256:rejected-response-0001",
+      "chosen_role_layout": ["system", "user", "assistant"],
+      "rejected_role_layout": ["system", "user", "assistant"],
+      "chosen_tokenizer": "llama-tokenizer@sha256:fixture-tokenizer",
+      "rejected_tokenizer": "llama-tokenizer@sha256:fixture-tokenizer",
+      "chosen_mask_policy": "dpo-response-only",
+      "rejected_mask_policy": "dpo-response-only",
+      "chosen_prompt_tokens": 32,
+      "rejected_prompt_tokens": 32,
+      "chosen_response_start_token": 32,
+      "rejected_response_start_token": 32,
+      "chosen_response_end_token": 64,
+      "rejected_response_end_token": 58,
+      "chosen_packed_example_id": "dpo-clean-0001",
+      "rejected_packed_example_id": "dpo-clean-0001"
+    }
+  ]
+}

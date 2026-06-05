@@ -963,6 +963,16 @@ def _preference_pair_contract_obligation(
         pair_key = f"{manifest.name}:{pair.pair_id}"
         pair_details[pair_key] = (manifest, pair)
         reasons: list[str] = []
+        branch_prompt_hashes = tuple(
+            value
+            for value in (pair.chosen_prompt_sha256, pair.rejected_prompt_sha256)
+            if value is not None
+        )
+        if branch_prompt_hashes and (
+            len(set(branch_prompt_hashes)) != 1
+            or any(value != pair.prompt_sha256 for value in branch_prompt_hashes)
+        ):
+            reasons.append("prompt-prefix-hash-mismatch")
         if pair.chosen_role_layout != pair.rejected_role_layout:
             reasons.append("role-layout-mismatch")
         if pair.chosen_tokenizer != pair.rejected_tokenizer:
@@ -1028,6 +1038,10 @@ def _preference_pair_contract_obligation(
             evidence.append(("chosen_packed_example_id", pair.chosen_packed_example_id))
         if pair.rejected_packed_example_id is not None:
             evidence.append(("rejected_packed_example_id", pair.rejected_packed_example_id))
+        if pair.chosen_prompt_sha256 is not None:
+            evidence.append(("chosen_prompt_sha256", pair.chosen_prompt_sha256))
+        if pair.rejected_prompt_sha256 is not None:
+            evidence.append(("rejected_prompt_sha256", pair.rejected_prompt_sha256))
         artifacts = (manifest.name,)
 
     return (

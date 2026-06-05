@@ -272,7 +272,9 @@ preserved dataset-packing boundaries, BOS/EOS delimiters, loss-mask selection, a
 user, tool, retrieval, or preference source ranges from supervised targets,
 chosen/rejected preference-pair agreement over prompt prefixes, role layouts,
 tokenizer pins, mask policies, response starts, truncation, and preserved packing
-boundaries, plus tokenizer and chat-template stage consistency across dataset preparation,
+boundaries, including a CPU-only RLHF/DPO fixture pack with synthetic and
+anonymized clean, prompt-mismatched, mask/truncation-defective, and
+role-layout/packing-defective manifests, plus tokenizer and chat-template stage consistency across dataset preparation,
 training, evaluation, and serving, with concrete models,
 explicit proof classifications, or minimized unsat cores,
 a \texttt{promptabi solver replay} maintainer path that verifies such reduced
@@ -692,7 +694,10 @@ grammars, tool definitions, prompt segments, provider configs, framework
 truncation configs, and training/fine-tuning manifests that explicitly model
 supervised and preference datasets, system-message policies, role-label
 canonicalization, loss-mask construction, packing windows, and pinned
-chat-template versions. It also provides \texttt{ArtifactRef},
+chat-template versions. Preference-pair contracts now include branch-level prompt
+hashes, response spans, tokenizer pins, mask policies, truncation flags, and
+packed-example IDs, which is enough to replay RLHF/DPO data-preparation failures
+without materializing private examples. It also provides \texttt{ArtifactRef},
 \texttt{SourceSpan}, \texttt{WitnessTrace}, \texttt{Diagnostic},
 \texttt{VerificationConfig}, \texttt{VerificationSession}, and
 \texttt{VerificationResult}. The API surface is now governed by a generated
@@ -810,10 +815,14 @@ every required argument is declared under the tool's properties, or returns a
 missing-parameter model. Tool definitions and provider configs become a
 provider-family compatibility query. Training manifests and chat-template role
 declarations become a target-role alignment query for supervised data
-pipelines. Satisfiable bad-state queries produce concrete model assignments and
-are reported as counterexample witnesses. Unsatisfiable queries produce proof
-diagnostics with the solver backend, minimized core, and a safety or
-incompatibility classification plus the solver-budget reason. Unsupported,
+pipelines, and preference manifests become a DPO/RLHF branch-equivalence query:
+the chosen and rejected branches must share prompt hashes, role layouts,
+tokenizer versions, mask policies, response start positions, truncation status,
+and preserved packing boundaries before the compared response. Satisfiable
+bad-state queries produce concrete model assignments and are reported as
+counterexample witnesses. Unsatisfiable queries produce proof diagnostics with
+the solver backend, minimized core, and a safety or incompatibility
+classification plus the solver-budget reason. Unsupported,
 timeout-limited, assignment-capped, approximated, or insufficiently finite inputs
 are separated explicitly rather than widening into a claim the implementation
 cannot justify.
@@ -1895,7 +1904,10 @@ configs plus every replayable real-bug benchmark case, then reports
 precision/recall/F1 over an explicit per-case rule universe. That scoped
 definition is important: always-on informational diagnostics such as repository
 health checks are neutral unless the label file declares them expected or absent.
-The same report measures abstaining diagnostics over total diagnostics, per-case
+The training slice now includes \texttt{fixtures/training\_rlhf}, where clean DPO
+contracts prove safety and defective RLHF/DPO manifests trigger exact static
+counterexamples for prompt-hash, mask-policy, truncation, role-layout,
+response-start, and packing-boundary bugs. The same report measures abstaining diagnostics over total diagnostics, per-case
 runtime, peak traced memory, warning/error witness completeness, Z3-backed solver
 decisiveness, and agreement/mismatch/abstention for differential checks against
 recorded real-library semantics. Runtime and memory are emitted as measurements,

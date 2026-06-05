@@ -1,0 +1,45 @@
+{
+  "dataset_format": "preference-jsonl",
+  "datasets": [
+    {
+      "name": "rlhf-role-packing",
+      "kind": "preference",
+      "path": "rlhf-role-packing.jsonl",
+      "format": "anonymized-preference-jsonl",
+      "example_count": 6,
+      "content_fields": ["prompt"],
+      "preference_fields": ["chosen", "rejected"]
+    }
+  ],
+  "packing_window": {
+    "strategy": "sample-packing",
+    "max_tokens": 512,
+    "boundary_token": "<|endoftext|>",
+    "preserve_example_boundaries": true,
+    "reset_position_ids": true
+  },
+  "preference_pairs": [
+    {
+      "pair_id": "rlhf-role-packing-0001",
+      "prompt_sha256": "sha256:shared-prompt-role",
+      "chosen_prompt_sha256": "sha256:shared-prompt-role",
+      "rejected_prompt_sha256": "sha256:shared-prompt-role",
+      "chosen_sha256": "sha256:chosen-role",
+      "rejected_sha256": "sha256:rejected-role",
+      "chosen_role_layout": ["system", "user", "assistant"],
+      "rejected_role_layout": ["system", "user", "tool", "assistant"],
+      "chosen_tokenizer": "llama-tokenizer@sha256:fixture-tokenizer",
+      "rejected_tokenizer": "llama-tokenizer@sha256:fixture-tokenizer",
+      "chosen_mask_policy": "dpo-response-only",
+      "rejected_mask_policy": "dpo-response-only",
+      "chosen_prompt_tokens": 36,
+      "rejected_prompt_tokens": 39,
+      "chosen_response_start_token": 36,
+      "rejected_response_start_token": 39,
+      "chosen_response_end_token": 59,
+      "rejected_response_end_token": 63,
+      "chosen_packed_example_id": "packed-a",
+      "rejected_packed_example_id": "packed-b"
+    }
+  ]
+}

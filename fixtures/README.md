@@ -21,3 +21,8 @@ limits for representative provider families. `promptabi corpus
 provider-fixture-manifest` validates the packs, rejects secret-like fields, and
 emits deterministic hashes; `fixtures/provider_fixture_packs/promptabi.json`
 replays the packs as an offline provider-contract oracle for CI checks.
+
+The training RLHF/DPO fixtures contain synthetic and anonymized preference-pair
+manifests with known shared-prompt, mask-policy, truncation, role-layout, and
+packing-boundary defects that `static-contracts` verifies without GPUs or model
+weights.

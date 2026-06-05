@@ -1,0 +1,37 @@
+{
+  "dataset_format": "preference-jsonl",
+  "datasets": [
+    {
+      "name": "dpo-mask-truncation",
+      "kind": "preference",
+      "path": "dpo-mask-truncation.jsonl",
+      "format": "trl-dpo-jsonl",
+      "example_count": 10,
+      "content_fields": ["prompt"],
+      "preference_fields": ["chosen", "rejected"]
+    }
+  ],
+  "preference_pairs": [
+    {
+      "pair_id": "dpo-mask-truncation-0001",
+      "prompt_sha256": "sha256:shared-prompt-mask",
+      "chosen_prompt_sha256": "sha256:shared-prompt-mask",
+      "rejected_prompt_sha256": "sha256:shared-prompt-mask",
+      "chosen_sha256": "sha256:chosen-long",
+      "rejected_sha256": "sha256:rejected-truncated",
+      "chosen_role_layout": ["system", "user", "assistant"],
+      "rejected_role_layout": ["system", "user", "assistant"],
+      "chosen_tokenizer": "llama-tokenizer@sha256:fixture-tokenizer",
+      "rejected_tokenizer": "llama-tokenizer@sha256:fixture-tokenizer",
+      "chosen_mask_policy": "dpo-response-only",
+      "rejected_mask_policy": "completion-only",
+      "chosen_prompt_tokens": 40,
+      "rejected_prompt_tokens": 40,
+      "chosen_response_start_token": 40,
+      "rejected_response_start_token": 40,
+      "chosen_response_end_token": 84,
+      "rejected_response_end_token": 72,
+      "rejected_truncated": true
+    }
+  ]
+}

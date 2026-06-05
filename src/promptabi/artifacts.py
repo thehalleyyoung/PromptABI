@@ -478,6 +478,8 @@ class PreferencePairContract:
     rejected_response_start_token: int
     chosen_response_end_token: int
     rejected_response_end_token: int
+    chosen_prompt_sha256: str | None = None
+    rejected_prompt_sha256: str | None = None
     chosen_truncated: bool = False
     rejected_truncated: bool = False
     chosen_packed_example_id: str | None = None
@@ -520,6 +522,8 @@ class PreferencePairContract:
             raise ValueError("preference pair chosen_response_end_token must be greater than or equal to chosen_response_start_token")
         if self.rejected_response_end_token < self.rejected_response_start_token:
             raise ValueError("preference pair rejected_response_end_token must be greater than or equal to rejected_response_start_token")
+        for field_name in ("chosen_prompt_sha256", "rejected_prompt_sha256"):
+            _optional_non_empty(f"preference pair {field_name}", getattr(self, field_name))
         for field_name in ("chosen_packed_example_id", "rejected_packed_example_id"):
             _optional_non_empty(f"preference pair {field_name}", getattr(self, field_name))
 
@@ -544,6 +548,10 @@ class PreferencePairContract:
             "chosen_truncated": self.chosen_truncated,
             "rejected_truncated": self.rejected_truncated,
         }
+        if self.chosen_prompt_sha256 is not None:
+            data["chosen_prompt_sha256"] = self.chosen_prompt_sha256
+        if self.rejected_prompt_sha256 is not None:
+            data["rejected_prompt_sha256"] = self.rejected_prompt_sha256
         if self.chosen_packed_example_id is not None:
             data["chosen_packed_example_id"] = self.chosen_packed_example_id
         if self.rejected_packed_example_id is not None:
@@ -1646,6 +1654,8 @@ def _preference_pair_contracts(spec: dict[str, Any]) -> tuple[PreferencePairCont
                 rejected_response_start_token=_int(item, "rejected_response_start_token", default=0),
                 chosen_response_end_token=_int(item, "chosen_response_end_token", default=0),
                 rejected_response_end_token=_int(item, "rejected_response_end_token", default=0),
+                chosen_prompt_sha256=_optional_str(item, "chosen_prompt_sha256"),
+                rejected_prompt_sha256=_optional_str(item, "rejected_prompt_sha256"),
                 chosen_truncated=_bool(item, "chosen_truncated", default=False),
                 rejected_truncated=_bool(item, "rejected_truncated", default=False),
                 chosen_packed_example_id=_optional_str(item, "chosen_packed_example_id"),
