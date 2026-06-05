@@ -74,6 +74,7 @@ from .editor_protocol import (
 from .explain import ExplainError, explain_diagnostic, render_explanation_json, render_explanation_text
 from .evaluation import EvaluationError, render_evaluation_json, render_evaluation_text, run_evaluation
 from .first_party_plugins import create_first_party_plugin_registry, render_plugin_capabilities
+from .formal import SolverReplayFile, render_solver_replay_json, render_solver_replay_text
 from .github_action import GitHubActionError, run_github_action
 from .gallery import GalleryError, build_gallery, render_gallery_json, render_gallery_text
 from .incremental import (
@@ -625,6 +626,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     proofs = subparsers.add_parser("proofs", help="show formal proof sketches for supported check families")
     proofs.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+
+    solver = subparsers.add_parser("solver", help="replay reduced finite-SMT obligations without source artifacts")
+    solver_subparsers = solver.add_subparsers(dest="solver_command", required=True)
+    solver_replay = solver_subparsers.add_parser(
+        "replay",
+        help="rerun a deterministic solver replay JSON file",
+    )
+    solver_replay.add_argument("file", help="solver replay JSON file")
+    solver_replay.add_argument(
         "--format",
         choices=("text", "json"),
         default="text",
@@ -1606,6 +1621,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         output = render_proof_sketch_report_json(report) if args.format == "json" else render_proof_sketch_report_text(report)
         print(output, end="")
         return 0 if report.passed else 1
+
+    if args.command == "solver" and args.solver_command == "replay":
+        try:
+            replay_file = SolverReplayFile.read_json(args.file)
+            report = replay_file.replay()
+            output = render_solver_replay_json(report) if args.format == "json" else render_solver_replay_text(report)
+        except (OSError, ValueError) as exc:
+            print(f"promptabi: cannot replay solver file: {exc}", file=sys.stderr)
+            return 2
+        print(output, end="")
+        return 0 if report.ok else 1
 
     if args.command == "doctor":
         report = run_doctor(

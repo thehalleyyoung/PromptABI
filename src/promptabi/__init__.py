@@ -296,6 +296,8 @@ from .formal import (
     Or,
     SolverBackend,
     SolverConclusion,
+    SolverReplayFile,
+    SolverReplayReport,
     SolverResult,
     SolverStatus,
     TransducerLabel,
@@ -303,6 +305,8 @@ from .formal import (
     TransducerWitness,
     Value,
     Var,
+    render_solver_replay_json,
+    render_solver_replay_text,
 )
 from .static_contracts import StaticContractFinding, StaticContractReport, analyze_static_contracts
 from .grammars import (
@@ -843,6 +847,8 @@ __all__ = [
     "SentencePieceAdapter",
     "SolverBackend",
     "SolverConclusion",
+    "SolverReplayFile",
+    "SolverReplayReport",
     "SolverResult",
     "SolverStatus",
     "SourceSpan",
@@ -1018,6 +1024,8 @@ __all__ = [
     "render_proof_sketch_report_text",
     "render_release_readiness_json",
     "render_release_readiness_text",
+    "render_solver_replay_json",
+    "render_solver_replay_text",
     "render_usage_privacy_text",
     "render_usage_summary_json",
     "render_usage_summary_text",

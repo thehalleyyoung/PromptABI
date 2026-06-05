@@ -10,13 +10,20 @@ from promptabi.formal import (
     Eq,
     FiniteContractProblem,
     FiniteStateTransducer,
+    Ge,
+    Gt,
     Implies,
     InSet,
     IntRangeDomain,
     Length,
+    Le,
+    Lt,
     NamedConstraint,
     Ne,
+    Not,
+    Or,
     SolverConclusion,
+    SolverReplayFile,
     SolverQueryCache,
     SolverStatus,
     Value,
@@ -256,6 +263,73 @@ def test_finite_contract_solver_supports_boolean_composition() -> None:
     result = problem.solve(prefer_z3=False)
 
     assert result.unsat is True
+
+
+def test_solver_replay_round_trips_full_supported_expression_fragment(tmp_path) -> None:
+    problem = FiniteContractProblem(
+        name="full-supported-fragment",
+        variables=(
+            BoolDomain("enabled"),
+            EnumDomain("role", ("assistant", "user")),
+            IntRangeDomain("tokens", 0, 4),
+            BoundedStringDomain("content", tuple("ab"), min_length=1, max_length=2),
+        ),
+        constraints=(
+            NamedConstraint("enabled", Eq(Var("enabled"), Value(True))),
+            NamedConstraint("role-is-user", InSet(Var("role"), ("user",))),
+            NamedConstraint("content-has-a", Contains(Var("content"), Value("a"))),
+            NamedConstraint("length-upper-bound", Le(Length(Var("content")), Var("tokens"))),
+            NamedConstraint("positive-budget", Gt(Var("tokens"), Value(0))),
+            NamedConstraint("non-assistant", Ne(Var("role"), Value("assistant"))),
+            NamedConstraint("bounded-range", And(Ge(Var("tokens"), Value(1)), Lt(Var("tokens"), Value(4)))),
+            NamedConstraint("or-guard", Or(Eq(Var("content"), Value("a")), Eq(Var("content"), Value("ba")))),
+            NamedConstraint("not-disabled", Not(Eq(Var("enabled"), Value(False)))),
+            NamedConstraint("implication", Implies(Eq(Var("role"), Value("user")), Contains(Var("content"), Value("a")))),
+        ),
+    )
+    replay = SolverReplayFile.from_problem(
+        problem,
+        replay_id="unit-full-fragment",
+        prefer_z3=False,
+        artifact_hashes={"promptabi.json": "sha256:abc123"},
+        supported_fragment_metadata={"fragment": "finite-contract-v1"},
+    )
+    path = tmp_path / "replay.json"
+
+    replay.write_json(path)
+    loaded = SolverReplayFile.read_json(path)
+    report = loaded.replay()
+
+    assert loaded.problem.to_dict() == problem.to_dict()
+    assert report.ok
+    assert report.status_matches
+    assert report.stored_sat_witness_valid is True
+    assert loaded.to_dict()["privacy"]["stores_provider_credentials"] is False
+    assert loaded.to_dict()["privacy"]["stores_reduced_formula_literals"] is True
+
+
+def test_solver_replay_treats_backend_and_query_environment_as_provenance() -> None:
+    problem = FiniteContractProblem(
+        name="role-region-nonforgeability",
+        variables=(
+            EnumDomain("boundary_marker", ("<|im_start|>assistant",)),
+            EnumDomain("controlled_region", ("user\x1fhello <|im_start|>assistant",)),
+        ),
+        constraints=(
+            NamedConstraint("controlled-region-contains-boundary-marker", Contains(Var("controlled_region"), Var("boundary_marker"))),
+        ),
+    )
+    replay = SolverReplayFile.from_problem(problem, replay_id="portable-sat-replay", prefer_z3=False)
+    stale_environment = dict(replay.normalized_query)
+    stale_environment["solver_version_fingerprints"] = (("z3", "different"),)
+    replay = SolverReplayFile.from_dict({**replay.to_dict(), "normalized_query": stale_environment})
+
+    report = replay.replay()
+
+    assert report.ok
+    assert report.status_matches
+    assert report.stored_sat_witness_valid is True
+    assert report.query_environment_matches is False
 
 
 def test_finite_contract_solver_uses_z3_when_available() -> None:

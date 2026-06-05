@@ -42,7 +42,9 @@ proof objects, a finite-contract solver with compressed lazy product witnesses,
 incremental DFA minimization, indexed transducer composition/projection, solver
 timeouts, constraint-sliced finite enumeration, and a deterministic solver-query
 cache keyed by normalized Z3 formulas, artifact hashes, supported-fragment
-metadata, and solver-version fingerprints, byte-level tokenizer memoization for
+metadata, and solver-version fingerprints, deterministic solver-replay JSON files
+that rerun reduced SMT-backed findings without loading original artifacts,
+datasets, prompts, or provider credentials, byte-level tokenizer memoization for
 repeated normalization,
 a dependency-aware verification-session scheduler with deterministic
 parallel check execution and a per-session analysis cache, a typed plugin
@@ -266,6 +268,9 @@ proving or refuting prompt-budget survival, stop/control-token exclusion,
 role-region non-forgeability, tool-schema required-parameter satisfiability,
 tool/provider compatibility, and supervised target-role alignment with concrete
 models, explicit proof classifications, or minimized unsat cores,
+a \texttt{promptabi solver replay} maintainer path that verifies such reduced
+solver obligations from portable JSON and treats solver backends, query hashes,
+and Z3 versions as provenance rather than brittle equality requirements,
 a CPU-only benchmark suite, documentation, and contribution guidance, plus a
 \texttt{promptabi release compatibility-audit} gate that replays the full
 seed corpus plus provider, grammar, and parser/framework fixtures against
@@ -391,7 +396,9 @@ and independently checks those witnesses with executable specifications,
 tracks check dependencies over artifact kinds, reuses cached tokenizer adapters,
 tokenizer/grammar analysis reports, budget reports, and finite static-contract
 query results keyed by normalized formulas plus artifact/fragment/solver
-fingerprints, parallelizes independent embedded checks, serializes shared tokenizer and
+fingerprints, emits replay files containing only reduced finite obligations,
+expected logical results, artifact hashes, and precise privacy metadata,
+parallelizes independent embedded checks, serializes shared tokenizer and
 solver resources, renders the same scheduler metadata as an artifact-to-check
 dependency graph for configured and missing tokenizer, template, schema, tool,
 stop-policy, truncation-policy, provider, prompt-segment, and training-manifest
@@ -456,7 +463,9 @@ required-prompt-token budget survival, stop strings colliding with special or
 added control tokens, controlled prompt regions containing role/control boundary
 markers, tool schemas requiring parameters absent from their declared properties,
 tool-provider family mismatches, and training target roles outside the serving
-chat-template role universe,
+chat-template role universe, and lets maintainers replay those obligations from
+fixture JSON while validating stored SAT witnesses directly against the
+deserialized formula,
 returns stable policy-controlled process exit codes, writes and enforces
 deterministic verification lockfiles that fail closed on artifact, config,
 provider-fixture, library-version, supported-fragment, or diagnostic-baseline

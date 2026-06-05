@@ -52,6 +52,28 @@ def test_verify_json_output_is_stable(capsys) -> None:
     assert list(payload) == ["config", "diagnostics", "ok"]
 
 
+def test_solver_replay_cli_validates_reduced_obligation(capsys) -> None:
+    exit_code = main(
+        [
+            "solver",
+            "replay",
+            "fixtures/solver_replays/role-region-forgery.solver-replay.json",
+            "--format",
+            "json",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["ok"] is True
+    assert payload["replay_id"] == "seed-role-region-forgery"
+    assert payload["expected"]["status"] == "sat"
+    assert payload["actual"]["status"] == "sat"
+    assert payload["stored_sat_witness_valid"] is True
+    assert captured.err == ""
+
+
 def test_verify_artifact_override_replaces_configured_location(tmp_path, capsys) -> None:
     config = tmp_path / "promptabi.json"
     existing = tmp_path / "schema.json"

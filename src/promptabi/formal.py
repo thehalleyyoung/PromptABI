@@ -1356,6 +1356,13 @@ class NamedConstraint:
     def to_dict(self) -> dict[str, object]:
         return {"name": self.name, "expression": self.expression.to_dict()}
 
+    @classmethod
+    def from_dict(cls, data: Mapping[str, object]) -> "NamedConstraint":
+        return cls(
+            name=str(data["name"]),
+            expression=_expression_from_dict(_require_mapping(data.get("expression"), "constraint expression")),
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class FiniteContractProblem:
@@ -1595,6 +1602,20 @@ class FiniteContractProblem:
             "constraints": [constraint.to_dict() for constraint in self.constraints],
         }
 
+    @classmethod
+    def from_dict(cls, data: Mapping[str, object]) -> "FiniteContractProblem":
+        variables = data.get("variables", ())
+        constraints = data.get("constraints", ())
+        if not isinstance(variables, Sequence) or isinstance(variables, (str, bytes)):
+            raise ValueError("finite contract variables must be a sequence")
+        if not isinstance(constraints, Sequence) or isinstance(constraints, (str, bytes)):
+            raise ValueError("finite contract constraints must be a sequence")
+        return cls(
+            name=str(data.get("name", "finite-contract")),
+            variables=tuple(_domain_from_dict(_require_mapping(item, "variable")) for item in variables),
+            constraints=tuple(NamedConstraint.from_dict(_require_mapping(item, "constraint")) for item in constraints),
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class SolverResult:
@@ -1741,6 +1762,231 @@ class SolverQueryCache:
         return cls.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
+SOLVER_REPLAY_SCHEMA = "promptabi.solver-replay.v1"
+
+
+@dataclass(frozen=True, slots=True)
+class SolverReplayReport:
+    """Result of replaying a reduced solver obligation from JSON."""
+
+    replay_id: str
+    query_key: str
+    expected: SolverResult
+    actual: SolverResult
+    status_matches: bool
+    stored_sat_witness_valid: bool | None
+    query_environment_matches: bool
+
+    @property
+    def ok(self) -> bool:
+        return self.status_matches and self.stored_sat_witness_valid is not False
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "replay_id": self.replay_id,
+            "query_key": self.query_key,
+            "ok": self.ok,
+            "status_matches": self.status_matches,
+            "stored_sat_witness_valid": self.stored_sat_witness_valid,
+            "query_environment_matches": self.query_environment_matches,
+            "expected": self.expected.to_dict(),
+            "actual": self.actual.to_dict(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class SolverReplayFile:
+    """Artifact-free replay for a reduced finite SMT obligation.
+
+    Replay files intentionally store the symbolic obligation, options, solver
+    provenance, expected logical result, and artifact hashes. They do not store
+    artifact files, datasets, provider credentials, or prompts needed to derive
+    the obligation. Literal tokens or schema/provider names that are part of the
+    reduced formula may still appear because they are required to rerun it.
+    """
+
+    replay_id: str
+    query_key: str
+    problem: FiniteContractProblem
+    options: Mapping[str, object]
+    artifact_hashes: Mapping[str, str]
+    supported_fragment_metadata: Mapping[str, object]
+    normalized_query: Mapping[str, object]
+    expected_result: SolverResult
+
+    @classmethod
+    def from_problem(
+        cls,
+        problem: FiniteContractProblem,
+        *,
+        replay_id: str | None = None,
+        prefer_z3: bool = True,
+        max_assignments: int | None = None,
+        timeout_seconds: float | None = None,
+        artifact_hashes: Mapping[str, str] | None = None,
+        supported_fragment_metadata: Mapping[str, object] | None = None,
+        expected_result: SolverResult | None = None,
+    ) -> "SolverReplayFile":
+        normalized_query = problem.normalized_solver_query(
+            prefer_z3=prefer_z3,
+            max_assignments=max_assignments,
+            timeout_seconds=timeout_seconds,
+            artifact_hashes=artifact_hashes,
+            supported_fragment_metadata=supported_fragment_metadata,
+        )
+        query_key = problem.solver_query_key(
+            prefer_z3=prefer_z3,
+            max_assignments=max_assignments,
+            timeout_seconds=timeout_seconds,
+            artifact_hashes=artifact_hashes,
+            supported_fragment_metadata=supported_fragment_metadata,
+        )
+        result = expected_result or problem.solve(
+            prefer_z3=prefer_z3,
+            max_assignments=max_assignments,
+            timeout_seconds=timeout_seconds,
+            artifact_hashes=artifact_hashes,
+            supported_fragment_metadata=supported_fragment_metadata,
+        )
+        return cls(
+            replay_id=replay_id or problem.name,
+            query_key=query_key,
+            problem=problem,
+            options={
+                "prefer_z3": prefer_z3,
+                "max_assignments": max_assignments,
+                "timeout_seconds": timeout_seconds,
+            },
+            artifact_hashes=dict(sorted((artifact_hashes or {}).items())),
+            supported_fragment_metadata=dict(supported_fragment_metadata or {}),
+            normalized_query=normalized_query,
+            expected_result=result,
+        )
+
+    def replay(self) -> SolverReplayReport:
+        prefer_z3 = bool(self.options.get("prefer_z3", True))
+        max_assignments = self.options.get("max_assignments")
+        timeout_seconds = self.options.get("timeout_seconds")
+        actual = self.problem.solve(
+            prefer_z3=prefer_z3,
+            max_assignments=int(max_assignments) if max_assignments is not None else None,
+            timeout_seconds=float(timeout_seconds) if timeout_seconds is not None else None,
+            artifact_hashes=self.artifact_hashes,
+            supported_fragment_metadata=self.supported_fragment_metadata,
+        )
+        stored_witness_valid = self._stored_sat_witness_valid()
+        current_query = self.problem.normalized_solver_query(
+            prefer_z3=prefer_z3,
+            max_assignments=int(max_assignments) if max_assignments is not None else None,
+            timeout_seconds=float(timeout_seconds) if timeout_seconds is not None else None,
+            artifact_hashes=self.artifact_hashes,
+            supported_fragment_metadata=self.supported_fragment_metadata,
+        )
+        return SolverReplayReport(
+            replay_id=self.replay_id,
+            query_key=self.query_key,
+            expected=self.expected_result,
+            actual=actual,
+            status_matches=actual.status is self.expected_result.status,
+            stored_sat_witness_valid=stored_witness_valid,
+            query_environment_matches=_canonical_json(current_query) == _canonical_json(self.normalized_query),
+        )
+
+    def _stored_sat_witness_valid(self) -> bool | None:
+        if self.expected_result.status is not SolverStatus.SAT:
+            return None
+        if self.expected_result.assignment is None:
+            return False
+        assignment = dict(self.expected_result.assignment)
+        variable_names = {variable.name for variable in self.problem.variables}
+        if set(assignment) != variable_names:
+            return False
+        return all(bool(constraint.expression.evaluate(assignment)) for constraint in self.problem.constraints)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema": SOLVER_REPLAY_SCHEMA,
+            "replay_id": self.replay_id,
+            "query_key": self.query_key,
+            "problem": self.problem.to_dict(),
+            "options": dict(self.options),
+            "artifact_hashes": dict(sorted(self.artifact_hashes.items())),
+            "supported_fragment_metadata": _stable_json_value(self.supported_fragment_metadata),
+            "normalized_query": _stable_json_value(self.normalized_query),
+            "expected_result": self.expected_result.to_dict(),
+            "privacy": {
+                "stores_artifact_files": False,
+                "stores_datasets": False,
+                "stores_provider_credentials": False,
+                "stores_full_prompts": False,
+                "stores_reduced_formula_literals": True,
+                "note": (
+                    "Replay uses only the reduced finite solver obligation. Literal tokens, "
+                    "delimiters, provider names, or schema field names required by that formula "
+                    "may appear; original artifact files and credential values are not loaded."
+                ),
+            },
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, object]) -> "SolverReplayFile":
+        schema = data.get("schema")
+        if schema != SOLVER_REPLAY_SCHEMA:
+            raise ValueError(f"unsupported solver replay schema: {schema!r}")
+        problem = FiniteContractProblem.from_dict(_require_mapping(data.get("problem"), "problem"))
+        options = _require_mapping(data.get("options", {}), "options")
+        artifact_hashes = _require_mapping(data.get("artifact_hashes", {}), "artifact_hashes")
+        supported_fragment_metadata = _require_mapping(
+            data.get("supported_fragment_metadata", {}),
+            "supported_fragment_metadata",
+        )
+        normalized_query = _require_mapping(data.get("normalized_query", {}), "normalized_query")
+        expected_result = SolverResult.from_dict(_require_mapping(data.get("expected_result"), "expected_result"))
+        return cls(
+            replay_id=str(data.get("replay_id", problem.name)),
+            query_key=str(data.get("query_key", "")),
+            problem=problem,
+            options=dict(options),
+            artifact_hashes={str(key): str(value) for key, value in artifact_hashes.items()},
+            supported_fragment_metadata=dict(supported_fragment_metadata),
+            normalized_query=dict(normalized_query),
+            expected_result=expected_result,
+        )
+
+    def write_json(self, path: str | Path) -> None:
+        Path(path).write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    @classmethod
+    def read_json(cls, path: str | Path) -> "SolverReplayFile":
+        return cls.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
+
+
+def render_solver_replay_text(report: SolverReplayReport) -> str:
+    status = "PASS" if report.ok else "FAIL"
+    witness = (
+        "n/a"
+        if report.stored_sat_witness_valid is None
+        else ("valid" if report.stored_sat_witness_valid else "invalid")
+    )
+    environment = "matched" if report.query_environment_matches else "different solver environment"
+    return "\n".join(
+        (
+            f"PromptABI solver replay: {report.replay_id}",
+            f"status: {status}",
+            f"query: {report.query_key}",
+            f"expected: {report.expected.status.value} ({report.expected.backend.value})",
+            f"actual: {report.actual.status.value} ({report.actual.backend.value})",
+            f"stored SAT witness: {witness}",
+            f"normalized query environment: {environment}",
+            "",
+        )
+    )
+
+
+def render_solver_replay_json(report: SolverReplayReport) -> str:
+    return json.dumps(report.to_dict(), indent=2, sort_keys=True) + "\n"
+
+
 def _stable_json_value(value: object) -> object:
     if isinstance(value, Mapping):
         return {str(key): _stable_json_value(value[key]) for key in sorted(value, key=str)}
@@ -1751,6 +1997,107 @@ def _stable_json_value(value: object) -> object:
     if isinstance(value, set | frozenset):
         return tuple(sorted((_stable_json_value(item) for item in value), key=repr))
     return repr(value)
+
+
+def _canonical_json(value: object) -> str:
+    return json.dumps(_stable_json_value(value), sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+
+
+def _require_mapping(value: object, name: str) -> Mapping[str, object]:
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{name} must be an object")
+    return value
+
+
+def _require_sequence(value: object, name: str) -> Sequence[object]:
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        raise ValueError(f"{name} must be a sequence")
+    return value
+
+
+def _domain_from_dict(data: Mapping[str, object]) -> VariableDomain:
+    domain_type = str(data.get("type", ""))
+    name = str(data.get("name", ""))
+    if domain_type == "bool":
+        return BoolDomain(name)
+    if domain_type == "enum":
+        return EnumDomain(name, tuple(str(item) for item in _require_sequence(data.get("members", ()), "enum members")))
+    if domain_type == "int-range":
+        return IntRangeDomain(name, int(data["minimum"]), int(data["maximum"]))
+    if domain_type == "bounded-string":
+        return BoundedStringDomain(
+            name,
+            tuple(str(item) for item in _require_sequence(data.get("alphabet", ()), "bounded string alphabet")),
+            min_length=int(data.get("min_length", 0)),
+            max_length=int(data.get("max_length", 8)),
+        )
+    raise ValueError(f"unsupported variable domain type: {domain_type!r}")
+
+
+def _expression_from_dict(data: Mapping[str, object]) -> Expression:
+    if "var" in data:
+        return Var(str(data["var"]))
+    if "value" in data:
+        value = data["value"]
+        if not isinstance(value, (bool, int, str)):
+            raise ValueError("expression value must be bool, int, or string")
+        return Value(value)
+    binary_builders: dict[str, type[Eq] | type[Ne] | type[Le] | type[Lt] | type[Ge] | type[Gt]] = {
+        "eq": Eq,
+        "ne": Ne,
+        "le": Le,
+        "lt": Lt,
+        "ge": Ge,
+        "gt": Gt,
+    }
+    for key, builder in binary_builders.items():
+        if key in data:
+            parts = _require_sequence(data[key], key)
+            if len(parts) != 2:
+                raise ValueError(f"{key} expression must have exactly two operands")
+            return builder(
+                _expression_from_dict(_require_mapping(parts[0], f"{key} left operand")),
+                _expression_from_dict(_require_mapping(parts[1], f"{key} right operand")),
+            )
+    if "and" in data:
+        return And(*(_expression_from_dict(_require_mapping(item, "and term")) for item in _require_sequence(data["and"], "and terms")))
+    if "or" in data:
+        return Or(*(_expression_from_dict(_require_mapping(item, "or term")) for item in _require_sequence(data["or"], "or terms")))
+    if "not" in data:
+        return Not(_expression_from_dict(_require_mapping(data["not"], "not term")))
+    if "implies" in data:
+        parts = _require_sequence(data["implies"], "implies operands")
+        if len(parts) != 2:
+            raise ValueError("implies expression must have exactly two operands")
+        return Implies(
+            _expression_from_dict(_require_mapping(parts[0], "implies condition")),
+            _expression_from_dict(_require_mapping(parts[1], "implies consequence")),
+        )
+    if "in" in data:
+        parts = _require_sequence(data["in"], "in operands")
+        if len(parts) != 2:
+            raise ValueError("in expression must have exactly two operands")
+        values = _require_sequence(parts[1], "in values")
+        parsed_values: list[bool | int | str] = []
+        for value in values:
+            if not isinstance(value, (bool, int, str)):
+                raise ValueError("in values must be bool, int, or string")
+            parsed_values.append(value)
+        return InSet(
+            _expression_from_dict(_require_mapping(parts[0], "in term")),
+            parsed_values,
+        )
+    if "length" in data:
+        return Length(_expression_from_dict(_require_mapping(data["length"], "length term")))
+    if "contains" in data:
+        parts = _require_sequence(data["contains"], "contains operands")
+        if len(parts) != 2:
+            raise ValueError("contains expression must have exactly two operands")
+        return Contains(
+            _expression_from_dict(_require_mapping(parts[0], "contains haystack")),
+            _expression_from_dict(_require_mapping(parts[1], "contains needle")),
+        )
+    raise ValueError(f"unsupported expression shape: {sorted(data)}")
 
 
 def _solver_version_fingerprints(*, prefer_z3: bool) -> tuple[tuple[str, str], ...]:
