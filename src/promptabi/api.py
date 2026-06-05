@@ -95,6 +95,17 @@ from .runtime_alarms import (
     render_runtime_alarm_json,
     render_runtime_alarm_text,
 )
+from .roadmap import (
+    RoadmapReport,
+    build_annual_corpus_refresh_report,
+    build_award_submission_report,
+    build_historical_trend_report,
+    build_research_agenda_report,
+    build_teaching_materials_report,
+    render_roadmap_json,
+    render_roadmap_markdown,
+    render_roadmap_text,
+)
 from .enterprise import (
     EnterpriseSettings,
     enterprise_readiness_diagnostics,
@@ -433,6 +444,74 @@ def runtime_alarms(
     if output_format == "json":
         return render_runtime_alarm_json(report)
     raise ValueError("output_format must be 'json' or 'text'")
+
+
+def historical_trends(
+    history: str | Path | None = None,
+    *,
+    repo_root: str | Path | None = None,
+    output_format: str | None = None,
+) -> RoadmapReport | str:
+    """Render or return historical structural-risk trends."""
+
+    report = build_historical_trend_report(history, repo_root=repo_root)
+    return _render_roadmap_api(report, output_format)
+
+
+def annual_corpus_refresh(
+    *,
+    repo_root: str | Path | None = None,
+    output_format: str | None = None,
+) -> RoadmapReport | str:
+    """Render or return the annual corpus refresh procedure."""
+
+    report = build_annual_corpus_refresh_report(repo_root=repo_root)
+    return _render_roadmap_api(report, output_format)
+
+
+def award_submission(
+    *,
+    repo_root: str | Path | None = None,
+    output_format: str | None = None,
+) -> RoadmapReport | str:
+    """Render or return evidence-bound award submission material."""
+
+    report = build_award_submission_report(repo_root=repo_root)
+    return _render_roadmap_api(report, output_format)
+
+
+def teaching_materials(
+    *,
+    repo_root: str | Path | None = None,
+    output_format: str | None = None,
+) -> RoadmapReport | str:
+    """Render or return PromptABI teaching materials."""
+
+    report = build_teaching_materials_report(repo_root=repo_root)
+    return _render_roadmap_api(report, output_format)
+
+
+def research_agenda(
+    *,
+    repo_root: str | Path | None = None,
+    output_format: str | None = None,
+) -> RoadmapReport | str:
+    """Render or return the next 100 PromptABI research-agenda steps."""
+
+    report = build_research_agenda_report(repo_root=repo_root)
+    return _render_roadmap_api(report, output_format)
+
+
+def _render_roadmap_api(report: RoadmapReport, output_format: str | None) -> RoadmapReport | str:
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_roadmap_json(report)
+    if output_format == "text":
+        return render_roadmap_text(report)
+    if output_format == "markdown":
+        return render_roadmap_markdown(report)
+    raise ValueError("output_format must be 'json', 'text', or 'markdown'")
 
 
 def generate_adversarial_cases(*, output_format: str | None = None) -> AdversarialCorpusReport | str:

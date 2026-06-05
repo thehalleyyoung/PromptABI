@@ -181,6 +181,7 @@ promptabi release compatibility-audit --candidate-version tokenizer=seed-v1 --ca
 promptabi release lts-plan --series 1.0 --base-version 1.0.0 --target-version 1.0.1 --item checker_fix:role-boundary-nonforgeability --item security_patch:security-model --item corpus_update:seed-v1 --item compatibility_metadata:provider-fixtures-v1
 promptabi release drift-bisect --surface tokenizer --baseline tok-r0 --revision tok-r1=tok-r1 --revision tok-r2=tok-r2 --bad-field eos_token_id
 promptabi release readiness --format text
+promptabi roadmap trends --format markdown > structural-risk-trends.md
 
 # Local changed-artifact gate and local-only usage summaries; no telemetry.
 promptabi pre-commit install --config examples/minimal/promptabi.json

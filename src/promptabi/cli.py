@@ -185,6 +185,18 @@ from .runtime_alarms import (
     render_runtime_alarm_json,
     render_runtime_alarm_text,
 )
+from .roadmap import (
+    RoadmapError,
+    build_annual_corpus_refresh_report,
+    build_award_submission_report,
+    build_historical_trend_report,
+    build_research_agenda_report,
+    build_teaching_materials_report,
+    render_roadmap_json,
+    render_roadmap_markdown,
+    render_roadmap_text,
+    write_roadmap_document,
+)
 from .editor_protocol import (
     EditorProtocolError,
     build_editor_diagnostic_report,
@@ -1910,6 +1922,59 @@ def build_parser() -> argparse.ArgumentParser:
         default="text",
         help="output format (default: text)",
     )
+
+    roadmap = subparsers.add_parser("roadmap", help="generate PromptABI roadmap, teaching, award, and trend reports")
+    roadmap_subparsers = roadmap.add_subparsers(dest="roadmap_command", required=True)
+    trends = roadmap_subparsers.add_parser(
+        "trends",
+        help="build historical structural-risk trends from dashboard history and corpus evidence",
+    )
+    trends.add_argument("--history", help="dashboard JSONL history from `promptabi dashboard --record`")
+    trends.add_argument("--repo-root", help="repository root containing fixtures/ (default: installed repository root)")
+    trends.add_argument("--as-of", default="2026-06-05T00:00:00+00:00", help="timestamp recorded in generated reports")
+    trends.add_argument("--format", choices=("text", "json", "markdown"), default="text", help="output format")
+    trends.add_argument("--output", help="write report to this path instead of stdout")
+    trends.add_argument("--force", action="store_true", help="overwrite --output when writing Markdown")
+
+    corpus_refresh = roadmap_subparsers.add_parser(
+        "corpus-refresh",
+        help="emit the annual read-only corpus refresh procedure and preservation gates",
+    )
+    corpus_refresh.add_argument("--repo-root", help="repository root containing fixtures/ (default: installed repository root)")
+    corpus_refresh.add_argument("--as-of", default="2026-06-05T00:00:00+00:00", help="timestamp recorded in generated reports")
+    corpus_refresh.add_argument("--format", choices=("text", "json", "markdown"), default="text", help="output format")
+    corpus_refresh.add_argument("--output", help="write report to this path instead of stdout")
+    corpus_refresh.add_argument("--force", action="store_true", help="overwrite --output when writing Markdown")
+
+    award = roadmap_subparsers.add_parser(
+        "award",
+        help="generate evidence-bound award-submission claims, limitations, and reproduction commands",
+    )
+    award.add_argument("--repo-root", help="repository root containing fixtures/ and examples/ (default: installed repository root)")
+    award.add_argument("--as-of", default="2026-06-05T00:00:00+00:00", help="timestamp recorded in generated reports")
+    award.add_argument("--format", choices=("text", "json", "markdown"), default="text", help="output format")
+    award.add_argument("--output", help="write report to this path instead of stdout")
+    award.add_argument("--force", action="store_true", help="overwrite --output when writing Markdown")
+
+    teaching = roadmap_subparsers.add_parser(
+        "teaching",
+        help="generate university and internal-training materials from executable examples",
+    )
+    teaching.add_argument("--repo-root", help="repository root containing examples/ (default: installed repository root)")
+    teaching.add_argument("--as-of", default="2026-06-05T00:00:00+00:00", help="timestamp recorded in generated reports")
+    teaching.add_argument("--format", choices=("text", "json", "markdown"), default="text", help="output format")
+    teaching.add_argument("--output", help="write report to this path instead of stdout")
+    teaching.add_argument("--force", action="store_true", help="overwrite --output when writing Markdown")
+
+    research_agenda = roadmap_subparsers.add_parser(
+        "research-agenda",
+        help="generate the next 100 PromptABI research and engineering steps",
+    )
+    research_agenda.add_argument("--repo-root", help="repository root containing docs/ (default: installed repository root)")
+    research_agenda.add_argument("--as-of", default="2026-06-05T00:00:00+00:00", help="timestamp recorded in generated reports")
+    research_agenda.add_argument("--format", choices=("text", "json", "markdown"), default="text", help="output format")
+    research_agenda.add_argument("--output", help="write report to this path instead of stdout")
+    research_agenda.add_argument("--force", action="store_true", help="overwrite --output when writing Markdown")
 
     fuzz = subparsers.add_parser("fuzz", help="mutation-based fuzzing workflows")
     fuzz_subparsers = fuzz.add_subparsers(dest="fuzz_command", required=True)
@@ -4295,6 +4360,53 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         except OSError as exc:
             print(f"promptabi: cannot read runtime alarm evidence: {exc}", file=sys.stderr)
+            return 2
+        return 0 if report.ok else 1
+
+    if args.command == "roadmap":
+        try:
+            if args.roadmap_command == "trends":
+                report = build_historical_trend_report(args.history, repo_root=args.repo_root, as_of=args.as_of)
+            elif args.roadmap_command == "corpus-refresh":
+                report = build_annual_corpus_refresh_report(repo_root=args.repo_root, as_of=args.as_of)
+            elif args.roadmap_command == "award":
+                report = build_award_submission_report(repo_root=args.repo_root, as_of=args.as_of)
+            elif args.roadmap_command == "teaching":
+                report = build_teaching_materials_report(repo_root=args.repo_root, as_of=args.as_of)
+            elif args.roadmap_command == "research-agenda":
+                report = build_research_agenda_report(repo_root=args.repo_root, as_of=args.as_of)
+            else:  # pragma: no cover - argparse enforces choices
+                parser.error(f"unknown roadmap command: {args.roadmap_command}")
+            if args.format == "json":
+                output = render_roadmap_json(report)
+            elif args.format == "markdown":
+                output = render_roadmap_markdown(report)
+            else:
+                output = render_roadmap_text(report)
+            if args.output:
+                if args.format == "markdown":
+                    write_roadmap_document(report, args.output, force=args.force)
+                else:
+                    Path(args.output).write_text(output, encoding="utf-8")
+                print(f"wrote roadmap report: {args.output} ({report.kind})")
+            else:
+                print(output, end="")
+        except (
+            RoadmapError,
+            EvaluationError,
+            ComparativeStudyError,
+            RealBugBenchmarkError,
+            ProviderFixturePackError,
+            SeedCorpusError,
+            StructuredSchemaCorpusError,
+            CorpusVerificationError,
+            TeamDashboardError,
+            ValueError,
+        ) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write roadmap report: {exc}", file=sys.stderr)
             return 2
         return 0 if report.ok else 1
 

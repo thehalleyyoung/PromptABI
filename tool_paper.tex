@@ -637,6 +637,44 @@ diagnostics, provider fixtures, release notes, and benchmark metadata. It makes
 evaluation maintenance reproducible rather than relying on informal manual
 updates.
 
+\paragraph{Roadmap and evidence reports.}
+\texttt{promptabi roadmap trends} converts dashboard history into structural-risk
+trend reports across repositories, teams, model families, provider migrations,
+and fine-tuning pipelines. \texttt{promptabi roadmap corpus-refresh} emits a
+read-only annual refresh procedure that can retire obsolete artifacts, add model
+families, update provider semantics, and preserve old benchmarks without
+destroying longitudinal evidence. \texttt{promptabi roadmap award} builds a
+concise award-submission brief from comparative studies, real-bug benchmarks,
+conference demos, and leaderboards, so claims remain evidence-bound rather than
+marketing copy. \texttt{promptabi roadmap teaching} turns executable examples and
+proof notebooks into university and internal-training labs. \texttt{promptabi
+roadmap research-agenda} publishes the next hundred compositional-verification,
+solver, prompt-pack, training-contract, and provider-standard conformance goals.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{0.28\linewidth}p{0.28\linewidth}p{0.32\linewidth}}
+\toprule
+Workflow & Evidence source & Output \\
+\midrule
+Historical trends & dashboard JSONL, corpus manifests & team/model/provider risk
+movement \\
+Annual corpus refresh & seed, structured-schema, provider, real-bug corpora &
+read-only retirement and preservation plan \\
+Award brief & comparative study, demos, leaderboard & concise claims,
+limitations, reproduction commands \\
+Teaching materials & examples, proof notebooks, concept docs & five-module
+syllabus and executable labs \\
+Research agenda & maintained roadmap generator & next 100 tracked research
+steps \\
+\bottomrule
+\end{tabular}
+\caption{Roadmap reports convert repository evidence into maintainable external
+artifacts.}
+\label{tab:roadmap-reports}
+\end{table}
+
 \newpage
 \section{Diagnostic Quality}
 
