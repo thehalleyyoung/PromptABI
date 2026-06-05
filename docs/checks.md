@@ -61,5 +61,6 @@ is available in JSON output and SARIF properties.
 
 For the shared machinery behind these families, read
 [Formalism](concepts/formalism.md),
+[Proof sketches](concepts/proof-sketches.md),
 [Tokenizer/template composition](concepts/tokenizer-template-composition.md),
 and [Z3/SMT-backed finite contracts](concepts/static-contracts.md).

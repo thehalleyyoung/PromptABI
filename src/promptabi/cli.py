@@ -79,6 +79,11 @@ from .mutation_fuzzing import (
     run_mutation_fuzzing,
 )
 from .plugins import PluginError, PluginRegistry, load_plugin_modules
+from .proof_sketches import (
+    build_supported_proof_catalog,
+    render_proof_sketch_report_json,
+    render_proof_sketch_report_text,
+)
 from .render import SarifRenderOptions, render_github_annotations, render_html, render_json, render_sarif, render_text
 from .seed_corpus import SeedCorpusError, build_seed_corpus_manifest, write_seed_corpus_manifest
 from .session import VerificationSession
@@ -424,6 +429,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="import an additional PromptABI plugin before building the matrix; may be repeated",
     )
     matrix.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+
+    proofs = subparsers.add_parser("proofs", help="show formal proof sketches for supported check families")
+    proofs.add_argument(
         "--format",
         choices=("text", "json"),
         default="text",
@@ -1157,6 +1170,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         print(output, end="")
         return 0
+
+    if args.command == "proofs":
+        report = build_supported_proof_catalog()
+        output = render_proof_sketch_report_json(report) if args.format == "json" else render_proof_sketch_report_text(report)
+        print(output, end="")
+        return 0 if report.passed else 1
 
     if args.command == "doctor":
         report = run_doctor(

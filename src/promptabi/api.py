@@ -72,6 +72,12 @@ from .mutation_fuzzing import (
 )
 from .plugins import PluginRegistry
 from .policies import Suppression, VerificationPolicy, apply_policy_diagnostics, load_policy_file
+from .proof_sketches import (
+    ProofSketchReport,
+    build_supported_proof_catalog,
+    render_proof_sketch_report_json,
+    render_proof_sketch_report_text,
+)
 from .reproducibility import (
     ReproducibilityInputs,
     ReproducibilityPackage,
@@ -355,6 +361,19 @@ def render_compatibility_matrix(
         return render_compatibility_matrix_text(resolved)
     if output_format == "json":
         return render_compatibility_matrix_json(resolved)
+    raise ValueError("output_format must be one of: text, json")
+
+
+def proof_sketches(*, output_format: str | None = None) -> ProofSketchReport | str:
+    """Return or render theorem sketches for supported PromptABI proof families."""
+
+    report = build_supported_proof_catalog()
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_proof_sketch_report_json(report)
+    if output_format == "text":
+        return render_proof_sketch_report_text(report)
     raise ValueError("output_format must be one of: text, json")
 
 

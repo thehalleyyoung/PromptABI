@@ -10,6 +10,7 @@ nav:
   - Concepts:
       - Artifact model: concepts/artifact-model.md
       - Formalism: concepts/formalism.md
+      - Proof sketches: concepts/proof-sketches.md
       - Tokenizer/template composition: concepts/tokenizer-template-composition.md
       - Static contracts: concepts/static-contracts.md
       - Role-boundary non-forgeability: concepts/role-boundary-nonforgeability.md

@@ -64,6 +64,11 @@ metadata, optional tokenizer/grammar/Z3 dependencies, a live Z3 smoke query,
 cache writability, first-party and requested plugin registries, supported backend
 capabilities, config validity, artifact path health, and aggregated setup
 problems before CI or local verification,
+lightweight proof-sketch certificates for role-boundary non-forgeability, stop
+overreachability, tokenizer/grammar emptiness, must-survive budgets, and finite
+SMT contracts, with executable checks that replay real witnesses where the
+necessary transition relation or solver proof object is present and explicitly
+downgrade to sketches or abstentions where it is not,
 a reusable GitHub Action and \texttt{promptabi github-action} runner that restore
 analysis caches, enforce lockfiles, skip pull requests whose diffs do not touch
 configured PromptABI inputs, write markdown job summaries, emit workflow
@@ -412,7 +417,8 @@ privacy, provider-fixture secret rejection, sanitized upstream reporting, and
 responsible disclosure path in a MkDocs-linked security model,
 adds MkDocs concept chapters for formal automata/transducers, tokenizer-template
 composition, Z3/SMT finite contracts, role-boundary non-forgeability, stop
-reachability, grammar emptiness, and must-survive budgets, and verifies those
+reachability, grammar emptiness, must-survive budgets, and proof-sketch
+certificates, and verifies those
 chapters against live symbols and executable examples in the test suite,
 adds a MkDocs-linked integration guide that maps PromptABI artifacts and checks to
 LangChain, LlamaIndex, vLLM, llama.cpp/Ollama, Hugging Face Transformers,
@@ -723,6 +729,41 @@ prove that artificial solver cutoffs surface as abstentions rather than false
 safety.
 This is the first formal benchline on which role-boundary, stop-reachability,
 grammar-emptiness, and must-survive budget checkers can be built.
+
+\subsection{Proof-Sketch Certificates}
+
+The repository now packages the proof obligations above as first-class
+certificates rather than leaving them implicit in diagnostics. The
+\texttt{promptabi.proof\_sketches} module defines a small certificate object with
+a property identifier, theorem statement, supported-fragment assumptions, lemmas,
+evidence, outcome, and executable checks. The CLI exposes the registered
+theorems through \texttt{promptabi proofs}, while the Python API exposes concrete
+certificate builders for the five core families.
+
+The design is intentionally conservative. A role-boundary certificate validates
+that a real \texttt{RoleBoundaryNonforgeabilityReport} is supported and, for each
+counterexample, checks that the malicious field is exactly the marker, that the
+marker appears in the rendered excerpt and tokenizer evidence, and that stored
+offset lengths match the marker without confusing global rendered offsets for
+excerpt-relative offsets. A stop-overreachability certificate checks the exact
+prefix split: the configured stop occurs at the firing offset, the delivered
+prefix equals the output before that offset, the valid prefix includes the stop,
+and truncation removes a required suffix. A grammar/tokenizer certificate is
+marked as a sketch unless the caller also supplies the compiled grammar DFA; with
+that automaton present, the certificate replays the stored grammar witness through
+\texttt{check\_dfa\_witness} and rechecks that decoded tokenizer output is accepted
+by the grammar. A must-survive budget certificate checks that proven results drop
+no required segment, violated results partition required segments into survived
+and dropped sets with a minimized counterexample, and unknown results carry a
+reason instead of silently treating unknown token counts as zero. A static-contract
+certificate delegates SAT assignment and UNSAT core replay to
+\texttt{check\_contract\_result}, so Z3-backed answers are independently checked
+against finite-domain semantics.
+
+This layer is not a substitute for mechanized theorem proving, but it closes an
+important systems gap: every proof-like claim now has a machine-readable theorem,
+explicit assumptions, an executable validation boundary, and a visible outcome of
+\texttt{proven}, \texttt{counterexample}, \texttt{abstained}, or \texttt{sketch}.
 
 \clearpage
 \section{Version-Pinned Artifact Loading}
