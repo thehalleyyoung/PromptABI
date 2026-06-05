@@ -61,6 +61,20 @@ class EvaluationHarnessReport:
         return not any(finding.severity == "error" for finding in self.findings)
 
 
+@dataclass(frozen=True, slots=True)
+class _ProviderEvalSnapshot:
+    artifact_name: str
+    provider: str
+    family: str | None
+    model: str | None
+    request_fields: tuple[str, ...]
+    response_fields: tuple[str, ...]
+    tool_argument_encoding: str | None
+    supports_parallel_tools: bool | None
+    stop_sequences: tuple[str, ...]
+    structured_output_modes: tuple[str, ...]
+
+
 def parse_evaluation_harness_mapping(
     name: str,
     raw: Mapping[str, Any],
@@ -100,6 +114,7 @@ def analyze_evaluation_harness_contracts(
     templates = tuple(artifact for artifact in artifacts if artifact.kind is ArtifactKind.CHAT_TEMPLATE)
 
     findings.extend(_provider_findings(harness, providers, spans))
+    findings.extend(_cross_provider_eval_findings(harness, providers, spans))
     findings.extend(_tokenizer_findings(harness, tokenizers, spans))
     findings.extend(_template_findings(harness, templates, spans))
     findings.extend(_stop_findings(harness, stop_policies, spans))
@@ -181,6 +196,281 @@ def _provider_findings(
             _missing("model", "provider-config artifacts do not expose model metadata for this harness model contract", spans.get("model"))
         )
     return tuple(findings)
+
+
+def _cross_provider_eval_findings(
+    harness: EvaluationHarnessArtifact,
+    providers: Sequence[ProviderConfigArtifact],
+    spans: Mapping[str, SourceSpan],
+) -> tuple[EvaluationHarnessFinding, ...]:
+    snapshots = tuple(_provider_eval_snapshot(provider) for provider in providers)
+    families = tuple(sorted({snapshot.family for snapshot in snapshots if snapshot.family is not None}))
+    if not snapshots:
+        return ()
+    if len(families) < 2:
+        return ()
+
+    findings: list[EvaluationHarnessFinding] = []
+    required_families = (
+        "openai",
+        "anthropic",
+        "gemini",
+        "bedrock",
+        "vllm-openai-server",
+        "llama.cpp-server",
+        "ollama",
+    )
+    missing_families = tuple(family for family in required_families if family not in families)
+    if missing_families:
+        findings.append(
+            EvaluationHarnessFinding(
+                rule_id="evaluation-harness-cross-provider-incomplete",
+                severity="warning",
+                message="cross-provider evaluation report does not cover every required adapter family",
+                suggestion=(
+                    "Add provider-config fixtures for OpenAI-compatible, Anthropic-style, Gemini-style, Bedrock, "
+                    "local vLLM, llama.cpp, and Ollama before publishing cross-provider benchmark claims."
+                ),
+                subject="providers",
+                expected=", ".join(required_families),
+                actual=", ".join(families),
+                span=spans.get("provider"),
+                witness=(
+                    ("select evaluation harness", harness.benchmark_name, harness.name),
+                    ("collect provider adapter families", None, ", ".join(families)),
+                    ("find missing adapter families", None, ", ".join(missing_families)),
+                ),
+            )
+        )
+
+    by_family = {snapshot.family: snapshot for snapshot in snapshots if snapshot.family is not None}
+    baseline_family = _first_provider_family(harness.provider)
+    baseline = by_family.get(baseline_family) if baseline_family is not None else None
+    if baseline is None:
+        baseline = next((snapshot for snapshot in snapshots if snapshot.family == "openai"), snapshots[0])
+
+    for snapshot in snapshots:
+        if snapshot is baseline:
+            continue
+        findings.extend(_compare_cross_provider_eval_pair(harness, baseline, snapshot, spans))
+
+    if not any(finding.severity == "error" for finding in findings):
+        findings.append(
+            EvaluationHarnessFinding(
+                rule_id="evaluation-harness-cross-provider-report",
+                severity="info",
+                message=(
+                    f"evaluation harness '{harness.name}' has a bounded cross-provider compatibility report "
+                    f"covering {len(families)} adapter families"
+                ),
+                suggestion="Keep provider fixture reports versioned with benchmark releases so cross-provider score deltas remain explainable.",
+                subject="providers",
+                expected=", ".join(required_families),
+                actual=", ".join(families),
+                span=spans.get("provider"),
+                witness=(
+                    ("select evaluation harness", harness.benchmark_name, harness.name),
+                    ("collect provider adapter families", None, ", ".join(families)),
+                    ("compare provider surfaces", baseline.artifact_name, "no contract-breaking cross-provider mismatch found"),
+                ),
+            )
+        )
+    return tuple(findings)
+
+
+def _compare_cross_provider_eval_pair(
+    harness: EvaluationHarnessArtifact,
+    baseline: _ProviderEvalSnapshot,
+    candidate: _ProviderEvalSnapshot,
+    spans: Mapping[str, SourceSpan],
+) -> tuple[EvaluationHarnessFinding, ...]:
+    findings: list[EvaluationHarnessFinding] = []
+    missing_request = _missing_strings(baseline.request_fields, candidate.request_fields)
+    missing_response = _missing_strings(baseline.response_fields, candidate.response_fields)
+    if missing_request or missing_response:
+        findings.append(
+            _cross_provider_mismatch(
+                harness,
+                baseline,
+                candidate,
+                "request_response",
+                "cross-provider evaluation provider adapter drops request or response fields used by the baseline harness",
+                expected=_join_nonempty(
+                    f"request:{','.join(baseline.request_fields)}",
+                    f"response:{','.join(baseline.response_fields)}",
+                ),
+                actual=_join_nonempty(
+                    f"missing-request:{','.join(missing_request) or '<none>'}",
+                    f"missing-response:{','.join(missing_response) or '<none>'}",
+                ),
+                suggestion="Add a provider-specific eval adapter or exclude this adapter from comparable benchmark score tables.",
+                span=spans.get("provider"),
+            )
+        )
+    if (
+        baseline.tool_argument_encoding is not None
+        and candidate.tool_argument_encoding is not None
+        and baseline.tool_argument_encoding != candidate.tool_argument_encoding
+    ):
+        findings.append(
+            _cross_provider_mismatch(
+                harness,
+                baseline,
+                candidate,
+                "tool_arguments",
+                "cross-provider evaluation tool-call argument encoding differs from the baseline harness",
+                expected=baseline.tool_argument_encoding,
+                actual=candidate.tool_argument_encoding,
+                suggestion="Normalize tool-call arguments before grading tool-use evals across providers.",
+                span=spans.get("provider"),
+            )
+        )
+    if (
+        baseline.supports_parallel_tools is True
+        and candidate.supports_parallel_tools is False
+    ):
+        findings.append(
+            _cross_provider_mismatch(
+                harness,
+                baseline,
+                candidate,
+                "parallel_tools",
+                "cross-provider evaluation adapter cannot replay baseline parallel tool-call cases",
+                expected="parallel tool calls supported",
+                actual="parallel tool calls unsupported",
+                suggestion="Shard parallel-tool eval cases or add an adapter that serializes equivalent tool calls.",
+                span=spans.get("provider"),
+            )
+        )
+    missing_stops = _missing_strings(harness.stop_sequences or baseline.stop_sequences, candidate.stop_sequences)
+    if missing_stops:
+        findings.append(
+            _cross_provider_mismatch(
+                harness,
+                baseline,
+                candidate,
+                "stop_policy",
+                "cross-provider evaluation adapter does not expose every benchmark stop sequence",
+                expected=", ".join(harness.stop_sequences or baseline.stop_sequences),
+                actual=", ".join(candidate.stop_sequences) or "<none>",
+                suggestion="Use provider-specific stopping settings that preserve the same parser boundary during eval replay.",
+                span=spans.get("stop_sequences") or spans.get("provider"),
+            )
+        )
+    missing_structured = _missing_strings(baseline.structured_output_modes, candidate.structured_output_modes)
+    if missing_structured:
+        findings.append(
+            _cross_provider_mismatch(
+                harness,
+                baseline,
+                candidate,
+                "structured_outputs",
+                "cross-provider evaluation adapter lacks structured-output modes used by the baseline harness",
+                expected=", ".join(baseline.structured_output_modes),
+                actual=", ".join(candidate.structured_output_modes) or "<none>",
+                suggestion="Compare structured-output evals only across adapters with equivalent schema or JSON modes.",
+                span=spans.get("answer_parser") or spans.get("provider"),
+            )
+        )
+    return tuple(findings)
+
+
+def _cross_provider_mismatch(
+    harness: EvaluationHarnessArtifact,
+    baseline: _ProviderEvalSnapshot,
+    candidate: _ProviderEvalSnapshot,
+    subject: str,
+    message: str,
+    *,
+    expected: str,
+    actual: str,
+    suggestion: str,
+    span: SourceSpan | None,
+) -> EvaluationHarnessFinding:
+    return EvaluationHarnessFinding(
+        rule_id="evaluation-harness-cross-provider-mismatch",
+        severity="error",
+        message=message,
+        suggestion=suggestion,
+        subject=f"providers.{candidate.artifact_name}.{subject}",
+        expected=f"{baseline.artifact_name}:{expected}",
+        actual=f"{candidate.artifact_name}:{actual}",
+        span=span,
+        witness=(
+            ("select evaluation harness", harness.benchmark_name, harness.name),
+            ("select baseline provider adapter", baseline.artifact_name, baseline.family or baseline.provider),
+            ("select candidate provider adapter", candidate.artifact_name, candidate.family or candidate.provider),
+            ("compare cross-provider eval surface", subject, "mismatch"),
+        ),
+    )
+
+
+def _provider_eval_snapshot(provider: ProviderConfigArtifact) -> _ProviderEvalSnapshot:
+    metadata = dict(provider.metadata)
+    request_fields = _metadata_strings(metadata, "request_fields", "request_shape_fields")
+    response_fields = _metadata_strings(metadata, "response_fields", "response_shape_fields")
+    stop_sequences = _metadata_strings(metadata, "stop_sequences", "stop")
+    structured_output_modes = _metadata_strings(metadata, "structured_output_modes")
+    family = _first_provider_family(
+        _metadata_string(metadata, "provider_family"),
+        provider.api_family,
+        provider.provider,
+    )
+    model = _metadata_string(metadata, "model") or _metadata_string(metadata, "model_name") or _metadata_string(metadata, "model_id")
+    return _ProviderEvalSnapshot(
+        artifact_name=provider.name,
+        provider=provider.provider,
+        family=family,
+        model=model,
+        request_fields=request_fields,
+        response_fields=response_fields,
+        tool_argument_encoding=_metadata_string(metadata, "tool_argument_encoding"),
+        supports_parallel_tools=_metadata_bool(metadata, "supports_parallel_tools"),
+        stop_sequences=stop_sequences,
+        structured_output_modes=structured_output_modes,
+    )
+
+
+def _metadata_string(metadata: Mapping[str, object], key: str) -> str | None:
+    value = metadata.get(key)
+    return value if isinstance(value, str) and value else None
+
+
+def _first_provider_family(*values: str | None) -> str | None:
+    from .provider_migration import canonical_provider_family
+
+    for value in values:
+        if (family := canonical_provider_family(value)) is not None:
+            return family
+    return None
+
+
+def _metadata_bool(metadata: Mapping[str, object], key: str) -> bool | None:
+    value = metadata.get(key)
+    return value if isinstance(value, bool) else None
+
+
+def _metadata_strings(metadata: Mapping[str, object], *keys: str) -> tuple[str, ...]:
+    values: list[str] = []
+    for key in keys:
+        value = metadata.get(key)
+        if isinstance(value, str) and value:
+            values.append(value)
+        elif isinstance(value, (list, tuple)) and all(isinstance(item, str) and item for item in value):
+            values.extend(value)
+        elif isinstance(value, Mapping):
+            values.extend(str(item) for item in value if isinstance(item, str) and item)
+    return tuple(sorted(dict.fromkeys(values)))
+
+
+def _missing_strings(required: Sequence[str], actual: Sequence[str]) -> tuple[str, ...]:
+    if not required:
+        return ()
+    return tuple(sorted(set(required).difference(actual)))
+
+
+def _join_nonempty(*parts: str) -> str:
+    return "; ".join(part for part in parts if part)
 
 
 def _tokenizer_findings(

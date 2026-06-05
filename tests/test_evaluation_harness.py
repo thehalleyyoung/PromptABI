@@ -338,6 +338,51 @@ def test_provider_hosted_evaluation_tokenizer_abstains_without_local_snapshot(tm
     assert not any(diagnostic.rule_id == "evaluation-harness-tokenizer-drift" for diagnostic in diagnostics)
 
 
+def test_evaluation_harness_reports_cross_provider_eval_matrix(tmp_path: Path) -> None:
+    config = _write_cross_provider_eval_config(tmp_path)
+
+    result = VerificationSession.from_config_file(config).run()
+    reports = [diagnostic for diagnostic in result.diagnostics if diagnostic.rule_id == "evaluation-harness-cross-provider-report"]
+
+    assert result.ok is True
+    assert reports
+    assert "7 adapter families" in reports[0].message
+    assert ("actual", "anthropic, bedrock, gemini, llama.cpp-server, ollama, openai, vllm-openai-server") in reports[0].properties
+    assert any(step.action == "collect provider adapter families" for step in reports[0].witness.steps)
+    assert not any(diagnostic.rule_id == "evaluation-harness-cross-provider-incomplete" for diagnostic in result.diagnostics)
+
+
+def test_evaluation_harness_detects_cross_provider_eval_mismatch(tmp_path: Path) -> None:
+    config = _write_cross_provider_eval_config(
+        tmp_path,
+        provider_overrides={
+            "ollama": {
+                "response_fields": ["message"],
+                "stop_sequences": ["<|done|>"],
+                "structured_output_modes": [],
+                "supports_parallel_tools": False,
+            }
+        },
+    )
+
+    result = VerificationSession.from_config_file(config).run()
+    mismatches = [diagnostic for diagnostic in result.diagnostics if diagnostic.rule_id == "evaluation-harness-cross-provider-mismatch"]
+
+    assert result.ok is False
+    assert {dict(diagnostic.properties)["subject"] for diagnostic in mismatches} >= {
+        "providers.ollama.stop_policy",
+        "providers.ollama.structured_outputs",
+        "providers.ollama.request_response",
+        "providers.ollama.parallel_tools",
+    }
+    assert any(
+        step.action == "select candidate provider adapter" and step.output == "ollama"
+        for diagnostic in mismatches
+        for step in diagnostic.witness.steps
+    )
+    assert all(diagnostic.span is not None for diagnostic in mismatches)
+
+
 def _write_eval_tokenizer(
     root: Path,
     *,
@@ -376,3 +421,95 @@ def _write_eval_tokenizer(
         json.dumps({"stop_strings": stop_strings, "eos_token_id": eos_id}, sort_keys=True),
         encoding="utf-8",
     )
+
+
+def _write_cross_provider_eval_config(
+    tmp_path: Path,
+    *,
+    provider_overrides: dict[str, dict[str, object]] | None = None,
+) -> Path:
+    provider_overrides = provider_overrides or {}
+    harness = tmp_path / "harness.json"
+    harness.write_text(
+        json.dumps(
+            {
+                "benchmark_name": "cross-provider-contract-eval",
+                "provider": "openai-compatible",
+                "model": "eval-model",
+                "tokenizer": "byte-bpe",
+                "prompt_template": "template",
+                "answer_parser": "json-schema",
+                "answer_schema": "schema",
+                "stop_sequences": ["</answer>"],
+                "prompt_variables": ["question"],
+                "required_prompt_variables": ["question"],
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "tokenizer.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "template.json").write_text('{"chat_template":"{{ messages[0].content }}"}', encoding="utf-8")
+    (tmp_path / "stop-policy.json").write_text(json.dumps({"stop": ["</answer>"]}), encoding="utf-8")
+    (tmp_path / "answer.schema.json").write_text('{"type":"object"}', encoding="utf-8")
+
+    base_metadata: dict[str, object] = {
+        "model": "eval-model",
+        "request_fields": ["messages", "tools", "response_format"],
+        "response_fields": ["choices", "message", "tool_calls"],
+        "tool_argument_encoding": "json-string",
+        "supports_parallel_tools": True,
+        "stop_sequences": ["</answer>"],
+        "structured_output_modes": ["json_schema"],
+    }
+    provider_specs = {
+        "openai": ("openai-compatible", "openai"),
+        "anthropic": ("anthropic", "anthropic"),
+        "gemini": ("gemini", "gemini"),
+        "bedrock": ("bedrock", "bedrock"),
+        "vllm": ("vllm-openai-server", "vllm-openai-server"),
+        "llamacpp": ("llama.cpp-server", "llama.cpp-server"),
+        "ollama": ("ollama", "ollama"),
+    }
+    artifacts: dict[str, object] = {
+        "eval": {"kind": "evaluation-harness", "path": "harness.json"},
+        "tokenizer": {"kind": "tokenizer", "path": "tokenizer.json", "family": "byte-bpe"},
+        "template": {"kind": "chat-template", "path": "template.json"},
+        "stops": {"kind": "stop-policy", "path": "stop-policy.json"},
+        "schema": {"kind": "schema", "path": "answer.schema.json", "dialect": "json-schema"},
+    }
+    for artifact_name, (provider_name, family) in provider_specs.items():
+        provider_path = tmp_path / f"{artifact_name}.json"
+        provider_path.write_text(
+            json.dumps(
+                {
+                    "provider": provider_name,
+                    "api_family": family,
+                    "request_shape": {"messages": "array", "tools": "array", "response_format": "object"},
+                    "response_shape": {"choices": "array", "message": "object", "tool_calls": "array"},
+                },
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+        metadata = {**base_metadata, "provider_family": family, **provider_overrides.get(artifact_name, {})}
+        artifacts[artifact_name] = {
+            "kind": "provider-config",
+            "path": f"{artifact_name}.json",
+            "provider": provider_name,
+            "metadata": metadata,
+        }
+
+    config = tmp_path / "promptabi.json"
+    config.write_text(
+        json.dumps(
+            {
+                "name": "cross-provider-eval",
+                "checks": ["evaluation-harness-contracts"],
+                "artifacts": artifacts,
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    return config

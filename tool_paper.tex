@@ -95,7 +95,11 @@ provider/model metadata, eval-tokenizer drift pins, prompt templates, prompt
 variables, few-shot roles/budgets, multi-turn history truncation, system-prompt
 survival, role alternation, tool availability, JSON answer parsers, schemas,
 stops, and private answer-key, grader-rubric, and chain-of-thought fields agree
-with the model/provider contract before a benchmark score is trusted,
+with the model/provider contract before a benchmark score is trusted, including
+bounded cross-provider compatibility reports that compare OpenAI-compatible,
+Anthropic-style, Gemini-style, Bedrock, local vLLM, llama.cpp, and Ollama eval
+adapters for request/response fields, tool argument encoding, parallel tool
+support, stop policies, and structured-output modes,
 a curated \texttt{promptabi gallery} that reruns real pinned configurations,
 emits compatibility badges, summarizes actual solver backends rather than merely
 advertised solver capability, and explains abstentions plus accepted risks,
@@ -484,7 +488,10 @@ provider families for request, response, tool, stop, streaming, context,
 structured-output, error, and routing compatibility, validates provider fixture
 packs that capture secret-free request/response shapes, tool-call encodings, stop
 behavior, streaming deltas, error envelopes, and edge-case limits for offline
-replay,
+replay, and emits cross-provider evaluation reports over real provider fixtures
+so benchmark claims can distinguish comparable adapter surfaces from missing
+request fields, stop-policy drift, unsupported parallel tools, or absent
+structured-output modes,
 ships paired end-to-end buggy/fixed mini applications for tool calling, JSON
 structured output, RAG truncation, provider migration, supervised
 training-data alignment, trained-on-invalid-interface examples, and
