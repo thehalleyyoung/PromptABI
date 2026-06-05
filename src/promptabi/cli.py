@@ -140,6 +140,14 @@ from .mutation_fuzzing import (
 )
 from .plugins import PluginError, PluginRegistry, load_plugin_modules
 from .policies import policy_forbids_local_summary
+from .prompt_packs import (
+    PromptPackLockError,
+    build_prompt_pack_lockfile,
+    compare_prompt_pack_lockfile,
+    load_prompt_pack_lockfile,
+    prompt_pack_lock_error_diagnostic,
+    write_prompt_pack_lockfile,
+)
 from .proof_sketches import (
     build_supported_proof_catalog,
     render_proof_sketch_report_json,
@@ -147,7 +155,7 @@ from .proof_sketches import (
 )
 from .render import SarifRenderOptions, render_github_annotations, render_html, render_json, render_sarif, render_text
 from .seed_corpus import SeedCorpusError, build_seed_corpus_manifest, write_seed_corpus_manifest
-from .session import VerificationSession
+from .session import VerificationResult, VerificationSession
 from .smt_benchmarks import (
     SmtBenchmarkError,
     build_smt_benchmark_manifest,
@@ -505,6 +513,60 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="overwrite existing scaffold files",
     )
+
+    prompt_pack = subparsers.add_parser("prompt-pack", help="manage reusable prompt-pack contracts")
+    prompt_pack_subparsers = prompt_pack.add_subparsers(dest="prompt_pack_command", required=True)
+    prompt_pack_lock = prompt_pack_subparsers.add_parser(
+        "lock",
+        help="write or enforce a package-manager-style lockfile for prompt-pack contracts",
+    )
+    prompt_pack_lock.add_argument(
+        "--config",
+        help="path to a PromptABI JSON config containing prompt-pack artifacts; defaults to discovering promptabi.json",
+    )
+    prompt_pack_lock.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        metavar="NAME=PATH_OR_URI",
+        help="override or add an artifact location for this run; may be repeated",
+    )
+    prompt_pack_lock.add_argument(
+        "--lockfile",
+        help="path to the prompt-pack lockfile (default: prompt-pack.lock.json beside the config)",
+    )
+    prompt_pack_lock.add_argument(
+        "--write",
+        action="store_true",
+        help="write the prompt-pack lockfile after verifying the configured prompt packs",
+    )
+    prompt_pack_lock.add_argument(
+        "--check",
+        action="store_true",
+        help="compare current prompt-pack packages and diagnostics against the lockfile",
+    )
+    prompt_pack_lock.add_argument(
+        "--fail-on",
+        choices=("error", "warning", "any", "never"),
+        default="error",
+        help="exit with code 1 at this diagnostic threshold (default: error)",
+    )
+    prompt_pack_lock.add_argument(
+        "--format",
+        default="text",
+        help="output format: text, html, json, sarif, github-annotations, or a plugin renderer (default: text)",
+    )
+    prompt_pack_lock.add_argument("-q", "--quiet", action="count", default=0, help="suppress informational text output")
+    prompt_pack_lock.add_argument("-v", "--verbose", action="count", default=0, help="include config and lockfile paths")
+    prompt_pack_lock.add_argument(
+        "--plugin",
+        action="append",
+        default=[],
+        metavar="MODULE[:OBJECT]",
+        help="import a PromptABI plugin module for renderer extensions; may be repeated",
+    )
+    _add_github_output_arguments(prompt_pack_lock)
+    _add_local_summary_argument(prompt_pack_lock)
 
     corpus = subparsers.add_parser("corpus", help="seed corpus maintenance commands")
     corpus_subparsers = corpus.add_subparsers(dest="corpus_command", required=True)
@@ -1641,6 +1703,84 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"next: promptabi verify --config {written[0]}")
         return 0
 
+    if args.command == "prompt-pack" and args.prompt_pack_command == "lock":
+        started_at = time.perf_counter()
+        try:
+            if args.quiet and args.verbose:
+                parser.error("--quiet and --verbose cannot be used together")
+            if not args.write and not args.check:
+                args.write = True
+            config_path = Path(args.config).resolve() if args.config else discover_config()
+            plugin_registry = _load_cli_plugins(args.plugin)
+            overrides = _parse_artifact_overrides(args.artifact, parser)
+            config = load_config(config_path).with_artifact_overrides(overrides, base_dir=Path.cwd())
+            if args.local_summary is not None and policy_forbids_local_summary(config.policy):
+                print("promptabi: organization policy pack forbids --local-summary writes", file=sys.stderr)
+                return 2
+            session = VerificationSession(config, plugin_registry=plugin_registry)
+            result = session.run()
+            loaded_artifacts, load_diagnostics = session.load_artifacts_with_diagnostics()
+            load_failed = any(diagnostic.severity.value == "error" for diagnostic in load_diagnostics)
+            lockfile_path = _resolve_prompt_pack_lockfile_path(args.lockfile, config_path)
+            lock_diagnostics = ()
+            if args.write:
+                if load_failed:
+                    print("promptabi: cannot write prompt-pack lockfile while artifact loading has errors", file=sys.stderr)
+                    return 2
+                write_prompt_pack_lockfile(
+                    lockfile_path,
+                    build_prompt_pack_lockfile(loaded_artifacts, result.diagnostics, base_dir=lockfile_path.parent),
+                )
+            if args.check:
+                try:
+                    lock_diagnostics = compare_prompt_pack_lockfile(
+                        load_prompt_pack_lockfile(lockfile_path),
+                        loaded_artifacts,
+                        result.diagnostics,
+                        lockfile_path=lockfile_path,
+                    )
+                except PromptPackLockError as exc:
+                    lock_diagnostics = (prompt_pack_lock_error_diagnostic(exc, lockfile_path=lockfile_path),)
+            if lock_diagnostics:
+                result = VerificationResult(
+                    config=result.config,
+                    diagnostics=tuple(sorted((*result.diagnostics, *lock_diagnostics), key=lambda item: item.sort_key)),
+                )
+        except (ConfigError, PromptPackLockError, PluginError, ValueError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write prompt-pack lockfile: {exc}", file=sys.stderr)
+            return 2
+        try:
+            output = _render_verification_output(
+                result,
+                args.format,
+                plugin_registry=plugin_registry,
+                text_kwargs={
+                    "verbosity": args.verbose - args.quiet,
+                    "config_path": config_path if args.verbose else None,
+                    "heading": "PromptABI prompt-pack lock",
+                },
+                sarif_options=_sarif_options(args, argv),
+            )
+        except PluginError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        if args.format == "text" and args.verbose:
+            output += f"prompt-pack lockfile: {lockfile_path}\n"
+        exit_code = _exit_code(result, fail_on=args.fail_on)
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="prompt-pack lock",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata=_verification_summary_metadata(result, output_format=args.format, fail_on=args.fail_on),
+        ):
+            return 2
+        print(output, end="")
+        return exit_code
+
     if args.command == "corpus" and args.corpus_command == "manifest":
         try:
             if args.output:
@@ -2407,6 +2547,12 @@ def _resolve_lockfile_path(value: str | None, config_path: Path) -> Path:
     if value:
         return Path(value).expanduser().resolve()
     return config_path.with_name("promptabi.lock.json")
+
+
+def _resolve_prompt_pack_lockfile_path(value: str | None, config_path: Path) -> Path:
+    if value:
+        return Path(value).expanduser().resolve()
+    return config_path.with_name("prompt-pack.lock.json")
 
 
 def _load_cli_plugins(values: Sequence[str]) -> PluginRegistry:

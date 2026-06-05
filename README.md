@@ -57,7 +57,7 @@ The same local verifier covers:
 | **Stops** | unreachable stops, tokenizer normalization ambiguity, special-token collisions, and stops that can fire inside JSON/tool/string fields |
 | **Grammars + schemas** | JSON Schema/regex/EBNF/Outlines/xgrammar/llguidance fragments that are empty, ambiguous, or parser-incompatible under tokenizer assumptions |
 | **Tools + providers** | OpenAI, Anthropic, MCP, LangChain, Pydantic, TypeScript-style, vLLM, llama.cpp, LiteLLM, Gemini, Bedrock, Groq, Together, and Ollama serialization drift |
-| **Prompt packs** | reusable prompt-library templates checked against expected roles, tool schemas, stop policies, and supported model/provider families |
+| **Prompt packs** | reusable prompt-library templates plus package-style locks for role, tool, stop, model-family, and contract-drift guarantees |
 | **Budgets + RAG** | must-survive prompt segments, dropped citations, metadata inflation, tokenizer mismatch, framework truncation, and context-window overflow |
 | **Provenance** | artifact hashes, licenses, trusted sources, reproducible HF revisions, lockfile drift, and offline fixture integrity |
 | **Enterprise posture** | org policy packs for required checks, severity, supported fragments, solver caps, privacy rules, approved fixtures, and no-network mirrors |
@@ -90,6 +90,7 @@ promptabi init --stack openai-tools --output-dir .promptabi-demo
 # Replay paired buggy/fixed app contracts across tools, JSON, RAG, providers, and training.
 promptabi verify --config examples/end-to-end/tool-calling/buggy.promptabi.json --fail-on never
 promptabi verify --config examples/prompt-packs/promptabi.json
+promptabi prompt-pack lock --config examples/prompt-packs/promptabi.json --write --lockfile /tmp/prompt-pack.lock.json
 promptabi verify --config examples/end-to-end/training-quickstart/fixed.promptabi.json
 promptabi verify-training --manifest examples/end-to-end/training-quickstart/fixed.training-manifest.json
 

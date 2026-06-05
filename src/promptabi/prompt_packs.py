@@ -1,9 +1,13 @@
-"""Prompt-pack parsing and compatibility checks."""
+"""Prompt-pack parsing, package locks, and compatibility checks."""
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
+from typing import Any
 
 from .artifacts import (
     Artifact,
@@ -18,7 +22,24 @@ from .artifacts import (
     TokenizerArtifact,
     ToolDefinitionArtifact,
 )
-from .diagnostics import SourceSpan
+from .diagnostics import (
+    ArtifactRef,
+    CheckMode,
+    Diagnostic,
+    DiagnosticSeverity,
+    SourceSpan,
+    WitnessStep,
+    WitnessTrace,
+)
+from .loaders import LoadedArtifact
+
+
+PROMPT_PACK_LOCKFILE_VERSION = 1
+PROMPT_PACK_LOCK_CHECK_MODES = (CheckMode.SOUND, CheckMode.COMPLETE)
+
+
+class PromptPackLockError(ValueError):
+    """Raised when a prompt-pack lockfile cannot be read or compared."""
 
 
 class PromptPackFindingKind(StrEnum):
@@ -55,6 +76,114 @@ class PromptPackReport:
     findings: tuple[PromptPackFinding, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class PromptPackLockEntry:
+    """Deterministic package-manager-style lock entry for one prompt pack."""
+
+    name: str
+    package_name: str
+    version: str | None
+    location: str
+    sha256: str | None
+    contract_hash: str
+    exported_templates: tuple[tuple[str, str, str], ...]
+    tool_schemas: tuple[tuple[str, str | None, str | None, bool], ...]
+    stop_policies: tuple[tuple[str, tuple[str, ...], tuple[int, ...], bool], ...]
+    supported_model_families: tuple[str, ...]
+    expected_roles: tuple[str, ...]
+    diagnostic_baseline: tuple[tuple[str, str, str], ...]
+
+    @classmethod
+    def from_mapping(cls, data: dict[str, Any]) -> "PromptPackLockEntry":
+        return cls(
+            name=_required_str(data, "name"),
+            package_name=_required_str(data, "package_name"),
+            version=_optional_str(data, "version"),
+            location=_required_str(data, "location"),
+            sha256=_optional_str(data, "sha256"),
+            contract_hash=_required_str(data, "contract_hash"),
+            exported_templates=_template_lock_entries(data.get("exported_templates", [])),
+            tool_schemas=_tool_lock_entries(data.get("tool_schemas", [])),
+            stop_policies=_stop_lock_entries(data.get("stop_policies", [])),
+            supported_model_families=_string_tuple(data.get("supported_model_families", []), "supported_model_families"),
+            expected_roles=_string_tuple(data.get("expected_roles", []), "expected_roles"),
+            diagnostic_baseline=_diagnostic_lock_entries(data.get("diagnostic_baseline", [])),
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {
+            "contract_hash": self.contract_hash,
+            "diagnostic_baseline": [
+                {"fingerprint": fingerprint, "rule_id": rule_id, "severity": severity}
+                for rule_id, severity, fingerprint in self.diagnostic_baseline
+            ],
+            "expected_roles": list(self.expected_roles),
+            "exported_templates": [
+                {
+                    "name": name,
+                    "roles_hash": roles_hash,
+                    "template_hash": template_hash,
+                }
+                for name, template_hash, roles_hash in self.exported_templates
+            ],
+            "location": self.location,
+            "name": self.name,
+            "package_name": self.package_name,
+            "stop_policies": [
+                {
+                    "include_eos": include_eos,
+                    "name": name,
+                    "stop_sequences": list(stop_sequences),
+                    "stop_token_ids": list(stop_token_ids),
+                }
+                for name, stop_sequences, stop_token_ids, include_eos in self.stop_policies
+            ],
+            "supported_model_families": list(self.supported_model_families),
+            "tool_schemas": [
+                {
+                    "name": name,
+                    "provider": provider,
+                    "required": required,
+                    "schema_digest": schema_digest,
+                }
+                for name, provider, schema_digest, required in self.tool_schemas
+            ],
+        }
+        if self.sha256 is not None:
+            data["sha256"] = self.sha256
+        if self.version is not None:
+            data["version"] = self.version
+        return data
+
+
+@dataclass(frozen=True, slots=True)
+class PromptPackLockfile:
+    """Lockfile that pins reusable prompt-pack packages and verified contracts."""
+
+    entries: tuple[PromptPackLockEntry, ...]
+    lockfile_version: int = PROMPT_PACK_LOCKFILE_VERSION
+
+    @classmethod
+    def from_mapping(cls, data: dict[str, Any]) -> "PromptPackLockfile":
+        if data.get("lockfile_version") != PROMPT_PACK_LOCKFILE_VERSION:
+            raise PromptPackLockError(f"unsupported prompt-pack lockfile version: {data.get('lockfile_version')!r}")
+        raw_entries = data.get("prompt_packs")
+        if not isinstance(raw_entries, list):
+            raise PromptPackLockError("prompt-pack lockfile field 'prompt_packs' must be a list")
+        entries: list[PromptPackLockEntry] = []
+        for item in raw_entries:
+            if not isinstance(item, dict):
+                raise PromptPackLockError("prompt-pack lock entries must be objects")
+            entries.append(PromptPackLockEntry.from_mapping(item))
+        return cls(entries=tuple(sorted(entries, key=lambda item: item.name)))
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "lockfile_version": self.lockfile_version,
+            "prompt_packs": [entry.to_dict() for entry in self.entries],
+        }
+
+
 def analyze_prompt_pack_contracts(
     prompt_pack: PromptPackArtifact,
     artifacts: tuple[Artifact, ...],
@@ -75,6 +204,7 @@ def analyze_prompt_pack_contracts(
             )
         )
         return PromptPackReport(tuple(findings))
+
 
     expected_roles = set(prompt_pack.expected_roles)
     for template in prompt_pack.exported_templates:
@@ -191,6 +321,150 @@ def analyze_prompt_pack_contracts(
     return PromptPackReport(tuple(findings))
 
 
+def build_prompt_pack_lockfile(
+    loaded_artifacts: tuple[LoadedArtifact, ...],
+    diagnostics: tuple[Diagnostic, ...] = (),
+    *,
+    base_dir: str | Path | None = None,
+) -> PromptPackLockfile:
+    """Build a deterministic lockfile for the configured prompt-pack package set."""
+
+    resolved_base = Path(base_dir).expanduser().resolve() if base_dir is not None else None
+    entries: list[PromptPackLockEntry] = []
+    for loaded in loaded_artifacts:
+        if isinstance(loaded.artifact, PromptPackArtifact):
+            entries.append(_prompt_pack_lock_entry(loaded, diagnostics, base_dir=resolved_base))
+    if not entries:
+        raise PromptPackLockError("no prompt-pack artifacts are loaded; cannot write a prompt-pack lockfile")
+    return PromptPackLockfile(tuple(sorted(entries, key=lambda entry: entry.name)))
+
+
+def prompt_pack_lockfile_to_json(lockfile: PromptPackLockfile) -> str:
+    return json.dumps(lockfile.to_dict(), indent=2, sort_keys=True) + "\n"
+
+
+def load_prompt_pack_lockfile(path: str | Path) -> PromptPackLockfile:
+    lockfile_path = Path(path)
+    try:
+        raw = json.loads(lockfile_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise PromptPackLockError(f"prompt-pack lockfile not found: {lockfile_path}") from exc
+    except json.JSONDecodeError as exc:
+        raise PromptPackLockError(
+            f"prompt-pack lockfile is not valid JSON at {lockfile_path}:{exc.lineno}:{exc.colno}: {exc.msg}"
+        ) from exc
+    if not isinstance(raw, dict):
+        raise PromptPackLockError("prompt-pack lockfile root must be a JSON object")
+    return PromptPackLockfile.from_mapping(raw)
+
+
+def write_prompt_pack_lockfile(path: str | Path, lockfile: PromptPackLockfile) -> None:
+    lockfile_path = Path(path)
+    lockfile_path.parent.mkdir(parents=True, exist_ok=True)
+    lockfile_path.write_text(prompt_pack_lockfile_to_json(lockfile), encoding="utf-8")
+
+
+def compare_prompt_pack_lockfile(
+    lockfile: PromptPackLockfile,
+    loaded_artifacts: tuple[LoadedArtifact, ...],
+    diagnostics: tuple[Diagnostic, ...] = (),
+    *,
+    lockfile_path: str | Path | None = None,
+) -> tuple[Diagnostic, ...]:
+    """Return diagnostics for prompt-pack package or verified-contract drift."""
+
+    base_dir = Path(lockfile_path).expanduser().resolve().parent if lockfile_path is not None else None
+    current = build_prompt_pack_lockfile(loaded_artifacts, diagnostics, base_dir=base_dir)
+    drift: list[Diagnostic] = []
+    expected_by_name = {entry.name: entry for entry in lockfile.entries}
+    current_by_name = {entry.name: entry for entry in current.entries}
+    for name in sorted(expected_by_name.keys() - current_by_name.keys()):
+        drift.append(
+            _prompt_pack_lock_diagnostic(
+                "prompt-pack-lock-missing",
+                f"prompt pack '{name}' is present in the lockfile but missing from current verification",
+                "prompt_pack",
+                "present",
+                "missing",
+                entry=expected_by_name[name],
+                lockfile_path=lockfile_path,
+            )
+        )
+    for name in sorted(current_by_name.keys() - expected_by_name.keys()):
+        drift.append(
+            _prompt_pack_lock_diagnostic(
+                "prompt-pack-lock-added",
+                f"prompt pack '{name}' is new relative to the lockfile",
+                "prompt_pack",
+                "missing",
+                "present",
+                entry=current_by_name[name],
+                lockfile_path=lockfile_path,
+            )
+        )
+    for name in sorted(expected_by_name.keys() & current_by_name.keys()):
+        expected = expected_by_name[name]
+        actual = current_by_name[name]
+        for field in (
+            "package_name",
+            "version",
+            "location",
+            "sha256",
+            "contract_hash",
+            "exported_templates",
+            "tool_schemas",
+            "stop_policies",
+            "supported_model_families",
+            "expected_roles",
+            "diagnostic_baseline",
+        ):
+            if getattr(expected, field) != getattr(actual, field):
+                drift.append(
+                    _prompt_pack_lock_diagnostic(
+                        "prompt-pack-lock-drift",
+                        f"prompt pack '{name}' {field.replace('_', ' ')} differs from the lockfile",
+                        field,
+                        str(getattr(expected, field)),
+                        str(getattr(actual, field)),
+                        entry=actual,
+                        lockfile_path=lockfile_path,
+                    )
+                )
+    if not drift:
+        return (
+            _prompt_pack_lock_diagnostic(
+                "prompt-pack-lock-verified",
+                "prompt-pack lockfile matches the current prompt-pack packages and verified contracts",
+                "prompt_pack_lockfile",
+                "matched",
+                "matched",
+                severity=DiagnosticSeverity.INFO,
+                lockfile_path=lockfile_path,
+            ),
+        )
+    return tuple(drift)
+
+
+def prompt_pack_lock_error_diagnostic(
+    exc: PromptPackLockError,
+    *,
+    lockfile_path: str | Path | None = None,
+) -> Diagnostic:
+    path = str(lockfile_path) if lockfile_path is not None else None
+    return Diagnostic(
+        rule_id="prompt-pack-lock-load-failed",
+        severity=DiagnosticSeverity.ERROR,
+        message=str(exc),
+        artifact=ArtifactRef(kind="prompt-pack-lockfile", name="prompt-pack-lockfile", path=path) if path else None,
+        check_modes=PROMPT_PACK_LOCK_CHECK_MODES,
+        suggestions=("Run promptabi prompt-pack lock after reviewing current prompt-pack packages.",),
+        witness=WitnessTrace(
+            summary="PromptABI could not load the prompt-pack lockfile for enforcement.",
+            steps=(WitnessStep(action="load prompt-pack lockfile", input=path, output=str(exc)),),
+        ),
+    )
+
+
 def _application_roles(artifacts: tuple[Artifact, ...]) -> set[str]:
     roles: set[str] = set()
     for artifact in artifacts:
@@ -227,3 +501,224 @@ def _application_model_families(artifacts: tuple[Artifact, ...]) -> set[str]:
         elif isinstance(artifact, TokenizerArtifact) and artifact.family is not None:
             families.add(artifact.family)
     return families
+
+
+def _prompt_pack_lock_entry(
+    loaded: LoadedArtifact,
+    diagnostics: tuple[Diagnostic, ...],
+    *,
+    base_dir: Path | None,
+) -> PromptPackLockEntry:
+    artifact = loaded.artifact
+    if not isinstance(artifact, PromptPackArtifact):
+        raise PromptPackLockError("prompt-pack lock entries can only be built from prompt-pack artifacts")
+    payload = {
+        "expected_roles": list(artifact.expected_roles),
+        "exported_templates": [template.to_dict() for template in artifact.exported_templates],
+        "pack_name": artifact.pack_name,
+        "stop_policies": [stop_policy.to_dict() for stop_policy in artifact.stop_policies],
+        "supported_model_families": list(artifact.supported_model_families),
+        "tool_schemas": [tool.to_dict() for tool in artifact.tool_schemas],
+        "version": artifact.pack_version,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return PromptPackLockEntry(
+        name=artifact.name,
+        package_name=artifact.pack_name,
+        version=artifact.pack_version,
+        location=_portable_path_string(artifact.location.ref_path or "", base_dir=base_dir),
+        sha256=loaded.actual_sha256 or artifact.provenance.sha256,
+        contract_hash=hashlib.sha256(encoded).hexdigest(),
+        exported_templates=tuple(
+            sorted(
+                (
+                    template.name,
+                    _sha256_text(template.template),
+                    _sha256_text("\n".join(template.roles)),
+                )
+                for template in artifact.exported_templates
+            )
+        ),
+        tool_schemas=tuple(
+            sorted((tool.name, tool.provider, tool.schema_digest, tool.required) for tool in artifact.tool_schemas)
+        ),
+        stop_policies=tuple(
+            sorted(
+                (
+                    stop_policy.name,
+                    stop_policy.stop_sequences,
+                    stop_policy.stop_token_ids,
+                    stop_policy.include_eos,
+                )
+                for stop_policy in artifact.stop_policies
+            )
+        ),
+        supported_model_families=artifact.supported_model_families,
+        expected_roles=artifact.expected_roles,
+        diagnostic_baseline=_prompt_pack_diagnostic_baseline(artifact.name, diagnostics),
+    )
+
+
+def _prompt_pack_diagnostic_baseline(
+    artifact_name: str,
+    diagnostics: tuple[Diagnostic, ...],
+) -> tuple[tuple[str, str, str], ...]:
+    return tuple(
+        sorted(
+            (diagnostic.rule_id, diagnostic.severity.value, diagnostic.fingerprint)
+            for diagnostic in diagnostics
+            if diagnostic.rule_id.startswith("prompt-pack-")
+            and not diagnostic.rule_id.startswith("prompt-pack-lock-")
+            and diagnostic.artifact is not None
+            and diagnostic.artifact.name == artifact_name
+        )
+    )
+
+
+def _prompt_pack_lock_diagnostic(
+    rule_id: str,
+    message: str,
+    field: str,
+    expected: str,
+    actual: str,
+    *,
+    entry: PromptPackLockEntry | None = None,
+    severity: DiagnosticSeverity = DiagnosticSeverity.ERROR,
+    lockfile_path: str | Path | None,
+) -> Diagnostic:
+    artifact = (
+        ArtifactRef(kind="prompt-pack", name=entry.name, path=entry.location if "://" not in entry.location else None, uri=entry.location if "://" in entry.location else None)
+        if entry is not None
+        else ArtifactRef(kind="prompt-pack-lockfile", name="prompt-pack-lockfile", path=str(lockfile_path) if lockfile_path is not None else None)
+    )
+    return Diagnostic(
+        rule_id=rule_id,
+        severity=severity,
+        message=message,
+        artifact=artifact,
+        check_modes=PROMPT_PACK_LOCK_CHECK_MODES,
+        suggestions=("Regenerate the prompt-pack lockfile only after reviewing package and contract changes.",),
+        witness=WitnessTrace(
+            summary="The enforced prompt-pack lockfile does not match the current package contract state."
+            if severity is DiagnosticSeverity.ERROR
+            else "The enforced prompt-pack lockfile matches the current package contract state.",
+            steps=(
+                WitnessStep(action="read prompt-pack lockfile", input=str(lockfile_path) if lockfile_path is not None else None),
+                WitnessStep(action=f"compare {field}", input=expected, output=actual),
+            ),
+            artifacts=(artifact,),
+        ),
+        properties=(("actual", actual), ("expected", expected), ("field", field)),
+    )
+
+
+def _sha256_text(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _portable_path_string(value: str, *, base_dir: Path | None) -> str:
+    if base_dir is None or "://" in value:
+        return value
+    try:
+        path = Path(value)
+    except ValueError:
+        return value
+    if not path.is_absolute():
+        return value
+    try:
+        return path.resolve().relative_to(base_dir).as_posix()
+    except ValueError:
+        return value
+
+
+def _template_lock_entries(value: object) -> tuple[tuple[str, str, str], ...]:
+    if not isinstance(value, list):
+        raise PromptPackLockError("prompt-pack lock field 'exported_templates' must be a list")
+    entries: list[tuple[str, str, str]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise PromptPackLockError("prompt-pack lock exported template entries must be objects")
+        entries.append((_required_str(item, "name"), _required_str(item, "template_hash"), _required_str(item, "roles_hash")))
+    return tuple(sorted(entries))
+
+
+def _tool_lock_entries(value: object) -> tuple[tuple[str, str | None, str | None, bool], ...]:
+    if not isinstance(value, list):
+        raise PromptPackLockError("prompt-pack lock field 'tool_schemas' must be a list")
+    entries: list[tuple[str, str | None, str | None, bool]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise PromptPackLockError("prompt-pack lock tool schema entries must be objects")
+        entries.append(
+            (
+                _required_str(item, "name"),
+                _optional_str(item, "provider"),
+                _optional_str(item, "schema_digest"),
+                _required_bool(item, "required"),
+            )
+        )
+    return tuple(sorted(entries))
+
+
+def _stop_lock_entries(value: object) -> tuple[tuple[str, tuple[str, ...], tuple[int, ...], bool], ...]:
+    if not isinstance(value, list):
+        raise PromptPackLockError("prompt-pack lock field 'stop_policies' must be a list")
+    entries: list[tuple[str, tuple[str, ...], tuple[int, ...], bool]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise PromptPackLockError("prompt-pack lock stop policy entries must be objects")
+        entries.append(
+            (
+                _required_str(item, "name"),
+                _string_tuple(item.get("stop_sequences", []), "stop_sequences"),
+                _int_tuple(item.get("stop_token_ids", []), "stop_token_ids"),
+                _required_bool(item, "include_eos"),
+            )
+        )
+    return tuple(sorted(entries))
+
+
+def _diagnostic_lock_entries(value: object) -> tuple[tuple[str, str, str], ...]:
+    if not isinstance(value, list):
+        raise PromptPackLockError("prompt-pack lock field 'diagnostic_baseline' must be a list")
+    entries: list[tuple[str, str, str]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise PromptPackLockError("prompt-pack lock diagnostic baseline entries must be objects")
+        entries.append((_required_str(item, "rule_id"), _required_str(item, "severity"), _required_str(item, "fingerprint")))
+    return tuple(sorted(entries))
+
+
+def _string_tuple(value: object, field_name: str) -> tuple[str, ...]:
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise PromptPackLockError(f"prompt-pack lock field '{field_name}' must be a list of strings")
+    return tuple(value)
+
+
+def _int_tuple(value: object, field_name: str) -> tuple[int, ...]:
+    if not isinstance(value, list) or not all(isinstance(item, int) and not isinstance(item, bool) for item in value):
+        raise PromptPackLockError(f"prompt-pack lock field '{field_name}' must be a list of integers")
+    return tuple(value)
+
+
+def _required_str(data: dict[str, Any], key: str) -> str:
+    value = data.get(key)
+    if not isinstance(value, str) or not value:
+        raise PromptPackLockError(f"prompt-pack lock field '{key}' must be a non-empty string")
+    return value
+
+
+def _optional_str(data: dict[str, Any], key: str) -> str | None:
+    value = data.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value:
+        raise PromptPackLockError(f"prompt-pack lock field '{key}' must be a non-empty string when present")
+    return value
+
+
+def _required_bool(data: dict[str, Any], key: str) -> bool:
+    value = data.get(key)
+    if not isinstance(value, bool):
+        raise PromptPackLockError(f"prompt-pack lock field '{key}' must be a boolean")
+    return value
