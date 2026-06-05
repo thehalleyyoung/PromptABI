@@ -43,10 +43,8 @@ The result is a CPU-only verifier that can be run in CI, before fine-tuning,
 before publishing benchmark scores, or before migrating providers. Its evidence
 is not a checklist of repository files: diagnostics carry executable witnesses,
 source spans, token paths, parser states, solver models, replay hashes, and
-privacy-preserving fingerprints. The implementation is validated by property
-tests, differential tests against real tokenizer/template libraries, replayable
-solver certificates, and public bug replays that traverse exact pinned
-production-code excerpts rather than only synthetic reductions.
+privacy-preserving fingerprints. The reported bug-finding evaluation uses public
+bug replays that traverse exact pinned production-code excerpts.
 \end{abstract}
 
 \section{Introduction}
@@ -86,9 +84,8 @@ PromptABI contributes:
   \item proof-producing diagnostics that distinguish verified safety,
   concrete counterexamples, and honest abstention;
   \item a deterministic CLI and embedding API designed for CI and offline use;
-  \item an evidence suite built from property tests, differential tests against
-  real libraries, replayable solver obligations, and public production-code bug
-  replays.
+  \item an evaluation suite whose reported bug-finding results come from public
+  production code in the wild, not synthetic simplifications of those bugs.
 \end{enumerate}
 
 \section{The Need}
@@ -340,62 +337,97 @@ structural witnesses for public fixtures, but private workflows can choose
 position-preserving redaction, hash-only evidence, or structural summaries while
 preserving stable fingerprints.
 
-\section{Evidence}
+\section{Evaluation}
 
-PromptABI's evidence strategy is layered.
+PromptABI's evaluation separates verifier-maintenance tests from real-world
+claims. Unit tests, property tests, and small local fixtures are useful for
+maintaining the implementation, but they are not counted here as bug-finding
+evidence. The evaluation in this paper counts only public upstream code that was
+shipped in the wild and is pinned by repository, commit, path, license, and
+SHA-256 hash.
 
-\paragraph{Executable examples.}
-Each major checker has examples that run through the public CLI or API. These
-examples are not screenshots; tests execute representative commands and inspect
-the resulting diagnostics.
+\subsection{Research Questions}
 
-\paragraph{Property and regression tests.}
-Generated and hand-written tests exercise safe, unsafe, ambiguous, unsupported,
-satisfiable, unsatisfiable, and abstaining cases. Snapshot tests lock diagnostic
-shape so integration users can depend on stable machine-readable output.
-
-\paragraph{Differential validation against real libraries.}
-Tokenizer and template abstractions are compared against real Hugging Face,
-SentencePiece, \texttt{tiktoken}, grammar, and parser behavior where those
-libraries define the deployed semantics.
-
-\paragraph{Public bug replay.}
-PromptABI includes a real-world bug corpus covering public reports in
-llama.cpp, vLLM, and Hugging Face Transformers. The benchmarked template and
-tool-parser cases now replay from exact pinned production-code excerpts. The
-Phi-style role-boundary case traverses the upstream chat template bytes before
-finding forged role markers. The Qwen3 XML tool-parser case extracts stop
-delimiters from the upstream parser source before proving that valid tool
-arguments can be truncated. Other cases retain minimized local payload models
-when the payload, not the upstream parser/template code, is the bounded object
-under test.
-
-\paragraph{Replayable solver certificates.}
-SMT-backed findings can be reduced to solver-replay JSON objects. These rerun
-the relevant finite obligation without requiring prompts, datasets, provider
-credentials, or full repository state.
-
-\section{Evaluation Methodology}
-
-A PLDI-style evaluation of PromptABI asks four questions.
-
+The evaluation asks four questions.
 \begin{enumerate}
-  \item \textbf{Bug finding:} does the tool catch known prompt-interface
-  failures before inference?
-  \item \textbf{Precision of evidence:} are reports actionable, replayable, and
-  tied to the responsible artifact?
-  \item \textbf{Coverage boundary:} does the tool clearly separate verified
-  fragments from abstentions?
-  \item \textbf{Integration cost:} can developers run it in ordinary CPU-only
-  workflows without model weights or secrets?
+  \item \textbf{Bug finding on real code:} when given exact production artifacts
+  from public incidents, does PromptABI find the interface bug?
+  \item \textbf{Attribution:} does the diagnostic identify the production
+  artifact and boundary responsible for the bug?
+  \item \textbf{Replayability:} can the result be rerun offline from pinned
+  public source bytes without model weights, provider calls, or private data?
+  \item \textbf{Cost:} is the check cheap enough for CI?
 \end{enumerate}
 
-PromptABI answers these questions with its public bug replay suite, structured
-schema and provider fixture suites, tokenizer and grammar conformance suites,
-training/evaluation fixture packs, release gates, and comparative studies. The
-important point is not a single aggregate number. The useful evidence is the
-combination of replayed bugs, minimized witnesses, differential agreement,
-explicit abstentions, and deterministic CI behavior.
+\subsection{Corpus}
+
+Table~\ref{tab:eval} lists the current evaluation corpus. Each row is exact code
+in the wild. The first row is the upstream llama.cpp Phi chat-template file. The
+second row is the upstream vLLM Qwen3 Coder tool-parser source. The tool loads
+the pinned source excerpt, validates the source hash, extracts the template or
+parser delimiters from those bytes, and only then runs the checker. If the
+expected value cannot be recovered from the source, the replay fails.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{0.22\linewidth}p{0.24\linewidth}p{0.25\linewidth}p{0.16\linewidth}}
+\toprule
+Production artifact & Public incident & Property checked & Result \\
+\midrule
+llama.cpp \texttt{microsoft-Phi-3.5-mini-instruct.jinja} at commit
+\texttt{2016bf2} &
+Phi-style role delimiter handling, llama.cpp PR 18462 &
+Can raw message content forge role/special-token boundaries? &
+Bug found: 18 role-boundary witnesses \\
+\addlinespace
+vLLM \texttt{qwen3coder\_tool\_parser.py} at commit \texttt{6a11d72} &
+Qwen3 XML tool parser regressions, vLLM PR 40861 &
+Can parser stop delimiters occur inside a valid tool argument boundary? &
+Bug found: 2 stop-overreach witnesses \\
+\bottomrule
+\end{tabular}
+\caption{Evaluation cases. Every case is replayed from exact pinned upstream
+production code; synthetic reductions are not counted.}
+\label{tab:eval}
+\end{table}
+
+\subsection{Results}
+
+PromptABI finds both production-code bugs in the corpus. The Phi case yields 18
+role-boundary witnesses after traversing 430 bytes of the exact upstream
+template. The Qwen3 case yields 2 stop-overreach witnesses after extracting
+\texttt{</tool\_call>}, \texttt{</function>}, and \texttt{</parameter>} from the
+exact upstream parser source. On a local CPU run, the complete evaluation command
+finishes in 0.64 seconds wall-clock time.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lr}
+\toprule
+Metric & Value \\
+\midrule
+Exact upstream production-code cases & 2 \\
+Cases with expected bug found & 2 \\
+Abstentions in counted cases & 0 \\
+Model or provider calls & 0 \\
+Total concrete witnesses & 20 \\
+Wall-clock runtime & 0.64s \\
+\bottomrule
+\end{tabular}
+\caption{Current production-code evaluation results.}
+\label{tab:results}
+\end{table}
+
+\subsection{Interpretation}
+
+The evaluation is intentionally small but strict. It does not claim that the
+entire public real-bug corpus has been converted to production-code replay.
+Non-production regression fixtures are excluded from the evaluation claim here.
+The claim is: for the counted cases, PromptABI traverses the same public code
+that shipped upstream, recovers the relevant boundary from that code, and
+produces concrete diagnostics before inference.
 
 \section{Limitations and Non-Goals}
 
@@ -434,8 +466,7 @@ emits replayable proofs, counterexamples, or abstentions before inference.
 
 The resulting workflow is practical because it is CPU-only, version-aware,
 source-mapped, privacy-conscious, and integrated with CI. It is credible because
-its diagnostics carry executable witnesses and because its real-bug evidence now
-includes exact production-code traversal, not only synthetic fixtures of known
-failures.
+its diagnostics carry executable witnesses and because its real-bug evaluation
+traverses exact production code that shipped in the wild.
 
 \end{document}
