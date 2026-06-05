@@ -92,7 +92,7 @@ promptabi matrix --format text
 # Show pinned, verified real-world-style configs with proof/risk badges.
 promptabi gallery --format text
 
-# Diagnose the local environment, optional backends, cache, plugins, and artifacts.
+# Diagnose the local environment and emit editor-ready inline diagnostics.
 promptabi doctor --config examples/minimal/promptabi.json
 promptabi diagnostics catalog --config examples/minimal/promptabi.json --format json
 promptabi diagnostics lsp --config examples/minimal/promptabi.json --format json

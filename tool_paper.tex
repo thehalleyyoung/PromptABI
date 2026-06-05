@@ -66,6 +66,9 @@ annotations, and upload GitHub-code-scanning SARIF, plus
 \texttt{promptabi pre-commit} local workflows that install PATH-independent git
 hooks and fail closed on staged schemas, templates, tokenizer configs, tool
 definitions, training manifests, PromptABI configs, and lockfiles before merge,
+and a minimal VS Code extension that shells out to the same deterministic CLI to
+publish inline diagnostics, rerun quick checks, open selected explanations, and
+preview rendered or tokenized witness traces,
 an opt-in \texttt{--local-summary} usage analytics path that appends only
 sanitized command names, exit codes, durations, diagnostic counts, and aggregate
 artifact/check counts to local JSONL while \texttt{promptabi usage privacy}
@@ -229,6 +232,11 @@ zero-based editor ranges, preserves fingerprints, suggestions, witnesses, and
 proof modes in diagnostic data, and publishes empty diagnostic arrays for watched
 local schemas, templates, stop policies, training manifests, and artifact bundles
 so editor shims can clear stale inline findings deterministically.
+A concrete VS Code extension now consumes that payload directly: it registers
+quick-check, explanation, and witness-preview commands, maps PromptABI spans to
+native diagnostics, attaches code actions to findings, and previews the exact
+render/tokenize witness steps produced by real checks rather than a separate
+editor-only analysis.
 The adjacent \texttt{promptabi bug-report} command uses the same selector and
 verification path but emits an upstream-ready markdown issue rather than a local
 tutorial, so the strongest evaluation unit---a maintainer-actionable bug
@@ -418,6 +426,8 @@ The repository layout is designed to scale:
 \texttt{src/promptabi} & Typed package, artifact model, formal automata, finite-state transducers, finite-contract core, offline loaders, CLI, configuration loading, diagnostic model, renderers, scheduler, analysis cache, and verification session. \\
 \hline
 \texttt{src/promptabi/plugins.py} & Typed extension registry for artifact loaders, dependency-aware checks, diagnostic renderers, and capability metadata covering provider adapters, grammar backends, template dialects, truncation policies, and solver encodings. \\
+\hline
+\texttt{editors/vscode} & Minimal VS Code extension shim that invokes \texttt{promptabi diagnostics lsp} and \texttt{promptabi explain}, publishes inline diagnostics, contributes quick-check/code-action commands, and renders witness previews from real verification payloads. \\
 \hline
 \texttt{tests} & Focused tests for package API and CLI determinism. \\
 \hline

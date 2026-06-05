@@ -1,0 +1,84 @@
+{
+  "name": "promptabi-vscode",
+  "displayName": "PromptABI",
+  "description": "Inline PromptABI diagnostics, explanations, and witness previews for prompt-interface contracts.",
+  "version": "0.1.0",
+  "publisher": "promptabi",
+  "license": "Apache-2.0",
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "categories": [
+    "Linters",
+    "Testing"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:promptabi.quickCheck",
+    "onCommand:promptabi.explainDiagnostic",
+    "onCommand:promptabi.previewWitness",
+    "workspaceContains:**/promptabi.json",
+    "workspaceContains:**/*.promptabi.json"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "promptabi.quickCheck",
+        "title": "PromptABI: Run Quick Check"
+      },
+      {
+        "command": "promptabi.explainDiagnostic",
+        "title": "PromptABI: Explain Selected Finding"
+      },
+      {
+        "command": "promptabi.previewWitness",
+        "title": "PromptABI: Preview Rendered/Tokenized Witness"
+      }
+    ],
+    "configuration": {
+      "title": "PromptABI",
+      "properties": {
+        "promptabi.executable": {
+          "type": "string",
+          "default": "promptabi",
+          "description": "PromptABI executable used by the editor extension."
+        },
+        "promptabi.configPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional PromptABI config path. Defaults to promptabi.json discovery in the workspace."
+        },
+        "promptabi.runOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run PromptABI diagnostics when PromptABI-relevant files are saved."
+        },
+        "promptabi.extraArtifacts": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "Additional artifact overrides in NAME=PATH_OR_URI form."
+        }
+      }
+    },
+    "menus": {
+      "editor/context": [
+        {
+          "command": "promptabi.quickCheck",
+          "group": "navigation@50"
+        },
+        {
+          "command": "promptabi.explainDiagnostic",
+          "group": "navigation@51"
+        },
+        {
+          "command": "promptabi.previewWitness",
+          "group": "navigation@52"
+        }
+      ]
+    }
+  }
+}
