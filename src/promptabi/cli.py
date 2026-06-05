@@ -61,6 +61,11 @@ from .provider_fixture_packs import (
     build_provider_fixture_pack_manifest,
     write_provider_fixture_pack_manifest,
 )
+from .real_bug_benchmarks import (
+    RealBugBenchmarkError,
+    build_real_bug_benchmark_manifest,
+    write_real_bug_benchmark_manifest,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -266,6 +271,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="provider fixture pack root (default: repository fixtures/provider_fixture_packs)",
     )
     provider_fixture_manifest.add_argument(
+        "--output",
+        help="write manifest JSON to this path instead of stdout",
+    )
+    real_bug_benchmark = corpus_subparsers.add_parser(
+        "real-bug-benchmark",
+        help="validate and replay the real-bug benchmark suite, then emit its manifest",
+    )
+    real_bug_benchmark.add_argument(
+        "--path",
+        help="real-bug benchmark JSON path (default: repository fixtures/real_bug_benchmarks/benchmark.json)",
+    )
+    real_bug_benchmark.add_argument(
         "--output",
         help="write manifest JSON to this path instead of stdout",
     )
@@ -660,6 +677,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         except OSError as exc:
             print(f"promptabi: cannot write corpus manifest: {exc}", file=sys.stderr)
+            return 2
+        return 0
+
+    if args.command == "corpus" and args.corpus_command == "real-bug-benchmark":
+        try:
+            if args.output:
+                manifest = write_real_bug_benchmark_manifest(args.output, path=args.path)
+                print(f"wrote real-bug benchmark manifest: {args.output} ({manifest['case_count']} cases)")
+            else:
+                manifest = build_real_bug_benchmark_manifest(args.path)
+                print(json.dumps(manifest, indent=2, sort_keys=True))
+        except RealBugBenchmarkError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write real-bug benchmark manifest: {exc}", file=sys.stderr)
             return 2
         return 0
 

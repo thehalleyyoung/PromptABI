@@ -134,8 +134,11 @@ analysis now checks recorded provider/template/parser contracts for name,
 argument-encoding, escaping, ID, parallel-call, streaming-chunk, and stop-delimiter
 agreement; secret-free provider fixture packs now record and deterministically
 replay request/response shapes, tool-call encodings, stop behavior, streaming
-deltas, errors, limits, and edge cases without API calls; provider migration
-analysis compares recorded OpenAI, Azure OpenAI, Anthropic, Gemini, Bedrock,
+deltas, errors, limits, and edge cases without API calls; `promptabi corpus
+real-bug-benchmark` replays a labeled real-bug suite spanning popular
+templates, tokenizers, tool schemas, provider migrations, structured-output
+parsers, RAG truncation, and training manifests; provider migration analysis
+compares recorded OpenAI, Azure OpenAI, Anthropic, Gemini, Bedrock,
 Together, Groq, Ollama, llama.cpp, vLLM OpenAI, and LiteLLM contracts for
 request/response/tool/stop/streaming/context compatibility. Context-window
 modeling now proves must-survive prompt segments against bounded real framework

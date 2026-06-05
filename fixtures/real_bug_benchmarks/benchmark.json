@@ -1,0 +1,108 @@
+{
+  "manifest_version": 1,
+  "methodology": "Synthetic reductions of public bug patterns are replayed offline against real PromptABI analyzers. The suite preserves failure classes and public provenance without copying upstream project source.",
+  "cases": [
+    {
+      "id": "phi-template-role-forgery-benchmark",
+      "category": "popular-template",
+      "display_name": "Phi-style chat template role delimiter forgery",
+      "public_reference": "https://github.com/ggml-org/llama.cpp/pull/18462",
+      "source_kind": "public-github-synthetic-reduction",
+      "bug_class": "attacker-controlled role/content fields can render model control delimiters",
+      "labels": ["chat-template", "role-boundary", "popular-template"],
+      "expected_rule_ids": ["role-boundary-nonforgeability"],
+      "replay": {
+        "method": "real-world-role-boundary",
+        "case_id": "phi_system_turn_forgery"
+      }
+    },
+    {
+      "id": "byte-tokenizer-added-special-drift",
+      "category": "tokenizer",
+      "display_name": "Tokenizer special/added-token expectation drift",
+      "public_reference": "https://github.com/huggingface/transformers/issues/29279",
+      "source_kind": "synthetic-tokenizer-regression",
+      "bug_class": "normalization plus added special tokens invalidates a pinned tokenizer expectation",
+      "labels": ["tokenizer", "normalization", "special-token"],
+      "expected_rule_ids": ["tokenizer-differential-mismatch"],
+      "replay": {
+        "method": "tokenizer-differential",
+        "text": " Cafe\u0301<tool><eos> ",
+        "normalization": ["strip", "nfc"],
+        "added_tokens": ["<tool>", "<eos>"],
+        "special_tokens": {"<eos>": 2},
+        "expected_token_ids": [67, 97, 102, 101, 256, 2],
+        "expected_decoded_text": "Cafe<tool><eos>"
+      }
+    },
+    {
+      "id": "qwen-tool-schema-stop-benchmark",
+      "category": "tool-schema",
+      "display_name": "Qwen XML-like tool parameter stop overreach",
+      "public_reference": "https://github.com/vllm-project/vllm/pull/40861",
+      "source_kind": "public-github-synthetic-reduction",
+      "bug_class": "tool argument strings can contain configured XML close-marker stops",
+      "labels": ["tool-schema", "stop-policy", "structured-output"],
+      "expected_rule_ids": ["stop-overreach-content"],
+      "replay": {
+        "method": "real-world-stop-overreachability",
+        "case_id": "qwen3_xml_tool_parameter_stop"
+      }
+    },
+    {
+      "id": "openai-provider-migration-contracts",
+      "category": "provider-migration",
+      "display_name": "OpenAI-compatible provider migration contract regressions",
+      "public_reference": "https://github.com/thehalleyyoung/PromptABI",
+      "source_kind": "fixture-pack-synthetic-reduction",
+      "bug_class": "provider migration can lose tool IDs, streaming chunks, stop semantics, context limits, and structured-output fields",
+      "labels": ["provider-migration", "tool-calling", "streaming"],
+      "expected_rule_ids": ["provider-migration"],
+      "replay": {
+        "method": "verification-config",
+        "config": "fixtures/provider_migration/promptabi.json"
+      }
+    },
+    {
+      "id": "open-source-agent-structured-output-parser",
+      "category": "structured-output-library",
+      "display_name": "Structured-output parser/schema mismatch",
+      "public_reference": "https://github.com/thehalleyyoung/PromptABI",
+      "source_kind": "open-source-agent-synthetic-reduction",
+      "bug_class": "application parser accepts outputs outside the constrained structured-output contract",
+      "labels": ["structured-output", "json-schema", "parser-compatibility"],
+      "expected_rule_ids": ["parser-compatibility-mismatch"],
+      "replay": {
+        "method": "structured-schema-entry",
+        "entry_id": "open-source-agent-ticket"
+      }
+    },
+    {
+      "id": "rag-retrieval-chunk-truncation",
+      "category": "rag-truncation",
+      "display_name": "RAG chunk metadata and citation truncation",
+      "public_reference": "https://github.com/thehalleyyoung/PromptABI",
+      "source_kind": "rag-synthetic-reduction",
+      "bug_class": "RAG chunk packing can drift tokenizers, drop citations, miscount overlap, and exceed payload limits",
+      "labels": ["rag", "truncation", "token-budget"],
+      "expected_rule_ids": ["rag-citation-loss", "rag-overlap-accounting", "rag-template-overhead"],
+      "replay": {
+        "method": "verification-config",
+        "config": "examples/rag-chunking/promptabi.json"
+      }
+    },
+    {
+      "id": "sft-target-role-alignment",
+      "category": "training-pipeline",
+      "display_name": "Supervised fine-tuning target role misalignment",
+      "public_reference": "https://github.com/thehalleyyoung/PromptABI",
+      "source_kind": "training-pipeline-synthetic-reduction",
+      "bug_class": "training manifest target roles include a role absent from the serving chat template",
+      "labels": ["training-manifest", "static-contract", "role-alignment"],
+      "expected_rule_ids": ["static-contract-violation", "training-target-role-alignment"],
+      "replay": {
+        "method": "static-training-contract"
+      }
+    }
+  ]
+}

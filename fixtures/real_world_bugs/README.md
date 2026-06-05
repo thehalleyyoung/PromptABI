@@ -21,3 +21,6 @@ The entries cover bugs from `ggml-org/llama.cpp`, `vllm-project/vllm`, and
 
 The tests in `tests/test_real_world_bugs.py` load `corpus.json` and assert that
 the current detectors emit concrete witnesses for every labeled bug pattern.
+`fixtures/real_bug_benchmarks/benchmark.json` reuses these reductions alongside
+tokenizer, provider-migration, structured-output, RAG, and training-pipeline
+cases to form the broader replayable real-bug benchmark suite.

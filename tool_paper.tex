@@ -114,7 +114,11 @@ Hugging Face Transformers reports into synthetic offline fixtures for Phi-style
 role delimiter forgery, ChatML special-token injection, Qwen/Gemma-style tool
 argument truncation, streaming stop interruption, array-of-object tool-argument
 leakage, multi-function XML boundary confusion, and XML tool-call
-parser-boundary stops, a grammar ingestion layer that normalizes JSON Schema,
+parser-boundary stops, a replayable real-bug benchmark manifest that extends
+those reductions with tokenizer-differential drift, provider migration,
+structured-output parser mismatch, RAG truncation, and supervised
+target-role-alignment failures under one deterministic CPU-only command, a
+grammar ingestion layer that normalizes JSON Schema,
 regex, EBNF,
 Outlines, xgrammar, llguidance, and PromptABI grammars into typed rules,
 terminals, source spans, supported-fragment metadata, and explicit abstentions,
@@ -1391,6 +1395,19 @@ layer should add exact immutable upstream revisions for vendored tokenizer
 configs, llama.cpp GGUF metadata, provider traces, and structured-output
 libraries.
 
+The broader real-bug benchmark suite turns this fixture layer into an evaluation
+object. \texttt{fixtures/real\_bug\_benchmarks/benchmark.json} records seven
+labeled categories: popular template, tokenizer, tool schema, provider
+migration, structured-output library, RAG truncation, and training pipeline. The
+loader validates category coverage, provenance, labels, and expected rule IDs,
+then replays each entry through the same public analyzers used by the CLI:
+role-boundary non-forgeability, stop-overreachability, tokenizer differential
+comparison, provider migration diagnostics, structured-schema parser
+compatibility, RAG chunking verification, and finite static contracts with the
+solver-independent enumeration backend for training target-role alignment. The
+suite therefore measures whether PromptABI still detects a diverse labeled bug
+set, not merely whether a fixture parses.
+
 The corpus should avoid secrets and network requirements. Provider fixtures
 should be recorded request and response shapes, not live API calls. Model
 artifacts should be metadata and tokenizer files, not weights. This keeps CI
@@ -1426,6 +1443,8 @@ Budget checks & Segment accounting, tokenizer-derived content counts, vLLM-style
 Corpus verification & Six runnable example/fixture configs verified through the public session path with diagnostic and failing-config counts. \\
 \hline
 Cold/warm cache & Direct measurement of token-budget analysis before and after per-session cache reuse, including an explicit cache-reused metric. \\
+\hline
+Real-bug benchmark & \texttt{promptabi corpus real-bug-benchmark} validates and replays the labeled real-bug suite across popular templates, tokenizers, tool schemas, provider migrations, structured-output parsers, RAG truncation, and training manifests, emitting observed rule IDs and a stable manifest hash. \\
 \hline
 \end{tabular}
 \end{center}
@@ -1515,6 +1534,15 @@ vLLM, and a llama.cpp tool-call parser-boundary stop failure. PromptABI detects
 all eight with bounded structural witnesses. The result is intentionally modest
 but important: the evaluation is no longer only synthetic, and each claimed
 detection is backed by a minimized fixture that can run in ordinary CPU-only CI.
+
+The new real-bug benchmark suite promotes those reductions into a cross-surface
+benchmark line. It requires all seven failure categories listed above, replays
+every label against real code, records observed rule IDs, and fails manifest
+generation if any expected rule disappears. This creates a release-blocking
+regression target for practical prompt-interface failures: a tokenizer oracle
+drift, a provider migration mismatch, a parser broader-than-schema bug, a RAG
+chunking/citation loss, and a discrete training target-role violation are tested
+beside public template and tool-stop reductions.
 
 The grammar-emptiness benchline adds a complementary satisfiability experiment:
 one fixture proves that an ordinary byte-level tokenizer can produce the bounded
@@ -1666,6 +1694,8 @@ Chat-template symbolic tests & Hugging Face \texttt{tokenizer\_config.json} temp
 Role-boundary checker tests & Bounded non-forgeability diagnostics catch dynamic role-header forgery and user-content delimiter forgery across ChatML, Llama, Mistral, XML tool tags, markdown fences, and fine-tune hash headers; witnesses include minimized inputs, rendered excerpts, centered token evidence, and exact offsets, while sanitizer tests prove JSON/escape filters plus sanitizer-preserving bindings suppress only protected-expression false positives. \\
 \hline
 Real-world bug corpus & Eight public llama.cpp/vLLM/Hugging Face bug patterns are reduced to synthetic offline fixtures and detected by the role-boundary and stop-overreachability checkers with concrete witnesses. \\
+\hline
+Real-bug benchmark suite & \texttt{promptabi corpus real-bug-benchmark} replays labeled failures for popular templates, tokenizers, tool schemas, provider migrations, structured-output parsers, RAG truncation, and training manifests; tests assert coverage, provenance, observed rule IDs, manifest hashing, and CLI output. \\
 \hline
 Stop differential tests & Recorded provider/framework chunks replay through CPU-only stop simulators; OpenAI-compatible/vLLM traces exclude delimiters, Hugging Face traces retain them, and CLI diagnostics flag mismatches with witness steps. \\
 \hline
