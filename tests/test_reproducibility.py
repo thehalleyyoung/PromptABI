@@ -39,6 +39,13 @@ def test_reproducibility_package_freezes_real_corpora_and_stable_expected_tables
     assert "python -m pip install -e ." in package.reproduction_commands
     assert "promptabi corpus evaluation --format json" in package.reproduction_commands
     assert "promptabi fuzz mutations --format json" in package.reproduction_commands
+    assert "PromptABI artifact evaluator guide" in package.evaluator_guide
+    assert "One-command reproduction" in package.evaluator_guide
+    assert "Expected runtime and hardware" in package.evaluator_guide
+    assert "Troubleshooting" in package.evaluator_guide
+    assert str(package.manifest["summary"]["fixture_file_count"]) in package.evaluator_guide  # type: ignore[index]
+    assert package.fixture_hashes["summary"]["tree_sha256"] in package.evaluator_guide  # type: ignore[index]
+    assert "precision 1.0" in package.evaluator_guide
     assert package.environment["solver"]["z3_available"] in {True, False}
     if package.environment["solver"]["z3_available"]:
         assert str(package.environment["solver"]["reproduction_pin"]).startswith("z3-solver==")
@@ -53,6 +60,7 @@ def test_reproducibility_writer_and_cli_create_roundtrippable_package(tmp_path: 
     package = write_reproducibility_package(output_dir, benchmark_iterations=1)
 
     assert sorted(path.name for path in output_dir.iterdir()) == [
+        "ARTIFACT_EVALUATOR_GUIDE.md",
         "environment.json",
         "expected_tables.json",
         "fixture_hashes.json",
@@ -76,6 +84,9 @@ def test_reproducibility_writer_and_cli_create_roundtrippable_package(tmp_path: 
     assert captured.err == ""
     assert "wrote paper reproducibility package" in captured.out
     assert json.loads((cli_dir / "expected_tables.json").read_text(encoding="utf-8"))["evaluation"]["passed"] is True
+    guide = (cli_dir / "ARTIFACT_EVALUATOR_GUIDE.md").read_text(encoding="utf-8")
+    assert "bash paper_artifact/reproduction_commands.sh" in guide
+    assert "GPU" in guide and "network access" in guide
 
 
 def test_reproducibility_hashes_change_when_frozen_fixture_copy_changes(tmp_path: Path) -> None:

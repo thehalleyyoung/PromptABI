@@ -25,6 +25,7 @@ REPRODUCIBILITY_PACKAGE_VERSION = 1
 DEFAULT_REPRODUCIBILITY_OUTPUT_DIR = Path("paper_artifact")
 DEFAULT_EVALUATION_CORPUS_PATH = repo_root() / "fixtures" / "evaluation" / "labeled_corpus.json"
 PACKAGE_FILENAMES = (
+    "ARTIFACT_EVALUATOR_GUIDE.md",
     "manifest.json",
     "fixture_hashes.json",
     "expected_tables.json",
@@ -58,9 +59,11 @@ class ReproducibilityPackage:
     expected_tables: dict[str, object]
     environment: dict[str, object]
     reproduction_commands: str
+    evaluator_guide: str
 
     def file_payloads(self) -> dict[str, str]:
         return {
+            "ARTIFACT_EVALUATOR_GUIDE.md": self.evaluator_guide,
             "manifest.json": _json_dump(self.manifest),
             "fixture_hashes.json": _json_dump(self.fixture_hashes),
             "expected_tables.json": _json_dump(self.expected_tables),
@@ -90,12 +93,21 @@ def build_reproducibility_package(
         environment=environment,
         benchmark_iterations=benchmark_iterations,
     )
+    guide = _evaluator_guide(
+        resolved,
+        manifest=manifest,
+        fixture_hashes=fixture_hashes,
+        expected_tables=expected_tables,
+        environment=environment,
+        benchmark_iterations=benchmark_iterations,
+    )
     return ReproducibilityPackage(
         manifest=manifest,
         fixture_hashes=fixture_hashes,
         expected_tables=expected_tables,
         environment=environment,
         reproduction_commands=commands,
+        evaluator_guide=guide,
     )
 
 
@@ -298,6 +310,102 @@ def _reproduction_commands(inputs: ReproducibilityInputs, *, benchmark_iteration
         "promptabi corpus evaluation --format json --output evaluation-report.json\n"
         "promptabi fuzz mutations --format json --output mutation-fuzzing-report.json\n"
         f"promptabi paper reproducibility --output-dir paper_artifact --benchmark-iterations {benchmark_iterations} --force\n"
+    )
+
+
+def _evaluator_guide(
+    inputs: ReproducibilityInputs,
+    *,
+    manifest: dict[str, object],
+    fixture_hashes: dict[str, object],
+    expected_tables: dict[str, object],
+    environment: dict[str, object],
+    benchmark_iterations: int,
+) -> str:
+    summary = manifest["summary"]  # type: ignore[index]
+    solver = environment["solver"]  # type: ignore[index]
+    python = environment["python"]  # type: ignore[index]
+    evaluation = expected_tables["evaluation"]  # type: ignore[index]
+    mutation = expected_tables["mutation_fuzzing"]  # type: ignore[index]
+    corpus_manifests = expected_tables["corpus_manifests"]  # type: ignore[index]
+    benchmark_cases = ", ".join(str(row["benchmark"]) for row in expected_tables["benchmarks"])  # type: ignore[index]
+    fixture_count = summary["fixture_file_count"]  # type: ignore[index]
+    fixture_hash = fixture_hashes["summary"]["tree_sha256"]  # type: ignore[index]
+    z3_pin = solver["reproduction_pin"] or "not required; bounded finite fallback is used"  # type: ignore[index]
+    seed_count = corpus_manifests["seed_corpus"]["entry_count"]  # type: ignore[index]
+    real_bug_count = corpus_manifests["real_bug_benchmark"]["case_count"]  # type: ignore[index]
+    provider_count = corpus_manifests["provider_fixture_packs"]["entry_count"]  # type: ignore[index]
+    schema_count = corpus_manifests["structured_schemas"]["entry_count"]  # type: ignore[index]
+    eval_count = evaluation["case_count"]  # type: ignore[index]
+    mutation_count = mutation["mutation_count"]  # type: ignore[index]
+    fixture_paths = ", ".join(
+        _rel(path, inputs.repository_root)
+        for path in (
+            inputs.seed_corpus_root,
+            inputs.structured_schema_root,
+            inputs.provider_fixture_root,
+            inputs.real_bug_benchmark_path,
+            inputs.evaluation_corpus_path,
+        )
+    )
+    return (
+        "# PromptABI artifact evaluator guide\n\n"
+        "This generated guide is for paper and artifact-review evaluators. It is written by "
+        "`promptabi paper reproducibility` from live repository code, so the counts, hashes, "
+        "commands, and dependency assumptions below match the adjacent JSON files rather than "
+        "hand-maintained prose.\n\n"
+        "## One-command reproduction\n\n"
+        "From a checkout that already contains this generated `paper_artifact/` directory, run:\n\n"
+        "```bash\n"
+        "bash paper_artifact/reproduction_commands.sh\n"
+        "```\n\n"
+        "To create or refresh the artifact package first, run:\n\n"
+        "```bash\n"
+        "python -m pip install -e \".[dev,grammars,solver,tokenizers]\"\n"
+        f"promptabi paper reproducibility --output-dir paper_artifact --benchmark-iterations {benchmark_iterations} --force\n"
+        "bash paper_artifact/reproduction_commands.sh\n"
+        "```\n\n"
+        "The shell script regenerates benchmark JSON, corpus manifests, the labeled evaluation "
+        "report, mutation-fuzzing results, and this reproducibility package. It exits non-zero "
+        "on the first failed command.\n\n"
+        "## Expected runtime and hardware\n\n"
+        "The artifact is CPU-only: it does not download model weights, call providers, require "
+        "GPUs, or require network access after dependencies are installed. The default evaluator "
+        f"run uses {benchmark_iterations} benchmark iteration(s) per case and should complete on "
+        "a laptop or ordinary CI runner. Increase `--benchmark-iterations` for lower-noise local "
+        "timing studies; the expected tables intentionally omit wall-clock seconds so functional "
+        "artifact checks are stable across machines.\n\n"
+        "## Environment assumptions\n\n"
+        f"- Python requirement: `{python['requires']}`; observed while building this package: `{python['observed']}`.\n"
+        f"- Optional SMT solver pin: `{z3_pin}`.\n"
+        "- If `z3-solver` is absent, supported bounded contracts use the documented finite "
+        "enumeration fallback and record that fallback in `environment.json`.\n"
+        "- The package is telemetry-free and uses local fixtures only.\n\n"
+        "## Frozen fixtures and licenses\n\n"
+        f"The fixture tree contains {fixture_count} hashed file(s) with aggregate SHA-256 "
+        f"`{fixture_hash}`. `fixture_hashes.json` records per-file byte counts and hashes. "
+        f"The expected corpus manifests cover {seed_count} seed model-family entries, "
+        f"{schema_count} structured-schema entries, {provider_count} provider fixture entries, "
+        f"and {real_bug_count} real-bug benchmark case(s) from {fixture_paths}. Fixture metadata in the repository "
+        "carries source, license, revision, and reproducibility notes for evaluator inspection; "
+        "the artifact package stores hashes rather than duplicating large or sensitive payloads.\n\n"
+        "## Expected results\n\n"
+        f"`expected_tables.json` records {len(expected_tables['benchmarks'])} benchmark line(s): "
+        f"{benchmark_cases}. The labeled evaluation has {eval_count} case(s), precision "
+        f"{evaluation['precision']}, recall {evaluation['recall']}, F1 {evaluation['f1']}, "
+        f"and passed=`{evaluation['passed']}`. Mutation fuzzing records {mutation_count} generated "
+        "mutation(s) and the discovered rule IDs used by the paper's robustness claims.\n\n"
+        "## Troubleshooting\n\n"
+        "- If package generation refuses to overwrite an output directory, rerun with `--force` "
+        "or choose an empty `--output-dir`.\n"
+        "- If optional tokenizer, grammar, or solver libraries are missing, install the bracketed "
+        "extras shown in the one-command reproduction block.\n"
+        "- If a hash changes, inspect `fixture_hashes.json` first; it pinpoints the exact fixture "
+        "path whose bytes changed.\n"
+        "- If a benchmark number varies, compare invariant fields in `expected_tables.json`; "
+        "time-derived metrics are deliberately excluded from the stable expected tables.\n"
+        "- If a solver-backed check differs, compare `environment.json` for the observed Z3 pin "
+        "or fallback mode before debugging checker logic.\n"
     )
 
 
