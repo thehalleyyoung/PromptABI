@@ -1225,6 +1225,16 @@ from .lexicographic_constraints import (
     strictly_increasing,
     verify_lex_order,
 )
+from .counterexample_spans import (
+    COUNTEREXAMPLE_SPANS_VERSION,
+    AnnotatedCounterexample,
+    CounterexampleSpanError,
+    LocatedAssignment,
+    VariableProvenance,
+    annotate_counterexample,
+    render_annotated_counterexample_json,
+    render_annotated_counterexample_text,
+)
 from .provider_fixture_replay import (
     ProviderFixtureReplayCase,
     ProviderFixtureReplayFinding,
@@ -2208,6 +2218,14 @@ __all__ = [
     "render_lex_order_text",
     "strictly_increasing",
     "verify_lex_order",
+    "COUNTEREXAMPLE_SPANS_VERSION",
+    "AnnotatedCounterexample",
+    "CounterexampleSpanError",
+    "LocatedAssignment",
+    "VariableProvenance",
+    "annotate_counterexample",
+    "render_annotated_counterexample_json",
+    "render_annotated_counterexample_text",
     "analyze_parser_compatibility",
     "analyze_tokenizer_grammar_ambiguity",
     "analyze_tokenizer_grammar_emptiness",
