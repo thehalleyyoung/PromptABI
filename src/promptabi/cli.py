@@ -332,6 +332,11 @@ from .provider_downgrade_paths import (
     render_provider_downgrade_paths_text,
     verify_provider_downgrade_paths,
 )
+from .prompt_pack_modules import (
+    render_prompt_pack_modules_json,
+    render_prompt_pack_modules_text,
+    resolve_prompt_pack_modules,
+)
 from .loaders import ArtifactLoader
 from .lockfiles import (
     LockfileError,
@@ -835,6 +840,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     _add_local_summary_argument(provider_downgrade)
+
+    prompt_pack_modules = subparsers.add_parser(
+        "prompt-pack-modules",
+        help="statically link prompt-pack imports as a module system and report unresolved edges",
+    )
+    prompt_pack_modules.add_argument(
+        "--config",
+        help="path to a PromptABI JSON config; defaults to discovering promptabi.json upward from cwd",
+    )
+    prompt_pack_modules.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    _add_local_summary_argument(prompt_pack_modules)
 
     explain = subparsers.add_parser("explain", help="expand one diagnostic into a tutorial-style explanation")
     explain.add_argument(
@@ -3669,6 +3690,37 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "format": args.format,
                 "downgrades_checked": report.downgrades_checked,
                 "blocking": len(report.blocking),
+            },
+        ):
+            return 2
+        print(output, end="")
+        return exit_code
+
+    if args.command == "prompt-pack-modules":
+        started_at = time.perf_counter()
+        try:
+            config_path = Path(args.config).resolve() if args.config else discover_config()
+            config = load_config(config_path)
+            loaded = tuple(ArtifactLoader().load(artifact) for artifact in config.artifact_bundle)
+            graph = resolve_prompt_pack_modules(loaded)
+        except (ConfigError, OSError, ValueError) as exc:
+            print(f"promptabi: cannot resolve prompt-pack modules: {exc}", file=sys.stderr)
+            return 2
+        output = (
+            render_prompt_pack_modules_json(graph)
+            if args.format == "json"
+            else render_prompt_pack_modules_text(graph)
+        )
+        exit_code = 0 if graph.ok else 1
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="prompt-pack-modules",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={
+                "format": args.format,
+                "modules": len(graph.modules),
+                "findings": len(graph.findings),
             },
         ):
             return 2

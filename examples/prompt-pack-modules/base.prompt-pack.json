@@ -1,0 +1,29 @@
+{
+  "name": "base-pack",
+  "version": "1.2.0",
+  "exported_templates": [
+    {
+      "name": "chat-core",
+      "template": "{% for message in messages %}{{ message.role }}: {{ message.content }}\n{% endfor %}assistant:",
+      "roles": ["system", "user", "assistant"],
+      "variables": ["messages"],
+      "supported_model_families": ["openai-compatible"]
+    }
+  ],
+  "expected_roles": ["system", "user", "assistant"],
+  "tool_schemas": [
+    {
+      "name": "search_docs",
+      "provider": "openai",
+      "required": true
+    }
+  ],
+  "stop_policies": [
+    {
+      "name": "tool-json",
+      "stop_sequences": ["</tool_call>"],
+      "include_eos": true
+    }
+  ],
+  "supported_model_families": ["openai-compatible"]
+}

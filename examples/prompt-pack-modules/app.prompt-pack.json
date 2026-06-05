@@ -1,0 +1,20 @@
+{
+  "name": "app-pack",
+  "version": "0.4.0",
+  "imports": [
+    {"pack": "base-pack", "symbol": "template:chat-core", "min_version": "1.0.0"},
+    {"pack": "base-pack", "symbol": "tool:search_docs", "as": "search", "min_version": "1.1.0"},
+    {"pack": "base-pack", "symbol": "stop:tool-json"}
+  ],
+  "exported_templates": [
+    {
+      "name": "app-flow",
+      "template": "{% for message in messages %}{{ message.role }}: {{ message.content }}\n{% endfor %}assistant:",
+      "roles": ["system", "user", "assistant"],
+      "variables": ["messages"],
+      "supported_model_families": ["openai-compatible"]
+    }
+  ],
+  "expected_roles": ["system", "user", "assistant"],
+  "supported_model_families": ["openai-compatible"]
+}

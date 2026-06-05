@@ -1,0 +1,16 @@
+{
+  "name": "prompt-pack-module-program",
+  "checks": ["prompt-pack-contracts"],
+  "artifacts": {
+    "base-pack": {
+      "kind": "prompt-pack",
+      "path": "base.prompt-pack.json",
+      "version": "1.2.0"
+    },
+    "app-pack": {
+      "kind": "prompt-pack",
+      "path": "app.prompt-pack.json",
+      "version": "0.4.0"
+    }
+  }
+}

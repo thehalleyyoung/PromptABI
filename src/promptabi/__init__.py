@@ -1013,6 +1013,17 @@ from .provider_downgrade_paths import (
     render_provider_downgrade_paths_text,
     verify_provider_downgrade_paths,
 )
+from .prompt_pack_modules import (
+    PROMPT_PACK_MODULE_VERSION,
+    PromptPackImport,
+    PromptPackModule,
+    PromptPackModuleFinding,
+    PromptPackModuleFindingKind,
+    PromptPackModuleGraph,
+    render_prompt_pack_modules_json,
+    render_prompt_pack_modules_text,
+    resolve_prompt_pack_modules,
+)
 from .provider_fixture_replay import (
     ProviderFixtureReplayCase,
     ProviderFixtureReplayFinding,
@@ -1816,6 +1827,15 @@ __all__ = [
     "render_provider_downgrade_paths_json",
     "render_provider_downgrade_paths_text",
     "verify_provider_downgrade_paths",
+    "PROMPT_PACK_MODULE_VERSION",
+    "PromptPackImport",
+    "PromptPackModule",
+    "PromptPackModuleFinding",
+    "PromptPackModuleFindingKind",
+    "PromptPackModuleGraph",
+    "render_prompt_pack_modules_json",
+    "render_prompt_pack_modules_text",
+    "resolve_prompt_pack_modules",
     "analyze_parser_compatibility",
     "analyze_tokenizer_grammar_ambiguity",
     "analyze_tokenizer_grammar_emptiness",
