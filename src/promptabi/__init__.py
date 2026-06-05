@@ -257,6 +257,15 @@ from .multi_agent_handoffs import (
     render_multi_agent_handoff_json,
     render_multi_agent_handoff_text,
 )
+from .policy_pack_semantics import (
+    POLICY_PACK_SEMANTICS_VERSION,
+    PolicyPackSemanticsReport,
+    PolicyPackSemanticsViolation,
+    PolicyPackSemanticsViolationKind,
+    prove_policy_pack_preserves_semantics,
+    render_policy_pack_semantics_json,
+    render_policy_pack_semantics_text,
+)
 from .attestation_gate_composition import (
     ATTESTATION_GATE_VERSION,
     AttestationGateDecision,
@@ -1973,6 +1982,13 @@ __all__ = [
     "validate_maintainer_health",
     "write_structured_schema_corpus_manifest",
     "WitnessPrivacyMode",
+    "POLICY_PACK_SEMANTICS_VERSION",
+    "PolicyPackSemanticsReport",
+    "PolicyPackSemanticsViolation",
+    "PolicyPackSemanticsViolationKind",
+    "prove_policy_pack_preserves_semantics",
+    "render_policy_pack_semantics_json",
+    "render_policy_pack_semantics_text",
     "ATTESTATION_GATE_VERSION",
     "AttestationGateDecision",
     "AttestationGateError",
