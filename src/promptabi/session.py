@@ -75,6 +75,7 @@ from .training_drift import TrainingDriftFinding, analyze_training_metadata_drif
 from .training_invalid_interface import TrainingInvalidInterfaceFinding, analyze_training_invalid_interface
 from .training_packing import TrainingPackingFinding, analyze_training_packing
 from .training_redaction import TrainingRedactionFinding, analyze_training_redaction
+from .training_streaming import TrainingStreamingFinding, analyze_training_streaming
 
 
 CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
@@ -162,6 +163,16 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "training-invalid-interface-malformed-tool-call": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-invalid-interface-unreachable-stop-sequence": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-invalid-interface-verified": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-streaming-contract-missing": (CheckMode.ABSTAINING, CheckMode.BOUNDED),
+    "training-streaming-stream-unreadable": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-streaming-sample-empty": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-streaming-field-missing": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-streaming-forbidden-field": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-streaming-role-violation": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-streaming-chunk-oversized": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-streaming-count-mismatch": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-streaming-hash-missing": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-streaming-verified": (CheckMode.SOUND, CheckMode.BOUNDED),
     "synthetic-generator-contracts-role-contract-violation": (CheckMode.SOUND, CheckMode.BOUNDED),
     "synthetic-generator-contracts-schema-contract-violation": (CheckMode.SOUND, CheckMode.BOUNDED),
     "synthetic-generator-contracts-tool-call-contract-violation": (CheckMode.SOUND, CheckMode.BOUNDED),
@@ -377,6 +388,7 @@ CHECK_DEPENDENCIES: dict[str, CheckDependency] = {
     "training-bridge": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "training-drift": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "training-invalid-interface": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
+    "training-streaming": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "synthetic-generator-contracts": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "training-packing": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "training-redaction": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
@@ -569,6 +581,7 @@ class VerificationSession:
             "training-bridge": self._training_bridge_check,
             "training-drift": self._training_drift_check,
             "training-invalid-interface": self._training_invalid_interface_check,
+            "training-streaming": self._training_streaming_check,
             "synthetic-generator-contracts": self._synthetic_generator_contracts_check,
             "training-packing": self._training_packing_check,
             "training-redaction": self._training_redaction_check,
@@ -1098,6 +1111,16 @@ class VerificationSession:
                 continue
             report = analyze_training_invalid_interface(loaded.artifact)
             diagnostics.extend(_training_invalid_interface_finding_diagnostic(loaded, finding) for finding in report.findings)
+        return tuple(diagnostics)
+
+    def _training_streaming_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        diagnostics: list[Diagnostic] = []
+        for loaded in context.loaded_artifacts:
+            if not isinstance(loaded.artifact, TrainingManifestArtifact):
+                continue
+            base_dir = Path(loaded.artifact.location.path).parent if loaded.artifact.location.path is not None else Path.cwd()
+            report = analyze_training_streaming(loaded.artifact, base_dir=base_dir)
+            diagnostics.extend(_training_streaming_finding_diagnostic(loaded, finding) for finding in report.findings)
         return tuple(diagnostics)
 
     def _synthetic_generator_contracts_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
@@ -2035,6 +2058,72 @@ def _training_invalid_interface_finding_diagnostic(
         suggestions=suggestions,
         witness=WitnessTrace(
             summary="PromptABI checked finite training-interface facts for impossible roles, malformed tool calls, invalid JSON outputs, and unreachable stops.",
+            steps=steps,
+            artifacts=(loaded.artifact.to_ref(),),
+        ),
+    )
+
+
+def _training_streaming_finding_diagnostic(
+    loaded: LoadedArtifact,
+    finding: TrainingStreamingFinding,
+) -> Diagnostic:
+    rule_id = f"training-streaming-{finding.kind.value}"
+    severity = {
+        "error": DiagnosticSeverity.ERROR,
+        "warning": DiagnosticSeverity.WARNING,
+        "info": DiagnosticSeverity.INFO,
+    }[finding.severity]
+    steps = tuple(
+        WitnessStep(action=action, input=input_value, output=output_value)
+        for action, input_value, output_value in finding.witness
+    )
+    properties: list[tuple[str, object]] = [("kind", finding.kind.value)]
+    if finding.subject is not None:
+        properties.append(("subject", finding.subject))
+    if finding.sample_name is not None:
+        properties.append(("sample_name", finding.sample_name))
+    properties.extend((("rows_sampled", finding.rows_sampled), ("chunks_sampled", finding.chunks_sampled)))
+    suggestions = {
+        "training-streaming-contract-missing": (
+            "Add metadata.streaming_dataset_verification with bounded JSONL sampling, chunk_size, required fields, role set, and hash-only evidence fields.",
+        ),
+        "training-streaming-stream-unreadable": (
+            "Fix the streaming dataset path or JSONL syntax so verification can sample rows without loading the full corpus.",
+        ),
+        "training-streaming-sample-empty": (
+            "Point the streaming contract at a non-empty local sample or lower expected_sample_rows for this shard.",
+        ),
+        "training-streaming-field-missing": (
+            "Align content_fields, preference_fields, and forbidden raw fields with the dataset loader contract.",
+        ),
+        "training-streaming-forbidden-field": (
+            "Remove raw private fields from streaming samples or replace them with hash-only structural evidence.",
+        ),
+        "training-streaming-role-violation": (
+            "Map sampled dataset roles to supported canonical roles before streaming them into training.",
+        ),
+        "training-streaming-chunk-oversized": (
+            "Lower chunk_size/max_row_bytes or adjust the streaming loader to emit bounded chunks.",
+        ),
+        "training-streaming-count-mismatch": (
+            "Refresh expected_sample_rows after changing the shard sample or loader filter.",
+        ),
+        "training-streaming-hash-missing": (
+            "Persist sha256:<digest> evidence for private target/mask fields instead of raw training content.",
+        ),
+    }.get(rule_id, ())
+    return Diagnostic(
+        rule_id=rule_id,
+        severity=severity,
+        message=finding.message,
+        artifact=loaded.artifact.to_ref(),
+        span=_artifact_span(loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG[rule_id],
+        properties=tuple(properties),
+        suggestions=suggestions,
+        witness=WitnessTrace(
+            summary="PromptABI sampled streaming training data with bounded memory and checked chunk-level structural invariants.",
             steps=steps,
             artifacts=(loaded.artifact.to_ref(),),
         ),

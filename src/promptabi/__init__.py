@@ -347,6 +347,13 @@ from .training_invalid_interface import (
     TrainingInvalidInterfaceReport,
     analyze_training_invalid_interface,
 )
+from .training_streaming import (
+    StreamingDatasetSpec,
+    TrainingStreamingFinding,
+    TrainingStreamingFindingKind,
+    TrainingStreamingReport,
+    analyze_training_streaming,
+)
 from .synthetic_generators import (
     SyntheticGeneratorFinding,
     SyntheticGeneratorFindingKind,
@@ -986,6 +993,10 @@ __all__ = [
     "TrainingPackingFindingKind",
     "TrainingPackingReport",
     "TrainingPipelineStageVersion",
+    "TrainingStreamingFinding",
+    "TrainingStreamingFindingKind",
+    "TrainingStreamingReport",
+    "StreamingDatasetSpec",
     "TrainingRedactionMode",
     "TrainingRedactionPolicy",
     "TrainingSourceContribution",
@@ -1138,6 +1149,7 @@ __all__ = [
     "analyze_tool_call_serialization",
     "analyze_training_inference_bridge",
     "analyze_training_invalid_interface",
+    "analyze_training_streaming",
     "analyze_synthetic_generators",
     "analyze_training_metadata_drift",
     "analyze_training_packing",

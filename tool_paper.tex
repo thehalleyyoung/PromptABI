@@ -81,7 +81,8 @@ roles, malformed tool calls, invalid JSON targets, and unreachable stop examples
 synthetic-data generator preflight checks that reject finite generator plans able
 to emit forbidden roles, invalid schema outputs, malformed tool-call envelopes,
 or truncation cases that drop required regions before any generated row is
-admitted, offline data-loader adapter fixtures for Hugging Face Datasets,
+admitted, streaming-shard verification that samples JSONL chunks without
+materializing private corpora, offline data-loader adapter fixtures for Hugging Face Datasets,
 JSONL, Parquet metadata, Axolotl, LLaMA-Factory, TRL, OpenRLHF, and internal
 formats, training-to-serving bridge facts, and corpus-metadata drift checks that compare
 training baselines against model-card facts, tokenizer/template pins, and serving
@@ -1923,7 +1924,7 @@ replayable real-bug benchmark case and reports precision/recall/F1 over an
 explicit per-case rule universe. The training slice includes RLHF/DPO fixtures,
 the SFT quickstart, and a multi-adapter data-loader fixture pack covering
 Hugging Face Datasets, JSONL, Parquet metadata, Axolotl, LLaMA-Factory, TRL,
-OpenRLHF, and internal redacted schemas; clean manifests prove safety, while defective manifests
+OpenRLHF, internal redacted schemas, and bounded streaming JSONL shards; clean manifests prove safety, while defective manifests
 trigger static counterexamples for source leakage, prompt-hash, mask-policy,
 truncation, role-layout, response-start, packing-boundary, and synthetic
 generator role/schema/tool/truncation bugs. The same

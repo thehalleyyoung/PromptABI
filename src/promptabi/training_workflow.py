@@ -25,6 +25,7 @@ TRAINING_WORKFLOW_CHECKS = (
     "training-packing",
     "training-redaction",
     "training-invalid-interface",
+    "training-streaming",
     "training-bridge",
     "training-drift",
     "synthetic-generator-contracts",
