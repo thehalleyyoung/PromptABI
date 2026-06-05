@@ -1,5 +1,5 @@
 \documentclass[10pt]{article}
-\usepackage[margin=0.72in]{geometry}
+\usepackage[margin=0.8in]{geometry}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
 \usepackage{microtype}
@@ -249,6 +249,10 @@ Survival proof, dropped-region witness, finite assignment \\
 Maintain reproducible CI &
 Lockfiles, signed bundles, replayable solver certificates &
 Artifact hash, diagnostic fingerprint, replay hash \\
+\addlinespace
+Block stale deploys &
+Kubernetes, Terraform, GitHub Environment, and release-system gates &
+Current bundle hash, reproducibility hash, gate manifest \\
 \bottomrule
 \end{tabular}
 \caption{PromptABI capabilities stated as user-facing verification needs.}
@@ -351,6 +355,13 @@ checks, and emits deterministic text, JSON, SARIF, GitHub annotations, or static
 HTML. CI usage can require a lockfile, compare changed artifacts only, and
 upload SARIF without contacting an LLM provider.
 
+\paragraph{Deployment gates.}
+\texttt{promptabi deployment-gates} regenerates signed verification-bundle
+evidence and emits enforcement examples for Kubernetes admission policies,
+Terraform preconditions, GitHub protected environments, and internal release
+systems. Each example binds deployment metadata to the current bundle hash,
+reproducibility hash, signing-key identifier, and verification gate status.
+
 \paragraph{Training preflight.}
 \texttt{promptabi verify-training} builds or loads a training manifest and checks
 role layouts, tokenizer/template consistency, packing windows, loss masks,
@@ -440,6 +451,34 @@ template and unsafe for another; one provider adapter may serialize tools
 differently from another; one tokenizer revision may invalidate an accepted
 structured-output grammar. PromptABI attaches evidence to the published model
 version without embedding private prompts or calling the model.
+
+\newpage
+\section{Deployment Gates}
+
+Deployment systems need a narrower contract than model registries: they need to
+know whether the artifact about to run is still the one PromptABI verified. The
+deployment-gate workflow builds that contract from the same signed bundle
+payload used for audit trails. The command
+\[
+\texttt{promptabi deployment-gates --config examples/minimal/promptabi.json --output-dir /tmp/gates}
+\]
+emits four executable gate examples plus a deterministic manifest. The
+Kubernetes example is a \texttt{ValidatingAdmissionPolicy} requiring deployment
+annotations for the current bundle and reproducibility hashes. The Terraform
+example uses \texttt{terraform\_data} preconditions so plan/apply fails on stale
+PromptABI metadata. The GitHub Environments example regenerates the gate
+manifest inside a protected environment job and checks hashes before approval.
+The internal release-system example is a compact JSON policy for release
+orchestrators that compare declared deployment metadata with signed PromptABI
+evidence.
+
+These are intentionally examples, not a new trust root. The trust root remains
+the local signing key and the reproducible bundle payload: config hash, artifact
+hashes, diagnostic fingerprints, lockfile state, and witness hashes. Deployment
+controllers can be simple because they only compare stable hashes and gate
+status. If the prompt template, tokenizer, schema, provider fixture, policy pack,
+or diagnostics drift, the bundle hash changes and the deployment gate fails
+closed.
 
 \newpage
 \section{Enterprise and Air-Gapped Operation}

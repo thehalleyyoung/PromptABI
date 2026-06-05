@@ -162,6 +162,14 @@ from .dependency_graph import (
     render_dependency_graph_mermaid,
     render_dependency_graph_text,
 )
+from .deployment_gates import (
+    DeploymentGateError,
+    build_deployment_gate_report,
+    render_deployment_gate_json,
+    render_deployment_gate_text,
+    render_deployment_gate_write_summary,
+    write_deployment_gate_examples,
+)
 from .editor_protocol import (
     EditorProtocolError,
     build_editor_diagnostic_report,
@@ -1781,6 +1789,45 @@ def build_parser() -> argparse.ArgumentParser:
         "--force",
         action="store_true",
         help="overwrite existing generated adoption-playbook files",
+    )
+
+    deployment_gates = subparsers.add_parser(
+        "deployment-gates",
+        help="generate Kubernetes, Terraform, GitHub Environment, and internal release gates from signed bundle evidence",
+    )
+    deployment_gates.add_argument(
+        "--config",
+        help="path to a PromptABI JSON config; defaults to discovering promptabi.json upward from cwd",
+    )
+    deployment_gates.add_argument(
+        "--bundle-key",
+        help="bundle signing key required for deployment evidence (default: PROMPTABI_BUNDLE_KEY)",
+    )
+    deployment_gates.add_argument("--bundle-key-id", default="deployment-gate", help="identifier recorded with the signature")
+    deployment_gates.add_argument(
+        "--fail-on",
+        choices=("error", "warning", "any", "never"),
+        default="error",
+        help="deployment gate threshold (default: error)",
+    )
+    deployment_gates.add_argument(
+        "--workspace-root",
+        help="workspace root used for relative artifact paths (default: config directory)",
+    )
+    deployment_gates.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format when not writing files (default: text)",
+    )
+    deployment_gates.add_argument(
+        "--output-dir",
+        help="write deployment-gate examples and JSON manifest to this directory instead of stdout",
+    )
+    deployment_gates.add_argument(
+        "--force",
+        action="store_true",
+        help="overwrite existing generated deployment-gate files",
     )
 
     fuzz = subparsers.add_parser("fuzz", help="mutation-based fuzzing workflows")
@@ -4065,6 +4112,41 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"promptabi: cannot write model-registry evidence: {exc}", file=sys.stderr)
             return 2
         return 0 if publication.ok else 1
+
+    if args.command == "deployment-gates":
+        try:
+            config_path = Path(args.config).resolve() if args.config else discover_config()
+            bundle_key = args.bundle_key or os.environ.get("PROMPTABI_BUNDLE_KEY")
+            if args.output_dir:
+                result = write_deployment_gate_examples(
+                    args.output_dir,
+                    config_path,
+                    bundle_key=bundle_key,
+                    bundle_key_id=args.bundle_key_id,
+                    fail_on=args.fail_on,
+                    workspace_root=args.workspace_root,
+                    force=args.force,
+                )
+                print(render_deployment_gate_write_summary(result), end="")
+                ok = result.report.ok
+            else:
+                report = build_deployment_gate_report(
+                    config_path,
+                    bundle_key=bundle_key,
+                    bundle_key_id=args.bundle_key_id,
+                    fail_on=args.fail_on,
+                    workspace_root=args.workspace_root,
+                )
+                output = render_deployment_gate_json(report) if args.format == "json" else render_deployment_gate_text(report)
+                print(output, end="")
+                ok = report.ok
+        except (ConfigError, DeploymentGateError, ValueError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write deployment gates: {exc}", file=sys.stderr)
+            return 2
+        return 0 if ok else 1
 
     if args.command == "fuzz" and args.fuzz_command == "mutations":
         try:

@@ -76,6 +76,13 @@ from .dependency_graph import (
     render_dependency_graph_mermaid,
     render_dependency_graph_text,
 )
+from .deployment_gates import (
+    DeploymentGateReport,
+    build_deployment_gate_report,
+    render_deployment_gate_json,
+    render_deployment_gate_text,
+    write_deployment_gate_examples,
+)
 from .enterprise import (
     EnterpriseSettings,
     enterprise_readiness_diagnostics,
@@ -931,6 +938,33 @@ def dependency_graph(
     if output_format == "mermaid":
         return render_dependency_graph_mermaid(report)
     raise ValueError("output_format must be one of: text, json, mermaid")
+
+
+def deployment_gates(
+    config: str | Path,
+    *,
+    bundle_key: str | bytes | None = None,
+    bundle_key_id: str = "deployment-gate",
+    fail_on: str = "error",
+    workspace_root: str | Path | None = None,
+    output_format: str | None = None,
+) -> DeploymentGateReport | str:
+    """Build or render deployment gates backed by current signed bundle evidence."""
+
+    report = build_deployment_gate_report(
+        config,
+        bundle_key=bundle_key,
+        bundle_key_id=bundle_key_id,
+        fail_on=fail_on,
+        workspace_root=workspace_root,
+    )
+    if output_format is None:
+        return report
+    if output_format == "text":
+        return render_deployment_gate_text(report)
+    if output_format == "json":
+        return render_deployment_gate_json(report)
+    raise ValueError("output_format must be one of: text, json")
 
 
 def compatibility_audit(

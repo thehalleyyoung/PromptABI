@@ -24,6 +24,7 @@ from .api import (
     diagnostic_message_catalog,
     diagnostic_clusters,
     dependency_graph,
+    deployment_gates,
     editor_diagnostics,
     enterprise_readiness,
     evaluate_corpus,
@@ -145,6 +146,20 @@ from .integration_api import (
     build_integration_report,
     render_integration_report_json,
     render_integration_report_text,
+)
+from .deployment_gates import (
+    DEPLOYMENT_GATE_MANIFEST_VERSION,
+    DEPLOYMENT_GATE_SURFACES,
+    DeploymentGateError,
+    DeploymentGateExample,
+    DeploymentGateReport,
+    DeploymentGateSurface,
+    DeploymentGateWriteResult,
+    build_deployment_gate_report,
+    render_deployment_gate_json,
+    render_deployment_gate_text,
+    render_deployment_gate_write_summary,
+    write_deployment_gate_examples,
 )
 from .model_registry import (
     MODEL_REGISTRY_MANIFEST_VERSION,
