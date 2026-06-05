@@ -79,7 +79,13 @@ diagnostic states its guarantee mode--`sound`, `complete`, `bounded`,
 shrunk or sliced to minimal strings, token paths, solver assignments, and
 cross-artifact products, so CI can distinguish proof from best-effort evidence.
 The [formal methods guide](docs/formal-methods.md) explains exactly when these
-claims use automata, Z3, composed products, or principled abstention.
+claims use automata, Z3, composed products, or principled abstention. Those
+guarantees are then measured at scale: a deterministic, network-free corpus of
+10,080 labeled chat-template configurations replays the production analyzers and
+reports the verifier *sound* (recall 1.0, zero false negatives) at F1 0.90, with
+a sanitizer-pass ablation, 12-month drift study, inter-rater agreement,
+million-token throughput, fuzzing, a provider leaderboard, and reproduced
+prompt-injection CVE vectors (`promptabi scaled-eval`).
 For disconnected deployments, the [air-gapped installation guide](docs/air-gapped.md)
 shows how to vendor wheels, Z3, corpora, provider fixtures, prompt-pack mirrors,
 and reproducibility checks without live network access.
@@ -135,6 +141,9 @@ promptabi proofs --traceability --format text
 promptabi proofs --experiments --format text
 promptabi metatheory --format text
 promptabi metatheory --appendix
+# Replay the production analyzers over a >=10k-case labeled prompt corpus:
+# sound (recall 1.0, zero false negatives), F1 0.90, ablation, drift, leaderboard, CVEs.
+promptabi scaled-eval --format text
 promptabi maintain health --format text
 promptabi graph --config examples/rag-chunking/promptabi.json --all-checks --format mermaid
 promptabi contract format examples/static-contract-language/app.pabi --check

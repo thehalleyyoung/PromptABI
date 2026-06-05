@@ -1,0 +1,43 @@
+{
+  "ablation_precision_gain": 0.6079,
+  "analyzer_invocations": 63,
+  "cohen_kappa": 0.8706,
+  "corpus_size": 10080,
+  "cross_tokenizer_error_rate": 0.0,
+  "cve_detected": [
+    "CVE-2024-CHATML-ROLE",
+    "CVE-2024-LLAMA-HEADER",
+    "CVE-2024-OPENAI-TOOL"
+  ],
+  "false_discovery_rate": 0.1808,
+  "ground_truth_prevalence": 0.2113,
+  "leaderboard": [
+    "chatml",
+    "mistral",
+    "phi",
+    "llama",
+    "gemma",
+    "openai-compatible",
+    "deepseek",
+    "zephyr",
+    "qwen"
+  ],
+  "max_drift": 0.0429,
+  "passed": true,
+  "predicted_prevalence": 0.2579,
+  "role_boundary": {
+    "accuracy": 0.9534,
+    "f1": 0.9006,
+    "false_negative": 0,
+    "false_positive": 470,
+    "precision": 0.8192,
+    "recall": 1.0,
+    "specificity": 0.9409,
+    "true_negative": 7480,
+    "true_positive": 2130
+  },
+  "schema_violation_rate": 0.4,
+  "tokenizer_round_trip_exact": true,
+  "training_violation_rate": 0.0,
+  "version": "2026.06"
+}

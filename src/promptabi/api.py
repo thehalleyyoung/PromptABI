@@ -278,6 +278,12 @@ from .prompt_calculus import (
     render_metatheory_text,
     run_metatheory,
 )
+from .scaled_evaluation import (
+    ScaledEvaluationReport,
+    render_scaled_evaluation_json,
+    render_scaled_evaluation_text,
+    run_scaled_evaluation,
+)
 from .soundness_audits import (
     SoundnessAuditReport,
     build_soundness_audit_report,
@@ -585,6 +591,25 @@ def prompt_calculus_metatheory(*, output_format: str | None = None) -> Metatheor
         return render_metatheory_json(report)
     if output_format == "text":
         return render_metatheory_text(report)
+    raise ValueError("output_format must be 'json' or 'text'")
+
+
+def scaled_empirical_evaluation(
+    *, output_format: str | None = None, corpus_limit: int | None = None
+) -> ScaledEvaluationReport | str:
+    """Run the scaled empirical evaluation (roadmap steps 316-330): a >=10k-case
+    labeled prompt corpus replayed through the production analyzers with
+    precision/recall/F1, ablation, longitudinal drift, inter-rater agreement,
+    throughput, fuzzing, a conformance leaderboard, reproduced CVE vectors,
+    false-positive cost, cross-tokenizer alignment, and training-data contracts."""
+
+    report = run_scaled_evaluation(corpus_limit=corpus_limit)
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_scaled_evaluation_json(report)
+    if output_format == "text":
+        return render_scaled_evaluation_text(report)
     raise ValueError("output_format must be 'json' or 'text'")
 
 

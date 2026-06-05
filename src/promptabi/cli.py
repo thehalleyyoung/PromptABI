@@ -474,6 +474,11 @@ from .prompt_calculus import (
     render_metatheory_text,
     run_metatheory,
 )
+from .scaled_evaluation import (
+    render_scaled_evaluation_json,
+    render_scaled_evaluation_text,
+    run_scaled_evaluation,
+)
 from .soundness_audits import (
     build_soundness_audit_report,
     render_soundness_audit_json,
@@ -2113,6 +2118,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--appendix",
         action="store_true",
         help="render the standalone formal appendix (Markdown) instead of the theorem report",
+    )
+    scaled_eval = subparsers.add_parser(
+        "scaled-eval",
+        help="run the scaled empirical evaluation over a >=10k-case labeled prompt corpus (steps 316-330)",
+    )
+    scaled_eval.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    scaled_eval.add_argument(
+        "--corpus-limit",
+        type=int,
+        default=None,
+        help="truncate the corpus to this many cases (default: full >=10k corpus)",
     )
     soundness_audit = subparsers.add_parser(
         "soundness-audit",
@@ -5164,6 +5185,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(render_formal_appendix_markdown(report), end="")
             return 0 if report.passed else 1
         output = render_metatheory_json(report) if args.format == "json" else render_metatheory_text(report)
+        print(output, end="")
+        return 0 if report.passed else 1
+
+    if args.command == "scaled-eval":
+        report = run_scaled_evaluation(corpus_limit=args.corpus_limit)
+        output = (
+            render_scaled_evaluation_json(report)
+            if args.format == "json"
+            else render_scaled_evaluation_text(report)
+        )
         print(output, end="")
         return 0 if report.passed else 1
 
