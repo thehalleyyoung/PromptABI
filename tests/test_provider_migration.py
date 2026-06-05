@@ -57,8 +57,22 @@ def test_provider_migration_analyzer_finds_recorded_contract_mismatches() -> Non
         "structured-output-mismatch",
         "error-shape-mismatch",
         "routing-target-missing",
+        "provider-envelope-not-preserved",
     }
     assert any(finding.target_artifact_name == "azure-openai-target" for finding in report.findings) is False
+    envelope_findings = [
+        finding
+        for finding in report.findings
+        if finding.kind.value == "provider-envelope-not-preserved"
+    ]
+    assert envelope_findings
+    assert any("openai-through-litellm-to-anthropic" in value for finding in envelope_findings for _key, value in finding.evidence)
+    assert any("response fields" in finding.message and "litellm-target -> anthropic-target" in value for finding in envelope_findings for _key, value in finding.evidence)
+    assert not any(
+        "openai-through-litellm-to-azure" in value
+        for finding in envelope_findings
+        for _key, value in finding.evidence
+    )
     assert any(
         finding.span and finding.span.path.endswith("anthropic-target.json")
         for finding in report.findings
@@ -74,6 +88,7 @@ def test_provider_migration_session_diagnostics_are_stable() -> None:
     assert result.ok is False
     assert len(diagnostics) >= 20
     assert any("tool-argument-encoding-mismatch" in diagnostic.message for diagnostic in diagnostics)
+    assert any("provider-envelope-not-preserved" in diagnostic.message for diagnostic in diagnostics)
     assert any("routing-target-missing" in diagnostic.message for diagnostic in diagnostics)
     assert diagnostics[0].check_modes[0].value == "bounded"
     assert all(diagnostic.witness is not None for diagnostic in diagnostics)
@@ -90,6 +105,7 @@ def test_provider_migration_cli_reports_real_fixture(capsys) -> None:
     assert captured.err == ""
     assert diagnostics
     assert any("context-limit-regression" in item["message"] for item in diagnostics)
+    assert any("provider-envelope-not-preserved" in item["message"] for item in diagnostics)
     assert any(item["span"]["path"].endswith("ollama-target.json") for item in diagnostics if "span" in item)
     assert any(
         step["action"] == "compare provider migration field"

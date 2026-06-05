@@ -17,6 +17,90 @@
       "litellm-target",
       "unsupported-target",
       "missing-target"
+    ],
+    "adapter_chains": [
+      {
+        "name": "openai-through-litellm-to-azure",
+        "source": "openai-source",
+        "targets": ["litellm-target", "azure-openai-target"],
+        "preserve": {
+          "request_fields": ["messages", "model", "tools", "tool_choice", "response_format"],
+          "response_fields": ["choices", "finish_reason", "tool_calls", "usage"],
+          "tool_argument_encoding": true,
+          "tool_id": true,
+          "parallel_tool_calls": true,
+          "streaming_fragments": true,
+          "stop_sequences": ["</tool_call>", "<|end|>"],
+          "structured_output_modes": ["json_schema", "json_object"]
+        },
+        "adapters": [
+          {
+            "from": "openai-source",
+            "to": "litellm-target",
+            "preserves_request_fields": ["messages", "model", "tools", "tool_choice", "response_format"],
+            "preserves_response_fields": ["choices", "finish_reason", "tool_calls", "usage"],
+            "preserves_tool_argument_encoding": true,
+            "preserves_tool_id": true,
+            "preserves_parallel_tool_calls": true,
+            "preserves_streaming_fragments": true,
+            "preserves_stop_sequences": ["</tool_call>", "<|end|>"],
+            "preserves_structured_output_modes": ["json_schema", "json_object"]
+          },
+          {
+            "from": "litellm-target",
+            "to": "azure-openai-target",
+            "preserves_request_fields": ["messages", "model", "tools", "tool_choice", "response_format"],
+            "preserves_response_fields": ["choices", "finish_reason", "tool_calls", "usage"],
+            "preserves_tool_argument_encoding": true,
+            "preserves_tool_id": true,
+            "preserves_parallel_tool_calls": true,
+            "preserves_streaming_fragments": true,
+            "preserves_stop_sequences": ["</tool_call>", "<|end|>"],
+            "preserves_structured_output_modes": ["json_schema", "json_object"]
+          }
+        ]
+      },
+      {
+        "name": "openai-through-litellm-to-anthropic",
+        "source": "openai-source",
+        "targets": ["litellm-target", "anthropic-target"],
+        "preserve": {
+          "request_fields": ["messages", "model", "tools", "tool_choice", "response_format"],
+          "response_fields": ["choices", "finish_reason", "tool_calls", "usage"],
+          "tool_argument_encoding": true,
+          "tool_id": true,
+          "parallel_tool_calls": true,
+          "streaming_fragments": true,
+          "stop_sequences": ["</tool_call>", "<|end|>"],
+          "structured_output_modes": ["json_schema", "json_object"]
+        },
+        "adapters": [
+          {
+            "from": "openai-source",
+            "to": "litellm-target",
+            "preserves_request_fields": ["messages", "model", "tools", "tool_choice", "response_format"],
+            "preserves_response_fields": ["choices", "finish_reason", "tool_calls", "usage"],
+            "preserves_tool_argument_encoding": true,
+            "preserves_tool_id": true,
+            "preserves_parallel_tool_calls": true,
+            "preserves_streaming_fragments": true,
+            "preserves_stop_sequences": ["</tool_call>", "<|end|>"],
+            "preserves_structured_output_modes": ["json_schema", "json_object"]
+          },
+          {
+            "from": "litellm-target",
+            "to": "anthropic-target",
+            "preserves_request_fields": ["messages", "model", "tools"],
+            "preserves_response_fields": ["usage"],
+            "preserves_tool_argument_encoding": false,
+            "preserves_tool_id": true,
+            "preserves_parallel_tool_calls": true,
+            "preserves_streaming_fragments": false,
+            "preserves_stop_sequences": [],
+            "preserves_structured_output_modes": ["tool_schema"]
+          }
+        ]
+      }
     ]
   },
   "migration_compatibility": {

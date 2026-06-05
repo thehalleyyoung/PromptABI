@@ -25,7 +25,7 @@
 Modern LLM systems fail in places that are not neural: chat templates splice
 untrusted text into role delimiters, tokenizer metadata changes the strings that
 grammars actually see, stop sequences fire inside tool arguments, provider
-adapters reinterpret structured outputs, and framework truncation silently drops
+adapter chains drop envelope fields, and framework truncation silently drops
 the evidence a prompt was meant to preserve. These failures are discrete,
 versioned, and usually present before a single token is generated, yet they are
 typically discovered through inference-time tests or production incidents.
@@ -135,11 +135,11 @@ expect.
 PromptABI compiles each artifact into small semantic views. A chat template
 becomes a bounded set of symbolic render paths and role regions. A tokenizer
 becomes an encode/normalize/decode relation over finite witnesses. A JSON
-schema becomes a grammar fragment and representative values. A provider adapter
-becomes a contract over fields, tool-call encodings, streaming chunks, stops,
-and structured-output modes. A training or evaluation manifest becomes a set of
-finite obligations about roles, masks, preserved context, answer schemas, and
-private fields.
+schema becomes a grammar fragment and representative values. A provider adapter chain becomes a contract over fields, tool-call encodings,
+streaming chunks, stops, and structured-output modes, with per-hop preservation
+obligations checked against recorded provider snapshots. A training or evaluation
+manifest becomes a set of finite obligations about roles, masks, preserved
+context, answer schemas, and private fields.
 
 The tool deliberately does not claim to model arbitrary Python, arbitrary
 Jinja, or arbitrary parser code. Its supported fragments are explicit. Outside
@@ -211,8 +211,14 @@ Provider migration is checked as a contract comparison, not as string matching.
 PromptABI compares request and response surfaces: tool-call IDs, JSON-object
 versus JSON-string arguments, parallel-call support, streaming chunk assembly,
 stop semantics, context limits, structured-output modes, and error envelopes.
-The output is a set of migration diagnostics with concrete fields and suggested
-safe fixes.
+For adapter chains, it additionally proves that declared provider-envelope
+obligations survive every hop: the analyzer checks the ordered chain, the
+adapter's own preservation declaration, and the target provider's recorded
+surface. A LiteLLM-to-Azure OpenAI chain can therefore be proven equivalent for
+OpenAI-style tool envelopes, while a LiteLLM-to-Anthropic chain emits concrete
+losses for response fields, JSON-string arguments, streaming fragments, stops,
+and structured-output modes. The output is a set of migration diagnostics with
+concrete fields and suggested safe fixes.
 
 \section{What the Tool Can Do}
 
@@ -239,8 +245,8 @@ Tokenizer $\times$ grammar emptiness and ambiguity checks &
 Token path, decoded text, grammar state, minimal string \\
 \addlinespace
 Migrate providers safely &
-Provider and streaming contract comparison &
-Lost field, changed encoding, response-shape witness \\
+Provider, streaming, and adapter-chain envelope preservation &
+Lost field, changed encoding, broken hop, response-shape witness \\
 \addlinespace
 Protect RAG, training, and eval invariants &
 Context-budget, mask, role, and private-field obligations &

@@ -29,6 +29,8 @@ class ProviderMigrationFindingKind(StrEnum):
     STRUCTURED_OUTPUT_MISMATCH = "structured-output-mismatch"
     ERROR_SHAPE_MISMATCH = "error-shape-mismatch"
     ROUTING_TARGET_MISSING = "routing-target-missing"
+    ADAPTER_CHAIN_INVALID = "adapter-chain-invalid"
+    PROVIDER_ENVELOPE_NOT_PRESERVED = "provider-envelope-not-preserved"
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +79,39 @@ class _ProviderSnapshot:
     routes_to: tuple[str, ...]
     migration_targets: tuple[str, ...]
     span_by_field: dict[str, SourceSpan]
+    adapter_chains: tuple["_AdapterChain", ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class _AdapterHop:
+    from_name: str
+    to_name: str
+    preserves_request_fields: tuple[str, ...]
+    preserves_response_fields: tuple[str, ...]
+    preserves_tool_argument_encoding: bool | None
+    preserves_tool_id: bool | None
+    preserves_parallel_tool_calls: bool | None
+    preserves_streaming_fragments: bool | None
+    preserves_stop_sequences: tuple[str, ...]
+    preserves_structured_output_modes: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _AdapterChain:
+    owner_artifact_name: str
+    name: str
+    source_name: str
+    targets: tuple[str, ...]
+    required_request_fields: tuple[str, ...]
+    required_response_fields: tuple[str, ...]
+    require_tool_argument_encoding: bool
+    require_tool_id: bool
+    require_parallel_tool_calls: bool
+    require_streaming_fragments: bool
+    required_stop_sequences: tuple[str, ...]
+    required_structured_output_modes: tuple[str, ...]
+    hops: tuple[_AdapterHop, ...]
+    span: SourceSpan | None
 
 
 SUPPORTED_PROVIDER_FAMILIES: tuple[str, ...] = (
@@ -170,6 +205,7 @@ def analyze_provider_migration(
                 )
                 continue
             findings.extend(_compare_provider_pair(source, target))
+    findings.extend(_analyze_adapter_chains(providers, by_name))
 
     supported_seen = tuple(
         sorted({provider.canonical_family for provider in providers if provider.canonical_family is not None})
@@ -425,6 +461,337 @@ def _compare_provider_pair(
     return tuple(findings)
 
 
+def _analyze_adapter_chains(
+    providers: tuple[_ProviderSnapshot, ...],
+    by_name: dict[str, _ProviderSnapshot],
+) -> tuple[ProviderMigrationFinding, ...]:
+    findings: list[ProviderMigrationFinding] = []
+    for owner in providers:
+        for chain in owner.adapter_chains:
+            source = by_name.get(chain.source_name)
+            if source is None:
+                findings.append(
+                    _chain_finding(
+                        ProviderMigrationFindingKind.ADAPTER_CHAIN_INVALID,
+                        "error",
+                        owner,
+                        None,
+                        chain,
+                        f"adapter chain '{chain.name}' starts at missing provider fixture '{chain.source_name}'",
+                        (("chain", chain.name), ("missing source", chain.source_name)),
+                        "Load the chain source fixture or correct provider_migration.adapter_chains[].source.",
+                    )
+                )
+                continue
+            path_names = (chain.source_name, *chain.targets)
+            if len(path_names) < 2:
+                findings.append(
+                    _chain_finding(
+                        ProviderMigrationFindingKind.ADAPTER_CHAIN_INVALID,
+                        "error",
+                        owner,
+                        source,
+                        chain,
+                        f"adapter chain '{chain.name}' must include at least one target provider",
+                        (("chain", chain.name), ("path", " -> ".join(path_names) or "<empty>")),
+                        "Declare at least one target fixture in provider_migration.adapter_chains[].targets.",
+                    )
+                )
+                continue
+            if len(set(path_names)) != len(path_names):
+                findings.append(
+                    _chain_finding(
+                        ProviderMigrationFindingKind.ADAPTER_CHAIN_INVALID,
+                        "error",
+                        owner,
+                        source,
+                        chain,
+                        f"adapter chain '{chain.name}' repeats a provider fixture and is cyclic",
+                        (("chain", chain.name), ("path", " -> ".join(path_names))),
+                        "Remove cycles so PromptABI can prove preservation over a finite acyclic adapter chain.",
+                    )
+                )
+                continue
+            for from_name, to_name in zip(path_names, path_names[1:]):
+                hop_source = by_name.get(from_name)
+                hop_target = by_name.get(to_name)
+                if hop_source is None or hop_target is None:
+                    missing = from_name if hop_source is None else to_name
+                    findings.append(
+                        _chain_finding(
+                            ProviderMigrationFindingKind.ROUTING_TARGET_MISSING,
+                            "error",
+                            owner,
+                            source,
+                            chain,
+                            f"adapter chain '{chain.name}' references missing provider fixture '{missing}'",
+                            (("chain", chain.name), ("path", " -> ".join(path_names)), ("missing fixture", missing)),
+                            "Load every provider fixture named by the adapter chain before relying on transitive compatibility.",
+                        )
+                    )
+                    continue
+                hop = _find_adapter_hop(chain, from_name, to_name)
+                if hop is None:
+                    findings.append(
+                        _chain_finding(
+                            ProviderMigrationFindingKind.ADAPTER_CHAIN_INVALID,
+                            "error",
+                            owner,
+                            hop_target,
+                            chain,
+                            f"adapter chain '{chain.name}' has no preservation declaration for {from_name} -> {to_name}",
+                            (("chain", chain.name), ("missing hop", f"{from_name} -> {to_name}")),
+                            "Add an adapter hop entry that declares exactly which envelope fields it preserves.",
+                        )
+                    )
+                    continue
+                findings.extend(_compare_adapter_hop(chain, hop, hop_source, hop_target, owner))
+    return tuple(findings)
+
+
+def _compare_adapter_hop(
+    chain: _AdapterChain,
+    hop: _AdapterHop,
+    source: _ProviderSnapshot,
+    target: _ProviderSnapshot,
+    owner: _ProviderSnapshot,
+) -> tuple[ProviderMigrationFinding, ...]:
+    findings: list[ProviderMigrationFinding] = []
+    path = f"{hop.from_name} -> {hop.to_name}"
+
+    request_missing_in_target = _required_missing(chain.required_request_fields, target.request_fields)
+    request_missing_in_adapter = _required_missing(chain.required_request_fields, hop.preserves_request_fields)
+    if request_missing_in_target or request_missing_in_adapter:
+        findings.append(
+            _envelope_finding(
+                owner,
+                target,
+                chain,
+                "request fields",
+                path,
+                request_missing_in_target,
+                request_missing_in_adapter,
+                chain.required_request_fields,
+                target.request_fields,
+                hop.preserves_request_fields,
+            )
+        )
+
+    response_missing_in_target = _required_missing(chain.required_response_fields, target.response_fields)
+    response_missing_in_adapter = _required_missing(chain.required_response_fields, hop.preserves_response_fields)
+    if response_missing_in_target or response_missing_in_adapter:
+        findings.append(
+            _envelope_finding(
+                owner,
+                target,
+                chain,
+                "response fields",
+                path,
+                response_missing_in_target,
+                response_missing_in_adapter,
+                chain.required_response_fields,
+                target.response_fields,
+                hop.preserves_response_fields,
+            )
+        )
+
+    if chain.require_tool_argument_encoding and source.tool_argument_encoding != target.tool_argument_encoding:
+        findings.append(
+            _chain_finding(
+                ProviderMigrationFindingKind.PROVIDER_ENVELOPE_NOT_PRESERVED,
+                "error",
+                owner,
+                target,
+                chain,
+                f"adapter chain '{chain.name}' changes tool argument encoding at {path}",
+                (
+                    ("chain", chain.name),
+                    ("hop", path),
+                    ("source tool argument encoding", source.tool_argument_encoding or "<missing>"),
+                    ("target tool argument encoding", target.tool_argument_encoding or "<missing>"),
+                ),
+                "Normalize tool arguments inside the adapter and record an equivalent parser contract.",
+            )
+        )
+    if chain.require_tool_argument_encoding and hop.preserves_tool_argument_encoding is not True:
+        findings.append(
+            _chain_finding(
+                ProviderMigrationFindingKind.PROVIDER_ENVELOPE_NOT_PRESERVED,
+                "error",
+                owner,
+                target,
+                chain,
+                f"adapter chain '{chain.name}' lacks a tool-argument preservation proof for {path}",
+                (("chain", chain.name), ("hop", path), ("preserves tool argument encoding", _bool_text(hop.preserves_tool_argument_encoding))),
+                "Set preserves_tool_argument_encoding only after the adapter has a replayed fixture proving equivalent encoding.",
+            )
+        )
+
+    if chain.require_tool_id and (not source.tool_id_path or not target.tool_id_path or hop.preserves_tool_id is not True):
+        findings.append(
+            _chain_finding(
+                ProviderMigrationFindingKind.PROVIDER_ENVELOPE_NOT_PRESERVED,
+                "error",
+                owner,
+                target,
+                chain,
+                f"adapter chain '{chain.name}' does not preserve tool-call IDs at {path}",
+                (
+                    ("chain", chain.name),
+                    ("hop", path),
+                    ("source tool ID path", source.tool_id_path or "<missing>"),
+                    ("target tool ID path", target.tool_id_path or "<missing>"),
+                    ("adapter preserves tool ID", _bool_text(hop.preserves_tool_id)),
+                ),
+                "Preserve or synthesize stable tool-call IDs through every adapter hop.",
+            )
+        )
+
+    if chain.require_parallel_tool_calls and (
+        source.supports_parallel_tools is not True
+        or target.supports_parallel_tools is not True
+        or hop.preserves_parallel_tool_calls is not True
+    ):
+        findings.append(
+            _chain_finding(
+                ProviderMigrationFindingKind.PROVIDER_ENVELOPE_NOT_PRESERVED,
+                "warning",
+                owner,
+                target,
+                chain,
+                f"adapter chain '{chain.name}' does not prove parallel tool-call preservation at {path}",
+                (
+                    ("chain", chain.name),
+                    ("hop", path),
+                    ("source parallel tools", _bool_text(source.supports_parallel_tools)),
+                    ("target parallel tools", _bool_text(target.supports_parallel_tools)),
+                    ("adapter preserves parallel tools", _bool_text(hop.preserves_parallel_tool_calls)),
+                ),
+                "Disable parallel tool calls or replay an adapter fixture that preserves ordering, IDs, and call indexes.",
+            )
+        )
+
+    if chain.require_streaming_fragments and (
+        source.streams_argument_fragments is not True
+        or target.streams_argument_fragments is not True
+        or hop.preserves_streaming_fragments is not True
+    ):
+        findings.append(
+            _chain_finding(
+                ProviderMigrationFindingKind.PROVIDER_ENVELOPE_NOT_PRESERVED,
+                "error",
+                owner,
+                target,
+                chain,
+                f"adapter chain '{chain.name}' does not preserve streaming argument fragments at {path}",
+                (
+                    ("chain", chain.name),
+                    ("hop", path),
+                    ("source streams fragments", _bool_text(source.streams_argument_fragments)),
+                    ("target streams fragments", _bool_text(target.streams_argument_fragments)),
+                    ("adapter preserves fragments", _bool_text(hop.preserves_streaming_fragments)),
+                ),
+                "Buffer or re-emit streaming deltas with a replayed chunk assembly contract for every adapter.",
+            )
+        )
+
+    stop_missing_in_target = _required_missing(chain.required_stop_sequences, target.stop_sequences)
+    stop_missing_in_adapter = _required_missing(chain.required_stop_sequences, hop.preserves_stop_sequences)
+    if stop_missing_in_target or stop_missing_in_adapter:
+        findings.append(
+            _envelope_finding(
+                owner,
+                target,
+                chain,
+                "stop sequences",
+                path,
+                stop_missing_in_target,
+                stop_missing_in_adapter,
+                chain.required_stop_sequences,
+                target.stop_sequences,
+                hop.preserves_stop_sequences,
+                severity="warning",
+            )
+        )
+
+    structured_missing_in_target = _required_missing(chain.required_structured_output_modes, target.structured_output_modes)
+    structured_missing_in_adapter = _required_missing(chain.required_structured_output_modes, hop.preserves_structured_output_modes)
+    if structured_missing_in_target or structured_missing_in_adapter:
+        findings.append(
+            _envelope_finding(
+                owner,
+                target,
+                chain,
+                "structured output modes",
+                path,
+                structured_missing_in_target,
+                structured_missing_in_adapter,
+                chain.required_structured_output_modes,
+                target.structured_output_modes,
+                hop.preserves_structured_output_modes,
+            )
+        )
+    return tuple(findings)
+
+
+def _envelope_finding(
+    owner: _ProviderSnapshot,
+    target: _ProviderSnapshot,
+    chain: _AdapterChain,
+    field: str,
+    hop_path: str,
+    missing_in_target: tuple[str, ...],
+    missing_in_adapter: tuple[str, ...],
+    required_values: tuple[str, ...],
+    target_values: tuple[str, ...],
+    adapter_values: tuple[str, ...],
+    *,
+    severity: str = "error",
+) -> ProviderMigrationFinding:
+    return _chain_finding(
+        ProviderMigrationFindingKind.PROVIDER_ENVELOPE_NOT_PRESERVED,
+        severity,
+        owner,
+        target,
+        chain,
+        f"adapter chain '{chain.name}' does not preserve provider-envelope {field} at {hop_path}",
+        (
+            ("chain", chain.name),
+            ("hop", hop_path),
+            ("required " + field, ", ".join(required_values) or "<none>"),
+            ("target " + field, ", ".join(target_values) or "<none>"),
+            ("adapter-preserved " + field, ", ".join(adapter_values) or "<none>"),
+            ("missing on target", ", ".join(missing_in_target) or "<none>"),
+            ("missing in adapter proof", ", ".join(missing_in_adapter) or "<none>"),
+        ),
+        "Update the adapter, target provider fixture, or chain contract so every required envelope field survives each hop.",
+    )
+
+
+def _chain_finding(
+    kind: ProviderMigrationFindingKind,
+    severity: str,
+    owner: _ProviderSnapshot,
+    target: _ProviderSnapshot | None,
+    chain: _AdapterChain,
+    message: str,
+    evidence: tuple[tuple[str, str], ...],
+    suggestion: str,
+) -> ProviderMigrationFinding:
+    return ProviderMigrationFinding(
+        kind=kind,
+        severity=severity,
+        source_provider=owner.provider,
+        target_provider=target.provider if target is not None else chain.targets[-1] if chain.targets else chain.source_name,
+        source_artifact_name=chain.source_name,
+        target_artifact_name=target.artifact_name if target is not None else None,
+        span=chain.span or owner.span_by_field.get("adapter chains") or owner.span_by_field.get("migration targets"),
+        message=message,
+        evidence=evidence,
+        suggestion=suggestion,
+    )
+
+
 def _finding(
     kind: ProviderMigrationFindingKind,
     severity: str,
@@ -465,6 +832,7 @@ def _provider_snapshot(loaded: LoadedArtifact) -> _ProviderSnapshot:
     routing = _mapping(compatibility.get("routing"))
     migration = _mapping(raw.get("provider_migration"))
     provider = _string(raw.get("provider")) or artifact.provider
+    artifact_name = artifact.name
 
     canonical = canonical_provider_family(
         _string(compatibility.get("provider_family"))
@@ -473,7 +841,7 @@ def _provider_snapshot(loaded: LoadedArtifact) -> _ProviderSnapshot:
         or provider
     )
     return _ProviderSnapshot(
-        artifact_name=artifact.name,
+        artifact_name=artifact_name,
         provider=provider,
         canonical_family=canonical,
         request_fields=_string_tuple(request.get("required_fields") or request.get("fields")),
@@ -497,6 +865,7 @@ def _provider_snapshot(loaded: LoadedArtifact) -> _ProviderSnapshot:
         ),
         migration_targets=_string_tuple(migration.get("targets")),
         span_by_field=spans,
+        adapter_chains=_adapter_chains_from_mapping(artifact_name, migration, spans.get("adapter chains")),
     )
 
 
@@ -519,6 +888,7 @@ def _read_provider_snapshot(path: Path) -> tuple[dict[str, Any], dict[str, Sourc
     field_paths = {
         "provider": ("provider",),
         "migration targets": ("provider_migration", "targets"),
+        "adapter chains": ("provider_migration", "adapter_chains"),
         "request fields": ("migration_compatibility", "request", "required_fields"),
         "response fields": ("migration_compatibility", "response", "required_fields"),
         "tool argument encoding": ("migration_compatibility", "tools", "argument_encoding"),
@@ -539,6 +909,90 @@ def _read_provider_snapshot(path: Path) -> tuple[dict[str, Any], dict[str, Sourc
     return raw, spans
 
 
+def _adapter_chains_from_mapping(
+    owner_artifact_name: str,
+    migration: dict[str, Any],
+    span: SourceSpan | None,
+) -> tuple[_AdapterChain, ...]:
+    raw_chains = migration.get("adapter_chains")
+    if not isinstance(raw_chains, list):
+        return ()
+    chains: list[_AdapterChain] = []
+    for index, raw_chain in enumerate(raw_chains):
+        if not isinstance(raw_chain, dict):
+            continue
+        preserve = _mapping(raw_chain.get("preserve"))
+        chain_name = _string(raw_chain.get("name")) or f"{owner_artifact_name}-adapter-chain-{index + 1}"
+        required_request = _string_tuple(
+            preserve.get("request_fields") or preserve.get("required_request_fields")
+        )
+        required_response = _string_tuple(
+            preserve.get("response_fields") or preserve.get("required_response_fields")
+        )
+        chains.append(
+            _AdapterChain(
+                owner_artifact_name=owner_artifact_name,
+                name=chain_name,
+                source_name=_string(raw_chain.get("source")) or owner_artifact_name,
+                targets=_ordered_string_tuple(raw_chain.get("targets")),
+                required_request_fields=required_request,
+                required_response_fields=required_response,
+                require_tool_argument_encoding=_bool(preserve.get("tool_argument_encoding")),
+                require_tool_id=_bool(preserve.get("tool_id")),
+                require_parallel_tool_calls=_bool(preserve.get("parallel_tool_calls")),
+                require_streaming_fragments=_bool(preserve.get("streaming_fragments")),
+                required_stop_sequences=_string_tuple(preserve.get("stop_sequences")),
+                required_structured_output_modes=_string_tuple(preserve.get("structured_output_modes")),
+                hops=_adapter_hops_from_sequence(raw_chain.get("adapters") or raw_chain.get("hops")),
+                span=span,
+            )
+        )
+    return tuple(chains)
+
+
+def _adapter_hops_from_sequence(value: Any) -> tuple[_AdapterHop, ...]:
+    if not isinstance(value, list):
+        return ()
+    hops: list[_AdapterHop] = []
+    for raw_hop in value:
+        if not isinstance(raw_hop, dict):
+            continue
+        from_name = _string(raw_hop.get("from"))
+        to_name = _string(raw_hop.get("to"))
+        if from_name is None or to_name is None:
+            continue
+        hops.append(
+            _AdapterHop(
+                from_name=from_name,
+                to_name=to_name,
+                preserves_request_fields=_string_tuple(
+                    raw_hop.get("preserves_request_fields") or raw_hop.get("request_fields")
+                ),
+                preserves_response_fields=_string_tuple(
+                    raw_hop.get("preserves_response_fields") or raw_hop.get("response_fields")
+                ),
+                preserves_tool_argument_encoding=_optional_bool(raw_hop.get("preserves_tool_argument_encoding")),
+                preserves_tool_id=_optional_bool(raw_hop.get("preserves_tool_id")),
+                preserves_parallel_tool_calls=_optional_bool(raw_hop.get("preserves_parallel_tool_calls")),
+                preserves_streaming_fragments=_optional_bool(raw_hop.get("preserves_streaming_fragments")),
+                preserves_stop_sequences=_string_tuple(
+                    raw_hop.get("preserves_stop_sequences") or raw_hop.get("stop_sequences")
+                ),
+                preserves_structured_output_modes=_string_tuple(
+                    raw_hop.get("preserves_structured_output_modes") or raw_hop.get("structured_output_modes")
+                ),
+            )
+        )
+    return tuple(hops)
+
+
+def _find_adapter_hop(chain: _AdapterChain, from_name: str, to_name: str) -> _AdapterHop | None:
+    for hop in chain.hops:
+        if hop.from_name == from_name and hop.to_name == to_name:
+            return hop
+    return None
+
+
 def _is_provider_snapshot(loaded: LoadedArtifact) -> bool:
     return loaded.artifact.kind is ArtifactKind.PROVIDER_CONFIG and loaded.source_type == "provider-config-snapshot"
 
@@ -547,6 +1001,12 @@ def _missing(source_values: tuple[str, ...], target_values: tuple[str, ...]) -> 
     if not source_values or not target_values:
         return ()
     return tuple(sorted(set(source_values).difference(target_values)))
+
+
+def _required_missing(required_values: tuple[str, ...], available_values: tuple[str, ...]) -> tuple[str, ...]:
+    if not required_values:
+        return ()
+    return tuple(sorted(set(required_values).difference(available_values)))
 
 
 def _mapping(value: Any) -> dict[str, Any]:
@@ -563,12 +1023,26 @@ def _string_tuple(value: Any) -> tuple[str, ...]:
     return ()
 
 
+def _ordered_string_tuple(value: Any) -> tuple[str, ...]:
+    if isinstance(value, str) and value:
+        return (value,)
+    if isinstance(value, list) and all(isinstance(item, str) and item for item in value):
+        return tuple(dict.fromkeys(value))
+    if isinstance(value, tuple) and all(isinstance(item, str) and item for item in value):
+        return tuple(dict.fromkeys(value))
+    return ()
+
+
 def _string(value: Any) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
 def _optional_bool(value: Any) -> bool | None:
     return value if isinstance(value, bool) else None
+
+
+def _bool(value: Any) -> bool:
+    return value is True
 
 
 def _int(value: Any) -> int | None:
@@ -585,3 +1059,9 @@ def _regresses_limit(source: int | None, target: int | None) -> bool:
 
 def _int_text(value: int | None) -> str:
     return str(value) if value is not None else "<missing>"
+
+
+def _bool_text(value: bool | None) -> str:
+    if value is None:
+        return "<missing>"
+    return str(value).lower()
