@@ -321,6 +321,12 @@ from .template_abstract_interpretation import (
     render_template_abstract_interpretation_json,
     render_template_abstract_interpretation_text,
 )
+from .compositional_proof_benchmarks import (
+    publish_compositional_proof_benchmarks,
+    render_compositional_proof_benchmark_json,
+    render_compositional_proof_benchmark_text,
+    run_compositional_proof_benchmarks,
+)
 from .lockfiles import (
     LockfileError,
     build_lockfile,
@@ -786,6 +792,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     _add_local_summary_argument(template_ai)
+
+    compositional_bench = subparsers.add_parser(
+        "compositional-bench",
+        help="run and optionally publish the compositional proof benchmark suite",
+    )
+    compositional_bench.add_argument(
+        "--publish-dir",
+        help="directory to publish the benchmark manifest into",
+    )
+    compositional_bench.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    _add_local_summary_argument(compositional_bench)
 
     explain = subparsers.add_parser("explain", help="expand one diagnostic into a tutorial-style explanation")
     explain.add_argument(
@@ -3540,6 +3562,36 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "format": args.format,
                 "supported": report.supported,
                 "violation_count": len(report.violations),
+            },
+        ):
+            return 2
+        print(output, end="")
+        return exit_code
+
+    if args.command == "compositional-bench":
+        started_at = time.perf_counter()
+        try:
+            report = run_compositional_proof_benchmarks()
+            if args.publish_dir:
+                publish_compositional_proof_benchmarks(args.publish_dir, report=report)
+        except (OSError, ValueError) as exc:
+            print(f"promptabi: cannot run compositional proof benchmarks: {exc}", file=sys.stderr)
+            return 2
+        output = (
+            render_compositional_proof_benchmark_json(report)
+            if args.format == "json"
+            else render_compositional_proof_benchmark_text(report)
+        )
+        exit_code = 0 if report.ok else 1
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="compositional-bench",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={
+                "format": args.format,
+                "passed": report.passed,
+                "total": report.total,
             },
         ):
             return 2
