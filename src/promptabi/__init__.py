@@ -195,6 +195,7 @@ from .chat_templates import (
     symbolically_execute_chat_template,
 )
 from .config import ConfigError, VerificationConfig, discover_config, load_config
+from .witness_privacy import WitnessPrivacyMode, apply_witness_privacy, private_witness
 from .compatibility_matrix import (
     CHECK_RULE_IDS,
     CompatibilityMatrix,
@@ -1267,4 +1268,7 @@ __all__ = [
     "validate_structured_schema_entry",
     "validate_contributor_infrastructure",
     "write_structured_schema_corpus_manifest",
+    "WitnessPrivacyMode",
+    "apply_witness_privacy",
+    "private_witness",
 ]

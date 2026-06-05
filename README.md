@@ -120,6 +120,9 @@ promptabi proofs --format text
 # In notebooks, inspect tokenizer/template/stop/grammar/SMT/budget witnesses as rich reprs.
 python -c "from promptabi import visualize_tokenization; from promptabi.tokenizers import ByteLevelTokenizer; print(visualize_tokenization('<|im_start|> hi', ByteLevelTokenizer(added_tokens=('<|im_start|>',))))"
 
+# Share CI evidence without leaking prompt text: keep offsets/token IDs, hash witness payloads.
+promptabi verify --config examples/role-boundary/unsafe.promptabi.json --witness-privacy hash-only --format json --fail-on never
+
 # Show pinned, verified real-world-style configs with proof/risk badges.
 promptabi gallery --format text
 

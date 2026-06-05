@@ -146,7 +146,11 @@ rich diagnostic witness records that carry the human trace plus machine-readable
 rendered strings, exact token IDs, role-region offsets, parser states, solver
 assignments, truncation decisions, and ranked minimal fixes, so a CI failure can
 be replayed by tools, surfaced in HTML, and audited without reverse-engineering a
-plain-text explanation,
+plain-text explanation, plus opt-in witness privacy modes for text, JSON, SARIF,
+GitHub annotations, and HTML that leave diagnostic fingerprints, token IDs,
+source spans, and structural offsets stable while transforming witness payload
+strings and witness artifact paths into position-preserving redactions,
+hash-only evidence, or structural length/line/digest summaries,
 a reusable GitHub Action and \texttt{promptabi github-action} runner that restore
 analysis caches, enforce lockfiles for app configs, run \texttt{verify-training}
 for training-manifest pull requests before fine-tuning jobs start, skip unrelated

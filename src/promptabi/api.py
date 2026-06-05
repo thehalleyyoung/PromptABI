@@ -150,6 +150,7 @@ from .version_gates import (
     render_version_gate_text,
     run_version_gate,
 )
+from .witness_privacy import WitnessPrivacyMode, apply_witness_privacy
 from .reproducibility import (
     ReproducibilityInputs,
     ReproducibilityPackage,
@@ -273,9 +274,11 @@ def render_result(
     plugin_registry: PluginRegistry | None = None,
     sarif_options: SarifRenderOptions | None = None,
     github_checkout_uri_base: str | Path | None = None,
+    witness_privacy: WitnessPrivacyMode | str = WitnessPrivacyMode.RAW,
 ) -> str:
     """Render a typed verification result as text, HTML, JSON, SARIF, or GitHub annotations."""
 
+    result = apply_witness_privacy(result, witness_privacy)
     if output_format == "text":
         return render_text(
             result,

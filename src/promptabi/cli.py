@@ -228,6 +228,7 @@ from .version_gates import (
     render_version_gate_text,
     run_version_gate,
 )
+from .witness_privacy import WitnessPrivacyMode, apply_witness_privacy
 from .provider_fixture_packs import (
     ProviderFixturePackError,
     build_provider_fixture_pack_manifest,
@@ -287,6 +288,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="text",
         help="output format: text, html, json, sarif, github-annotations, or a plugin renderer (default: text)",
     )
+    _add_witness_privacy_argument(verify)
     _add_github_output_arguments(verify)
     verify.add_argument(
         "--plugin",
@@ -376,6 +378,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="text",
         help="output format: text, html, json, sarif, github-annotations, or a plugin renderer (default: text)",
     )
+    _add_witness_privacy_argument(verify_training)
     _add_github_output_arguments(verify_training)
     verify_training.add_argument(
         "--plugin",
@@ -498,6 +501,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="text",
         help="output format: text, html, json, sarif, github-annotations, or a plugin renderer (default: text)",
     )
+    _add_witness_privacy_argument(diff)
     _add_github_output_arguments(diff)
     diff.add_argument(
         "--plugin",
@@ -1709,6 +1713,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "cache_dir": cache_dir,
                 },
                 sarif_options=_sarif_options(args, argv),
+                witness_privacy=args.witness_privacy,
             )
         except PluginError as exc:
             print(f"promptabi: {exc}", file=sys.stderr)
@@ -2103,6 +2108,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "heading": "PromptABI training verification",
                 },
                 sarif_options=_sarif_options(args, argv),
+                witness_privacy=args.witness_privacy,
             )
         except PluginError as exc:
             print(f"promptabi: {exc}", file=sys.stderr)
@@ -2293,6 +2299,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "heading": "PromptABI diff",
                 },
                 sarif_options=_sarif_options(args, argv),
+                witness_privacy=args.witness_privacy,
             )
         except PluginError as exc:
             print(f"promptabi: {exc}", file=sys.stderr)
@@ -3199,6 +3206,18 @@ def _add_github_output_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_witness_privacy_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--witness-privacy",
+        choices=tuple(mode.value for mode in WitnessPrivacyMode),
+        default=WitnessPrivacyMode.RAW.value,
+        help=(
+            "transform witness payload strings before rendering: raw, position-preserving redacted, "
+            "hash-only, or structural metadata (default: raw)"
+        ),
+    )
+
+
 def _add_pre_commit_common_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--config",
@@ -3300,7 +3319,9 @@ def _render_verification_output(
     plugin_registry: PluginRegistry,
     text_kwargs: dict[str, object],
     sarif_options: SarifRenderOptions | None = None,
+    witness_privacy: str = WitnessPrivacyMode.RAW.value,
 ) -> str:
+    result = apply_witness_privacy(result, witness_privacy)
     if output_format == "text":
         return render_text(result, **text_kwargs)
     if output_format == "json":
