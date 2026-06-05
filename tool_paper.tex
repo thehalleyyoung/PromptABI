@@ -506,6 +506,79 @@ an inconclusive status that is never reported as a safe or unsafe claim.
 \end{proof}
 
 
+\section{Executable Metatheory}
+\label{sec:metatheory}
+
+The check families above are grounded in a small core calculus for prompt
+assembly whose metatheory PromptABI \emph{mechanizes in the executable sense}:
+every theorem is stated precisely and then discharged by exhaustive, bounded
+enumeration over the production implementation (\texttt{promptabi.\allowbreak
+prompt\_calculus}), in the style of executable semantics frameworks such as PLT
+Redex and randomized proof tools such as QuickChick. A claim is trusted only
+after an independent reference predicate confirms it on every element of a
+finite, explicitly bounded domain. The full development is reproducible with one
+command, \texttt{promptabi metatheory}, and rendered as a standalone formal
+appendix with \texttt{promptabi metatheory -{}-appendix}.
+
+\paragraph{The calculus.}
+Terms are $t ::= \mathsf{Lit}\,s \mid \mathsf{Data}\,s \mid \mathsf{Esc}\,t \mid
+\mathsf{Seg}\,r\,t \mid \mathsf{Concat}\,t\,t$, where $\mathsf{Lit}$ is trusted,
+developer-authored control text (free of delimiter characters), $\mathsf{Data}$
+is untrusted input, $\mathsf{Esc}$ is a sanitizer, and $\mathsf{Seg}\,r$ wraps a
+body in the structural role delimiters $\langle r\rangle\,\cdots\,\langle
+\mathrm{end}\rangle$. A small-step machine reduces configurations to a
+provenance-annotated character stream; a denotational renderer gives the
+reference meaning.
+
+\paragraph{Theorems.}
+The mechanized development covers fourteen theorems, including:
+(i) the small-step relation is a deterministic total function on non-final
+configurations, every term normalizes, and its normal form equals the
+denotational renderer (\emph{adequacy});
+(ii) \emph{type soundness / role non-forgeability}: if $\vdash t : \mathsf{control}$
+then no adversarial data assignment produces a control-delimiter occurrence that
+includes a data-provenance character, and the rejected (ill-typed) programs are
+exhibited as genuine forgery witnesses;
+(iii) contextual equivalence is an equivalence relation and a \emph{congruence};
+(iv) the stop policy is a \emph{denotational truncation} function equal to the
+operational scanner and always a stop-free prefix;
+(v) the structured-output schema checker is \emph{sound and complete} against an
+independent reference acceptor;
+(vi) the decidable grammar-backend fragment is a \emph{down-closed} region of the
+feature lattice, characterized exactly by its maximal elements;
+(vii) a \emph{noninterference} theorem: the control skeleton is invariant under
+all substitutions of data leaves;
+(viii) capability-negotiation fallback is \emph{monotone} and order-preserving;
+(ix) tool-call accounting is a \emph{session-type} discipline whose typed traces
+are exactly the balanced ones;
+(x) safe migration dry-run patches \emph{preserve} request well-formedness;
+(xi) provider-contract refinement is a \emph{preorder};
+(xii) conformance is \emph{compositional} over prompt-pack composition; and
+(xiii) prompt-interface drift forms an \emph{ultrametric}. The core
+role-non-forgeability proposition is additionally mirrored in a Lean~4 source
+artifact for the formal appendix.
+
+\begin{theorem}[Role non-forgeability]
+For every well-typed term $t$ (every $\mathsf{Data}$ leaf guarded by
+$\mathsf{Esc}$) and every adversarial data assignment, the rendered prompt
+contains no control-delimiter occurrence spanning any data-provenance character.
+\end{theorem}
+\begin{proof}
+The sanitizer denotation removes data ``\texttt{<}'' characters and trusted
+literals contain no ``\texttt{<}''; hence every delimiter occurrence's leading
+character is structural control text emitted atomically by $\mathsf{Seg}$. The
+PromptABI harness discharges the proposition by enumerating all well-typed terms
+up to depth two over an adversarial data alphabet that includes every whole
+delimiter, checking the independent forgery predicate on each, and separately
+exhibiting ill-typed forgery witnesses so the type system is shown to be
+meaningful rather than vacuous.
+\end{proof}
+
+Across the suite, PromptABI checks tens of thousands of bounded instances with
+zero counterexamples for every proved obligation; the per-theorem domain sizes
+and pass/fail status are emitted as stable JSON for the artifact appendix.
+
+
 \section{Implementation}
 
 PromptABI is a Python tool with a deterministic command-line interface and an

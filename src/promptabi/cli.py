@@ -468,6 +468,12 @@ from .mechanized_proofs import (
     render_mechanized_proof_experiments_text,
     run_mechanized_proof_experiments,
 )
+from .prompt_calculus import (
+    render_formal_appendix_markdown,
+    render_metatheory_json,
+    render_metatheory_text,
+    run_metatheory,
+)
 from .soundness_audits import (
     build_soundness_audit_report,
     render_soundness_audit_json,
@@ -2092,6 +2098,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--experiments",
         action="store_true",
         help="run mechanized proof experiments for small automata and finite-contract fragments",
+    )
+    metatheory = subparsers.add_parser(
+        "metatheory",
+        help="run the executable prompt-assembly metatheory (operational semantics, type soundness, congruence, ...)",
+    )
+    metatheory.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    metatheory.add_argument(
+        "--appendix",
+        action="store_true",
+        help="render the standalone formal appendix (Markdown) instead of the theorem report",
     )
     soundness_audit = subparsers.add_parser(
         "soundness-audit",
@@ -5134,6 +5155,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0 if notebook_report.passed else 1
         report = build_supported_proof_catalog()
         output = render_proof_sketch_report_json(report) if args.format == "json" else render_proof_sketch_report_text(report)
+        print(output, end="")
+        return 0 if report.passed else 1
+
+    if args.command == "metatheory":
+        report = run_metatheory()
+        if args.appendix:
+            print(render_formal_appendix_markdown(report), end="")
+            return 0 if report.passed else 1
+        output = render_metatheory_json(report) if args.format == "json" else render_metatheory_text(report)
         print(output, end="")
         return 0 if report.passed else 1
 

@@ -67,8 +67,9 @@ The same local verifier covers:
 Under the hood, PromptABI combines a declarative static contract language,
 deterministic automata, finite-state
 transducers, executable specs for witnesses/products/SMT outcomes, differential
-checks against real tokenizer/template libraries, mechanized proof experiments
-for small automata/SMT fragments, and a Z3-backed finite
+checks against real tokenizer/template libraries, an executable metatheory that
+mechanizes role non-forgeability, noninterference, schema soundness/completeness,
+and ten more theorems by exhaustive bounded enumeration, and a Z3-backed finite
 contract layer over booleans, enums, integer ranges, membership, lengths, and
 bounded strings. Solver and incremental-check reuse are cacheable by normalized
 formulas, dependency metadata, artifact hashes, supported-fragment metadata, and
@@ -132,6 +133,8 @@ promptabi matrix --format text
 promptabi soundness-audit --rule role-boundary-nonforgeability --format markdown
 promptabi proofs --traceability --format text
 promptabi proofs --experiments --format text
+promptabi metatheory --format text
+promptabi metatheory --appendix
 promptabi maintain health --format text
 promptabi graph --config examples/rag-chunking/promptabi.json --all-checks --format mermaid
 promptabi contract format examples/static-contract-language/app.pabi --check

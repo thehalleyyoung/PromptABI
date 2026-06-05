@@ -272,6 +272,12 @@ from .mechanized_proofs import (
     render_mechanized_proof_experiments_text,
     run_mechanized_proof_experiments,
 )
+from .prompt_calculus import (
+    MetatheoryReport,
+    render_metatheory_json,
+    render_metatheory_text,
+    run_metatheory,
+)
 from .soundness_audits import (
     SoundnessAuditReport,
     build_soundness_audit_report,
@@ -561,6 +567,24 @@ def mechanized_proof_experiments(*, output_format: str | None = None) -> Mechani
         return render_mechanized_proof_experiments_json(report)
     if output_format == "text":
         return render_mechanized_proof_experiments_text(report)
+    raise ValueError("output_format must be 'json' or 'text'")
+
+
+def prompt_calculus_metatheory(*, output_format: str | None = None) -> MetatheoryReport | str:
+    """Run the executable prompt-assembly metatheory (operational semantics, type
+    soundness/non-forgeability, observational congruence, denotational stop
+    policy, schema soundness/completeness, decidable grammar fragment,
+    noninterference, capability monotonicity, session-typed tool calls, migration
+    preservation, contract refinement, conformance compositionality, drift
+    ultrametric)."""
+
+    report = run_metatheory()
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_metatheory_json(report)
+    if output_format == "text":
+        return render_metatheory_text(report)
     raise ValueError("output_format must be 'json' or 'text'")
 
 
