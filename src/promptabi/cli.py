@@ -276,6 +276,12 @@ from .proof_sketches import (
     render_proof_sketch_report_json,
     render_proof_sketch_report_text,
 )
+from .soundness_audits import (
+    build_soundness_audit_report,
+    render_soundness_audit_json,
+    render_soundness_audit_markdown,
+    render_soundness_audit_text,
+)
 from .render import SarifRenderOptions, render_github_annotations, render_html, render_json, render_sarif, render_text
 from .seed_corpus import SeedCorpusError, build_seed_corpus_manifest, write_seed_corpus_manifest
 from .session import VerificationResult, VerificationSession
@@ -1447,6 +1453,20 @@ def build_parser() -> argparse.ArgumentParser:
     proofs.add_argument(
         "--format",
         choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    soundness_audit = subparsers.add_parser(
+        "soundness-audit",
+        help="review each built-in check family's soundness boundary, evidence, and blind spots",
+    )
+    soundness_audit.add_argument(
+        "--rule",
+        help="limit to one check name or canonical diagnostic rule id",
+    )
+    soundness_audit.add_argument(
+        "--format",
+        choices=("text", "json", "markdown"),
         default="text",
         help="output format (default: text)",
     )
@@ -3515,6 +3535,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "proofs":
         report = build_supported_proof_catalog()
         output = render_proof_sketch_report_json(report) if args.format == "json" else render_proof_sketch_report_text(report)
+        print(output, end="")
+        return 0 if report.passed else 1
+
+    if args.command == "soundness-audit":
+        try:
+            report = build_soundness_audit_report(rule=args.rule)
+        except ValueError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        if args.format == "json":
+            output = render_soundness_audit_json(report)
+        elif args.format == "markdown":
+            output = render_soundness_audit_markdown(report)
+        else:
+            output = render_soundness_audit_text(report)
         print(output, end="")
         return 0 if report.passed else 1
 

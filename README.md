@@ -110,6 +110,7 @@ promptabi diff promptabi.baseline.json promptabi.json
 promptabi version-gate promptabi.baseline.json promptabi.json --allowed-impact patch-safe
 PROMPTABI_BUNDLE_KEY=local-audit-key promptabi bundle create --config examples/minimal/promptabi.json --output promptabi.bundle.json
 promptabi matrix --format text
+promptabi soundness-audit --rule role-boundary-nonforgeability --format markdown
 promptabi graph --config examples/rag-chunking/promptabi.json --all-checks --format mermaid
 promptabi contract format examples/static-contract-language/app.pabi --check
 promptabi contract migrate examples/static-contract-language/app.pabi --check

@@ -811,6 +811,15 @@ results, heuristic collision evidence, and abstentions, while static contracts
 are shown as bounded Z3-backed SMT over all artifact kinds, including finite
 supervised target-role alignment and rendered/tokenized/loss-masked span
 containment for training manifests.
+PromptABI also ships \texttt{promptabi soundness-audit}, a deterministic review
+registry over every built-in check family in the compatibility matrix. Each row
+binds canonical diagnostic rule IDs to the rule's abstraction, assumptions,
+supported fragments, proof obligations, differential or conformance evidence,
+and known blind spots. The status calculation is intentionally conservative:
+a row with bounded search, heuristic subclaims, abstentions, or recorded blind
+spots is reported as conditional or reviewed rather than as unqualified
+soundness, and the tests assert that the audit cannot invent non-emitted rule
+IDs or silently promote blind-spot-bearing checks.
 The central proof obligations also have an executable specification layer:
 automata witnesses are replayed transition-by-transition, product automata are
 checked by bounded language equivalence rather than by trusting product state
@@ -1857,6 +1866,17 @@ than a vague "context quality" concern.
 
 \clearpage
 \section{Differential Validation}
+
+The new soundness audit report is the bridge between proof claims and empirical
+evidence. For role-boundary non-forgeability, stop overreachability,
+grammar-tokenizer emptiness, and finite static contracts, it points to concrete
+proof-sketch replay functions and focused tests; for the remaining built-in
+families it derives scope from scheduler metadata and the compatibility matrix,
+then records the focused test module, conformance suite, fixture pack, or corpus
+that keeps the abstraction honest. This makes the repository's guarantees
+auditable as code: reviewers can ask not only ``what does the checker report?''
+but also ``what assumptions, fragments, obligations, evidence, and blind spots
+justify that report?''
 
 PromptABI's abstractions must be checked against the libraries developers
 actually use. The verifier should not implement a tokenizer, chat-template

@@ -203,6 +203,13 @@ from .proof_sketches import (
     render_proof_sketch_report_json,
     render_proof_sketch_report_text,
 )
+from .soundness_audits import (
+    SoundnessAuditReport,
+    build_soundness_audit_report,
+    render_soundness_audit_json,
+    render_soundness_audit_markdown,
+    render_soundness_audit_text,
+)
 from .release import (
     ReleaseReadinessReport,
     build_release_readiness_report,
@@ -886,6 +893,25 @@ def proof_sketches(*, output_format: str | None = None) -> ProofSketchReport | s
     if output_format == "text":
         return render_proof_sketch_report_text(report)
     raise ValueError("output_format must be one of: text, json")
+
+
+def soundness_audits(
+    *,
+    rule: str | None = None,
+    output_format: str | None = None,
+) -> SoundnessAuditReport | str:
+    """Return or render check soundness audits for built-in PromptABI rule families."""
+
+    report = build_soundness_audit_report(rule=rule)
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_soundness_audit_json(report)
+    if output_format == "markdown":
+        return render_soundness_audit_markdown(report)
+    if output_format == "text":
+        return render_soundness_audit_text(report)
+    raise ValueError("output_format must be one of: text, json, markdown")
 
 
 def evaluate_corpus(
