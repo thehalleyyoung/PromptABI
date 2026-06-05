@@ -40,8 +40,10 @@ finite-state transducers with composition and projection, executable
 specifications that replay witnesses, bounded product-language laws, and SMT
 proof objects, a finite-contract solver with compressed lazy product witnesses,
 incremental DFA minimization, indexed transducer composition/projection, solver
-timeouts, and constraint-sliced finite enumeration, byte-level tokenizer
-memoization for repeated normalization,
+timeouts, constraint-sliced finite enumeration, and a deterministic solver-query
+cache keyed by normalized Z3 formulas, artifact hashes, supported-fragment
+metadata, and solver-version fingerprints, byte-level tokenizer memoization for
+repeated normalization,
 a dependency-aware verification-session scheduler with deterministic
 parallel check execution and a per-session analysis cache, a typed plugin
 registry for artifact loaders, checks, provider adapters, grammar backends,
@@ -387,8 +389,9 @@ token evidence centered on the forged marker, exact boundary offsets, and explic
 extracts automata, transducer, and solver witnesses for finite formal contracts
 and independently checks those witnesses with executable specifications,
 tracks check dependencies over artifact kinds, reuses cached tokenizer adapters,
-tokenizer/grammar analysis reports, budget reports, and static-contract query
-results, parallelizes independent embedded checks, serializes shared tokenizer and
+tokenizer/grammar analysis reports, budget reports, and finite static-contract
+query results keyed by normalized formulas plus artifact/fragment/solver
+fingerprints, parallelizes independent embedded checks, serializes shared tokenizer and
 solver resources, renders the same scheduler metadata as an artifact-to-check
 dependency graph for configured and missing tokenizer, template, schema, tool,
 stop-policy, truncation-policy, provider, prompt-segment, and training-manifest
@@ -721,6 +724,15 @@ minimal unsat cores when no assignment exists. Z3 cores are deletion-minimized
 against the tracked named constraints while finite-domain restrictions remain
 background assumptions, so the proof object shown to a developer is not merely
 the first raw solver core.
+
+Solver calls now have a first-class deterministic cache surface. The cache key
+normalizes the finite problem, sorted named constraints, Z3 s-expressions when
+available, explicit assignment and timeout budgets, artifact hashes, supported
+fragment metadata, and solver-version fingerprints. It can be used in memory or
+round-tripped as JSON, and a cache miss recomputes the query rather than
+silently reusing stale proof objects. This matters for privacy-preserving CI:
+teams can reuse expensive static-contract conclusions without keying solely on
+prompt names or persisting private prompt text.
 
 The formal core is now accompanied by \texttt{promptabi.specs}, a
 machine-checkable reference layer used by the tests and paper artifact. Its DFA

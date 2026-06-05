@@ -17,6 +17,7 @@ from promptabi.formal import (
     NamedConstraint,
     Ne,
     SolverConclusion,
+    SolverQueryCache,
     SolverStatus,
     Value,
     Var,
@@ -292,3 +293,89 @@ def test_finite_contract_solver_minimizes_z3_unsat_core_when_available() -> None
     assert result.backend.value == "z3"
     assert result.conclusion is SolverConclusion.UNSAT_CORE_PROOF
     assert result.unsat_core == ("must-be-user", "must-be-assistant")
+
+
+def test_solver_query_cache_reuses_normalized_problem_results() -> None:
+    cache = SolverQueryCache()
+    problem = FiniteContractProblem(
+        name="cached-role-forgery",
+        variables=(
+            EnumDomain("role", ("assistant", "user")),
+            BoundedStringDomain("content", tuple("<a>"), min_length=0, max_length=3),
+        ),
+        constraints=(
+            NamedConstraint("attacker-role", Eq(Var("role"), Value("user"))),
+            NamedConstraint("contains-delimiter", Contains(Var("content"), Value("<a>"))),
+        ),
+    )
+
+    first = problem.solve(
+        prefer_z3=False,
+        query_cache=cache,
+        artifact_hashes={"template": "sha256:abc", "tokenizer": "sha256:def"},
+        supported_fragment_metadata={"strings": {"max_length": 3}, "backend": "finite"},
+    )
+    second = problem.solve(
+        prefer_z3=False,
+        query_cache=cache,
+        artifact_hashes={"tokenizer": "sha256:def", "template": "sha256:abc"},
+        supported_fragment_metadata={"backend": "finite", "strings": {"max_length": 3}},
+    )
+
+    assert first.sat is True
+    assert first.cache_hit is False
+    assert second.cache_hit is True
+    assert second.assignment == first.assignment
+    assert second.cache_key == first.cache_key
+    assert cache.hits == 1
+    assert cache.misses == 1
+
+
+def test_solver_query_cache_key_includes_artifact_and_fragment_metadata() -> None:
+    problem = FiniteContractProblem(
+        variables=(BoolDomain("flag"),),
+        constraints=(NamedConstraint("flag-true", Eq(Var("flag"), Value(True))),),
+    )
+
+    base = problem.solver_query_key(
+        prefer_z3=False,
+        artifact_hashes={"manifest": "sha256:one"},
+        supported_fragment_metadata={"fragment": "bool-v1"},
+    )
+    changed_artifact = problem.solver_query_key(
+        prefer_z3=False,
+        artifact_hashes={"manifest": "sha256:two"},
+        supported_fragment_metadata={"fragment": "bool-v1"},
+    )
+    changed_fragment = problem.solver_query_key(
+        prefer_z3=False,
+        artifact_hashes={"manifest": "sha256:one"},
+        supported_fragment_metadata={"fragment": "bool-v2"},
+    )
+
+    assert base != changed_artifact
+    assert base != changed_fragment
+    payload = problem.normalized_solver_query(
+        prefer_z3=False,
+        artifact_hashes={"manifest": "sha256:one"},
+        supported_fragment_metadata={"fragment": "bool-v1"},
+    )
+    assert ("promptabi-finite-contract-solver", "v2-query-cache") in payload["solver_version_fingerprints"]
+
+
+def test_solver_query_cache_round_trips_to_json(tmp_path) -> None:
+    cache_path = tmp_path / "solver-cache.json"
+    cache = SolverQueryCache()
+    problem = FiniteContractProblem(
+        variables=(BoolDomain("flag"),),
+        constraints=(NamedConstraint("flag-false", Eq(Var("flag"), Value(False))),),
+    )
+
+    first = cache.solve(problem, prefer_z3=False)
+    cache.write_json(cache_path)
+    restored = SolverQueryCache.read_json(cache_path)
+    second = restored.solve(problem, prefer_z3=False)
+
+    assert first.cache_hit is False
+    assert second.cache_hit is True
+    assert second.assignment == {"flag": False}

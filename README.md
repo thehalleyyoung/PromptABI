@@ -62,13 +62,15 @@ The same local verifier covers:
 | **Enterprise posture** | org policy packs for required checks, severity, supported fragments, solver caps, privacy rules, approved fixtures, and no-network mirrors |
 | **Training/eval contracts** | target-role alignment, tokenizer/template drift, supervised-region checks, and fixture-backed real-bug benchmarks |
 
-Under the hood, PromptABI combines deterministic finite automata,
-finite-state transducers, executable specs for witnesses/products/SMT outcomes,
-differential checks against real tokenizer/template libraries, and a Z3-backed
-finite contract layer over booleans, enums, integer ranges, membership, lengths,
-and bounded strings. Every diagnostic states its guarantee mode--`sound`,
-`complete`, `bounded`, `z3-backed-smt`, `heuristic`, or `abstaining`--so CI can
-distinguish proof from best-effort evidence.
+Under the hood, PromptABI combines deterministic automata, finite-state
+transducers, executable specs for witnesses/products/SMT outcomes, differential
+checks against real tokenizer/template libraries, and a Z3-backed finite
+contract layer over booleans, enums, integer ranges, membership, lengths, and
+bounded strings. Solver queries are cacheable by normalized formulas, artifact
+hashes, supported-fragment metadata, and solver-version fingerprints. Every
+diagnostic states its guarantee mode--`sound`, `complete`, `bounded`,
+`z3-backed-smt`, `heuristic`, or `abstaining`--so CI can distinguish proof from
+best-effort evidence.
 
 ## Daily workflows
 

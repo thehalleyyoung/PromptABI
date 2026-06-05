@@ -10,9 +10,12 @@ from __future__ import annotations
 import time
 from collections import deque
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
+import hashlib
 from itertools import product
+import json
+from pathlib import Path
 from typing import Any, Protocol
 
 
@@ -1375,16 +1378,85 @@ class FiniteContractProblem:
         prefer_z3: bool = True,
         max_assignments: int | None = None,
         timeout_seconds: float | None = None,
+        query_cache: "SolverQueryCache | None" = None,
+        artifact_hashes: Mapping[str, str] | None = None,
+        supported_fragment_metadata: Mapping[str, object] | None = None,
     ) -> "SolverResult":
         if max_assignments is not None and max_assignments <= 0:
             raise ValueError("max_assignments must be positive when provided")
         if timeout_seconds is not None and timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive when provided")
+        cache_key: str | None = None
+        if query_cache is not None:
+            cache_key = self.solver_query_key(
+                prefer_z3=prefer_z3,
+                max_assignments=max_assignments,
+                timeout_seconds=timeout_seconds,
+                artifact_hashes=artifact_hashes,
+                supported_fragment_metadata=supported_fragment_metadata,
+            )
+            cached = query_cache.get(cache_key)
+            if cached is not None:
+                return cached
         if prefer_z3:
             z3_result = self._solve_with_z3(timeout_seconds=timeout_seconds)
             if z3_result is not None:
-                return z3_result
-        return self._solve_by_enumeration(max_assignments=max_assignments, timeout_seconds=timeout_seconds)
+                return query_cache.put(cache_key, z3_result) if query_cache is not None and cache_key is not None else z3_result
+        result = self._solve_by_enumeration(max_assignments=max_assignments, timeout_seconds=timeout_seconds)
+        return query_cache.put(cache_key, result) if query_cache is not None and cache_key is not None else result
+
+    def normalized_solver_query(
+        self,
+        *,
+        prefer_z3: bool = True,
+        max_assignments: int | None = None,
+        timeout_seconds: float | None = None,
+        artifact_hashes: Mapping[str, str] | None = None,
+        supported_fragment_metadata: Mapping[str, object] | None = None,
+    ) -> dict[str, object]:
+        """Return the deterministic payload used to fingerprint a solver query."""
+
+        return {
+            "schema": "promptabi.solver-query.v1",
+            "problem": {
+                "name": self.name,
+                "variables": [_stable_json_value(variable.to_dict()) for variable in self.variables],
+                "constraints": [
+                    _stable_json_value(constraint.to_dict())
+                    for constraint in sorted(self.constraints, key=lambda constraint: constraint.name)
+                ],
+                "z3_formulas": _normalized_z3_formulas(self) if prefer_z3 else (),
+            },
+            "options": {
+                "prefer_z3": prefer_z3,
+                "max_assignments": max_assignments,
+                "timeout_milliseconds": None if timeout_seconds is None else max(1, int(timeout_seconds * 1000)),
+            },
+            "artifact_hashes": tuple(sorted((artifact_hashes or {}).items())),
+            "supported_fragment_metadata": _stable_json_value(supported_fragment_metadata or {}),
+            "solver_version_fingerprints": _solver_version_fingerprints(prefer_z3=prefer_z3),
+        }
+
+    def solver_query_key(
+        self,
+        *,
+        prefer_z3: bool = True,
+        max_assignments: int | None = None,
+        timeout_seconds: float | None = None,
+        artifact_hashes: Mapping[str, str] | None = None,
+        supported_fragment_metadata: Mapping[str, object] | None = None,
+    ) -> str:
+        """Hash normalized formula, artifact, fragment, and solver-version inputs."""
+
+        payload = self.normalized_solver_query(
+            prefer_z3=prefer_z3,
+            max_assignments=max_assignments,
+            timeout_seconds=timeout_seconds,
+            artifact_hashes=artifact_hashes,
+            supported_fragment_metadata=supported_fragment_metadata,
+        )
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
     def _solve_with_z3(self, *, timeout_seconds: float | None = None) -> "SolverResult | None":
         try:
@@ -1532,6 +1604,8 @@ class SolverResult:
     unsat_core: tuple[str, ...] = ()
     checked_assignments: int = 0
     reason: str | None = None
+    cache_key: str | None = None
+    cache_hit: bool = False
 
     @property
     def sat(self) -> bool:
@@ -1562,7 +1636,165 @@ class SolverResult:
             data["unsat_core"] = list(self.unsat_core)
         if self.reason is not None:
             data["reason"] = self.reason
+        if self.cache_key is not None:
+            data["cache_key"] = self.cache_key
+            data["cache_hit"] = self.cache_hit
         return data
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, object]) -> "SolverResult":
+        assignment = data.get("assignment")
+        if assignment is not None and not isinstance(assignment, Mapping):
+            raise ValueError("solver result assignment must be an object when present")
+        unsat_core = data.get("unsat_core", ())
+        if not isinstance(unsat_core, Sequence) or isinstance(unsat_core, (str, bytes)):
+            raise ValueError("solver result unsat_core must be a sequence")
+        reason = data.get("reason")
+        cache_key = data.get("cache_key")
+        return cls(
+            status=SolverStatus(str(data["status"])),
+            backend=SolverBackend(str(data["backend"])),
+            assignment=dict(assignment) if assignment is not None else None,
+            unsat_core=tuple(str(item) for item in unsat_core),
+            checked_assignments=int(data.get("checked_assignments", 0)),
+            reason=str(reason) if reason is not None else None,
+            cache_key=str(cache_key) if cache_key is not None else None,
+            cache_hit=bool(data.get("cache_hit", False)),
+        )
+
+    def with_cache_metadata(self, *, cache_key: str, cache_hit: bool) -> "SolverResult":
+        return replace(self, cache_key=cache_key, cache_hit=cache_hit)
+
+
+@dataclass(slots=True)
+class SolverQueryCache:
+    """Deterministic finite/SMT query cache keyed by normalized solver inputs."""
+
+    entries: dict[str, SolverResult] = field(default_factory=dict)
+    hits: int = 0
+    misses: int = 0
+
+    def get(self, cache_key: str) -> SolverResult | None:
+        result = self.entries.get(cache_key)
+        if result is None:
+            self.misses += 1
+            return None
+        self.hits += 1
+        return result.with_cache_metadata(cache_key=cache_key, cache_hit=True)
+
+    def put(self, cache_key: str, result: SolverResult) -> SolverResult:
+        stored = result.with_cache_metadata(cache_key=cache_key, cache_hit=False)
+        self.entries[cache_key] = stored
+        return stored
+
+    def solve(
+        self,
+        problem: FiniteContractProblem,
+        *,
+        prefer_z3: bool = True,
+        max_assignments: int | None = None,
+        timeout_seconds: float | None = None,
+        artifact_hashes: Mapping[str, str] | None = None,
+        supported_fragment_metadata: Mapping[str, object] | None = None,
+    ) -> SolverResult:
+        return problem.solve(
+            prefer_z3=prefer_z3,
+            max_assignments=max_assignments,
+            timeout_seconds=timeout_seconds,
+            query_cache=self,
+            artifact_hashes=artifact_hashes,
+            supported_fragment_metadata=supported_fragment_metadata,
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema": "promptabi.solver-cache.v1",
+            "hits": self.hits,
+            "misses": self.misses,
+            "entries": {
+                key: result.with_cache_metadata(cache_key=key, cache_hit=False).to_dict()
+                for key, result in sorted(self.entries.items())
+            },
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, object]) -> "SolverQueryCache":
+        entries_data = data.get("entries", {})
+        if not isinstance(entries_data, Mapping):
+            raise ValueError("solver cache entries must be an object")
+        entries: dict[str, SolverResult] = {}
+        for key, value in entries_data.items():
+            if not isinstance(value, Mapping):
+                raise ValueError(f"solver cache entry {key!r} must be an object")
+            entries[str(key)] = SolverResult.from_dict(value)
+        return cls(
+            entries=entries,
+            hits=int(data.get("hits", 0)),
+            misses=int(data.get("misses", 0)),
+        )
+
+    def write_json(self, path: str | Path) -> None:
+        Path(path).write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    @classmethod
+    def read_json(cls, path: str | Path) -> "SolverQueryCache":
+        return cls.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
+
+
+def _stable_json_value(value: object) -> object:
+    if isinstance(value, Mapping):
+        return {str(key): _stable_json_value(value[key]) for key in sorted(value, key=str)}
+    if isinstance(value, (str, int, bool)) or value is None:
+        return value
+    if isinstance(value, (list, tuple)):
+        return tuple(_stable_json_value(item) for item in value)
+    if isinstance(value, set | frozenset):
+        return tuple(sorted((_stable_json_value(item) for item in value), key=repr))
+    return repr(value)
+
+
+def _solver_version_fingerprints(*, prefer_z3: bool) -> tuple[tuple[str, str], ...]:
+    fingerprints = [("promptabi-finite-contract-solver", "v2-query-cache")]
+    if prefer_z3:
+        try:
+            import z3  # type: ignore[import-not-found]
+        except ImportError:
+            fingerprints.append(("z3", "unavailable"))
+        else:
+            fingerprints.append(("z3", str(z3.get_version_string())))
+    return tuple(fingerprints)
+
+
+def _normalized_z3_formulas(problem: FiniteContractProblem) -> tuple[tuple[str, object], ...]:
+    try:
+        import z3  # type: ignore[import-not-found]
+    except ImportError:
+        return (("z3", "unavailable"),)
+    try:
+        context = _Z3Context(z3=z3, variables={})
+        domain_formulas: list[tuple[str, object]] = []
+        for variable in problem.variables:
+            z3_variable = variable.z3_variable(context)
+            context.variables[variable.name] = z3_variable
+            domain_formulas.append((f"domain:{variable.name}", z3.simplify(variable.z3_domain_constraint(z3_variable, context)).sexpr()))
+        constraint_formulas: list[tuple[str, object]] = []
+        for constraint in sorted(problem.constraints, key=lambda item: item.name):
+            constraint_formulas.append((constraint.name, z3.simplify(constraint.expression.to_z3(context)).sexpr()))
+        return tuple(domain_formulas + constraint_formulas)
+    except (TypeError, ValueError, AttributeError, z3.Z3Exception) as exc:
+        return (
+            (
+                "unsupported-z3-normalization",
+                {
+                    "error_type": type(exc).__name__,
+                    "message": str(exc),
+                    "constraints": [
+                        _stable_json_value(constraint.to_dict())
+                        for constraint in sorted(problem.constraints, key=lambda item: item.name)
+                    ],
+                },
+            ),
+        )
 
 
 @dataclass(frozen=True, slots=True)
