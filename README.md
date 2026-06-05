@@ -113,6 +113,7 @@ promptabi launch-assets --output-dir launch_assets --force
 promptabi fuzz mutations --format text
 promptabi maintain refresh --output-dir maintainer_artifact --force
 promptabi paper reproducibility --output-dir paper_artifact --force
+promptabi release readiness --format text
 
 # Local changed-artifact gate and local-only usage summaries; no telemetry.
 promptabi pre-commit install --config examples/minimal/promptabi.json

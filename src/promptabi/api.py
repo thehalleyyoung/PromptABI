@@ -102,6 +102,12 @@ from .proof_sketches import (
     render_proof_sketch_report_json,
     render_proof_sketch_report_text,
 )
+from .release import (
+    ReleaseReadinessReport,
+    build_release_readiness_report,
+    render_release_readiness_json,
+    render_release_readiness_text,
+)
 from .reproducibility import (
     ReproducibilityInputs,
     ReproducibilityPackage,
@@ -484,6 +490,24 @@ def create_reproducibility_package(
         benchmark_iterations=benchmark_iterations,
         force=force,
     )
+
+
+def release_readiness(
+    repo_root: str | Path | None = None,
+    *,
+    expected_version: str = "1.0.0",
+    output_format: str | None = None,
+) -> ReleaseReadinessReport | str:
+    """Run or render the 1.0 release-readiness gate."""
+
+    report = build_release_readiness_report(repo_root, expected_version=expected_version)
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_release_readiness_json(report)
+    if output_format == "text":
+        return render_release_readiness_text(report)
+    raise ValueError("output_format must be one of: text, json")
 
 
 def refresh_maintainer_tooling(

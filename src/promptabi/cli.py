@@ -132,6 +132,12 @@ from .real_bug_benchmarks import (
     build_real_bug_benchmark_manifest,
     write_real_bug_benchmark_manifest,
 )
+from .release import (
+    ReleaseReadinessError,
+    build_release_readiness_report,
+    render_release_readiness_json,
+    render_release_readiness_text,
+)
 from .reproducibility import (
     ReproducibilityPackageError,
     write_reproducibility_package,
@@ -599,6 +605,29 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="overwrite existing reproducibility package files in the output directory",
     )
+
+    release = subparsers.add_parser("release", help="release readiness and shipping gates")
+    release_subparsers = release.add_subparsers(dest="release_command", required=True)
+    release_readiness = release_subparsers.add_parser(
+        "readiness",
+        help="run the 1.0 release-readiness gate against live repository assets",
+    )
+    release_readiness.add_argument(
+        "--repo-root",
+        help="repository root to inspect (default: installed PromptABI repository root)",
+    )
+    release_readiness.add_argument(
+        "--expected-version",
+        default="1.0.0",
+        help="release version expected in pyproject and package metadata (default: 1.0.0)",
+    )
+    release_readiness.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    release_readiness.add_argument("--output", help="write release-readiness report to this path instead of stdout")
 
     usage = subparsers.add_parser("usage", help="inspect telemetry-free local command summaries")
     usage_subparsers = usage.add_subparsers(dest="usage_command", required=True)
@@ -1384,6 +1413,32 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"{args.output_dir} ({package.manifest['summary']['fixture_file_count']} fixture files)"
         )
         return 0
+
+    if args.command == "release" and args.release_command == "readiness":
+        try:
+            report = build_release_readiness_report(
+                args.repo_root,
+                expected_version=args.expected_version,
+            )
+            output = render_release_readiness_json(report) if args.format == "json" else render_release_readiness_text(report)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                print(f"wrote release-readiness report: {args.output} ({len(report.checks)} checks)")
+            else:
+                print(output, end="")
+        except (
+            ReleaseReadinessError,
+            SeedCorpusError,
+            RealBugBenchmarkError,
+            ReproducibilityPackageError,
+            ValueError,
+        ) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write release-readiness report: {exc}", file=sys.stderr)
+            return 2
+        return 0 if report.ok else 1
 
     if args.command == "usage" and args.usage_command == "summary":
         try:

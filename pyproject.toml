@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "promptabi"
-version = "0.1.0"
+version = "1.0.0"
 description = "Static verification for tokenizer, template, tool-calling, and prompt-interface contracts."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -12,7 +12,7 @@ license = { text = "Apache-2.0" }
 authors = [{ name = "PromptABI contributors" }]
 keywords = ["llm", "tokenizer", "chat-template", "verification", "prompt-engineering"]
 classifiers = [
-  "Development Status :: 2 - Pre-Alpha",
+  "Development Status :: 5 - Production/Stable",
   "Environment :: Console",
   "Intended Audience :: Developers",
   "License :: OSI Approved :: Apache Software License",
