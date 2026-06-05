@@ -38,6 +38,7 @@ from .diagnostics import (
     WitnessTrace,
 )
 from .loaders import LoadedArtifact
+from .tokenizers import TokenizerAdapter
 
 
 PROMPT_PACK_LOCKFILE_VERSION = 1
@@ -75,6 +76,8 @@ class PromptPackFindingKind(StrEnum):
     COMPOSITION_REQUIRED_REGION_TRUNCATED = "composition-required-region-truncated"
     COMPOSITION_RAG_UNBOUNDED = "composition-rag-unbounded"
     COMPOSITION_VERIFIED = "composition-verified"
+    TEMPLATE_TOKENIZER_CONTROL_TOKEN = "template-tokenizer-control-token"
+    TEMPLATE_TOKENIZER_VERIFIED = "template-tokenizer-verified"
     VERIFIED = "verified"
 
 
@@ -93,6 +96,8 @@ class PromptPackFinding:
     span: SourceSpan | None = None
     subject: str | None = None
     evidence: tuple[tuple[str, str], ...] = ()
+    witness_strings: tuple[str, ...] = ()
+    token_ids: tuple[int, ...] = ()
     severity: DiagnosticSeverity = DiagnosticSeverity.ERROR
 
 
@@ -397,6 +402,7 @@ def analyze_prompt_pack_contracts(
     *,
     source_spans: dict[str, SourceSpan] | None = None,
     token_budget_report: TokenBudgetReport | None = None,
+    tokenizers: tuple[tuple[TokenizerArtifact, TokenizerAdapter], ...] = (),
 ) -> PromptPackReport:
     """Check a reusable prompt pack against its own and app-level ABI promises."""
 
@@ -521,9 +527,39 @@ def analyze_prompt_pack_contracts(
             token_budget_report=token_budget_report,
         )
     )
+    findings.extend(
+        _prompt_pack_template_tokenizer_findings(
+            prompt_pack,
+            tokenizers,
+            source_spans=source_spans,
+        )
+    )
 
     if not findings:
-        if _has_composition_evidence(artifacts, token_budget_report):
+        if tokenizers:
+            tokenizer_names = tuple(artifact.name for artifact, _tokenizer in tokenizers)
+            probe = _first_template_tokenizer_probe(prompt_pack, tokenizers)
+            findings.append(
+                PromptPackFinding(
+                    kind=PromptPackFindingKind.TEMPLATE_TOKENIZER_VERIFIED,
+                    pack=prompt_pack,
+                    message=(
+                        f"prompt pack '{prompt_pack.pack_name}' has a bounded "
+                        "chat-template/tokenizer proof for exported control markers"
+                    ),
+                    expected=tuple(template.name for template in prompt_pack.exported_templates),
+                    observed=tokenizer_names,
+                    severity=DiagnosticSeverity.INFO,
+                    evidence=(
+                        ("templates", ", ".join(template.name for template in prompt_pack.exported_templates)),
+                        ("tokenizers", ", ".join(tokenizer_names)),
+                        ("control_markers", ", ".join(_prompt_pack_control_markers(prompt_pack)) or "<none>"),
+                    ),
+                    witness_strings=(probe[0],) if probe is not None else (),
+                    token_ids=probe[1] if probe is not None else (),
+                )
+            )
+        elif _has_composition_evidence(artifacts, token_budget_report):
             findings.append(
                 PromptPackFinding(
                     kind=PromptPackFindingKind.COMPOSITION_VERIFIED,
@@ -1513,6 +1549,135 @@ def _prompt_pack_composition_findings(
         )
 
     return tuple(findings)
+
+
+def _prompt_pack_template_tokenizer_findings(
+    prompt_pack: PromptPackArtifact,
+    tokenizers: tuple[tuple[TokenizerArtifact, TokenizerAdapter], ...],
+    *,
+    source_spans: dict[str, SourceSpan],
+) -> tuple[PromptPackFinding, ...]:
+    if not tokenizers:
+        return ()
+
+    findings: list[PromptPackFinding] = []
+    control_markers = _prompt_pack_control_markers(prompt_pack)
+    raw_content_templates = tuple(
+        template for template in prompt_pack.exported_templates if _template_interpolates_raw_content(template.template)
+    )
+    if not control_markers or not raw_content_templates:
+        return ()
+
+    for template in raw_content_templates:
+        template_markers = tuple(marker for marker in control_markers if marker in template.template)
+        if not template_markers:
+            continue
+        for tokenizer_artifact, tokenizer in tokenizers:
+            for marker in _tokenizer_control_markers(tokenizer_artifact):
+                if marker in template_markers:
+                    continue
+                encoded = tokenizer.encode(marker, add_special_tokens=False)
+                if not encoded.tokens or not any(token.special or token.added for token in encoded.tokens):
+                    continue
+                token_ids = encoded.token_ids
+                findings.append(
+                    PromptPackFinding(
+                        kind=PromptPackFindingKind.TEMPLATE_TOKENIZER_CONTROL_TOKEN,
+                        pack=prompt_pack,
+                        template=template,
+                        message=(
+                            f"prompt-pack template '{template.name}' interpolates raw message content that "
+                            f"can inject tokenizer control token {marker!r} under tokenizer '{tokenizer_artifact.name}'"
+                        ),
+                        expected=template_markers,
+                        observed=(marker,),
+                        span=source_spans.get(f"exported_templates.{template.name}"),
+                        subject=f"{template.name}:user content",
+                        evidence=(
+                            ("template_control_markers", ", ".join(template_markers)),
+                            ("tokenizer", tokenizer_artifact.name),
+                            ("tokenizer_backend", tokenizer.backend.value),
+                            ("injected_marker", marker),
+                            ("token_ids", ", ".join(str(token_id) for token_id in token_ids)),
+                        ),
+                        witness_strings=(marker,),
+                        token_ids=token_ids,
+                    )
+                )
+    return tuple(findings)
+
+
+def _first_template_tokenizer_probe(
+    prompt_pack: PromptPackArtifact,
+    tokenizers: tuple[tuple[TokenizerArtifact, TokenizerAdapter], ...],
+) -> tuple[str, tuple[int, ...]] | None:
+    markers = _prompt_pack_control_markers(prompt_pack)
+    if not markers:
+        return None
+    marker = markers[0]
+    for _artifact, tokenizer in tokenizers:
+        encoded = tokenizer.encode(marker, add_special_tokens=False)
+        if encoded.token_ids:
+            return marker, encoded.token_ids
+    return None
+
+
+def _prompt_pack_control_markers(prompt_pack: PromptPackArtifact) -> tuple[str, ...]:
+    markers: set[str] = set()
+    for template in prompt_pack.exported_templates:
+        markers.update(_angle_control_markers(template.template))
+        for role in template.roles or prompt_pack.expected_roles:
+            markers.update(_role_control_markers(template.template, role))
+    return tuple(sorted(markers, key=lambda item: (-len(item), item)))
+
+
+def _tokenizer_control_markers(tokenizer_artifact: TokenizerArtifact) -> tuple[str, ...]:
+    declared = set(tokenizer_artifact.added_tokens)
+    for key, value in tokenizer_artifact.metadata:
+        if key in {"added_tokens", "special_tokens", "control_tokens"}:
+            if isinstance(value, str):
+                declared.add(value)
+            elif isinstance(value, (tuple, list, set)):
+                declared.update(item for item in value if isinstance(item, str))
+            elif isinstance(value, dict):
+                declared.update(item for item in value.values() if isinstance(item, str))
+    return tuple(sorted((item for item in declared if _looks_like_control_marker(item)), key=lambda item: (-len(item), item)))
+
+
+def _angle_control_markers(text: str) -> tuple[str, ...]:
+    markers: set[str] = set()
+    start = 0
+    while True:
+        open_index = text.find("<|", start)
+        if open_index < 0:
+            break
+        close_index = text.find("|>", open_index + 2)
+        if close_index < 0:
+            break
+        markers.add(text[open_index : close_index + 2])
+        start = close_index + 2
+    return tuple(markers)
+
+
+def _role_control_markers(text: str, role: str) -> tuple[str, ...]:
+    candidates = (f"<|{role}|>", f"<|im_start|>{role}", f"{role}:")
+    return tuple(candidate for candidate in candidates if candidate in text)
+
+
+def _looks_like_control_marker(text: str) -> bool:
+    return "<|" in text or "|>" in text or text.startswith("<") and text.endswith(">") or text.endswith(":")
+
+
+def _template_interpolates_raw_content(template_source: str) -> bool:
+    raw_needles = (
+        "{{ message.content }}",
+        "{{message.content}}",
+        "{{ message['content'] }}",
+        "{{message['content']}}",
+        "{{ messages[0].content }}",
+        "{{messages[0].content}}",
+    )
+    return any(needle in template_source for needle in raw_needles)
 
 
 def _has_composition_evidence(

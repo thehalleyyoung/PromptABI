@@ -399,7 +399,11 @@ Reusable prompts are treated as packages with exported templates, roles, tool
 schemas, stops, supported model families, lockfiles, upgrade checks, signed
 provenance, public registry metadata, and offline mirrors. A consuming
 application can reuse package-level proofs and then add local context, RAG
-chunks, tools, or truncation rules.
+chunks, tools, or truncation rules. The newest composition layer also checks the
+exported chat-template markers against the configured tokenizer: a prompt pack
+can now prove that its structural markers have bounded tokenizer evidence, or
+fail with a concrete user-content witness when a downstream tokenizer admits a
+control token that the pack did not reserve.
 
 \paragraph{Debugging and education.}
 \texttt{promptabi explain} expands one diagnostic into artifact snippets,

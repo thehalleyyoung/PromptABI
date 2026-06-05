@@ -154,6 +154,9 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "prompt-pack-composition-required-region-undeclared": (CheckMode.SOUND, CheckMode.BOUNDED),
     "prompt-pack-composition-verified": (CheckMode.SOUND, CheckMode.BOUNDED),
     "prompt-pack-empty": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "prompt-pack-template-tokenizer-abstained": (CheckMode.ABSTAINING, CheckMode.BOUNDED),
+    "prompt-pack-template-tokenizer-control-token": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "prompt-pack-template-tokenizer-verified": (CheckMode.SOUND, CheckMode.BOUNDED),
     "prompt-pack-lock-added": LOCKFILE_CHECK_MODES,
     "prompt-pack-lock-drift": LOCKFILE_CHECK_MODES,
     "prompt-pack-lock-load-failed": LOCKFILE_CHECK_MODES,
@@ -1279,6 +1282,28 @@ class VerificationSession:
         diagnostics: list[Diagnostic] = []
         artifacts = tuple(loaded.artifact for loaded in context.loaded_artifacts)
         token_budget_report = self._analyze_token_budget_context(context)
+        tokenizers: list[tuple[TokenizerArtifact, TokenizerAdapter]] = []
+        for loaded in context.loaded_artifacts:
+            if isinstance(loaded.artifact, TokenizerArtifact):
+                try:
+                    tokenizers.append((loaded.artifact, context.cache.tokenizer(loaded.artifact)))
+                except TokenizerError as exc:
+                    diagnostics.append(
+                        Diagnostic(
+                            rule_id="prompt-pack-template-tokenizer-abstained",
+                            severity=DiagnosticSeverity.WARNING,
+                            message=f"tokenizer artifact '{loaded.artifact.name}' could not be loaded for prompt-pack composition",
+                            artifact=loaded.artifact.to_ref(),
+                            span=_artifact_span(loaded.artifact),
+                            check_modes=CHECK_MODE_CATALOG["prompt-pack-template-tokenizer-abstained"],
+                            suggestions=("Fix the tokenizer artifact before trusting prompt-pack/tokenizer composition proofs.",),
+                            witness=WitnessTrace(
+                                summary="PromptABI abstained from prompt-pack/tokenizer composition for this tokenizer.",
+                                steps=(WitnessStep(action="load tokenizer", input=loaded.artifact.name, output=str(exc)),),
+                                artifacts=(loaded.artifact.to_ref(),),
+                            ),
+                        )
+                    )
         for loaded in context.loaded_artifacts:
             if not isinstance(loaded.artifact, PromptPackArtifact):
                 continue
@@ -1288,6 +1313,7 @@ class VerificationSession:
                 artifacts,
                 source_spans=spans,
                 token_budget_report=token_budget_report,
+                tokenizers=tuple(tokenizers),
             )
             diagnostics.extend(_prompt_pack_finding_diagnostic(loaded, finding) for finding in report.findings)
         return tuple(diagnostics)
@@ -2801,6 +2827,8 @@ _PROMPT_PACK_RULE_IDS: dict[PromptPackFindingKind, str] = {
     PromptPackFindingKind.COMPOSITION_REQUIRED_REGION_TRUNCATED: "prompt-pack-composition-required-region-truncated",
     PromptPackFindingKind.COMPOSITION_RAG_UNBOUNDED: "prompt-pack-composition-rag-unbounded",
     PromptPackFindingKind.COMPOSITION_VERIFIED: "prompt-pack-composition-verified",
+    PromptPackFindingKind.TEMPLATE_TOKENIZER_CONTROL_TOKEN: "prompt-pack-template-tokenizer-control-token",
+    PromptPackFindingKind.TEMPLATE_TOKENIZER_VERIFIED: "prompt-pack-template-tokenizer-verified",
     PromptPackFindingKind.VERIFIED: "prompt-pack-verified",
 }
 
@@ -2812,7 +2840,7 @@ def _prompt_pack_finding_diagnostic(loaded: LoadedArtifact, finding: PromptPackF
         WitnessStep(
             action="load prompt-pack contract",
             input=finding.pack.pack_name,
-            output=f"{len(finding.pack.exported_templates)} exported template(s)",
+            output=_join_or_none(tuple(template.name for template in finding.pack.exported_templates)),
         ),
         WitnessStep(action="compare expected roles", output=_join_or_none(finding.expected)),
         WitnessStep(action="compare downstream app facts", output=_join_or_none(finding.observed)),
@@ -2829,6 +2857,13 @@ def _prompt_pack_finding_diagnostic(loaded: LoadedArtifact, finding: PromptPackF
         WitnessStep(action="inspect composition evidence", input=key, output=value)
         for key, value in finding.evidence
     )
+    properties: list[tuple[str, object]] = [
+        ("pack_name", finding.pack.pack_name),
+        ("pack_version", finding.pack.pack_version or ""),
+        ("finding_kind", finding.kind.value),
+    ]
+    if finding.subject is not None:
+        properties.append(("subject", finding.subject))
     return Diagnostic(
         rule_id=rule_id,
         severity=severity,
@@ -2839,19 +2874,21 @@ def _prompt_pack_finding_diagnostic(loaded: LoadedArtifact, finding: PromptPackF
         suggestions=(
             ()
             if finding.kind
-            in {PromptPackFindingKind.VERIFIED, PromptPackFindingKind.COMPOSITION_VERIFIED}
+            in {
+                PromptPackFindingKind.VERIFIED,
+                PromptPackFindingKind.COMPOSITION_VERIFIED,
+                PromptPackFindingKind.TEMPLATE_TOKENIZER_VERIFIED,
+            }
             else (_prompt_pack_suggestion(finding.kind),)
         ),
         witness=WitnessTrace(
             summary="PromptABI checked reusable prompt-pack contracts against configured app and composition artifacts.",
             steps=tuple(steps),
             artifacts=(loaded.artifact.to_ref(),),
+            rendered_strings=finding.witness_strings,
+            token_ids=finding.token_ids,
         ),
-        properties=(
-            ("pack_name", finding.pack.pack_name),
-            ("pack_version", finding.pack.pack_version or ""),
-            ("finding_kind", finding.kind.value),
-        ),
+        properties=tuple(properties),
     )
 
 
@@ -2878,6 +2915,8 @@ def _prompt_pack_suggestion(kind: PromptPackFindingKind) -> str:
         return "Increase the context budget or change truncation policy so prompt-pack required regions survive composition."
     if kind is PromptPackFindingKind.COMPOSITION_RAG_UNBOUNDED:
         return "Give each retrieval chunk a runtime max_tokens or retrieval_payload_limit_tokens bound before reusing pack-level guarantees."
+    if kind is PromptPackFindingKind.TEMPLATE_TOKENIZER_CONTROL_TOKEN:
+        return "Escape or encode message content before rendering, or remove tokenizer control/special tokens that are not structural markers for this prompt pack."
     return "Inspect the prompt-pack contract."
 
 

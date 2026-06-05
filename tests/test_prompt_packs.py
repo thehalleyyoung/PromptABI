@@ -382,6 +382,138 @@ def test_prompt_pack_composition_reports_rag_and_truncation_regressions(tmp_path
     assert truncated.witness is not None
 
 
+def test_prompt_pack_composes_template_and_tokenizer_proofs(tmp_path: Path) -> None:
+    pack = tmp_path / "support.prompt-pack.json"
+    _write_prompt_pack(
+        pack,
+        template_source="{% for message in messages %}<|im_start|>{{ message.role }}\n{{ message.content }}<|im_end|>\n{% endfor %}",
+    )
+    config = tmp_path / "promptabi.json"
+    config.write_text(
+        json.dumps(
+            {
+                "name": "prompt-pack-template-tokenizer-safe",
+                "checks": ["prompt-pack-contracts"],
+                "artifacts": {
+                    "support": {"kind": "prompt-pack", "path": pack.name, "version": "1.0.0"},
+                    "messages": {
+                        "kind": "prompt-segment",
+                        "uri": "memory://messages",
+                        "segments": [
+                            {"name": "system-policy", "role": "system", "required": True},
+                            {"name": "user-request", "role": "user", "required": True},
+                            {"name": "assistant-answer", "role": "assistant"},
+                        ],
+                    },
+                    "tools": {
+                        "kind": "tool-definition",
+                        "uri": "memory://tools",
+                        "provider": "openai",
+                        "tool_names": ["refund_user"],
+                    },
+                    "stops": {
+                        "kind": "stop-policy",
+                        "uri": "memory://stops",
+                        "stop_sequences": ["</tool_call>"],
+                    },
+                    "provider": {
+                        "kind": "provider-config",
+                        "uri": "memory://provider",
+                        "provider": "openai-compatible",
+                    },
+                    "tokenizer": {
+                        "kind": "tokenizer",
+                        "uri": "memory://tokenizer",
+                        "family": "byte-level",
+                        "added_tokens": ["<|im_start|>", "<|im_end|>"],
+                    },
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+    result = VerificationSession.from_config_file(config).run()
+
+    assert result.ok
+    assert [diagnostic.rule_id for diagnostic in result.diagnostics] == ["prompt-pack-template-tokenizer-verified"]
+    diagnostic = result.diagnostics[0]
+    assert "chat-template/tokenizer proof" in diagnostic.message
+    assert dict(diagnostic.properties)["finding_kind"] == "template-tokenizer-verified"
+    assert diagnostic.witness is not None
+    assert "support-chat" in diagnostic.witness.steps[0].output
+    assert diagnostic.witness.token_ids
+
+
+def test_prompt_pack_template_tokenizer_composition_reports_control_token_collision(tmp_path: Path) -> None:
+    pack = tmp_path / "support.prompt-pack.json"
+    _write_prompt_pack(
+        pack,
+        template_source="{% for message in messages %}<|im_start|>{{ message.role }}\n{{ message.content }}<|im_end|>\n{% endfor %}",
+    )
+    config = tmp_path / "promptabi.json"
+    config.write_text(
+        json.dumps(
+            {
+                "name": "prompt-pack-template-tokenizer-unsafe",
+                "checks": ["prompt-pack-contracts"],
+                "artifacts": {
+                    "support": {"kind": "prompt-pack", "path": pack.name, "version": "1.0.0"},
+                    "messages": {
+                        "kind": "prompt-segment",
+                        "uri": "memory://messages",
+                        "segments": [
+                            {"name": "system-policy", "role": "system", "required": True},
+                            {"name": "user-request", "role": "user", "required": True},
+                            {"name": "assistant-answer", "role": "assistant"},
+                        ],
+                    },
+                    "tools": {
+                        "kind": "tool-definition",
+                        "uri": "memory://tools",
+                        "provider": "openai",
+                        "tool_names": ["refund_user"],
+                    },
+                    "stops": {
+                        "kind": "stop-policy",
+                        "uri": "memory://stops",
+                        "stop_sequences": ["</tool_call>"],
+                    },
+                    "provider": {
+                        "kind": "provider-config",
+                        "uri": "memory://provider",
+                        "provider": "openai-compatible",
+                    },
+                    "tokenizer": {
+                        "kind": "tokenizer",
+                        "uri": "memory://tokenizer",
+                        "family": "byte-level",
+                        "added_tokens": ["<|im_start|>", "<|im_end|>", "<|system|>"],
+                    },
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+    result = VerificationSession.from_config_file(config).run()
+
+    assert not result.ok
+    assert [diagnostic.rule_id for diagnostic in result.diagnostics] == [
+        "prompt-pack-template-tokenizer-control-token"
+    ]
+    diagnostic = result.diagnostics[0]
+    assert "can inject tokenizer control token '<|system|>'" in diagnostic.message
+    assert dict(diagnostic.properties)["subject"] == "support-chat:user content"
+    assert diagnostic.witness is not None
+    assert diagnostic.witness.rendered_strings == ("<|system|>",)
+    assert diagnostic.witness.token_ids == (258,)
+
+
 def test_prompt_pack_lockfile_pins_package_contracts_and_diagnostics(tmp_path: Path) -> None:
     pack = tmp_path / "support.prompt-pack.json"
     _write_prompt_pack(pack)
