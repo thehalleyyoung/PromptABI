@@ -101,6 +101,11 @@ CHECK_RULE_IDS: dict[str, tuple[str, ...]] = {
         "rag-payload-truncation",
         "rag-template-overhead",
         "rag-tokenizer-mismatch",
+        "rag-tool-schema-composed",
+        "rag-tool-schema-field-forbidden",
+        "rag-tool-schema-field-missing",
+        "rag-tool-schema-missing",
+        "rag-tool-schema-truncated",
     ),
     "static-contracts": (
         "static-contract-abstained",
@@ -417,7 +422,11 @@ def _surfaces_for_check(check_name: str, artifact_kinds: tuple[ArtifactKind, ...
         "parser-compatibility": _grammar_surfaces(),
         "provider-fixture-replay": _provider_surfaces(),
         "provider-migration": _provider_surfaces(),
-        "rag-chunking-compatibility": (*_tokenizer_surfaces(), *_framework_surfaces()),
+        "rag-chunking-compatibility": (
+            *_tokenizer_surfaces(),
+            *_framework_surfaces(),
+            _surface("tool", "json-schema-arguments", ArtifactKind.TOOL_DEFINITION),
+        ),
         "static-contracts": (
             *_tokenizer_surfaces(),
             *_template_surfaces(),

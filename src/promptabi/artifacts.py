@@ -448,6 +448,8 @@ class PromptSegment:
     metadata_tokens: int = 0
     template_overhead_tokens: int = 0
     retrieval_payload_limit_tokens: int | None = None
+    tool_name: str | None = None
+    tool_argument_fields: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -462,10 +464,15 @@ class PromptSegment:
             raise ValueError("prompt segment content must be a string")
         if self.overhead_tokens < 0:
             raise ValueError("prompt segment overhead_tokens must be non-negative")
-        for field_name in ("chunk_id", "document_id", "chunk_tokenizer", "citation"):
+        for field_name in ("chunk_id", "document_id", "chunk_tokenizer", "citation", "tool_name"):
             value = getattr(self, field_name)
             if value is not None and not value:
                 raise ValueError(f"prompt segment {field_name} must be non-empty")
+        object.__setattr__(
+            self,
+            "tool_argument_fields",
+            _unique_strings(self.tool_argument_fields, field_name="prompt segment tool_argument_fields"),
+        )
         for field_name in (
             "source_start",
             "source_end",
@@ -513,10 +520,13 @@ class PromptSegment:
             "actual_overlap_tokens",
             "citation",
             "retrieval_payload_limit_tokens",
+            "tool_name",
         ):
             value = getattr(self, key)
             if value is not None:
                 data[key] = value
+        if self.tool_argument_fields:
+            data["tool_argument_fields"] = list(self.tool_argument_fields)
         if self.citation_required:
             data["citation_required"] = self.citation_required
         if self.metadata_tokens:
@@ -2428,6 +2438,9 @@ def _prompt_segments(spec: dict[str, Any]) -> tuple[PromptSegment, ...]:
                 metadata_tokens=_int(item, "metadata_tokens", default=0),
                 template_overhead_tokens=_int(item, "template_overhead_tokens", default=0),
                 retrieval_payload_limit_tokens=_optional_int(item, "retrieval_payload_limit_tokens"),
+                tool_name=_optional_str(item, "tool_name") or _optional_str(item, "tool"),
+                tool_argument_fields=_tuple_of_str(item, "tool_argument_fields")
+                or _tuple_of_str(item, "tool_fields"),
             )
         )
     return tuple(segments)

@@ -1,0 +1,37 @@
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "lookup_refund_policy",
+        "description": "Look up a refund-policy chunk by order and citation.",
+        "parameters": {
+          "type": "object",
+          "required": ["order_id", "citation"],
+          "additionalProperties": false,
+          "properties": {
+            "order_id": {"type": "string", "pattern": "^ORD-[0-9]+$"},
+            "citation": {"type": "string"}
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "summarize_refund_policy",
+        "description": "Summarize a retrieved refund-policy chunk for the answer.",
+        "parameters": {
+          "type": "object",
+          "required": ["content", "document_id", "citation"],
+          "additionalProperties": false,
+          "properties": {
+            "content": {"type": "string"},
+            "document_id": {"type": "string"},
+            "citation": {"type": "string"}
+          }
+        }
+      }
+    }
+  ]
+}

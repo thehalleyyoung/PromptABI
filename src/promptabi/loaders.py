@@ -1210,6 +1210,9 @@ def _prompt_segment_from_mapping(raw: object, *, fallback_name: str) -> PromptSe
         metadata_tokens=_nonnegative_int(raw, "metadata_tokens", default=0),
         template_overhead_tokens=_nonnegative_int(raw, "template_overhead_tokens", default=0),
         retrieval_payload_limit_tokens=_nonnegative_optional(raw, "retrieval_payload_limit_tokens", positive=True),
+        tool_name=_optional_segment_str(raw, "tool_name") or _optional_segment_str(raw, "tool"),
+        tool_argument_fields=_segment_string_tuple(raw, "tool_argument_fields")
+        or _segment_string_tuple(raw, "tool_fields"),
     )
 
 
@@ -1268,6 +1271,8 @@ def _merge_prompt_segments(
                     if segment.retrieval_payload_limit_tokens is not None
                     else parsed_segment.retrieval_payload_limit_tokens
                 ),
+                tool_name=segment.tool_name or parsed_segment.tool_name,
+                tool_argument_fields=segment.tool_argument_fields or parsed_segment.tool_argument_fields,
             )
         )
     declared_names = {segment.name for segment in declared}
@@ -1360,6 +1365,15 @@ def _optional_segment_str(raw: dict[str, object], key: str) -> str | None:
     if not isinstance(value, str) or not value:
         raise ValueError(f"segment {key} must be a non-empty string")
     return value
+
+
+def _segment_string_tuple(raw: dict[str, object], key: str) -> tuple[str, ...]:
+    value = raw.get(key)
+    if value is None:
+        return ()
+    if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):
+        raise ValueError(f"segment {key} must be a list of non-empty strings")
+    return tuple(dict.fromkeys(value))
 
 
 def _training_manifest_metadata(artifact: Artifact) -> tuple[tuple[str, object], ...]:

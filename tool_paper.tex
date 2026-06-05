@@ -211,8 +211,16 @@ declared segments, tokenizer-derived or declared token counts, output reserves,
 tool overhead, generation prompts, and framework truncation policies to prove
 whether required regions survive. The same machinery applies to RAG citations,
 training masks, supervised target roles, DPO/RLHF pair consistency, and
-evaluation harness prompts. A benchmark score should not be trusted if the
-grader rubric, answer schema, system prompt, or private answer key can be
+evaluation harness prompts. The RAG model now composes retrieved chunks with the
+tool schemas that consume them: a chunk can declare the tool argument fields it
+will supply, PromptABI infers bounded rendered facts such as content, document
+IDs, and citations, and the verifier compares those facts with the normalized
+OpenAI/Anthropic/MCP-style tool schema under the same framework truncation
+policy. It therefore distinguishes a valid chunk that preserves all required
+tool arguments from a chunk whose citation is dropped, whose \texttt{order\_id}
+is never rendered, or whose metadata would be rejected by a closed JSON Schema.
+A benchmark score should not be trusted if the grader rubric, answer schema,
+system prompt, private answer key, or tool-consuming retrieval evidence can be
 dropped or exposed by the interface.
 
 \subsection{Provider Migration}
@@ -259,8 +267,8 @@ Provider, streaming, and adapter-chain envelope preservation &
 Lost field, changed encoding, broken hop, response-shape witness \\
 \addlinespace
 Protect RAG, training, and eval invariants &
-Context-budget, mask, role, and private-field obligations &
-Survival proof, dropped-region witness, finite assignment \\
+Context-budget, RAG/tool-schema, mask, role, and private-field obligations &
+Survival proof, missing tool argument, dropped-region witness, finite assignment \\
 \addlinespace
 Maintain reproducible CI &
 Lockfiles, inherited config lineage, signed bundles, replayable solver

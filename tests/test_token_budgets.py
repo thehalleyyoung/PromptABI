@@ -10,6 +10,7 @@ from promptabi import (
     PromptSegmentArtifact,
     TokenBudgetReservation,
     TokenizerArtifact,
+    ToolDefinitionArtifact,
     VerificationConfig,
     analyze_token_budget,
 )
@@ -379,6 +380,196 @@ def test_rag_chunking_compatibility_reports_real_chunk_contract_failures() -> No
     assert [segment.name for segment in report.truncation.dropped_segments] == ["chunk-a"]
 
 
+def test_rag_chunk_policy_composes_with_tool_schema_requirements(tmp_path: Path) -> None:
+    tools_path = tmp_path / "tools.json"
+    tools_path.write_text(
+        json.dumps(
+            {
+                "tools": [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "fetch_policy",
+                            "description": "Fetch policy context.",
+                            "parameters": {
+                                "type": "object",
+                                "required": ["order_id", "citation"],
+                                "additionalProperties": False,
+                                "properties": {
+                                    "order_id": {"type": "string"},
+                                    "citation": {"type": "string"},
+                                },
+                            },
+                        },
+                    },
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "summarize_policy",
+                            "description": "Summarize policy context.",
+                            "parameters": {
+                                "type": "object",
+                                "required": ["content", "document_id", "citation"],
+                                "additionalProperties": False,
+                                "properties": {
+                                    "content": {"type": "string"},
+                                    "document_id": {"type": "string"},
+                                    "citation": {"type": "string"},
+                                },
+                            },
+                        },
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    segments = PromptSegmentArtifact(
+        kind=ArtifactKind.PROMPT_SEGMENT,
+        name="rag",
+        location=ArtifactLocation(uri="memory://rag"),
+        segments=(
+            PromptSegment("system", role="system", required=True, token_count=10),
+            PromptSegment(
+                "unsafe-chunk",
+                role="retrieval",
+                token_count=30,
+                chunk_id="a",
+                document_id="refund-policy",
+                citation="refund-policy#0",
+                tool_name="fetch_policy",
+                tool_argument_fields=("citation", "extra_field"),
+            ),
+            PromptSegment(
+                "safe-chunk",
+                role="retrieval",
+                token_count=20,
+                chunk_id="b",
+                document_id="refund-policy",
+                citation="refund-policy#1",
+                tool_name="summarize_policy",
+                tool_argument_fields=("content", "document_id", "citation"),
+            ),
+            PromptSegment("question", role="user", required=True, token_count=10),
+        ),
+    )
+    budget = FrameworkTruncationConfigArtifact(
+        kind=ArtifactKind.FRAMEWORK_TRUNCATION_CONFIG,
+        name="rag-budget",
+        location=ArtifactLocation(uri="memory://rag-budget"),
+        framework="custom-rag",
+        strategy="priority",
+        drop_roles=("retrieval",),
+        max_context_tokens=90,
+        preserve_system=True,
+    )
+    tool_artifact = ToolDefinitionArtifact(
+        kind=ArtifactKind.TOOL_DEFINITION,
+        name="rag-tools",
+        location=ArtifactLocation(path=str(tools_path)),
+        provider="openai",
+    )
+
+    report = analyze_token_budget(
+        VerificationConfig(name="rag-tools", artifact_bundle=()),
+        (
+            ArtifactLoader().load(segments),
+            ArtifactLoader().load(budget),
+            ArtifactLoader().load(tool_artifact),
+        ),
+    )
+
+    by_rule = [finding.rule_id for finding in report.findings if finding.rule_id.startswith("rag-tool-schema")]
+    assert by_rule == [
+        "rag-tool-schema-field-missing",
+        "rag-tool-schema-field-forbidden",
+        "rag-tool-schema-composed",
+    ]
+    missing = next(finding for finding in report.findings if finding.rule_id == "rag-tool-schema-field-missing")
+    assert dict(missing.evidence)["required_fields"] == "citation, order_id"
+    composed = next(finding for finding in report.findings if finding.rule_id == "rag-tool-schema-composed")
+    assert "safe-chunk" in composed.message
+
+
+def test_rag_tool_schema_composition_reports_truncated_required_tool_arguments(tmp_path: Path) -> None:
+    tools_path = tmp_path / "tools.json"
+    tools_path.write_text(
+        json.dumps(
+            {
+                "tools": [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "summarize_policy",
+                            "description": "Summarize policy context.",
+                            "parameters": {
+                                "type": "object",
+                                "required": ["content", "document_id", "citation"],
+                                "additionalProperties": False,
+                                "properties": {
+                                    "content": {"type": "string"},
+                                    "document_id": {"type": "string"},
+                                    "citation": {"type": "string"},
+                                },
+                            },
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    segments = PromptSegmentArtifact(
+        kind=ArtifactKind.PROMPT_SEGMENT,
+        name="rag",
+        location=ArtifactLocation(uri="memory://rag"),
+        segments=(
+            PromptSegment("system", role="system", required=True, token_count=10),
+            PromptSegment(
+                "tool-chunk",
+                role="retrieval",
+                token_count=70,
+                document_id="refund-policy",
+                citation="refund-policy#0",
+                tool_name="summarize_policy",
+                tool_argument_fields=("content", "document_id", "citation"),
+            ),
+            PromptSegment("question", role="user", required=True, token_count=20),
+        ),
+    )
+    budget = FrameworkTruncationConfigArtifact(
+        kind=ArtifactKind.FRAMEWORK_TRUNCATION_CONFIG,
+        name="rag-budget",
+        location=ArtifactLocation(uri="memory://rag-budget"),
+        framework="custom-rag",
+        strategy="priority",
+        drop_roles=("retrieval",),
+        max_context_tokens=40,
+        preserve_system=True,
+    )
+
+    report = analyze_token_budget(
+        VerificationConfig(name="rag-tools", artifact_bundle=()),
+        (
+            ArtifactLoader().load(segments),
+            ArtifactLoader().load(budget),
+            ArtifactLoader().load(
+                ToolDefinitionArtifact(
+                    kind=ArtifactKind.TOOL_DEFINITION,
+                    name="rag-tools",
+                    location=ArtifactLocation(path=str(tools_path)),
+                    provider="openai",
+                )
+            ),
+        ),
+    )
+
+    rule_ids = [finding.rule_id for finding in report.findings if finding.rule_id.startswith("rag-tool-schema")]
+    assert rule_ids == ["rag-tool-schema-truncated"]
+    truncated = next(finding for finding in report.findings if finding.rule_id == "rag-tool-schema-truncated")
+    assert dict(truncated.evidence)["policy"] == "custom-rag:priority"
+
+
 def test_verify_rag_chunking_example_uses_dedicated_check(capsys) -> None:
     exit_code = main(["verify", "--config", "examples/rag-chunking/promptabi.json", "--format", "json"])
 
@@ -390,6 +581,10 @@ def test_verify_rag_chunking_example_uses_dedicated_check(capsys) -> None:
     assert "rag-citation-loss" in rule_ids
     assert "rag-overlap-accounting" in rule_ids
     assert "rag-template-overhead" in rule_ids
+    assert "rag-tool-schema-field-missing" in rule_ids
+    assert "rag-tool-schema-field-forbidden" in rule_ids
+    assert "rag-tool-schema-truncated" in rule_ids
+    assert "rag-tool-schema-composed" in rule_ids
     assert "token-budget-model" not in rule_ids
 
 

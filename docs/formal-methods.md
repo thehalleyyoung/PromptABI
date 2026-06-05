@@ -103,6 +103,7 @@ Representative composed products:
 | tokenizer -> grammar -> application parser | constrained decoding accepts strings the parser rejects, or no valid string exists |
 | provider envelope -> tool schema -> stop policy | streamed tool-call chunks, IDs, names, escaping, or stops disagree |
 | prompt segments -> framework truncation -> context budget | a required system/RAG/training region is dropped before deployment |
+| RAG chunks -> truncation policy -> tool schema | retrieved context omits, overflows, or truncates fields required by the tool call that consumes it |
 | training manifest -> chat template -> packing/loss mask | supervised labels cover user/tool/retrieval text or invalid assistant regions |
 
 The dependency graph command exposes these relationships for real configs:

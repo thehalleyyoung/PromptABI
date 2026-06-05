@@ -28,7 +28,9 @@
           "citation_required": true,
           "metadata_tokens": 20,
           "template_overhead_tokens": 8,
-          "retrieval_payload_limit_tokens": 45
+          "retrieval_payload_limit_tokens": 45,
+          "tool_name": "lookup_refund_policy",
+          "tool_argument_fields": ["content", "citation"]
         },
         {
           "name": "chunk-b",
@@ -43,9 +45,12 @@
           "expected_overlap_tokens": 8,
           "actual_overlap_tokens": 5,
           "citation_required": true,
+          "citation": "refund-policy#1",
           "metadata_tokens": 2,
           "template_overhead_tokens": 4,
-          "retrieval_payload_limit_tokens": 80
+          "retrieval_payload_limit_tokens": 80,
+          "tool_name": "summarize_refund_policy",
+          "tool_argument_fields": ["content", "document_id", "citation"]
         },
         {
           "name": "user-question",
@@ -68,6 +73,11 @@
       "kind": "tokenizer",
       "uri": "memory://serving-byte-tokenizer",
       "family": "byte-level"
+    },
+    "rag-tools": {
+      "kind": "tool-definition",
+      "path": "tools.json",
+      "provider": "openai"
     }
   }
 }

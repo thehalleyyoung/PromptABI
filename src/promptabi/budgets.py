@@ -9,6 +9,7 @@ from .artifacts import (
     FrameworkTruncationConfigArtifact,
     PromptSegment,
     PromptSegmentArtifact,
+    ToolDefinitionArtifact,
     TokenizerArtifact,
 )
 from .config import VerificationConfig
@@ -77,6 +78,8 @@ class TokenBudgetSegment:
     metadata_tokens: int = 0
     template_overhead_tokens: int = 0
     retrieval_payload_limit_tokens: int | None = None
+    tool_name: str | None = None
+    tool_argument_fields: tuple[str, ...] = ()
 
     @property
     def total_tokens(self) -> int | None:
@@ -101,6 +104,8 @@ class TokenBudgetSegment:
             or self.metadata_tokens > 0
             or self.template_overhead_tokens > 0
             or self.retrieval_payload_limit_tokens is not None
+            or self.tool_name is not None
+            or bool(self.tool_argument_fields)
         )
 
 
@@ -607,6 +612,7 @@ def analyze_token_budget(
             )
 
     findings.extend(_rag_chunking_findings(segments, truncation, tokenizers))
+    findings.extend(_rag_tool_schema_findings(segments, truncation, loaded_artifacts))
 
     report = TokenBudgetReport(
         budget_source=budget_source,
@@ -856,6 +862,8 @@ def _segment_chunk_fields(segment: PromptSegment) -> dict[str, object]:
         "metadata_tokens": segment.metadata_tokens,
         "template_overhead_tokens": segment.template_overhead_tokens,
         "retrieval_payload_limit_tokens": segment.retrieval_payload_limit_tokens,
+        "tool_name": segment.tool_name,
+        "tool_argument_fields": segment.tool_argument_fields,
     }
 
 
@@ -1066,6 +1074,181 @@ def _rag_overlap_findings(chunks: tuple[TokenBudgetSegment, ...]) -> tuple[Token
                 )
             )
     return tuple(findings)
+
+
+@dataclass(frozen=True, slots=True)
+class _ToolSchemaSummary:
+    name: str
+    required_fields: tuple[str, ...]
+    property_names: tuple[str, ...]
+    closed: bool
+    provider: str
+    artifact_name: str
+
+
+def _rag_tool_schema_findings(
+    segments: tuple[TokenBudgetSegment, ...],
+    truncation: TruncationDecision,
+    loaded_artifacts: tuple[LoadedArtifact, ...],
+) -> tuple[TokenBudgetFinding, ...]:
+    """Compose retrieval chunk obligations with normalized tool-schema facts."""
+
+    chunks = tuple(segment for segment in segments if segment.is_retrieval_chunk and segment.tool_name is not None)
+    if not chunks:
+        return ()
+    schemas = _loaded_tool_schema_summaries(loaded_artifacts)
+    dropped_names = {segment.name for segment in truncation.dropped_segments}
+    findings: list[TokenBudgetFinding] = []
+    for chunk in chunks:
+        assert chunk.tool_name is not None
+        schema = schemas.get(chunk.tool_name)
+        supplied_fields = _rag_chunk_supplied_tool_fields(chunk)
+        if schema is None:
+            findings.append(
+                TokenBudgetFinding(
+                    rule_id="rag-tool-schema-missing",
+                    severity="error",
+                    message=(
+                        f"retrieval chunk '{chunk.name}' declares consumer tool '{chunk.tool_name}', "
+                        "but no loaded tool-definition artifact provides that schema"
+                    ),
+                    suggestion="Load the tool-definition artifact that consumes this retrieval chunk or fix the chunk's tool_name.",
+                    evidence=(
+                        ("chunk", chunk.name),
+                        ("tool", chunk.tool_name),
+                        ("supplied_fields", ", ".join(supplied_fields) or "<none>"),
+                    ),
+                )
+            )
+            continue
+        missing_required = tuple(field for field in schema.required_fields if field not in supplied_fields)
+        unknown_fields = tuple(
+            field
+            for field in supplied_fields
+            if schema.closed and schema.property_names and field not in schema.property_names
+        )
+        if missing_required:
+            findings.append(
+                TokenBudgetFinding(
+                    rule_id="rag-tool-schema-field-missing",
+                    severity="error",
+                    message=(
+                        f"retrieval chunk '{chunk.name}' feeding tool '{schema.name}' does not provide "
+                        f"required argument field(s): {', '.join(missing_required)}"
+                    ),
+                    suggestion="Add those fields to tool_argument_fields or include matching chunk metadata before tool-call serialization.",
+                    evidence=(
+                        ("chunk", chunk.name),
+                        ("tool", schema.name),
+                        ("required_fields", ", ".join(schema.required_fields) or "<none>"),
+                        ("supplied_fields", ", ".join(supplied_fields) or "<none>"),
+                        ("tool_artifact", schema.artifact_name),
+                    ),
+                )
+            )
+        if unknown_fields:
+            findings.append(
+                TokenBudgetFinding(
+                    rule_id="rag-tool-schema-field-forbidden",
+                    severity="error",
+                    message=(
+                        f"retrieval chunk '{chunk.name}' supplies field(s) not accepted by closed "
+                        f"tool schema '{schema.name}': {', '.join(unknown_fields)}"
+                    ),
+                    suggestion="Remove undeclared RAG metadata from the tool arguments or update the closed tool schema.",
+                    evidence=(
+                        ("chunk", chunk.name),
+                        ("tool", schema.name),
+                        ("accepted_fields", ", ".join(schema.property_names) or "<none>"),
+                        ("forbidden_fields", ", ".join(unknown_fields)),
+                        ("tool_artifact", schema.artifact_name),
+                    ),
+                )
+            )
+        if chunk.name in dropped_names and (schema.required_fields or chunk.tool_argument_fields):
+            findings.append(
+                TokenBudgetFinding(
+                    rule_id="rag-tool-schema-truncated",
+                    severity="error",
+                    message=(
+                        f"framework truncation can drop retrieval chunk '{chunk.name}' before it "
+                        f"satisfies tool '{schema.name}' argument obligations"
+                    ),
+                    suggestion="Make that retrieval chunk must-survive, reserve more retrieval budget, or move required tool arguments outside truncatable RAG context.",
+                    evidence=(
+                        ("chunk", chunk.name),
+                        ("tool", schema.name),
+                        ("policy", f"{truncation.policy.framework}:{truncation.policy.strategy}"),
+                        ("dropped_segments", ", ".join(segment.name for segment in truncation.dropped_segments)),
+                    ),
+                )
+            )
+        if not missing_required and not unknown_fields and chunk.name not in dropped_names:
+            findings.append(
+                TokenBudgetFinding(
+                    rule_id="rag-tool-schema-composed",
+                    severity="info",
+                    message=(
+                        f"retrieval chunk '{chunk.name}' preserves tool '{schema.name}' "
+                        "argument obligations under the modeled RAG policy"
+                    ),
+                    suggestion="Keep this chunk/tool binding pinned in the PromptABI config when updating RAG or tool schemas.",
+                    evidence=(
+                        ("chunk", chunk.name),
+                        ("tool", schema.name),
+                        ("provider", schema.provider),
+                        ("supplied_fields", ", ".join(supplied_fields) or "<none>"),
+                        ("required_fields", ", ".join(schema.required_fields) or "<none>"),
+                    ),
+                )
+            )
+    return tuple(findings)
+
+
+def _loaded_tool_schema_summaries(loaded_artifacts: tuple[LoadedArtifact, ...]) -> dict[str, _ToolSchemaSummary]:
+    summaries: dict[str, _ToolSchemaSummary] = {}
+    for loaded in loaded_artifacts:
+        if not isinstance(loaded.artifact, ToolDefinitionArtifact):
+            continue
+        metadata = dict(loaded.metadata)
+        tool_count = int(metadata.get("tool_count", 0))
+        provider = str(metadata.get("provider_family", loaded.artifact.provider or "generic"))
+        for index in range(tool_count):
+            name = metadata.get(f"tool_{index}_name")
+            if not isinstance(name, str) or not name:
+                continue
+            required = _metadata_string_tuple(metadata.get(f"tool_{index}_required"))
+            properties = _metadata_string_tuple(metadata.get(f"tool_{index}_properties"))
+            summaries[name] = _ToolSchemaSummary(
+                name=name,
+                required_fields=required,
+                property_names=properties,
+                closed=metadata.get(f"tool_{index}_additional_properties") is False,
+                provider=provider,
+                artifact_name=loaded.artifact.name,
+            )
+    return summaries
+
+
+def _metadata_string_tuple(value: object) -> tuple[str, ...]:
+    if isinstance(value, tuple):
+        return tuple(item for item in value if isinstance(item, str))
+    if isinstance(value, list):
+        return tuple(item for item in value if isinstance(item, str))
+    if isinstance(value, str) and value:
+        return (value,)
+    return ()
+
+
+def _rag_chunk_supplied_tool_fields(chunk: TokenBudgetSegment) -> tuple[str, ...]:
+    fields = list(chunk.tool_argument_fields)
+    if chunk.token_count is not None:
+        fields.append("content")
+    if chunk.document_id is not None:
+        fields.append("document_id")
+    if chunk.citation is not None:
+        fields.append("citation")
+    return tuple(sorted(dict.fromkeys(fields)))
 
 
 def _actual_overlap(previous: TokenBudgetSegment, current: TokenBudgetSegment) -> int | None:
