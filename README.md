@@ -129,6 +129,7 @@ promptabi gallery --format text
 
 # Diagnose the local environment and emit editor-ready inline diagnostics.
 promptabi doctor --config examples/minimal/promptabi.json
+promptabi diagnostics cluster --config examples/minimal/promptabi.json --strategy rule
 promptabi diagnostics catalog --config examples/minimal/promptabi.json --format json
 promptabi diagnostics lsp --config examples/minimal/promptabi.json --format json
 

@@ -143,7 +143,10 @@ overreachability, tokenizer/grammar emptiness, must-survive budgets, and finite
 SMT contracts, with executable checks that replay reported counterexamples
 through the same bounded abstraction and real tokenizer adapters when available,
 while downgrading to sketches or abstentions when no replayable object exists,
-rich diagnostic witness records that carry the human trace plus machine-readable
+deterministic diagnostic clustering that groups related findings by rule,
+declared root cause, artifact edge, provider behavior, or shared minimized
+witness digest while preserving unclustered-finding coverage counts for safe
+triage, rich diagnostic witness records that carry the human trace plus machine-readable
 rendered strings, exact token IDs, role-region offsets, parser states, solver
 assignments, truncation decisions, and ranked minimal fixes, so a CI failure can
 be replayed by tools, explored in a web-free static HTML report with role-region

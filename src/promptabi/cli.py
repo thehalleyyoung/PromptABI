@@ -33,6 +33,12 @@ from .beta import (
     run_beta_program,
 )
 from .config import ConfigError, discover_config, load_config
+from .diagnostic_clustering import (
+    DiagnosticClusterStrategy,
+    build_diagnostic_clusters,
+    render_diagnostic_clusters_json,
+    render_diagnostic_clusters_text,
+)
 from .contract_language import (
     ContractLanguageError,
     format_static_contract,
@@ -1390,6 +1396,48 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: json)",
     )
     diagnostics_catalog.add_argument("--output", help="write the catalog to this path instead of stdout")
+    diagnostics_cluster = diagnostics_subparsers.add_parser(
+        "cluster",
+        help="group related findings by root cause, artifact edge, rule, provider behavior, or witness",
+    )
+    diagnostics_cluster.add_argument(
+        "--config",
+        help="path to a PromptABI JSON config; defaults to discovering promptabi.json upward from cwd",
+    )
+    diagnostics_cluster.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        metavar="NAME=PATH_OR_URI",
+        help="override or add an artifact location for this run; may be repeated",
+    )
+    diagnostics_cluster.add_argument(
+        "--plugin",
+        action="append",
+        default=[],
+        metavar="MODULE[:OBJECT]",
+        help="import an additional PromptABI plugin before clustering diagnostics; may be repeated",
+    )
+    diagnostics_cluster.add_argument(
+        "--strategy",
+        action="append",
+        choices=tuple(strategy.value for strategy in DiagnosticClusterStrategy),
+        default=[],
+        help="clustering strategy to run; may be repeated (default: all strategies)",
+    )
+    diagnostics_cluster.add_argument(
+        "--min-size",
+        type=int,
+        default=2,
+        help="minimum findings required to emit a cluster (default: 2)",
+    )
+    diagnostics_cluster.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    diagnostics_cluster.add_argument("--output", help="write diagnostic clusters to this path instead of stdout")
     diagnostics_lsp = diagnostics_subparsers.add_parser(
         "lsp",
         help="emit language-server-style publishDiagnostics payloads for editors",
@@ -2242,6 +2290,37 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         except OSError as exc:
             print(f"promptabi: cannot write diagnostic catalog: {exc}", file=sys.stderr)
+            return 2
+        return 0
+
+    if args.command == "diagnostics" and args.diagnostics_command == "cluster":
+        try:
+            if args.min_size < 1:
+                parser.error("--min-size must be at least 1")
+            config_path = Path(args.config).resolve() if args.config else discover_config()
+            overrides = _parse_artifact_overrides(args.artifact, parser)
+            plugin_registry = _load_cli_plugins(args.plugin)
+            config = load_config(config_path).with_artifact_overrides(overrides, base_dir=Path.cwd())
+            result = VerificationSession(config, plugin_registry=plugin_registry).run()
+            report = build_diagnostic_clusters(
+                result.diagnostics,
+                strategies=tuple(args.strategy) if args.strategy else tuple(DiagnosticClusterStrategy),
+                min_cluster_size=args.min_size,
+            )
+            output = (
+                render_diagnostic_clusters_json(report)
+                if args.format == "json"
+                else render_diagnostic_clusters_text(report)
+            )
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+            else:
+                print(output, end="")
+        except (ConfigError, PluginError, ValueError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write diagnostic clusters: {exc}", file=sys.stderr)
             return 2
         return 0
 

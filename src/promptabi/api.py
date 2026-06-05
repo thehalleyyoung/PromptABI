@@ -38,6 +38,12 @@ from .beta import (
     run_beta_program,
 )
 from .diagnostics import Diagnostic
+from .diagnostic_clustering import (
+    DiagnosticClusterReport,
+    build_diagnostic_clusters,
+    render_diagnostic_clusters_json,
+    render_diagnostic_clusters_text,
+)
 from .dependency_graph import (
     DependencyGraphReport,
     build_dependency_graph,
@@ -440,6 +446,37 @@ def diagnostic_message_catalog(
         return render_diagnostic_catalog_json(catalog)
     if output_format == "text":
         return render_diagnostic_catalog_text(catalog)
+    raise ValueError("output_format must be one of: text, json")
+
+
+def diagnostic_clusters(
+    diagnostics_or_result: Sequence[Diagnostic] | VerificationResult,
+    *,
+    strategies: Sequence[str] | None = None,
+    min_cluster_size: int = 2,
+    output_format: str | None = None,
+) -> DiagnosticClusterReport | str:
+    """Group related findings by root cause, artifact edge, rule, provider behavior, or witness."""
+
+    diagnostics = (
+        diagnostics_or_result.diagnostics
+        if isinstance(diagnostics_or_result, VerificationResult)
+        else diagnostics_or_result
+    )
+    report = build_diagnostic_clusters(
+        diagnostics,
+        strategies=tuple(strategies) if strategies is not None else (),
+        min_cluster_size=min_cluster_size,
+    ) if strategies is not None else build_diagnostic_clusters(
+        diagnostics,
+        min_cluster_size=min_cluster_size,
+    )
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_diagnostic_clusters_json(report)
+    if output_format == "text":
+        return render_diagnostic_clusters_text(report)
     raise ValueError("output_format must be one of: text, json")
 
 
