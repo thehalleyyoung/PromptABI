@@ -18,6 +18,14 @@ from .api_stability import (
     render_public_api_manifest_markdown,
 )
 from .bug_reports import BugReportError, generate_bug_report, render_bug_report
+from .bundles import (
+    VerificationBundleError,
+    create_signed_verification_bundle,
+    load_signed_verification_bundle,
+    render_bundle_verification_text,
+    verify_signed_verification_bundle,
+    write_signed_verification_bundle,
+)
 from .beta import (
     BetaProgramError,
     render_beta_program_json,
@@ -275,6 +283,43 @@ def build_parser() -> argparse.ArgumentParser:
     bug_report.add_argument(
         "--output",
         help="write markdown to this path instead of stdout",
+    )
+
+    bundle = subparsers.add_parser("bundle", help="create and verify signed PromptABI audit bundles")
+    bundle_subparsers = bundle.add_subparsers(dest="bundle_command", required=True)
+    bundle_create = bundle_subparsers.add_parser(
+        "create",
+        help="run verification and write a signed bundle with diagnostics, witnesses, lockfile state, and hashes",
+    )
+    bundle_create.add_argument(
+        "--config",
+        help="path to a PromptABI JSON config; defaults to discovering promptabi.json upward from cwd",
+    )
+    bundle_create.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        metavar="NAME=PATH_OR_URI",
+        help="override or add an artifact location for this run; may be repeated",
+    )
+    bundle_create.add_argument("--output", required=True, help="write signed bundle JSON to this path")
+    bundle_create.add_argument("--key", help="bundle signing key (default: PROMPTABI_BUNDLE_KEY)")
+    bundle_create.add_argument("--key-id", default="local", help="identifier recorded with the signature")
+    bundle_create.add_argument(
+        "--excerpt-bytes",
+        type=int,
+        default=4096,
+        help="maximum artifact bytes to embed as base64 excerpts for audit replay (default: 4096)",
+    )
+    bundle_create.add_argument("--force", action="store_true", help="overwrite an existing bundle")
+    bundle_verify = bundle_subparsers.add_parser("verify", help="verify a signed bundle without rerunning checks")
+    bundle_verify.add_argument("bundle", help="signed bundle JSON path")
+    bundle_verify.add_argument("--key", help="bundle signing key (default: PROMPTABI_BUNDLE_KEY)")
+    bundle_verify.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
     )
 
     diff = subparsers.add_parser("diff", help="compare two PromptABI configs for contract-breaking changes")
@@ -1094,6 +1139,45 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"promptabi: cannot write bug report: {exc}", file=sys.stderr)
             return 2
         return 0
+
+    if args.command == "bundle" and args.bundle_command == "create":
+        try:
+            config_path = Path(args.config).resolve() if args.config else discover_config()
+            overrides = _parse_artifact_overrides(args.artifact, parser)
+            bundle = create_signed_verification_bundle(
+                config_path,
+                key=args.key,
+                key_id=args.key_id,
+                artifact_overrides=overrides,
+                excerpt_bytes=args.excerpt_bytes,
+            )
+            write_signed_verification_bundle(args.output, bundle, force=args.force)
+        except (ConfigError, VerificationBundleError, ValueError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write verification bundle: {exc}", file=sys.stderr)
+            return 2
+        print(
+            "wrote signed verification bundle: "
+            f"{args.output} ({len(bundle.payload['diagnostics'])} diagnostics, hash {bundle.bundle_hash})"
+        )
+        return 0
+
+    if args.command == "bundle" and args.bundle_command == "verify":
+        try:
+            bundle = load_signed_verification_bundle(args.bundle)
+            verification = verify_signed_verification_bundle(bundle, key=args.key)
+            output = (
+                json.dumps(verification.to_dict(), indent=2, sort_keys=True) + "\n"
+                if args.format == "json"
+                else render_bundle_verification_text(verification)
+            )
+        except VerificationBundleError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        print(output, end="")
+        return 0 if verification.ok else 1
 
     if args.command == "diagnostics" and args.diagnostics_command == "catalog":
         try:

@@ -57,6 +57,14 @@ from .evaluation import (
     run_evaluation,
 )
 from .bug_reports import BugReport, generate_bug_report, render_bug_report
+from .bundles import (
+    VerificationBundle,
+    VerificationBundleVerification,
+    create_signed_verification_bundle,
+    render_bundle_verification_text,
+    verify_signed_verification_bundle,
+    write_signed_verification_bundle,
+)
 from .explain import DiagnosticExplanation, explain_diagnostic, render_explanation_json, render_explanation_text
 from .loaders import ArtifactLoader, LoadedArtifact
 from .first_party_plugins import create_first_party_plugin_registry
@@ -334,6 +342,50 @@ def create_bug_report(
         command=command,
         base_dir=base_dir,
     )
+
+
+def create_verification_bundle(
+    config_path: str | Path,
+    *,
+    key: str | bytes | None = None,
+    key_id: str = "local",
+    artifact_overrides: Mapping[str, str] | None = None,
+    output: str | Path | None = None,
+    excerpt_bytes: int = 4096,
+    force: bool = False,
+) -> VerificationBundle:
+    """Run verification and return or write a signed audit bundle."""
+
+    bundle = create_signed_verification_bundle(
+        config_path,
+        key=key,
+        key_id=key_id,
+        artifact_overrides=dict(artifact_overrides) if artifact_overrides is not None else None,
+        excerpt_bytes=excerpt_bytes,
+    )
+    if output is not None:
+        write_signed_verification_bundle(output, bundle, force=force)
+    return bundle
+
+
+def verify_verification_bundle(
+    bundle: VerificationBundle | dict[str, object] | str | Path,
+    *,
+    key: str | bytes | None = None,
+    output_format: str | None = None,
+) -> VerificationBundleVerification | str:
+    """Verify a signed audit bundle and optionally render the result."""
+
+    result = verify_signed_verification_bundle(bundle, key=key)
+    if output_format is None:
+        return result
+    if output_format == "text":
+        return render_bundle_verification_text(result)
+    if output_format == "json":
+        import json
+
+        return json.dumps(result.to_dict(), indent=2, sort_keys=True) + "\n"
+    raise ValueError("output_format must be one of: text, json")
 
 
 def minimize_failure_repro(

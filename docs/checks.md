@@ -11,6 +11,11 @@ truth. Diagnostic messages also expose stable localization keys and optional
 placeholder metadata; see [Diagnostic localization](localization.md) for the
 catalog format and `promptabi diagnostics catalog` workflow.
 
+`promptabi bundle create` runs the same verifier and emits a signed audit bundle
+containing config hashes, deterministic lockfile state, diagnostics, witnesses,
+artifact excerpts, solver metadata, and a reproducibility hash; `promptabi bundle
+verify` checks the HMAC signature without rerunning private artifacts.
+
 | Mode | Meaning |
 | --- | --- |
 | `sound` | No violation is reported unless one exists under the stated abstraction. |
