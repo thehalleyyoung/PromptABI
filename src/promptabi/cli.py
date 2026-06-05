@@ -17,6 +17,14 @@ from .api_stability import (
     render_public_api_manifest_json,
     render_public_api_manifest_markdown,
 )
+from .artifact_bisection import (
+    ArtifactBisectionError,
+    ArtifactDriftSurface,
+    artifact_revision_from_cli,
+    bisect_artifact_drift,
+    render_artifact_bisection_json,
+    render_artifact_bisection_text,
+)
 from .autofix import (
     AutoFixError,
     AutoFixKind,
@@ -1425,6 +1433,45 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     compatibility_audit.add_argument("--output", help="write compatibility audit report to this path instead of stdout")
+    drift_bisect = release_subparsers.add_parser(
+        "drift-bisect",
+        help="find the first tokenizer, template, schema, provider, or framework artifact revision that introduced drift",
+    )
+    drift_bisect.add_argument(
+        "--surface",
+        required=True,
+        choices=tuple(surface.value for surface in ArtifactDriftSurface),
+        help="artifact surface to compare",
+    )
+    drift_bisect.add_argument("--baseline", required=True, help="known-good baseline artifact path")
+    drift_bisect.add_argument(
+        "--baseline-label",
+        default="baseline",
+        help="label for the known-good baseline artifact (default: baseline)",
+    )
+    drift_bisect.add_argument(
+        "--revision",
+        action="append",
+        required=True,
+        metavar="LABEL=PATH",
+        help="chronological candidate artifact revision; may be repeated oldest to newest",
+    )
+    drift_bisect.add_argument(
+        "--bad-field",
+        action="append",
+        default=[],
+        help=(
+            "field, kind, or wildcard field prefix that defines the regression predicate; "
+            "defaults to any contract-relevant drift"
+        ),
+    )
+    drift_bisect.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    drift_bisect.add_argument("--output", help="write drift-bisection report to this path instead of stdout")
 
     dashboard = subparsers.add_parser(
         "dashboard",
@@ -3263,6 +3310,29 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         except OSError as exc:
             print(f"promptabi: cannot write compatibility audit report: {exc}", file=sys.stderr)
+            return 2
+        return 0 if report.ok else 1
+
+    if args.command == "release" and args.release_command == "drift-bisect":
+        try:
+            report = bisect_artifact_drift(
+                args.surface,
+                args.baseline,
+                tuple(artifact_revision_from_cli(value) for value in args.revision),
+                baseline_label=args.baseline_label,
+                bad_fields=tuple(args.bad_field),
+            )
+            output = render_artifact_bisection_json(report) if args.format == "json" else render_artifact_bisection_text(report)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                print(f"wrote drift-bisection report: {args.output} ({len(report.probes)} probes)")
+            else:
+                print(output, end="")
+        except ArtifactBisectionError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write drift-bisection report: {exc}", file=sys.stderr)
             return 2
         return 0 if report.ok else 1
 

@@ -93,6 +93,13 @@ from .api_stability import (
     render_public_api_manifest_json,
     render_public_api_manifest_markdown,
 )
+from .artifact_bisection import (
+    ArtifactBisectionReport,
+    ArtifactRevision,
+    bisect_artifact_drift,
+    render_artifact_bisection_json,
+    render_artifact_bisection_text,
+)
 from .autofix import (
     AutoFixReport,
     GuardedAutoFixPreviewReport,
@@ -692,6 +699,33 @@ def compatibility_audit(
         return render_compatibility_audit_json(report)
     if output_format == "text":
         return render_compatibility_audit_text(report)
+    raise ValueError("output_format must be one of: text, json")
+
+
+def artifact_drift_bisection(
+    surface: str,
+    baseline_path: str | Path,
+    revisions: Sequence[ArtifactRevision],
+    *,
+    baseline_label: str = "baseline",
+    bad_fields: Sequence[str] = (),
+    output_format: str | None = None,
+) -> ArtifactBisectionReport | str:
+    """Run or render a local artifact-drift regression bisection."""
+
+    report = bisect_artifact_drift(
+        surface,
+        baseline_path,
+        tuple(revisions),
+        baseline_label=baseline_label,
+        bad_fields=tuple(bad_fields),
+    )
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_artifact_bisection_json(report)
+    if output_format == "text":
+        return render_artifact_bisection_text(report)
     raise ValueError("output_format must be one of: text, json")
 
 

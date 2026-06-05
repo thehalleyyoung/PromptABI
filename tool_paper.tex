@@ -373,12 +373,13 @@ and Z3 versions as provenance rather than brittle equality requirements, a
 minimized \texttt{promptabi corpus smt-benchmark} line with satisfiable,
 unsatisfiable, timeout-prone, and unsupported prompt-interface obligations
 replayed against the real finite/Z3 solver,
-a CPU-only benchmark suite, documentation, and contribution guidance, plus a
-\texttt{promptabi release compatibility-audit} gate that replays the full
-seed corpus plus provider, grammar, and parser/framework fixtures against
-explicitly pinned candidate versions---abstaining rather than certifying
-unpinned upstream releases---and a \texttt{promptabi release readiness} gate
-that checks version metadata,
+a CPU-only benchmark suite, documentation, and contribution guidance, plus
+\texttt{promptabi release compatibility-audit} and
+\texttt{promptabi release drift-bisect} gates that replay pinned corpus/provider/
+grammar/parser/framework fixtures and binary-search local tokenizer, template,
+schema, provider, or framework artifact histories to identify the first
+contract-regressing revision---abstaining rather than certifying unpinned
+upstream releases---and a \texttt{promptabi release readiness} gate that checks version metadata,
 changelog, README command anchors, stable CLI paths, GitHub Action and release
 workflows, MkDocs navigation, seed-corpus manifests, formal/Z3-backed check
 registration, real-bug replay, the reproducibility bundle, and this paper
