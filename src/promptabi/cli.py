@@ -348,6 +348,12 @@ from .bounded_array_contracts import (
     render_bounded_array_report_text,
     verify_bounded_array_contract,
 )
+from .stop_policy_lemmas import (
+    load_stop_policy,
+    render_stop_policy_lemmas_json,
+    render_stop_policy_lemmas_text,
+    verify_stop_policy_lemmas,
+)
 from .loaders import ArtifactLoader
 from .lockfiles import (
     LockfileError,
@@ -900,6 +906,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     _add_local_summary_argument(bounded_array)
+
+    stop_lemmas = subparsers.add_parser(
+        "stop-policy-lemmas",
+        help="prove prefix/suffix/border lemmas for a stop policy with automaton-certified witnesses",
+    )
+    stop_lemmas.add_argument(
+        "--policy",
+        required=True,
+        help="path to a stop-policy JSON document with a 'stop_sequences' list",
+    )
+    stop_lemmas.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    _add_local_summary_argument(stop_lemmas)
 
     explain = subparsers.add_parser("explain", help="expand one diagnostic into a tutorial-style explanation")
     explain.add_argument(
@@ -3824,6 +3847,36 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "format": args.format,
                 "contract": report.contract,
                 "guarantees": len(report.results),
+                "ok": report.ok,
+            },
+        ):
+            return 2
+        print(output, end="")
+        return exit_code
+
+    if args.command == "stop-policy-lemmas":
+        started_at = time.perf_counter()
+        try:
+            policy = load_stop_policy(str(Path(args.policy).resolve()))
+            report = verify_stop_policy_lemmas(policy)
+        except (OSError, ValueError, KeyError) as exc:
+            print(f"promptabi: cannot prove stop-policy lemmas: {exc}", file=sys.stderr)
+            return 2
+        output = (
+            render_stop_policy_lemmas_json(report)
+            if args.format == "json"
+            else render_stop_policy_lemmas_text(report)
+        )
+        exit_code = 0 if report.ok else 1
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="stop-policy-lemmas",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={
+                "format": args.format,
+                "policy_name": report.policy_name,
+                "stop_sequences": len(report.stop_sequences),
                 "ok": report.ok,
             },
         ):

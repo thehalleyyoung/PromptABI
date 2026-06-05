@@ -1,0 +1,4 @@
+{
+  "name": "clean-chat-stops",
+  "stop_sequences": ["<|im_end|>", "\n\nUser:", "</answer>"]
+}

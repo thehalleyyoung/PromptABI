@@ -1,0 +1,4 @@
+{
+  "name": "shadowed-stops",
+  "stop_sequences": ["</s>", "</s></s>", "STOP", "STOPNOW", "abcab"]
+}
