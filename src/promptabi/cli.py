@@ -360,6 +360,12 @@ from .envelope_map_constraints import (
     render_envelope_report_text,
     verify_envelope_contract,
 )
+from .token_budget_arithmetic import (
+    load_token_budget_contract,
+    render_token_budget_report_json,
+    render_token_budget_report_text,
+    verify_token_budget_contract,
+)
 from .loaders import ArtifactLoader
 from .lockfiles import (
     LockfileError,
@@ -946,6 +952,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     _add_local_summary_argument(envelope_map)
+
+    token_budget = subparsers.add_parser(
+        "token-budget",
+        help="prove linear-arithmetic guarantees over packed token budgets (segments fit the window)",
+    )
+    token_budget.add_argument(
+        "--contract",
+        required=True,
+        help="path to a token-budget contract JSON document",
+    )
+    token_budget.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    _add_local_summary_argument(token_budget)
 
     explain = subparsers.add_parser("explain", help="expand one diagnostic into a tutorial-style explanation")
     explain.add_argument(
@@ -3924,6 +3947,36 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not _write_local_summary_if_requested(
             args.local_summary,
             command="envelope-map",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={
+                "format": args.format,
+                "contract": report.contract,
+                "guarantees": len(report.results),
+                "ok": report.ok,
+            },
+        ):
+            return 2
+        print(output, end="")
+        return exit_code
+
+    if args.command == "token-budget":
+        started_at = time.perf_counter()
+        try:
+            contract = load_token_budget_contract(str(Path(args.contract).resolve()))
+            report = verify_token_budget_contract(contract)
+        except (OSError, ValueError, KeyError) as exc:
+            print(f"promptabi: cannot verify token-budget contract: {exc}", file=sys.stderr)
+            return 2
+        output = (
+            render_token_budget_report_json(report)
+            if args.format == "json"
+            else render_token_budget_report_text(report)
+        )
+        exit_code = 0 if report.ok else 1
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="token-budget",
             exit_code=exit_code,
             started_at=started_at,
             metadata={

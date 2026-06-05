@@ -1127,6 +1127,57 @@ class Gt:
 
 
 @dataclass(frozen=True, slots=True)
+class Sum:
+    """Integer sum of finite expressions (linear arithmetic over the solver)."""
+
+    terms: tuple[Expression, ...]
+
+    def __init__(self, *terms: Expression) -> None:
+        object.__setattr__(self, "terms", tuple(terms))
+
+    def evaluate(self, assignment: Assignment) -> int:
+        total = 0
+        for term in self.terms:
+            value = _finite_int_value(term.evaluate(assignment))
+            if value is None:
+                raise TypeError("sum received a non-integer finite value")
+            total += value
+        return total
+
+    def to_z3(self, context: "_Z3Context") -> Any:
+        operands = [term.to_z3(context) for term in self.terms]
+        if not operands:
+            return context.z3.IntVal(0)
+        accumulator = operands[0]
+        for operand in operands[1:]:
+            accumulator = accumulator + operand
+        return accumulator
+
+    def to_dict(self) -> dict[str, object]:
+        return {"sum": [term.to_dict() for term in self.terms]}
+
+
+@dataclass(frozen=True, slots=True)
+class Mul:
+    """Multiply a finite expression by an integer coefficient."""
+
+    coefficient: int
+    term: Expression
+
+    def evaluate(self, assignment: Assignment) -> int:
+        value = _finite_int_value(self.term.evaluate(assignment))
+        if value is None:
+            raise TypeError("scaled term received a non-integer finite value")
+        return self.coefficient * value
+
+    def to_z3(self, context: "_Z3Context") -> Any:
+        return context.z3.IntVal(self.coefficient) * self.term.to_z3(context)
+
+    def to_dict(self) -> dict[str, object]:
+        return {"mul": [self.coefficient, self.term.to_dict()]}
+
+
+@dataclass(frozen=True, slots=True)
 class And:
     terms: tuple[Expression, ...]
 
@@ -2213,6 +2264,13 @@ def _expression_from_dict(data: Mapping[str, object]) -> Expression:
         )
     if "length" in data:
         return Length(_expression_from_dict(_require_mapping(data["length"], "length term")))
+    if "sum" in data:
+        return Sum(*(_expression_from_dict(_require_mapping(item, "sum term")) for item in _require_sequence(data["sum"], "sum terms")))
+    if "mul" in data:
+        parts = _require_sequence(data["mul"], "mul operands")
+        if len(parts) != 2 or not isinstance(parts[0], int) or isinstance(parts[0], bool):
+            raise ValueError("mul expression must be [integer-coefficient, term]")
+        return Mul(int(parts[0]), _expression_from_dict(_require_mapping(parts[1], "mul term")))
     if "contains" in data:
         parts = _require_sequence(data["contains"], "contains operands")
         if len(parts) != 2:
@@ -2307,6 +2365,13 @@ def _expression_variables(expression: Expression) -> frozenset[str]:
         return frozenset()
     if isinstance(expression, (Eq, Ne, Le, Lt, Ge, Gt)):
         return _expression_variables(expression.left) | _expression_variables(expression.right)
+    if isinstance(expression, Sum):
+        variables: set[str] = set()
+        for term in expression.terms:
+            variables.update(_expression_variables(term))
+        return frozenset(variables)
+    if isinstance(expression, Mul):
+        return _expression_variables(expression.term)
     if isinstance(expression, (And, Or)):
         variables: set[str] = set()
         for term in expression.terms:

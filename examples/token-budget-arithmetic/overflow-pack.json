@@ -1,0 +1,15 @@
+{
+  "name": "overflow-pack",
+  "segments": [
+    {"name": "context", "minimum": 0, "maximum": 900},
+    {"name": "reserved_completion", "minimum": 256, "maximum": 256}
+  ],
+  "assumptions": [
+    {"name": "context-bounded", "left": [{"segment": "context"}], "op": "<=", "right": [{"const": 900}]}
+  ],
+  "guarantees": [
+    {"name": "fits-1024",
+     "left": [{"segment": "context"}, {"segment": "reserved_completion"}],
+     "op": "<=", "right": [{"const": 1024}]}
+  ]
+}

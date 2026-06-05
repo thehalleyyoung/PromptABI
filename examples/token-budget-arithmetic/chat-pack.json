@@ -1,0 +1,21 @@
+{
+  "name": "chat-context-pack",
+  "segments": [
+    {"name": "system", "minimum": 0, "maximum": 200},
+    {"name": "few_shot", "minimum": 0, "maximum": 300},
+    {"name": "user_input", "minimum": 0, "maximum": 400},
+    {"name": "reserved_completion", "minimum": 100, "maximum": 100}
+  ],
+  "assumptions": [
+    {"name": "system-bounded", "left": [{"segment": "system"}], "op": "<=", "right": [{"const": 200}]},
+    {"name": "few-shot-bounded", "left": [{"segment": "few_shot"}], "op": "<=", "right": [{"const": 300}]},
+    {"name": "user-bounded", "left": [{"segment": "user_input"}], "op": "<=", "right": [{"const": 400}]}
+  ],
+  "guarantees": [
+    {"name": "packed-fits-window",
+     "left": [{"segment": "system"}, {"segment": "few_shot"}, {"segment": "user_input"}, {"segment": "reserved_completion"}],
+     "op": "<=", "right": [{"const": 1024}]},
+    {"name": "completion-reserved",
+     "left": [{"segment": "reserved_completion"}], "op": ">=", "right": [{"const": 100}]}
+  ]
+}
