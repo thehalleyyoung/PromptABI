@@ -26,6 +26,7 @@ from .api import (
     render_minimization,
     render_result,
     run_verification,
+    verify_corpora,
 )
 from .bug_reports import BugReport, BugReportError, generate_bug_report
 from .artifacts import (
@@ -102,6 +103,15 @@ from .diagnostics import (
     SourceSpan,
     WitnessStep,
     WitnessTrace,
+)
+from .corpus_verification import (
+    CorpusVerificationCheck,
+    CorpusVerificationError,
+    CorpusVerificationReport,
+    CorpusVerificationThresholds,
+    render_corpus_verification_json,
+    render_corpus_verification_text,
+    run_corpus_verification,
 )
 from .evaluation import (
     DEFAULT_EVALUATION_CORPUS_PATH,
@@ -476,6 +486,10 @@ __all__ = [
     "ConfigError",
     "ConfigDiffInputs",
     "Contains",
+    "CorpusVerificationCheck",
+    "CorpusVerificationError",
+    "CorpusVerificationReport",
+    "CorpusVerificationThresholds",
     "CompatibilityMatrix",
     "CompatibilityMatrixEntry",
     "CompatibilitySurface",
@@ -738,6 +752,8 @@ __all__ = [
     "render_compatibility_matrix",
     "render_compatibility_matrix_json",
     "render_compatibility_matrix_text",
+    "render_corpus_verification_json",
+    "render_corpus_verification_text",
     "render_explanation",
     "render_evaluation_json",
     "render_evaluation_text",
@@ -751,6 +767,8 @@ __all__ = [
     "render_usage_summary_json",
     "render_usage_summary_text",
     "run_verification",
+    "run_corpus_verification",
+    "verify_corpora",
     "run_evaluation",
     "run_mutation_fuzzing",
     "minimize_failure_repro",

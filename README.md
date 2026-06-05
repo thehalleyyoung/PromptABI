@@ -96,6 +96,7 @@ promptabi gallery --format text
 promptabi doctor --config examples/minimal/promptabi.json
 
 # Run labeled benchmarks, mutation fuzzing, and paper artifact regeneration.
+promptabi corpus verify --format text
 promptabi corpus evaluation --format text
 promptabi fuzz mutations --format text
 promptabi paper reproducibility --output-dir paper_artifact --force

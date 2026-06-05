@@ -1509,7 +1509,7 @@ Z3 static contracts & Cross-artifact finite obligations over prompt budgets, sto
 \hline
 Budget checks & Segment accounting, tokenizer-derived content counts, vLLM-style reservations, truncation simulation, required-token overflow, and finding counts. \\
 \hline
-Corpus verification & Six runnable example/fixture configs verified through the public session path with diagnostic and failing-config counts. \\
+Corpus verification & \texttt{promptabi corpus verify} release-gates the seed corpus, structured-schema corpus, provider fixture packs, real-bug benchmark, labeled evaluation, and optional runtime/Python-heap thresholds with explicit nonzero coverage checks. \\
 \hline
 Cold/warm cache & Direct measurement of token-budget analysis before and after per-session cache reuse, including an explicit cache-reused metric. \\
 \hline
@@ -1594,7 +1594,14 @@ runtime, peak traced memory, warning/error witness completeness, Z3-backed solve
 decisiveness, and agreement/mismatch/abstention for differential checks against
 recorded real-library semantics. Runtime and memory are emitted as measurements,
 not golden values, while rule IDs and labels remain deterministic.
-Future experiments can add mutation-based stress cases and version-drift tests.
+The maintainer-facing \texttt{promptabi corpus verify} command composes this
+evaluation with seed-corpus manifests, structured-schema config replays, provider
+fixture replay coverage, real-bug benchmark replay, and optional runtime/Python
+heap thresholds. It fails closed on missing coverage, disappearing expected rule
+IDs, low witness quality, missing differential or Z3-backed coverage, or exceeded
+performance ceilings, making release-blocking soundness and performance
+regressions visible through one JSON or text report. Future experiments can add
+mutation-based stress cases and version-drift tests.
 The deployed seed corpus already supplies the first corpus-wide experimental
 unit: a run can validate ten families, materialize twenty PromptABI artifacts,
 and compare the resulting manifest hash across revisions. Future experiments can

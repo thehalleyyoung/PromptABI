@@ -12,6 +12,13 @@ from .compatibility_matrix import (
     render_compatibility_matrix_json,
     render_compatibility_matrix_text,
 )
+from .corpus_verification import (
+    CorpusVerificationReport,
+    CorpusVerificationThresholds,
+    render_corpus_verification_json,
+    render_corpus_verification_text,
+    run_corpus_verification,
+)
 from .diagnostics import Diagnostic
 from .evaluation import (
     EvaluationReport,
@@ -298,6 +305,23 @@ def evaluate_corpus(
         return render_evaluation_json(report)
     if output_format == "text":
         return render_evaluation_text(report)
+    raise ValueError("output_format must be one of: text, json")
+
+
+def verify_corpora(
+    *,
+    thresholds: CorpusVerificationThresholds | None = None,
+    output_format: str | None = None,
+) -> CorpusVerificationReport | str:
+    """Run the maintainer release gate across all maintained corpora."""
+
+    report = run_corpus_verification(thresholds=thresholds)
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_corpus_verification_json(report)
+    if output_format == "text":
+        return render_corpus_verification_text(report)
     raise ValueError("output_format must be one of: text, json")
 
 

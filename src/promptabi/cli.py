@@ -19,6 +19,13 @@ from .compatibility_matrix import (
     render_compatibility_matrix_json,
     render_compatibility_matrix_text,
 )
+from .corpus_verification import (
+    CorpusVerificationError,
+    CorpusVerificationThresholds,
+    render_corpus_verification_json,
+    render_corpus_verification_text,
+    run_corpus_verification,
+)
 from .diff import diff_config_files
 from .doctor import render_doctor_json, render_doctor_text, run_doctor
 from .explain import ExplainError, explain_diagnostic, render_explanation_json, render_explanation_text
@@ -329,6 +336,56 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         help="write evaluation report to this path instead of stdout",
     )
+    corpus_verify = corpus_subparsers.add_parser(
+        "verify",
+        help="run release-blocking verification across all maintained corpora",
+    )
+    corpus_verify.add_argument("--seed-root", help="seed corpus root (default: repository fixtures/seed_corpus)")
+    corpus_verify.add_argument(
+        "--structured-schema-root",
+        help="structured schema corpus root (default: repository fixtures/structured_schemas)",
+    )
+    corpus_verify.add_argument(
+        "--provider-fixture-root",
+        help="provider fixture pack root (default: repository fixtures/provider_fixture_packs)",
+    )
+    corpus_verify.add_argument(
+        "--real-bug-benchmark",
+        help="real-bug benchmark JSON path (default: repository fixtures/real_bug_benchmarks/benchmark.json)",
+    )
+    corpus_verify.add_argument(
+        "--evaluation-corpus",
+        help="labeled evaluation corpus JSON path (default: repository fixtures/evaluation/labeled_corpus.json)",
+    )
+    corpus_verify.add_argument(
+        "--min-witness-quality",
+        type=float,
+        default=0.75,
+        help="minimum aggregate witness quality required for release (default: 0.75)",
+    )
+    corpus_verify.add_argument(
+        "--min-differential-agreement",
+        type=float,
+        default=0.30,
+        help="minimum differential agreement rate required for release (default: 0.30)",
+    )
+    corpus_verify.add_argument(
+        "--max-runtime-seconds",
+        type=float,
+        help="optional wall-clock runtime ceiling for the whole release gate",
+    )
+    corpus_verify.add_argument(
+        "--max-peak-memory-mib",
+        type=float,
+        help="optional tracemalloc Python-heap ceiling in MiB for the whole release gate",
+    )
+    corpus_verify.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    corpus_verify.add_argument("--output", help="write corpus verification report to this path instead of stdout")
 
     plugins = subparsers.add_parser("plugins", help="inspect PromptABI plugin capabilities")
     plugins.add_argument(
@@ -880,6 +937,51 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"promptabi: cannot write evaluation report: {exc}", file=sys.stderr)
             return 2
         return 0 if all(result.passed for result in report.results) else 1
+
+    if args.command == "corpus" and args.corpus_command == "verify":
+        try:
+            thresholds = CorpusVerificationThresholds(
+                min_witness_quality=args.min_witness_quality,
+                min_differential_agreement=args.min_differential_agreement,
+                max_runtime_seconds=args.max_runtime_seconds,
+                max_peak_memory_bytes=(
+                    int(args.max_peak_memory_mib * 1024 * 1024)
+                    if args.max_peak_memory_mib is not None
+                    else None
+                ),
+            )
+            report = run_corpus_verification(
+                seed_root=args.seed_root,
+                structured_schema_root=args.structured_schema_root,
+                provider_fixture_root=args.provider_fixture_root,
+                real_bug_benchmark_path=args.real_bug_benchmark,
+                evaluation_corpus_path=args.evaluation_corpus,
+                thresholds=thresholds,
+            )
+            output = (
+                render_corpus_verification_json(report)
+                if args.format == "json"
+                else render_corpus_verification_text(report)
+            )
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                print(f"wrote corpus verification report: {args.output} ({len(report.checks)} checks)")
+            else:
+                print(output, end="")
+        except (
+            CorpusVerificationError,
+            EvaluationError,
+            ProviderFixturePackError,
+            RealBugBenchmarkError,
+            SeedCorpusError,
+            StructuredSchemaCorpusError,
+        ) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write corpus verification report: {exc}", file=sys.stderr)
+            return 2
+        return 0 if report.ok else 1
 
     if args.command == "plugins":
         try:
