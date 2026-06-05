@@ -88,6 +88,12 @@ from .evaluation_reproducibility import (
     render_evaluation_reproducibility_json,
     render_evaluation_reproducibility_text,
 )
+from .framework_truncation_conformance import (
+    FrameworkTruncationConformanceReport,
+    build_framework_truncation_conformance_report,
+    render_framework_truncation_conformance_json,
+    render_framework_truncation_conformance_text,
+)
 from .grammar_conformance import (
     GrammarConformanceReport,
     build_grammar_conformance_report,
@@ -388,6 +394,23 @@ def provider_conformance_suite(
         return render_provider_conformance_json(report)
     if output_format == "text":
         return render_provider_conformance_text(report)
+    raise ValueError("output_format must be 'json' or 'text'")
+
+
+def framework_truncation_conformance_suite(
+    path: str | Path | None = None,
+    *,
+    output_format: str | None = None,
+) -> FrameworkTruncationConformanceReport | str:
+    """Replay maintained framework-truncation conformance suites."""
+
+    report = build_framework_truncation_conformance_report(path)
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_framework_truncation_conformance_json(report)
+    if output_format == "text":
+        return render_framework_truncation_conformance_text(report)
     raise ValueError("output_format must be 'json' or 'text'")
 
 
@@ -926,6 +949,7 @@ def verify_corpora(
     seed_root: str | Path | None = None,
     structured_schema_root: str | Path | None = None,
     provider_fixture_root: str | Path | None = None,
+    framework_truncation_conformance_suite_path: str | Path | None = None,
     grammar_conformance_suite_path: str | Path | None = None,
     tokenizer_conformance_suite_path: str | Path | None = None,
     real_bug_benchmark_path: str | Path | None = None,
@@ -940,6 +964,7 @@ def verify_corpora(
         seed_root=seed_root,
         structured_schema_root=structured_schema_root,
         provider_fixture_root=provider_fixture_root,
+        framework_truncation_conformance_suite_path=framework_truncation_conformance_suite_path,
         grammar_conformance_suite_path=grammar_conformance_suite_path,
         tokenizer_conformance_suite_path=tokenizer_conformance_suite_path,
         real_bug_benchmark_path=real_bug_benchmark_path,

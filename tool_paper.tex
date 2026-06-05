@@ -73,6 +73,9 @@ pipeline, a Hugging Face \texttt{tokenizer\_config.json} chat-template parser,
 a tokenizer/config drift checker that compares real tokenizer revisions for
 special-token ID changes, added-token changes, normalizer changes, chat-template
 hashes, BOS/EOS flags and IDs, and generation stop-policy deltas,
+maintained framework-truncation conformance suites for LangChain, LlamaIndex,
+vLLM, Transformers, llama.cpp, LiteLLM, OpenAI-compatible servers, and custom
+RAG policies,
 deterministic PromptABI lockfiles that pin verified artifact hashes, upstream
 revisions, library versions, provider fixture versions, supported-fragment
 metadata, and expected diagnostic fingerprints for CI enforcement, signed
@@ -1544,7 +1547,8 @@ hashes, expected behaviors, license notes, upstream references, pinned fixture
 revisions, and reproducibility notes, and fail deterministically if a required
 family or sentinel contract is missing. The maintainer refresh command extends
 that idea to the full release surface: it refreshes model-artifact manifests,
-structured-schema, provider-fixture, and provider-conformance manifests, the real-bug benchmark manifest,
+structured-schema, provider-fixture, provider-conformance, and
+framework-truncation-conformance manifests, the real-bug benchmark manifest,
 portable expected diagnostics with repository-relative spans, corpus diffs against
 a previous snapshot, and concise release notes. That turns the corpus from a
 collection of files into an auditable experimental input and release artifact.
@@ -1824,6 +1828,12 @@ token span, kept/dropped decision, truncation boundary, and survival label. This
 visualization is visible in human CLI text and is also emitted as the structured
 \texttt{token\_budget\_visualization} property in JSON and SARIF, so CI systems can
 annotate exactly which prompt fields disappear without scraping prose. The
+\texttt{promptabi corpus framework-truncation-conformance} suite now release-gates
+that behavior over maintained fixtures for LangChain, LlamaIndex, vLLM,
+Transformers, llama.cpp, LiteLLM, OpenAI-compatible servers, and custom RAG
+policies, replaying expected kept/dropped sets, selected strategies,
+must-survive proof status, and emitted rule IDs through the same live budget
+analyzer used by application configs. The
 \texttt{examples/token-budget} workflow exercises this through the real CLI: a
 vLLM-style budget reserves output, tool, generation-prompt, and special-token
 overhead, then fails because required system and user segments exceed the modeled
@@ -1985,13 +1995,15 @@ Z3 static contracts & Declarative interface rules for allowed roles, required re
 \hline
 Budget checks & Segment accounting, tokenizer-derived content counts, vLLM-style reservations, truncation simulation, required-token overflow, and finding counts. \\
 \hline
-Corpus verification & \texttt{promptabi corpus verify} release-gates seed, structured-schema, provider fixture and provider-conformance suites, real-bug, eval, adversarial, tokenizer/grammar conformance, labeled evaluation, minimized SMT, and optional runtime/Python-heap thresholds with explicit nonzero coverage checks. \\
+Corpus verification & \texttt{promptabi corpus verify} release-gates seed, structured-schema, provider fixture, provider-conformance, framework-truncation-conformance, real-bug, eval, adversarial, tokenizer/grammar conformance, labeled evaluation, minimized SMT, and optional runtime/Python-heap thresholds with explicit nonzero coverage checks. \\
 \hline
 Benchmark leaderboard & \texttt{promptabi corpus leaderboard} combines labeled-evaluation precision/recall/F1 and abstentions, deterministic CPU benchmark runtime, Python heap peaks, serialized diagnostic witness-byte summaries, and minimized-SMT replay pass rates into a version-labeled release leaderboard. \\
 \hline
 Minimized SMT benchmark & \texttt{promptabi corpus smt-benchmark} replays satisfiable, unsatisfiable, timeout-prone, and unsupported reduced prompt-interface formulas against the real finite/Z3 solver and emits stable query hashes, checked-assignment counts, conclusions, and manifest hashes. \\
 \hline
 Provider conformance & \texttt{promptabi corpus provider-conformance} proves the recorded provider packs exercise tool-call streaming, true parallel tool calls, JSON-mode fields, response formats, stop handling, error envelopes, and context-window limits across OpenAI, Anthropic, Gemini, Bedrock, LiteLLM, and vLLM-compatible fixtures. \\
+\hline
+Framework truncation conformance & \texttt{promptabi corpus framework-truncation-conformance} replays LangChain, LlamaIndex, vLLM, Transformers, llama.cpp, LiteLLM, OpenAI-compatible, and custom-RAG budget fixtures through the real token-budget analyzer, checking selected strategies, kept/dropped segment sets, must-survive status, and emitted rule IDs. \\
 \hline
 Maintainer refresh & \texttt{promptabi maintain refresh} regenerates model/corpus/provider manifests, expected diagnostic baselines with portable fingerprints, corpus diffs, and release notes from real repository configs. \\
 \hline

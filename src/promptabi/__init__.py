@@ -27,6 +27,7 @@ from .api import (
     evaluate_corpus,
     evaluation_reproducibility,
     explain_result,
+    framework_truncation_conformance_suite,
     fuzz_mutations,
     generate_adversarial_cases,
     grammar_conformance_suite,
@@ -557,6 +558,19 @@ from .grammar_conformance import (
     render_grammar_conformance_json,
     render_grammar_conformance_text,
     write_grammar_conformance_manifest,
+)
+from .framework_truncation_conformance import (
+    DEFAULT_FRAMEWORK_TRUNCATION_CONFORMANCE_SUITE,
+    FRAMEWORK_TRUNCATION_CONFORMANCE_VERSION,
+    REQUIRED_FRAMEWORK_TRUNCATION_FAMILIES,
+    FrameworkTruncationConformanceCaseReport,
+    FrameworkTruncationConformanceError,
+    FrameworkTruncationConformanceReport,
+    FrameworkTruncationCoverage,
+    build_framework_truncation_conformance_report,
+    render_framework_truncation_conformance_json,
+    render_framework_truncation_conformance_text,
+    write_framework_truncation_conformance_manifest,
 )
 from .tokenizer_conformance import (
     DEFAULT_TOKENIZER_CONFORMANCE_SUITE,

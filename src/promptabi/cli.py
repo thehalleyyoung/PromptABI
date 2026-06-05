@@ -155,6 +155,13 @@ from .evaluation_fixture_packs import (
     write_evaluation_fixture_pack_manifest,
 )
 from .first_party_plugins import create_first_party_plugin_registry, render_plugin_capabilities
+from .framework_truncation_conformance import (
+    FrameworkTruncationConformanceError,
+    build_framework_truncation_conformance_report,
+    render_framework_truncation_conformance_json,
+    render_framework_truncation_conformance_text,
+    write_framework_truncation_conformance_manifest,
+)
 from .formal import SolverReplayFile, render_solver_replay_json, render_solver_replay_text
 from .github_action import GitHubActionError, run_github_action
 from .gallery import GalleryError, build_gallery, render_gallery_json, render_gallery_text
@@ -1075,6 +1082,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: json)",
     )
     provider_conformance.add_argument("--output", help="write provider conformance manifest to this path")
+    framework_truncation_conformance = corpus_subparsers.add_parser(
+        "framework-truncation-conformance",
+        help="replay maintained framework-truncation conformance suites",
+    )
+    framework_truncation_conformance.add_argument(
+        "--suite",
+        help=(
+            "framework truncation conformance suite JSON path "
+            "(default: repository fixtures/framework_truncation_conformance/suite.json)"
+        ),
+    )
+    framework_truncation_conformance.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="json",
+        help="output format (default: json)",
+    )
+    framework_truncation_conformance.add_argument(
+        "--output",
+        help="write framework truncation conformance manifest to this path",
+    )
     real_bug_benchmark = corpus_subparsers.add_parser(
         "real-bug-benchmark",
         help="validate and replay the real-bug benchmark suite, then emit its manifest",
@@ -1265,6 +1293,13 @@ def build_parser() -> argparse.ArgumentParser:
     corpus_verify.add_argument(
         "--provider-fixture-root",
         help="provider fixture pack root (default: repository fixtures/provider_fixture_packs)",
+    )
+    corpus_verify.add_argument(
+        "--framework-truncation-conformance-suite",
+        help=(
+            "framework truncation conformance suite JSON path "
+            "(default: repository fixtures/framework_truncation_conformance/suite.json)"
+        ),
     )
     corpus_verify.add_argument(
         "--grammar-conformance-suite",
@@ -3086,6 +3121,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         return 0 if report.all_cases_passed else 1
 
+    if args.command == "corpus" and args.corpus_command == "framework-truncation-conformance":
+        try:
+            report = build_framework_truncation_conformance_report(args.suite)
+            output = (
+                render_framework_truncation_conformance_json(report)
+                if args.format == "json"
+                else render_framework_truncation_conformance_text(report)
+            )
+            if args.output:
+                if args.format == "json":
+                    write_framework_truncation_conformance_manifest(args.output, suite_path=args.suite)
+                else:
+                    Path(args.output).write_text(output, encoding="utf-8")
+                print(f"wrote framework truncation conformance manifest: {args.output} ({report.case_count} cases)")
+            else:
+                print(output, end="")
+        except (FrameworkTruncationConformanceError, OSError, ValueError) as exc:
+            print(f"promptabi: cannot build framework truncation conformance suite: {exc}", file=sys.stderr)
+            return 2
+        return 0 if report.all_cases_passed else 1
+
     if args.command == "corpus" and args.corpus_command == "real-bug-benchmark":
         try:
             if args.output:
@@ -3317,6 +3373,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 seed_root=args.seed_root,
                 structured_schema_root=args.structured_schema_root,
                 provider_fixture_root=args.provider_fixture_root,
+                framework_truncation_conformance_suite_path=args.framework_truncation_conformance_suite,
                 grammar_conformance_suite_path=args.grammar_conformance_suite,
                 tokenizer_conformance_suite_path=args.tokenizer_conformance_suite,
                 real_bug_benchmark_path=args.real_bug_benchmark,

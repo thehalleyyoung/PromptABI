@@ -1,0 +1,181 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "langchain-conversation-buffer-window",
+      "framework": "langchain",
+      "policy": {
+        "framework": "langchain",
+        "max_context_tokens": 50
+      },
+      "segments": [
+        {"name": "system-policy", "role": "system", "required": true, "token_count": 18},
+        {"name": "early-user-task", "role": "user", "required": true, "token_count": 26},
+        {"name": "latest-user-task", "role": "user", "required": true, "token_count": 20}
+      ],
+      "expected": {
+        "strategy": "oldest-message",
+        "kept": ["system-policy", "latest-user-task"],
+        "dropped": ["early-user-task"],
+        "must_survive_status": "violated",
+        "rule_ids": ["token-budget-required-overflow", "token-budget-total-overflow", "token-budget-required-truncated"]
+      },
+      "evidence": "LangChain-style rolling memory preserves the system segment but evicts oldest conversational turns first."
+    },
+    {
+      "id": "llamaindex-chat-memory",
+      "framework": "llamaindex",
+      "policy": {
+        "framework": "llamaindex",
+        "max_context_tokens": 48
+      },
+      "segments": [
+        {"name": "system-policy", "role": "system", "required": true, "token_count": 16},
+        {"name": "retrieved-summary", "role": "retrieval", "required": false, "token_count": 18},
+        {"name": "old-question", "role": "user", "required": false, "token_count": 14},
+        {"name": "current-question", "role": "user", "required": true, "token_count": 18}
+      ],
+      "expected": {
+        "strategy": "oldest-message",
+        "kept": ["system-policy", "old-question", "current-question"],
+        "dropped": ["retrieved-summary"],
+        "must_survive_status": "proven",
+        "rule_ids": ["token-budget-total-overflow", "token-budget-framework-truncation"]
+      },
+      "evidence": "LlamaIndex chat-memory behavior is modeled as oldest non-system message eviction under a bounded token limit."
+    },
+    {
+      "id": "vllm-left-truncation",
+      "framework": "vllm",
+      "policy": {
+        "framework": "vllm",
+        "max_context_tokens": 45
+      },
+      "segments": [
+        {"name": "z-first", "role": "user", "required": false, "token_count": 25},
+        {"name": "a-second", "role": "user", "required": true, "token_count": 20},
+        {"name": "m-third", "role": "assistant", "required": true, "token_count": 20}
+      ],
+      "expected": {
+        "strategy": "left",
+        "kept": ["a-second", "m-third"],
+        "dropped": ["z-first"],
+        "must_survive_status": "proven",
+        "rule_ids": ["token-budget-total-overflow", "token-budget-framework-truncation"]
+      },
+      "evidence": "vLLM/OpenAI-compatible prompt truncation removes the leftmost input tokens in declaration order."
+    },
+    {
+      "id": "transformers-no-truncation",
+      "framework": "transformers",
+      "policy": {
+        "framework": "transformers",
+        "max_context_tokens": 40
+      },
+      "segments": [
+        {"name": "system-policy", "role": "system", "required": true, "token_count": 15},
+        {"name": "user-task", "role": "user", "required": true, "token_count": 16},
+        {"name": "few-shot", "role": "assistant", "required": false, "token_count": 18}
+      ],
+      "expected": {
+        "strategy": "left",
+        "kept": ["user-task", "few-shot"],
+        "dropped": ["system-policy"],
+        "must_survive_status": "violated",
+        "rule_ids": ["token-budget-total-overflow", "token-budget-required-truncated"]
+      },
+      "evidence": "Transformers-style generation is normalized to left truncation by default, exposing required system-prefix loss."
+    },
+    {
+      "id": "llamacpp-right-truncation",
+      "framework": "llama.cpp",
+      "policy": {
+        "framework": "llama.cpp",
+        "strategy": "right",
+        "max_context_tokens": 46
+      },
+      "segments": [
+        {"name": "system-policy", "role": "system", "required": true, "token_count": 14},
+        {"name": "conversation", "role": "user", "required": true, "token_count": 18},
+        {"name": "long-tail", "role": "assistant", "required": false, "token_count": 22}
+      ],
+      "expected": {
+        "strategy": "right",
+        "kept": ["system-policy", "conversation"],
+        "dropped": ["long-tail"],
+        "must_survive_status": "proven",
+        "rule_ids": ["token-budget-total-overflow", "token-budget-framework-truncation"]
+      },
+      "evidence": "llama.cpp context management can be represented by right-tail trimming for generated/request suffix overflow checks."
+    },
+    {
+      "id": "litellm-provider-router",
+      "framework": "litellm",
+      "policy": {
+        "framework": "litellm",
+        "preserve_system": true,
+        "max_context_tokens": 42
+      },
+      "segments": [
+        {"name": "router-policy", "role": "system", "required": true, "token_count": 12},
+        {"name": "old-user", "role": "user", "required": false, "token_count": 20},
+        {"name": "latest-user", "role": "user", "required": true, "token_count": 18}
+      ],
+      "expected": {
+        "strategy": "left",
+        "kept": ["router-policy", "latest-user"],
+        "dropped": ["old-user"],
+        "must_survive_status": "proven",
+        "rule_ids": ["token-budget-total-overflow", "token-budget-framework-truncation"]
+      },
+      "evidence": "LiteLLM/OpenAI-compatible routing is checked as left truncation while preserving system/router policy."
+    },
+    {
+      "id": "openai-compatible-server",
+      "framework": "openai-compatible",
+      "policy": {
+        "framework": "openai-compatible",
+        "preserve_system": true,
+        "max_context_tokens": 44
+      },
+      "segments": [
+        {"name": "system-policy", "role": "system", "required": true, "token_count": 13},
+        {"name": "old-context", "role": "user", "required": false, "token_count": 22},
+        {"name": "current-user", "role": "user", "required": true, "token_count": 17}
+      ],
+      "expected": {
+        "strategy": "left",
+        "kept": ["system-policy", "current-user"],
+        "dropped": ["old-context"],
+        "must_survive_status": "proven",
+        "rule_ids": ["token-budget-total-overflow", "token-budget-framework-truncation"]
+      },
+      "evidence": "OpenAI-compatible servers share left-truncation request-envelope behavior for bounded conformance."
+    },
+    {
+      "id": "custom-rag-priority",
+      "framework": "custom-rag",
+      "policy": {
+        "framework": "custom-rag-pipeline",
+        "strategy": "priority",
+        "drop_roles": ["retrieval"],
+        "preserve_system": true,
+        "max_context_tokens": 55
+      },
+      "segments": [
+        {"name": "system-policy", "role": "system", "required": true, "token_count": 15},
+        {"name": "retrieval-a", "role": "retrieval", "required": false, "token_count": 30},
+        {"name": "retrieval-b", "role": "retrieval", "required": false, "token_count": 20},
+        {"name": "question", "role": "user", "required": true, "token_count": 14}
+      ],
+      "expected": {
+        "strategy": "priority",
+        "kept": ["system-policy", "retrieval-b", "question"],
+        "dropped": ["retrieval-a"],
+        "must_survive_status": "proven",
+        "rule_ids": ["token-budget-total-overflow", "token-budget-framework-truncation"]
+      },
+      "evidence": "Custom RAG policy drops retrieval context before required prompt regions."
+    }
+  ]
+}
