@@ -135,9 +135,12 @@ model used by RAG checks, plus an agent-framework adapter that turns
 LangChain/LlamaIndex-style runtime prompt assembly specs into ordinary PromptABI
 configs and proves the selected reusable prompt pack still matches dynamic
 segments, tools, stops, and provider family choices,
-a curated \texttt{promptabi gallery} that reruns real pinned configurations,
-emits compatibility badges, summarizes actual solver backends rather than merely
-advertised solver capability, and explains abstentions plus accepted risks,
+a curated \texttt{promptabi gallery} that reruns pinned configurations, emits
+compatibility badges, summarizes actual solver backends, and explains
+abstentions plus accepted risks, plus a \texttt{promptabi conference-demo}
+runner that proves four stage moments---pre-deployment, pre-fine-tuning,
+pre-eval-publication, and pre-provider-migration---catch real buggy configs and
+verify paired fixed configs,
 a \texttt{promptabi doctor} preflight that inspects Python and PromptABI version
 metadata, optional tokenizer/grammar/Z3 dependencies, a live Z3 smoke query,
 cache writability, first-party and requested plugin registries, supported backend
@@ -754,7 +757,7 @@ The repository layout is designed to scale:
 \hline
 \texttt{benchmarks} and \texttt{promptabi fuzz} & CPU-only benchmark entrypoints plus deterministic mutation fuzzing for tokenizer analysis, symbolic template execution, grammar products, stop checks, SMT contracts, budget modeling, corpus verification, cache reuse, and cross-artifact violation discovery. \\
 \hline
-\texttt{promptabi launch-assets} & Evidence-backed launch material: comparison table, architecture diagram, demo GIF source script, SVG benchmark chart, public bug gallery, positioning copy, and a manifest generated from real evaluation, benchmark, beta, and real-bug replay code paths. \\
+\texttt{promptabi launch-assets} / \texttt{conference-demo} & Evidence-backed launch material plus stage-ready demos for deploy, fine-tuning, eval-publication, and provider-migration gates, all generated from real verification, benchmark, beta, and real-bug replay code paths. \\
 \hline
 \texttt{docs} & MkDocs-ready documentation for architecture, check families, artifact modeling, public API stability, integration guides for major LLM stacks, the formal transducer/SMT basis, tokenizer-template composition, role boundaries, stop reachability, grammar emptiness, must-survive budgets, and the local structural security model. \\
 \hline

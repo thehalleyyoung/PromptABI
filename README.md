@@ -131,8 +131,9 @@ python -c "from promptabi import visualize_tokenization; from promptabi.tokenize
 # Share CI evidence without leaking prompt text: keep offsets/token IDs, hash witness payloads.
 promptabi verify --config examples/role-boundary/unsafe.promptabi.json --witness-privacy hash-only --format json --fail-on never
 
-# Show pinned, verified real-world-style configs with proof/risk badges.
+# Show pinned proof/risk badges and four stage-ready bug-catching demos.
 promptabi gallery --format text
+promptabi conference-demo --format text
 
 # Diagnose the local environment and emit editor-ready inline diagnostics.
 promptabi doctor --config examples/minimal/promptabi.json

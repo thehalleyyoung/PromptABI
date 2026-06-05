@@ -108,6 +108,12 @@ from .compatibility_matrix import (
     render_compatibility_matrix_json,
     render_compatibility_matrix_text,
 )
+from .conference_demos import (
+    ConferenceDemoError,
+    render_conference_demo_json,
+    render_conference_demo_text,
+    run_conference_demos,
+)
 from .compatibility_audit import (
     CompatibilityAuditError,
     render_compatibility_audit_json,
@@ -1558,6 +1564,25 @@ def build_parser() -> argparse.ArgumentParser:
     gallery.add_argument(
         "--output",
         help="write gallery report to this path instead of stdout",
+    )
+
+    conference_demo = subparsers.add_parser(
+        "conference-demo",
+        help="replay stage-ready demos that catch bugs before deploy, fine-tune, eval, and migration",
+    )
+    conference_demo.add_argument(
+        "--root",
+        help="repository root containing examples/ (default: installed PromptABI repository root)",
+    )
+    conference_demo.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    conference_demo.add_argument(
+        "--output",
+        help="write conference-demo report to this path instead of stdout",
     )
 
     launch_assets = subparsers.add_parser(
@@ -3648,6 +3673,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         except OSError as exc:
             print(f"promptabi: cannot write gallery report: {exc}", file=sys.stderr)
+            return 2
+        return 0 if report.ok else 1
+
+    if args.command == "conference-demo":
+        try:
+            report = run_conference_demos(args.root)
+            output = render_conference_demo_json(report) if args.format == "json" else render_conference_demo_text(report)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                print(f"wrote conference-demo report: {args.output} ({len(report.cases)} scenarios)")
+            else:
+                print(output, end="")
+        except (ConferenceDemoError, ConfigError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write conference-demo report: {exc}", file=sys.stderr)
             return 2
         return 0 if report.ok else 1
 
