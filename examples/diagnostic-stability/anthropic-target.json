@@ -1,0 +1,21 @@
+{
+  "provider": "anthropic",
+  "request_shape": {"messages": "array", "tools": "array"},
+  "response_shape": {"content": "array"},
+  "streaming_deltas": {"content_block_delta": "object"},
+  "migration_compatibility": {
+    "provider_family": "anthropic",
+    "request": {"required_fields": ["messages", "model", "tools"]},
+    "response": {"required_fields": ["content", "stop_reason", "usage"]},
+    "tools": {
+      "argument_encoding": "json-object",
+      "id_path": "content[].id",
+      "supports_parallel_tool_calls": true
+    },
+    "streaming": {"emits_argument_fragments": false},
+    "stops": {"sequences": []},
+    "limits": {"max_input_tokens": 200000, "max_output_tokens": 4096},
+    "structured_outputs": {"modes": ["tool_schema"]},
+    "errors": {"code_path": "error.type", "rate_limit_path": "error.type"}
+  }
+}

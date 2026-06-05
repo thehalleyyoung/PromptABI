@@ -337,6 +337,11 @@ from .prompt_pack_modules import (
     render_prompt_pack_modules_text,
     resolve_prompt_pack_modules,
 )
+from .diagnostic_stability import (
+    prove_diagnostic_stability_under_formatting,
+    render_diagnostic_stability_json,
+    render_diagnostic_stability_text,
+)
 from .loaders import ArtifactLoader
 from .lockfiles import (
     LockfileError,
@@ -856,6 +861,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     _add_local_summary_argument(prompt_pack_modules)
+
+    diagnostic_stability = subparsers.add_parser(
+        "diagnostic-stability",
+        help="prove diagnostics are invariant under semantics-preserving reformatting of artifacts",
+    )
+    diagnostic_stability.add_argument(
+        "--config",
+        help="path to a PromptABI JSON config; defaults to discovering promptabi.json upward from cwd",
+    )
+    diagnostic_stability.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    _add_local_summary_argument(diagnostic_stability)
 
     explain = subparsers.add_parser("explain", help="expand one diagnostic into a tutorial-style explanation")
     explain.add_argument(
@@ -3721,6 +3742,35 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "format": args.format,
                 "modules": len(graph.modules),
                 "findings": len(graph.findings),
+            },
+        ):
+            return 2
+        print(output, end="")
+        return exit_code
+
+    if args.command == "diagnostic-stability":
+        started_at = time.perf_counter()
+        try:
+            config_path = Path(args.config).resolve() if args.config else discover_config()
+            report = prove_diagnostic_stability_under_formatting(config_path)
+        except (ConfigError, OSError, ValueError) as exc:
+            print(f"promptabi: cannot prove diagnostic stability: {exc}", file=sys.stderr)
+            return 2
+        output = (
+            render_diagnostic_stability_json(report)
+            if args.format == "json"
+            else render_diagnostic_stability_text(report)
+        )
+        exit_code = 0 if report.ok else 1
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="diagnostic-stability",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={
+                "format": args.format,
+                "baseline_count": report.baseline_count,
+                "variants": len(report.variants),
             },
         ):
             return 2
