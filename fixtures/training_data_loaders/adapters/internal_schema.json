@@ -1,0 +1,12 @@
+{
+  "sample_count": 2,
+  "schema": {
+    "columns": [
+      "tenant_hash",
+      "messages",
+      "assistant_target_sha256",
+      "loss_mask_sha256"
+    ],
+    "version": "internal-chat-v3"
+  }
+}

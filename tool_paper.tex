@@ -81,7 +81,9 @@ roles, malformed tool calls, invalid JSON targets, and unreachable stop examples
 synthetic-data generator preflight checks that reject finite generator plans able
 to emit forbidden roles, invalid schema outputs, malformed tool-call envelopes,
 or truncation cases that drop required regions before any generated row is
-admitted, training-to-serving bridge facts, and corpus-metadata drift checks that compare
+admitted, offline data-loader adapter fixtures for Hugging Face Datasets,
+JSONL, Parquet metadata, Axolotl, LLaMA-Factory, TRL, OpenRLHF, and internal
+formats, training-to-serving bridge facts, and corpus-metadata drift checks that compare
 training baselines against model-card facts, tokenizer/template pins, and serving
 lockfile summaries while keeping witnesses structural or hash-only rather than
 raw private dataset material,
@@ -715,7 +717,13 @@ canonicalization, loss-mask construction, packing windows, and pinned
 chat-template versions. Preference-pair contracts now include branch-level prompt
 hashes, response spans, tokenizer pins, mask policies, truncation flags, and
 packed-example IDs, which is enough to replay RLHF/DPO data-preparation failures
-without materializing private examples. It also provides \texttt{ArtifactRef},
+without materializing private examples. Training manifests can also carry
+offline data-loader adapter fixture summaries: PromptABI reads local Hugging Face
+Datasets metadata, JSONL samples, Parquet metadata stubs, Axolotl configs,
+LLaMA-Factory dataset-info files, TRL and OpenRLHF preference rows, and internal
+redacted schemas, then checks declared fields, splits, counts, and
+non-sensitive fingerprints before treating the loader surface as covered. It
+also provides \texttt{ArtifactRef},
 \texttt{SourceSpan}, \texttt{WitnessTrace}, \texttt{Diagnostic},
 \texttt{VerificationConfig}, \texttt{VerificationSession}, and
 \texttt{VerificationResult}. The API surface is now governed by a generated
@@ -1912,8 +1920,10 @@ The evaluation answers five questions.
 The deployed setup includes \texttt{fixtures/evaluation/labeled\_corpus.json}
 and \texttt{promptabi corpus evaluation}, which executes real configs plus every
 replayable real-bug benchmark case and reports precision/recall/F1 over an
-explicit per-case rule universe. The training slice includes RLHF/DPO fixtures
-and the SFT quickstart; clean manifests prove safety, while defective manifests
+explicit per-case rule universe. The training slice includes RLHF/DPO fixtures,
+the SFT quickstart, and a multi-adapter data-loader fixture pack covering
+Hugging Face Datasets, JSONL, Parquet metadata, Axolotl, LLaMA-Factory, TRL,
+OpenRLHF, and internal redacted schemas; clean manifests prove safety, while defective manifests
 trigger static counterexamples for source leakage, prompt-hash, mask-policy,
 truncation, role-layout, response-start, packing-boundary, and synthetic
 generator role/schema/tool/truncation bugs. The same

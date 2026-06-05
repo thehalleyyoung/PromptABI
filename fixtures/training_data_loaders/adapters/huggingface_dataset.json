@@ -1,0 +1,16 @@
+{
+  "builder_name": "json",
+  "config_name": "chat_sft",
+  "dataset_name": "promptabi/offline-chat-fixture",
+  "features": {
+    "id": "string",
+    "messages": "list<struct<role:string,content:string>>"
+  },
+  "fingerprint": "sha256:hf-loader-fixture",
+  "splits": {
+    "train": {
+      "num_bytes": 512,
+      "num_examples": 2
+    }
+  }
+}

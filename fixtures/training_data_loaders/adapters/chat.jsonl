@@ -1,0 +1,2 @@
+{"id":"jsonl-0001","messages":[{"role":"system","content":"Follow policy."},{"role":"user","content":"Summarize."},{"role":"assistant","content":"Done."}]}
+{"id":"jsonl-0002","messages":[{"role":"user","content":"Classify."},{"role":"assistant","content":"label"}]}

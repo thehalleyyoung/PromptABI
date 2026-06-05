@@ -1,0 +1,2 @@
+{"prompt":"<s>[INST] Prefer concise answers. [/INST]","chosen":"A short answer.","rejected":"A long, off-policy answer."}
+{"prompt":"<s>[INST] Emit JSON. [/INST]","chosen":"{\"ok\":true}","rejected":"not json"}

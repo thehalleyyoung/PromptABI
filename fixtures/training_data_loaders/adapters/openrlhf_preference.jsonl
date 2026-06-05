@@ -1,0 +1,2 @@
+{"prompt":"Question","chosen":"safe completion","rejected":"unsafe completion","chosen_score":1.0,"rejected_score":0.0}
+{"prompt":"Tool prompt","chosen":"{\"tool\":\"lookup\"}","rejected":"<tool_call>broken","chosen_score":0.8,"rejected_score":0.1}

@@ -1,0 +1,12 @@
+{
+  "checks": [
+    "training-invalid-interface"
+  ],
+  "name": "training-data-loader-adapter-fixtures",
+  "artifacts": {
+    "training-loaders": {
+      "kind": "training-manifest",
+      "path": "training_loaders.training-manifest.json"
+    }
+  }
+}

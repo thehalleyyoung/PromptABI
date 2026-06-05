@@ -1,0 +1,14 @@
+{
+  "datasets": [
+    {
+      "conversation": "sharegpt",
+      "path": "local/offline-chat.jsonl",
+      "type": "sharegpt"
+    }
+  ],
+  "field_mapping": {
+    "messages": "conversations"
+  },
+  "sample_count": 2,
+  "sequence_len": 2048
+}

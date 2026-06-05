@@ -34,6 +34,7 @@ from .role_boundaries import build_role_boundary_model
 from .source import build_json_source_map
 from .stop_policies import StopPolicyParseError, parse_stop_policy_config
 from .tool_schemas import ToolSchemaIngestionError, ingest_tool_schema_mapping
+from .training_data_loaders import DataLoaderAdapterError, analyze_data_loader_adapters
 
 
 _SHA256_RE = re.compile(r"^[0-9a-fA-F]{64}$")
@@ -669,16 +670,17 @@ class ArtifactLoader:
             )
         try:
             source_map = build_json_source_map(text, path)
+            loader_report = analyze_data_loader_adapters(raw, base_dir=path.parent)
             parsed = artifact_from_config(
                 artifact.name,
                 {**raw, "kind": ArtifactKind.TRAINING_MANIFEST.value, "path": str(path)},
                 base_dir=Path("."),
             )
-        except ValueError as exc:
+        except (DataLoaderAdapterError, ValueError) as exc:
             raise ArtifactLoadError(
                 rule_id="artifact-load-failed",
                 message=f"training-manifest artifact '{artifact.name}' could not be parsed",
-                suggestion="Declare supervised/preference datasets, role labels, loss masks, packing windows, and chat-template versions with supported PromptABI fields.",
+                suggestion="Declare supervised/preference datasets, data-loader adapters, role labels, loss masks, packing windows, and chat-template versions with supported PromptABI fields.",
                 steps=(("parse training manifest fields", str(path), str(exc)),),
             ) from exc
         loaded = self._load_file(artifact, path, source_type="training-manifest")
@@ -691,7 +693,7 @@ class ArtifactLoader:
                 metadata=_merge_metadata(artifact.metadata, parsed.metadata),
                 source_span=artifact.source_span,
             )
-        metadata = _training_manifest_metadata(parsed_artifact)
+        metadata = _merge_metadata(_training_manifest_metadata(parsed_artifact), loader_report.to_metadata())
         return LoadedArtifact(
             artifact=parsed_artifact,
             source_type="training-manifest",

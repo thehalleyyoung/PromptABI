@@ -1,0 +1,197 @@
+{
+  "dataset_format": "multi-loader-fixture",
+  "datasets": [
+    {
+      "content_fields": [
+        "messages"
+      ],
+      "example_count": 2,
+      "format": "jsonl",
+      "kind": "supervised",
+      "name": "jsonl-chat",
+      "path": "adapters/chat.jsonl",
+      "split": "train"
+    },
+    {
+      "content_fields": [
+        "prompt"
+      ],
+      "example_count": 2,
+      "format": "trl-dpo-jsonl",
+      "kind": "preference",
+      "name": "trl-dpo",
+      "path": "adapters/trl_dpo.jsonl",
+      "preference_fields": [
+        "chosen",
+        "rejected"
+      ]
+    }
+  ],
+  "loss_mask_policy": {
+    "ignored_roles": [
+      "system",
+      "user"
+    ],
+    "strategy": "assistant-only",
+    "target_roles": [
+      "assistant"
+    ]
+  },
+  "metadata": {
+    "data_loader_adapters": [
+      {
+        "content_fields": [
+          "messages"
+        ],
+        "example_count": 2,
+        "family": "huggingface-datasets",
+        "fingerprint": "sha256:hf-loader-fixture",
+        "format": "hf-datasets",
+        "kind": "supervised",
+        "name": "hf-datasets-chat",
+        "path": "adapters/huggingface_dataset.json",
+        "split": "train"
+      },
+      {
+        "content_fields": [
+          "messages"
+        ],
+        "example_count": 2,
+        "family": "jsonl",
+        "format": "chat-jsonl",
+        "kind": "supervised",
+        "name": "jsonl-chat",
+        "path": "adapters/chat.jsonl"
+      },
+      {
+        "content_fields": [
+          "messages"
+        ],
+        "example_count": 2,
+        "family": "parquet-metadata",
+        "format": "parquet",
+        "kind": "supervised",
+        "name": "parquet-chat-metadata",
+        "path": "adapters/parquet_metadata.json"
+      },
+      {
+        "content_fields": [
+          "messages"
+        ],
+        "example_count": 2,
+        "family": "axolotl",
+        "format": "axolotl-sharegpt",
+        "kind": "supervised",
+        "name": "axolotl-sharegpt",
+        "path": "adapters/axolotl_config.json"
+      },
+      {
+        "content_fields": [
+          "messages"
+        ],
+        "example_count": 2,
+        "family": "llama-factory",
+        "format": "llama-factory-dataset-info",
+        "kind": "supervised",
+        "name": "llama-factory-sharegpt",
+        "path": "adapters/llama_factory_dataset_info.json"
+      },
+      {
+        "content_fields": [
+          "prompt"
+        ],
+        "example_count": 2,
+        "family": "trl",
+        "format": "trl-dpo-jsonl",
+        "kind": "preference",
+        "name": "trl-dpo",
+        "path": "adapters/trl_dpo.jsonl",
+        "preference_fields": [
+          "chosen",
+          "rejected"
+        ]
+      },
+      {
+        "content_fields": [
+          "prompt"
+        ],
+        "example_count": 2,
+        "family": "openrlhf",
+        "format": "openrlhf-preference-jsonl",
+        "kind": "preference",
+        "name": "openrlhf-preference",
+        "path": "adapters/openrlhf_preference.jsonl",
+        "preference_fields": [
+          "chosen",
+          "rejected"
+        ]
+      },
+      {
+        "content_fields": [
+          "messages",
+          "assistant_target_sha256",
+          "loss_mask_sha256"
+        ],
+        "example_count": 2,
+        "family": "internal",
+        "format": "internal-json",
+        "kind": "supervised",
+        "name": "internal-redacted-chat",
+        "path": "adapters/internal_schema.json"
+      }
+    ],
+    "training_interface_contract": {
+      "allowed_roles": [
+        "system",
+        "user",
+        "assistant"
+      ],
+      "json_outputs": [
+        {
+          "id": "loader-json",
+          "parses": true,
+          "schema_valid": true,
+          "valid": true
+        }
+      ],
+      "stop_sequences": [
+        {
+          "matching_examples": 2,
+          "reachable": true,
+          "sequence": "<|eot_id|>"
+        }
+      ],
+      "tool_calls": [
+        {
+          "id": "loader-tool",
+          "valid": true
+        }
+      ]
+    }
+  },
+  "packing_window": {
+    "boundary_token": "<|eot_id|>",
+    "max_tokens": 2048,
+    "preserve_example_boundaries": true,
+    "reset_position_ids": true,
+    "strategy": "sample-packing"
+  },
+  "role_labels": [
+    {
+      "canonical_role": "system",
+      "source_role": "system",
+      "trainable": false
+    },
+    {
+      "canonical_role": "user",
+      "source_role": "user",
+      "trainable": false
+    },
+    {
+      "canonical_role": "assistant",
+      "source_role": "assistant",
+      "supervised_target": true,
+      "trainable": true
+    }
+  ]
+}

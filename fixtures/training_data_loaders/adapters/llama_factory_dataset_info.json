@@ -1,0 +1,12 @@
+{
+  "dataset_info": {
+    "promptabi_chat": {
+      "columns": {
+        "messages": "messages"
+      },
+      "file_name": "chat.jsonl",
+      "formatting": "sharegpt"
+    }
+  },
+  "sample_count": 2
+}

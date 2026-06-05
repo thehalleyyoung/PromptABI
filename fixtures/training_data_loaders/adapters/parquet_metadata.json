@@ -1,0 +1,17 @@
+{
+  "columns": [
+    {
+      "logical_type": "string",
+      "name": "id"
+    },
+    {
+      "logical_type": "json",
+      "name": "messages"
+    }
+  ],
+  "created_by": "promptabi-fixture-writer",
+  "fingerprint": "sha256:parquet-metadata-fixture",
+  "num_row_groups": 1,
+  "num_rows": 2,
+  "private_material": false
+}
