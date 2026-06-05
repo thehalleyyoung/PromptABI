@@ -106,6 +106,9 @@ package-manager-style \texttt{promptabi prompt-pack lock} workflow, and
 a public \texttt{promptabi prompt-pack registry} manifest that publishes
 non-sensitive proof hashes, diagnostic fingerprints, supported-fragment counts,
 and reproducible artifact metadata without raw template, tool, or stop contents,
+plus a \texttt{promptabi prompt-pack mirror} workflow that copies local private
+pack artifacts into checksum-verified, network-free enterprise mirrors and
+revalidates them offline before use,
 validating, pinning, and proving upgrade preservation for exported templates,
 role-boundary and budget hashes, tool schemas, stop policies, supported
 model/provider families, package hashes, and diagnostic baselines against
@@ -287,8 +290,8 @@ bounded survival proofs, compact text/JSON/SARIF budget visualizations, and
 web-free static HTML reports with prompt, witness, chart, diff, and corpus
 sections against real framework truncation policies, including minimized
 counterexamples when required regions can be dropped, an enterprise-readiness
-surface that checks strict no-network declarations, offline mirror paths and
-digests, private artifact indexes, and internal provider fixtures through the
+surface that checks strict no-network declarations, prompt-pack mirror manifests
+and mirrored-file digests, private artifact indexes, and internal provider fixtures through the
 shared secret scanner, plus organization-wide policy packs that layer required
 checks, severity thresholds, supported proof-mode fragments, solver-timeout caps,
 local-summary privacy rules, and approved provider-fixture digests into the
@@ -542,7 +545,9 @@ model/provider families remain compatible with the app that imports them, while
 the public registry format converts the same verified state into contract hashes,
 hash-only template/tool/stop proofs, diagnostic fingerprints, supported-fragment
 counts, and reproducible source metadata suitable for publishing outside a
-private prompt library,
+private prompt library, and the local mirror workflow turns reviewed private
+packs into content-addressed files plus a manifest that detects checksum, size,
+and path-escape drift without network access,
 returns stable policy-controlled process exit codes, writes and enforces
 deterministic verification lockfiles that fail closed on artifact, config,
 provider-fixture, library-version, supported-fragment, or diagnostic-baseline
@@ -631,7 +636,7 @@ The repository layout is designed to scale:
 \hline
 \texttt{src/promptabi/plugins.py} & Typed extension registry for artifact loaders, dependency-aware checks, diagnostic renderers, and capability metadata covering provider adapters, grammar backends, template dialects, truncation policies, and solver encodings. \\
 \hline
-\texttt{src/promptabi/prompt\_packs.py} & Prompt-pack compatibility checker for reusable prompt libraries, package lock/upgrade gates, and public registry manifests with non-sensitive proof hashes, diagnostic fingerprints, supported-fragment counts, and reproducible artifact metadata. \\
+\texttt{src/promptabi/prompt\_packs.py} & Prompt-pack compatibility checker for reusable prompt libraries, package lock/upgrade gates, public registry manifests with non-sensitive proof hashes, and checksum-verified local mirror manifests for air-gapped private prompt-pack indexes. \\
 \hline
 \texttt{src/promptabi/api\_stability.py} & Generated public-API manifest, stable/provisional/deprecated symbol taxonomy, deprecation decorator, Markdown/JSON API reference renderers, and baseline compatibility comparison for downstream plugin authors. \\
 \hline

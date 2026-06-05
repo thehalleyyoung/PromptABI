@@ -57,7 +57,7 @@ The same local verifier covers:
 | **Stops** | unreachable stops, tokenizer normalization ambiguity, special-token collisions, and stops that can fire inside JSON/tool/string fields |
 | **Grammars + schemas** | JSON Schema/regex/EBNF/Outlines/xgrammar/llguidance fragments that are empty, ambiguous, or parser-incompatible under tokenizer assumptions |
 | **Tools + providers** | OpenAI, Anthropic, MCP, LangChain, Pydantic, TypeScript-style, vLLM, llama.cpp, LiteLLM, Gemini, Bedrock, Groq, Together, and Ollama serialization drift |
-| **Prompt packs** | reusable prompt-library templates plus package-style locks for role, tool, stop, model-family, and contract-drift guarantees |
+| **Prompt packs** | reusable prompt-library templates, locks, upgrade gates, public registries, and offline mirrors for role/tool/stop/model-family guarantees |
 | **Budgets + RAG** | must-survive prompt segments, dropped citations, metadata inflation, tokenizer mismatch, framework truncation, and context-window overflow |
 | **Provenance** | artifact hashes, licenses, trusted sources, reproducible HF revisions, lockfile drift, and offline fixture integrity |
 | **Enterprise posture** | org policy packs for required checks, severity, supported fragments, solver caps, privacy rules, approved fixtures, and no-network mirrors |
@@ -92,6 +92,7 @@ promptabi verify --config examples/end-to-end/tool-calling/buggy.promptabi.json 
 promptabi verify --config examples/prompt-packs/promptabi.json
 promptabi prompt-pack lock --config examples/prompt-packs/promptabi.json --write --lockfile /tmp/prompt-pack.lock.json
 promptabi prompt-pack registry --config examples/prompt-packs/promptabi.json --output /tmp/prompt-pack.registry.json
+promptabi prompt-pack mirror build --config examples/prompt-packs/promptabi.json --mirror-dir /tmp/prompt-pack-mirror
 promptabi prompt-pack upgrade --config examples/prompt-packs/promptabi.json --baseline-lockfile /tmp/prompt-pack.lock.json
 promptabi verify --config examples/end-to-end/training-quickstart/fixed.promptabi.json
 promptabi verify-training --manifest examples/end-to-end/training-quickstart/fixed.training-manifest.json

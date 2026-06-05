@@ -142,14 +142,22 @@ from .plugins import PluginError, PluginRegistry, load_plugin_modules
 from .policies import policy_forbids_local_summary
 from .prompt_packs import (
     PromptPackLockError,
+    PromptPackMirrorError,
+    build_prompt_pack_mirror,
     build_prompt_pack_registry,
     build_prompt_pack_lockfile,
     compare_prompt_pack_lockfile,
     compare_prompt_pack_upgrade,
+    load_prompt_pack_mirror_manifest,
     load_prompt_pack_lockfile,
+    prompt_pack_mirror_error_diagnostic,
+    prompt_pack_mirror_to_json,
     prompt_pack_lock_error_diagnostic,
     prompt_pack_registry_to_json,
+    render_prompt_pack_mirror_text,
+    render_prompt_pack_mirror_verification_text,
     render_prompt_pack_registry_text,
+    verify_prompt_pack_mirror,
     write_prompt_pack_registry,
     write_prompt_pack_lockfile,
 )
@@ -649,6 +657,65 @@ def build_parser() -> argparse.ArgumentParser:
         help="import a PromptABI plugin module for artifact loading compatibility; renderers are not used",
     )
     _add_local_summary_argument(prompt_pack_registry)
+    prompt_pack_mirror = prompt_pack_subparsers.add_parser(
+        "mirror",
+        help="build or verify an offline local mirror for private prompt-pack registries",
+    )
+    prompt_pack_mirror_subparsers = prompt_pack_mirror.add_subparsers(dest="prompt_pack_mirror_command", required=True)
+    prompt_pack_mirror_build = prompt_pack_mirror_subparsers.add_parser(
+        "build",
+        help="copy configured local prompt packs into a checksum-verified mirror directory",
+    )
+    prompt_pack_mirror_build.add_argument(
+        "--config",
+        help="path to a PromptABI JSON config containing prompt-pack artifacts; defaults to discovering promptabi.json",
+    )
+    prompt_pack_mirror_build.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        metavar="NAME=PATH_OR_URI",
+        help="override or add an artifact location for this run; may be repeated",
+    )
+    prompt_pack_mirror_build.add_argument(
+        "--mirror-dir",
+        required=True,
+        help="directory that will contain prompt-pack-mirror.json and mirrored pack files",
+    )
+    prompt_pack_mirror_build.add_argument(
+        "--format",
+        choices=("json", "text"),
+        default="text",
+        help="output format for stdout (default: text)",
+    )
+    prompt_pack_mirror_build.add_argument("-q", "--quiet", action="count", default=0, help="suppress stdout after writing the mirror")
+    prompt_pack_mirror_build.add_argument("-v", "--verbose", action="count", default=0, help="include config and mirror paths in text output")
+    prompt_pack_mirror_build.add_argument(
+        "--plugin",
+        action="append",
+        default=[],
+        metavar="MODULE[:OBJECT]",
+        help="import a PromptABI plugin module for artifact loading compatibility",
+    )
+    _add_local_summary_argument(prompt_pack_mirror_build)
+    prompt_pack_mirror_verify = prompt_pack_mirror_subparsers.add_parser(
+        "verify",
+        help="verify a local prompt-pack mirror manifest without network access",
+    )
+    prompt_pack_mirror_verify.add_argument(
+        "--manifest",
+        required=True,
+        help="path to prompt-pack-mirror.json inside the local mirror",
+    )
+    prompt_pack_mirror_verify.add_argument(
+        "--format",
+        choices=("json", "text"),
+        default="text",
+        help="output format (default: text)",
+    )
+    prompt_pack_mirror_verify.add_argument("--output", help="write verification output to this path instead of stdout")
+    prompt_pack_mirror_verify.add_argument("-q", "--quiet", action="count", default=0, help="suppress stdout when --output is set")
+    _add_local_summary_argument(prompt_pack_mirror_verify)
 
     corpus = subparsers.add_parser("corpus", help="seed corpus maintenance commands")
     corpus_subparsers = corpus.add_subparsers(dest="corpus_command", required=True)
@@ -1530,6 +1597,111 @@ def main(argv: Sequence[str] | None = None) -> int:
         ):
             return 2
         if output_path is None or not args.quiet:
+            print(output, end="")
+        return exit_code
+
+    if args.command == "prompt-pack" and args.prompt_pack_command == "mirror" and args.prompt_pack_mirror_command == "build":
+        started_at = time.perf_counter()
+        try:
+            if args.quiet and args.verbose:
+                parser.error("--quiet and --verbose cannot be used together")
+            config_path = Path(args.config).resolve() if args.config else discover_config()
+            mirror_dir = Path(args.mirror_dir).expanduser().resolve()
+            plugin_registry = _load_cli_plugins(args.plugin)
+            overrides = _parse_artifact_overrides(args.artifact, parser)
+            config = load_config(config_path).with_artifact_overrides(overrides, base_dir=Path.cwd())
+            if args.local_summary is not None and policy_forbids_local_summary(config.policy):
+                print("promptabi: organization policy pack forbids --local-summary writes", file=sys.stderr)
+                return 2
+            session = VerificationSession(config, plugin_registry=plugin_registry)
+            result = session.run()
+            loaded_artifacts, load_diagnostics = session.load_artifacts_with_diagnostics()
+            if any(diagnostic.severity.value == "error" for diagnostic in load_diagnostics):
+                print("promptabi: cannot build prompt-pack mirror while artifact loading has errors", file=sys.stderr)
+                return 2
+            mirror = build_prompt_pack_mirror(
+                loaded_artifacts,
+                result.diagnostics,
+                mirror_dir=mirror_dir,
+                base_dir=config_path.parent,
+            )
+            verification = verify_prompt_pack_mirror(mirror_dir / "prompt-pack-mirror.json", manifest=mirror)
+            if not verification.ok:
+                output = (
+                    json.dumps(verification.to_dict(), indent=2, sort_keys=True) + "\n"
+                    if args.format == "json"
+                    else render_prompt_pack_mirror_verification_text(verification)
+                )
+                print(output, end="")
+                return 1
+            output = prompt_pack_mirror_to_json(mirror) if args.format == "json" else render_prompt_pack_mirror_text(mirror)
+            if args.format == "text" and args.verbose:
+                output += f"config: {config_path}\n"
+                output += f"prompt-pack mirror: {mirror_dir / 'prompt-pack-mirror.json'}\n"
+            exit_code = 0
+        except (ConfigError, PromptPackLockError, PromptPackMirrorError, PluginError, ValueError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write prompt-pack mirror: {exc}", file=sys.stderr)
+            return 2
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="prompt-pack mirror build",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={"output_format": args.format, "prompt_pack_count": len(mirror.entries)},
+        ):
+            return 2
+        if not args.quiet:
+            print(output, end="")
+        return exit_code
+
+    if args.command == "prompt-pack" and args.prompt_pack_command == "mirror" and args.prompt_pack_mirror_command == "verify":
+        started_at = time.perf_counter()
+        manifest_path = Path(args.manifest).expanduser().resolve()
+        try:
+            manifest = load_prompt_pack_mirror_manifest(manifest_path)
+            verification = verify_prompt_pack_mirror(manifest_path, manifest=manifest)
+        except PromptPackMirrorError as exc:
+            verification = None
+            diagnostic = prompt_pack_mirror_error_diagnostic(exc, manifest_path=manifest_path)
+            output = (
+                json.dumps({"diagnostics": [diagnostic.to_dict()], "ok": False}, indent=2, sort_keys=True) + "\n"
+                if args.format == "json"
+                else f"PromptABI prompt-pack local mirror verification\nstatus: FAIL\nERROR {diagnostic.rule_id}: {diagnostic.message}\n"
+            )
+            exit_code = 1
+        except OSError as exc:
+            print(f"promptabi: cannot verify prompt-pack mirror: {exc}", file=sys.stderr)
+            return 2
+        else:
+            output = (
+                json.dumps(verification.to_dict(), indent=2, sort_keys=True) + "\n"
+                if args.format == "json"
+                else render_prompt_pack_mirror_verification_text(verification)
+            )
+            exit_code = 0 if verification.ok else 1
+        if args.output:
+            try:
+                output_path = Path(args.output).expanduser().resolve()
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_text(output, encoding="utf-8")
+            except OSError as exc:
+                print(f"promptabi: cannot write prompt-pack mirror verification: {exc}", file=sys.stderr)
+                return 2
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="prompt-pack mirror verify",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={
+                "output_format": args.format,
+                "prompt_pack_count": len(verification.manifest.entries) if verification is not None else 0,
+            },
+        ):
+            return 2
+        if not args.output or not args.quiet:
             print(output, end="")
         return exit_code
 

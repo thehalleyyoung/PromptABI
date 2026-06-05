@@ -1,9 +1,10 @@
-"""Prompt-pack parsing, package locks, and compatibility checks."""
+"""Prompt-pack parsing, package locks, registries, mirrors, and compatibility checks."""
 
 from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -37,10 +38,15 @@ from .loaders import LoadedArtifact
 PROMPT_PACK_LOCKFILE_VERSION = 1
 PROMPT_PACK_LOCK_CHECK_MODES = (CheckMode.SOUND, CheckMode.COMPLETE)
 PROMPT_PACK_REGISTRY_VERSION = 1
+PROMPT_PACK_MIRROR_VERSION = 1
 
 
 class PromptPackLockError(ValueError):
     """Raised when a prompt-pack lockfile cannot be read or compared."""
+
+
+class PromptPackMirrorError(ValueError):
+    """Raised when a local prompt-pack registry mirror cannot be built or verified."""
 
 
 class PromptPackFindingKind(StrEnum):
@@ -234,6 +240,85 @@ class PromptPackRegistry:
         return {
             "prompt_packs": [entry.to_dict() for entry in self.entries],
             "registry_version": self.registry_version,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PromptPackMirrorEntry:
+    """One content-addressed local prompt-pack artifact in an offline mirror."""
+
+    name: str
+    package_name: str
+    version: str | None
+    source_location: str
+    mirror_path: str
+    sha256: str
+    size_bytes: int
+    contract_hash: str
+    proof_hash: str
+    registry_entry: PromptPackRegistryEntry
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {
+            "contract_hash": self.contract_hash,
+            "mirror_path": self.mirror_path,
+            "name": self.name,
+            "package_name": self.package_name,
+            "proof_hash": self.proof_hash,
+            "registry_entry": self.registry_entry.to_dict(),
+            "sha256": self.sha256,
+            "size_bytes": self.size_bytes,
+            "source_location": self.source_location,
+        }
+        if self.version is not None:
+            data["version"] = self.version
+        return data
+
+
+@dataclass(frozen=True, slots=True)
+class PromptPackMirrorManifest:
+    """Manifest for an enterprise-local prompt-pack registry mirror."""
+
+    entries: tuple[PromptPackMirrorEntry, ...]
+    mirror_version: int = PROMPT_PACK_MIRROR_VERSION
+
+    @classmethod
+    def from_mapping(cls, data: dict[str, Any]) -> "PromptPackMirrorManifest":
+        if data.get("mirror_version") != PROMPT_PACK_MIRROR_VERSION:
+            raise PromptPackMirrorError(f"unsupported prompt-pack mirror version: {data.get('mirror_version')!r}")
+        raw_entries = data.get("prompt_packs")
+        if not isinstance(raw_entries, list):
+            raise PromptPackMirrorError("prompt-pack mirror field 'prompt_packs' must be a list")
+        entries: list[PromptPackMirrorEntry] = []
+        for item in raw_entries:
+            if not isinstance(item, dict):
+                raise PromptPackMirrorError("prompt-pack mirror entries must be objects")
+            entries.append(_mirror_entry_from_mapping(item))
+        return cls(entries=tuple(sorted(entries, key=lambda entry: (entry.package_name, entry.name))))
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "mirror_version": self.mirror_version,
+            "prompt_packs": [entry.to_dict() for entry in self.entries],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PromptPackMirrorVerification:
+    """Result of validating a local prompt-pack registry mirror."""
+
+    manifest: PromptPackMirrorManifest
+    diagnostics: tuple[Diagnostic, ...]
+
+    @property
+    def ok(self) -> bool:
+        return all(diagnostic.severity is not DiagnosticSeverity.ERROR for diagnostic in self.diagnostics)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "diagnostics": [diagnostic.to_dict() for diagnostic in self.diagnostics],
+            "mirror": self.manifest.to_dict(),
+            "ok": self.ok,
         }
 
 
@@ -465,6 +550,195 @@ def write_prompt_pack_registry(path: str | Path, registry: PromptPackRegistry) -
     registry_path.write_text(prompt_pack_registry_to_json(registry), encoding="utf-8")
 
 
+def build_prompt_pack_mirror(
+    loaded_artifacts: tuple[LoadedArtifact, ...],
+    diagnostics: tuple[Diagnostic, ...] = (),
+    *,
+    mirror_dir: str | Path,
+    base_dir: str | Path | None = None,
+) -> PromptPackMirrorManifest:
+    """Copy configured local prompt-pack artifacts into a checksum-verified offline mirror."""
+
+    resolved_mirror = Path(mirror_dir).expanduser().resolve()
+    packages_dir = resolved_mirror / "packs"
+    packages_dir.mkdir(parents=True, exist_ok=True)
+    lockfile = build_prompt_pack_lockfile(loaded_artifacts, diagnostics, base_dir=base_dir)
+    registry_by_name = {
+        entry.name: _registry_entry_from_lock_entry(entry)
+        for entry in lockfile.entries
+    }
+    entries: list[PromptPackMirrorEntry] = []
+    for loaded in loaded_artifacts:
+        artifact = loaded.artifact
+        if not isinstance(artifact, PromptPackArtifact):
+            continue
+        if artifact.location.path is None:
+            raise PromptPackMirrorError(
+                f"prompt pack '{artifact.name}' is not a resolved local file and cannot be mirrored without network access"
+            )
+        source_path = Path(artifact.location.path)
+        if not source_path.is_file():
+            raise PromptPackMirrorError(f"prompt pack '{artifact.name}' source file is missing: {source_path}")
+        sha256 = loaded.actual_sha256 or _sha256_file(source_path)
+        lock_entry = next(entry for entry in lockfile.entries if entry.name == artifact.name)
+        suffix = source_path.suffix or ".json"
+        mirror_name = f"{_safe_filename(lock_entry.package_name)}-{sha256[:16]}{suffix}"
+        mirror_path = packages_dir / mirror_name
+        if mirror_path.exists():
+            existing_sha = _sha256_file(mirror_path)
+            if existing_sha != sha256:
+                raise PromptPackMirrorError(f"mirror target collision for prompt pack '{artifact.name}': {mirror_path}")
+        else:
+            shutil.copyfile(source_path, mirror_path)
+        size_bytes = mirror_path.stat().st_size
+        source_location = _portable_path_string(str(source_path.resolve()), base_dir=Path(base_dir).resolve() if base_dir is not None else None)
+        entries.append(
+            PromptPackMirrorEntry(
+                name=lock_entry.name,
+                package_name=lock_entry.package_name,
+                version=lock_entry.version,
+                source_location=source_location,
+                mirror_path=mirror_path.relative_to(resolved_mirror).as_posix(),
+                sha256=sha256,
+                size_bytes=size_bytes,
+                contract_hash=lock_entry.contract_hash,
+                proof_hash=registry_by_name[lock_entry.name].proof_hash,
+                registry_entry=registry_by_name[lock_entry.name],
+            )
+        )
+    if not entries:
+        raise PromptPackMirrorError("no local prompt-pack artifacts are loaded; cannot build a local mirror")
+    manifest = PromptPackMirrorManifest(tuple(sorted(entries, key=lambda entry: (entry.package_name, entry.name))))
+    write_prompt_pack_mirror_manifest(resolved_mirror / "prompt-pack-mirror.json", manifest)
+    return manifest
+
+
+def prompt_pack_mirror_to_json(mirror: PromptPackMirrorManifest) -> str:
+    return json.dumps(mirror.to_dict(), indent=2, sort_keys=True) + "\n"
+
+
+def load_prompt_pack_mirror_manifest(path: str | Path) -> PromptPackMirrorManifest:
+    manifest_path = Path(path)
+    try:
+        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise PromptPackMirrorError(f"prompt-pack mirror manifest not found: {manifest_path}") from exc
+    except json.JSONDecodeError as exc:
+        raise PromptPackMirrorError(
+            f"prompt-pack mirror manifest is not valid JSON at {manifest_path}:{exc.lineno}:{exc.colno}: {exc.msg}"
+        ) from exc
+    if not isinstance(raw, dict):
+        raise PromptPackMirrorError("prompt-pack mirror manifest root must be a JSON object")
+    return PromptPackMirrorManifest.from_mapping(raw)
+
+
+def write_prompt_pack_mirror_manifest(path: str | Path, mirror: PromptPackMirrorManifest) -> None:
+    manifest_path = Path(path)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(prompt_pack_mirror_to_json(mirror), encoding="utf-8")
+
+
+def verify_prompt_pack_mirror(
+    path: str | Path,
+    *,
+    manifest: PromptPackMirrorManifest | None = None,
+) -> PromptPackMirrorVerification:
+    """Verify mirrored prompt-pack files and privacy-preserving registry metadata offline."""
+
+    manifest_path = Path(path).expanduser().resolve()
+    mirror = manifest or load_prompt_pack_mirror_manifest(manifest_path)
+    mirror_root = manifest_path.parent
+    diagnostics: list[Diagnostic] = []
+    for entry in mirror.entries:
+        file_path = (mirror_root / entry.mirror_path).resolve()
+        artifact_ref = ArtifactRef(kind="prompt-pack-mirror", name=entry.name, path=str(file_path))
+        if not _is_relative_to(file_path, mirror_root):
+            diagnostics.append(
+                _prompt_pack_mirror_diagnostic(
+                    "prompt-pack-mirror-path-escaped",
+                    f"mirrored prompt pack '{entry.name}' points outside the mirror directory",
+                    artifact_ref=artifact_ref,
+                    expected="inside mirror",
+                    actual=entry.mirror_path,
+                )
+            )
+            continue
+        if not file_path.is_file():
+            diagnostics.append(
+                _prompt_pack_mirror_diagnostic(
+                    "prompt-pack-mirror-missing-file",
+                    f"mirrored prompt pack '{entry.name}' is missing from the local mirror",
+                    artifact_ref=artifact_ref,
+                    expected=entry.sha256,
+                    actual="missing",
+                )
+            )
+            continue
+        actual_sha = _sha256_file(file_path)
+        actual_size = file_path.stat().st_size
+        if actual_sha != entry.sha256:
+            diagnostics.append(
+                _prompt_pack_mirror_diagnostic(
+                    "prompt-pack-mirror-sha256-drift",
+                    f"mirrored prompt pack '{entry.name}' checksum differs from the mirror manifest",
+                    artifact_ref=artifact_ref,
+                    expected=entry.sha256,
+                    actual=actual_sha,
+                )
+            )
+        if actual_size != entry.size_bytes:
+            diagnostics.append(
+                _prompt_pack_mirror_diagnostic(
+                    "prompt-pack-mirror-size-drift",
+                    f"mirrored prompt pack '{entry.name}' size differs from the mirror manifest",
+                    artifact_ref=artifact_ref,
+                    expected=str(entry.size_bytes),
+                    actual=str(actual_size),
+                )
+            )
+    if not diagnostics:
+        diagnostics.append(
+            _prompt_pack_mirror_diagnostic(
+                "prompt-pack-mirror-verified",
+                f"prompt-pack mirror verifies {len(mirror.entries)} local package(s) without network access",
+                artifact_ref=ArtifactRef(kind="prompt-pack-mirror", name="prompt-pack-mirror", path=str(manifest_path)),
+                expected="matched",
+                actual="matched",
+                severity=DiagnosticSeverity.INFO,
+            )
+        )
+    return PromptPackMirrorVerification(mirror, tuple(diagnostics))
+
+
+def render_prompt_pack_mirror_text(mirror: PromptPackMirrorManifest) -> str:
+    lines = ["PromptABI prompt-pack local mirror", f"mirror version: {mirror.mirror_version}"]
+    for entry in mirror.entries:
+        version = f"@{entry.version}" if entry.version is not None else ""
+        lines.extend(
+            [
+                "",
+                f"- {entry.package_name}{version}",
+                f"  file: {entry.mirror_path}",
+                f"  sha256: {entry.sha256}",
+                f"  contract: {entry.contract_hash[:16]} proof: {entry.proof_hash[:16]}",
+                f"  source: {entry.source_location}",
+            ]
+        )
+    return "\n".join(lines) + "\n"
+
+
+def render_prompt_pack_mirror_verification_text(verification: PromptPackMirrorVerification) -> str:
+    status = "PASS" if verification.ok else "FAIL"
+    lines = [
+        "PromptABI prompt-pack local mirror verification",
+        f"status: {status}",
+        f"packages: {len(verification.manifest.entries)}",
+    ]
+    for diagnostic in verification.diagnostics:
+        lines.append(f"{diagnostic.severity.value.upper()} {diagnostic.rule_id}: {diagnostic.message}")
+    return "\n".join(lines) + "\n"
+
+
 def compare_prompt_pack_lockfile(
     lockfile: PromptPackLockfile,
     loaded_artifacts: tuple[LoadedArtifact, ...],
@@ -655,6 +929,26 @@ def prompt_pack_lock_error_diagnostic(
         witness=WitnessTrace(
             summary="PromptABI could not load the prompt-pack lockfile for enforcement.",
             steps=(WitnessStep(action="load prompt-pack lockfile", input=path, output=str(exc)),),
+        ),
+    )
+
+
+def prompt_pack_mirror_error_diagnostic(
+    exc: PromptPackMirrorError,
+    *,
+    manifest_path: str | Path | None = None,
+) -> Diagnostic:
+    path = str(manifest_path) if manifest_path is not None else None
+    return Diagnostic(
+        rule_id="prompt-pack-mirror-load-failed",
+        severity=DiagnosticSeverity.ERROR,
+        message=str(exc),
+        artifact=ArtifactRef(kind="prompt-pack-mirror", name="prompt-pack-mirror", path=path) if path else None,
+        check_modes=PROMPT_PACK_LOCK_CHECK_MODES,
+        suggestions=("Rebuild the local prompt-pack mirror from reviewed prompt-pack artifacts.",),
+        witness=WitnessTrace(
+            summary="PromptABI could not load or verify the local prompt-pack mirror.",
+            steps=(WitnessStep(action="load prompt-pack mirror", input=path, output=str(exc)),),
         ),
     )
 
@@ -1105,8 +1399,44 @@ def _prompt_pack_upgrade_diagnostic(
     )
 
 
+def _prompt_pack_mirror_diagnostic(
+    rule_id: str,
+    message: str,
+    *,
+    artifact_ref: ArtifactRef,
+    expected: str,
+    actual: str,
+    severity: DiagnosticSeverity = DiagnosticSeverity.ERROR,
+) -> Diagnostic:
+    return Diagnostic(
+        rule_id=rule_id,
+        severity=severity,
+        message=message,
+        artifact=artifact_ref,
+        check_modes=PROMPT_PACK_LOCK_CHECK_MODES,
+        suggestions=("Use `promptabi prompt-pack mirror build` to refresh the local mirror after reviewing package changes.",),
+        witness=WitnessTrace(
+            summary="PromptABI verified local mirror files against the mirror manifest.",
+            steps=(
+                WitnessStep(action="read mirror manifest", input=artifact_ref.path),
+                WitnessStep(action="compare mirrored artifact", input=expected, output=actual),
+            ),
+            artifacts=(artifact_ref,),
+        ),
+        properties=(("actual", actual), ("expected", expected)),
+    )
+
+
 def _sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _sha256_file(path: Path) -> str:
+    hasher = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
 
 
 def _hash_jsonable(value: object) -> str:
@@ -1223,3 +1553,76 @@ def _required_bool(data: dict[str, Any], key: str) -> bool:
     if not isinstance(value, bool):
         raise PromptPackLockError(f"prompt-pack lock field '{key}' must be a boolean")
     return value
+
+
+def _mirror_entry_from_mapping(data: dict[str, Any]) -> PromptPackMirrorEntry:
+    registry_raw = data.get("registry_entry")
+    if not isinstance(registry_raw, dict):
+        raise PromptPackMirrorError("prompt-pack mirror entry field 'registry_entry' must be an object")
+    registry_entry = _registry_entry_from_mapping(registry_raw)
+    size_bytes = data.get("size_bytes")
+    if not isinstance(size_bytes, int) or isinstance(size_bytes, bool) or size_bytes < 0:
+        raise PromptPackMirrorError("prompt-pack mirror entry field 'size_bytes' must be a non-negative integer")
+    return PromptPackMirrorEntry(
+        name=_mirror_required_str(data, "name"),
+        package_name=_mirror_required_str(data, "package_name"),
+        version=_mirror_optional_str(data, "version"),
+        source_location=_mirror_required_str(data, "source_location"),
+        mirror_path=_mirror_required_str(data, "mirror_path"),
+        sha256=_mirror_required_str(data, "sha256"),
+        size_bytes=size_bytes,
+        contract_hash=_mirror_required_str(data, "contract_hash"),
+        proof_hash=_mirror_required_str(data, "proof_hash"),
+        registry_entry=registry_entry,
+    )
+
+
+def _registry_entry_from_mapping(data: dict[str, Any]) -> PromptPackRegistryEntry:
+    return PromptPackRegistryEntry(
+        name=_mirror_required_str(data, "name"),
+        package_name=_mirror_required_str(data, "package_name"),
+        version=_mirror_optional_str(data, "version"),
+        location=_mirror_required_str(data, "location"),
+        sha256=_mirror_optional_str(data, "sha256"),
+        contract_hash=_mirror_required_str(data, "contract_hash"),
+        proof_hash=_mirror_required_str(data, "proof_hash"),
+        supported_fragments=_dict_to_pairs(data.get("supported_fragments", {}), "supported_fragments"),
+        reproducible_metadata=_dict_to_pairs(data.get("reproducible_metadata", {}), "reproducible_metadata"),
+        proofs=_dict_to_pairs(data.get("proofs", {}), "proofs"),
+        diagnostics=_diagnostic_lock_entries(data.get("diagnostics", [])),
+    )
+
+
+def _dict_to_pairs(value: object, field_name: str) -> tuple[tuple[str, object], ...]:
+    if not isinstance(value, dict):
+        raise PromptPackMirrorError(f"prompt-pack mirror registry field '{field_name}' must be an object")
+    return tuple(sorted(value.items(), key=lambda item: item[0]))
+
+
+def _mirror_required_str(data: dict[str, Any], key: str) -> str:
+    value = data.get(key)
+    if not isinstance(value, str) or not value:
+        raise PromptPackMirrorError(f"prompt-pack mirror field '{key}' must be a non-empty string")
+    return value
+
+
+def _mirror_optional_str(data: dict[str, Any], key: str) -> str | None:
+    value = data.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value:
+        raise PromptPackMirrorError(f"prompt-pack mirror field '{key}' must be a non-empty string when present")
+    return value
+
+
+def _safe_filename(value: str) -> str:
+    safe = "".join(char if char.isalnum() or char in ("-", "_", ".") else "-" for char in value.strip())
+    return safe.strip(".-") or "prompt-pack"
+
+
+def _is_relative_to(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True

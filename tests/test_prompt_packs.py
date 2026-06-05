@@ -5,10 +5,13 @@ from promptabi.artifacts import ArtifactKind, artifact_from_config
 from promptabi.cli import main
 from promptabi.loaders import ArtifactLoader
 from promptabi.prompt_packs import (
+    build_prompt_pack_mirror,
     build_prompt_pack_lockfile,
     build_prompt_pack_registry,
     compare_prompt_pack_lockfile,
     compare_prompt_pack_upgrade,
+    load_prompt_pack_mirror_manifest,
+    verify_prompt_pack_mirror,
     prompt_pack_registry_to_json,
 )
 from promptabi.session import VerificationSession
@@ -514,3 +517,71 @@ def test_cli_prompt_pack_registry_writes_public_manifest(tmp_path: Path, capsys)
     assert payload["prompt_packs"][0]["package_name"] == "support-pack"
     assert "refund_user" not in output.read_text(encoding="utf-8")
     assert "</tool_call>" not in output.read_text(encoding="utf-8")
+
+
+def test_prompt_pack_mirror_copies_local_packs_and_verifies_offline(tmp_path: Path) -> None:
+    pack = tmp_path / "support.prompt-pack.json"
+    config = tmp_path / "promptabi.json"
+    mirror_dir = tmp_path / "mirror"
+    _write_prompt_pack(pack, schema_digest="sha256:refund-v1")
+    _write_safe_config(config, pack)
+    session = VerificationSession.from_config_file(config)
+    result = session.run()
+    loaded, _load_diagnostics = session.load_artifacts_with_diagnostics()
+
+    mirror = build_prompt_pack_mirror(loaded, result.diagnostics, mirror_dir=mirror_dir, base_dir=tmp_path)
+    manifest = load_prompt_pack_mirror_manifest(mirror_dir / "prompt-pack-mirror.json")
+    verification = verify_prompt_pack_mirror(mirror_dir / "prompt-pack-mirror.json")
+
+    assert mirror.entries[0].package_name == "support-pack"
+    assert manifest.entries[0].mirror_path.startswith("packs/")
+    assert (mirror_dir / manifest.entries[0].mirror_path).read_text(encoding="utf-8") == pack.read_text(encoding="utf-8")
+    assert verification.ok
+    assert verification.diagnostics[0].rule_id == "prompt-pack-mirror-verified"
+    assert "refund_user" not in json.dumps(manifest.to_dict(), sort_keys=True)
+    assert "</tool_call>" not in json.dumps(manifest.to_dict(), sort_keys=True)
+
+
+def test_prompt_pack_mirror_detects_tampered_local_pack(tmp_path: Path) -> None:
+    pack = tmp_path / "support.prompt-pack.json"
+    config = tmp_path / "promptabi.json"
+    mirror_dir = tmp_path / "mirror"
+    _write_prompt_pack(pack, schema_digest="sha256:refund-v1")
+    _write_safe_config(config, pack)
+    session = VerificationSession.from_config_file(config)
+    result = session.run()
+    loaded, _load_diagnostics = session.load_artifacts_with_diagnostics()
+    mirror = build_prompt_pack_mirror(loaded, result.diagnostics, mirror_dir=mirror_dir, base_dir=tmp_path)
+    mirrored_file = mirror_dir / mirror.entries[0].mirror_path
+
+    mirrored_file.write_text(mirrored_file.read_text(encoding="utf-8").replace("refund-v1", "refund-v2"), encoding="utf-8")
+    verification = verify_prompt_pack_mirror(mirror_dir / "prompt-pack-mirror.json")
+
+    assert not verification.ok
+    assert [diagnostic.rule_id for diagnostic in verification.diagnostics] == ["prompt-pack-mirror-sha256-drift"]
+
+
+def test_cli_prompt_pack_mirror_build_and_verify(tmp_path: Path, capsys) -> None:
+    pack = tmp_path / "support.prompt-pack.json"
+    config = tmp_path / "promptabi.json"
+    mirror_dir = tmp_path / "mirror"
+    _write_prompt_pack(pack, schema_digest="sha256:refund-v1")
+    _write_safe_config(config, pack)
+
+    assert main(["prompt-pack", "mirror", "build", "--config", str(config), "--mirror-dir", str(mirror_dir), "--format", "json"]) == 0
+    built = json.loads(capsys.readouterr().out)
+    assert built["mirror_version"] == 1
+    assert built["prompt_packs"][0]["package_name"] == "support-pack"
+    assert (mirror_dir / "prompt-pack-mirror.json").is_file()
+
+    assert main(["prompt-pack", "mirror", "verify", "--manifest", str(mirror_dir / "prompt-pack-mirror.json"), "--format", "json"]) == 0
+    verified = json.loads(capsys.readouterr().out)
+    assert verified["ok"] is True
+    assert verified["diagnostics"][0]["rule_id"] == "prompt-pack-mirror-verified"
+
+    mirrored_file = mirror_dir / built["prompt_packs"][0]["mirror_path"]
+    mirrored_file.write_text(mirrored_file.read_text(encoding="utf-8").replace("refund_user", "refund_usfr"), encoding="utf-8")
+    assert main(["prompt-pack", "mirror", "verify", "--manifest", str(mirror_dir / "prompt-pack-mirror.json"), "--format", "json"]) == 1
+    tampered = json.loads(capsys.readouterr().out)
+    assert tampered["ok"] is False
+    assert tampered["diagnostics"][0]["rule_id"] == "prompt-pack-mirror-sha256-drift"
