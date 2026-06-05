@@ -297,6 +297,12 @@ from .model_registry import (
     render_model_registry_publication_json,
     render_model_registry_publication_text,
 )
+from .multi_agent_handoffs import (
+    MultiAgentHandoffError,
+    load_multi_agent_handoff_manifest,
+    render_multi_agent_handoff_json,
+    render_multi_agent_handoff_text,
+)
 from .lockfiles import (
     LockfileError,
     build_lockfile,
@@ -676,6 +682,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     _add_local_summary_argument(streaming_parser)
+
+    handoff_witness = subparsers.add_parser(
+        "handoff-witness",
+        help="verify multi-agent handoff contracts and emit replayable witnesses",
+    )
+    handoff_witness.add_argument(
+        "--manifest",
+        required=True,
+        help="multi-agent handoff manifest JSON path",
+    )
+    handoff_witness.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    _add_local_summary_argument(handoff_witness)
 
     explain = subparsers.add_parser("explain", help="expand one diagnostic into a tutorial-style explanation")
     explain.add_argument(
@@ -3306,6 +3329,35 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "output_format": args.format,
                 "chunk_count": len(chunks),
                 "event_count": len(report.replay.events),
+                "violation_count": len(report.violations),
+            },
+        ):
+            return 2
+        print(output, end="")
+        return exit_code
+
+    if args.command == "handoff-witness":
+        started_at = time.perf_counter()
+        try:
+            report = load_multi_agent_handoff_manifest(args.manifest)
+        except (OSError, MultiAgentHandoffError, ValueError) as exc:
+            print(f"promptabi: cannot verify multi-agent handoffs: {exc}", file=sys.stderr)
+            return 2
+        output = (
+            render_multi_agent_handoff_json(report)
+            if args.format == "json"
+            else render_multi_agent_handoff_text(report)
+        )
+        exit_code = 0 if report.ok else 1
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="handoff-witness",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={
+                "agent_count": len(report.agents),
+                "format": args.format,
+                "handoff_count": len(report.handoffs),
                 "violation_count": len(report.violations),
             },
         ):

@@ -58,6 +58,7 @@ The same local verifier covers:
 | **Grammars + schemas** | JSON Schema/regex/EBNF/Outlines/xgrammar/llguidance fragments that are empty, ambiguous, or parser-incompatible under tokenizer assumptions |
 | **Tools + providers** | OpenAI, Anthropic, MCP, LangChain, Pydantic, TypeScript-style, vLLM, llama.cpp, LiteLLM, Gemini, Bedrock, Groq, Together, and Ollama serialization drift, including adapter-chain envelope preservation |
 | **Prompt packs + contracts** | reusable templates and assume/guarantee contracts with compositional tokenizer/template/role/tool/stop/model-family/RAG/truncation guarantees, inherited proof-obligation lineage, locks, monotone extension certificates, registries, signing, and offline mirrors |
+| **Agent handoffs** | multi-agent boundaries that reject wrong roles, missing provenance, schema drift, and unescaped control markers with concrete handoff witnesses |
 | **Budgets + RAG** | must-survive regions, dropped citations, tokenizer/metadata drift, framework truncation, context overflow, and RAG chunks that fail the tool schemas consuming them |
 | **Provenance** | artifact hashes, licenses, trusted sources, reproducible HF revisions, lockfile drift, offline fixture integrity, and upstream bug/fix/workaround links |
 | **Enterprise + platform posture** | org policy packs, no-network mirrors, access-controlled private indexes/prompt packs/policy packs, audit-bundle retention, approved fixtures, privacy rules, governance gates, proved incremental-cache reuse, stable payloads for CI/IDEs/registries, and TS/Go/Rust readers |
@@ -176,6 +177,7 @@ promptabi corpus smt-benchmark --format text
 promptabi corpus leaderboard --format text
 promptabi corpus adversarial --format text
 promptabi solver replay fixtures/solver_replays/role-region-forgery.solver-replay.json
+promptabi handoff-witness --manifest examples/multi-agent-handoffs/support-handoffs.json --format text
 promptabi launch-assets --output-dir launch_assets --force
 promptabi adoption-playbooks --format markdown
 promptabi fuzz mutations --format text

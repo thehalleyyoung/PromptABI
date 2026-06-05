@@ -243,6 +243,20 @@ from .agent_frameworks import (
     render_agent_prompt_pack_plan,
     write_agent_promptabi_config,
 )
+from .multi_agent_handoffs import (
+    MULTI_AGENT_HANDOFF_VERSION,
+    HandoffAgentContract,
+    HandoffContractViolation,
+    HandoffPayload,
+    HandoffViolationKind,
+    MultiAgentHandoff,
+    MultiAgentHandoffError,
+    MultiAgentHandoffReport,
+    analyze_multi_agent_handoffs,
+    load_multi_agent_handoff_manifest,
+    render_multi_agent_handoff_json,
+    render_multi_agent_handoff_text,
+)
 from .bug_reports import BugReport, BugReportError, generate_bug_report
 from .bundles import (
     VERIFICATION_BUNDLE_VERSION,

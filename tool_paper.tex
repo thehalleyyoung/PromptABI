@@ -32,9 +32,10 @@ typically discovered through inference-time tests or production incidents.
 
 PromptABI treats this boundary as an application binary interface for prompts.
 It gives templates, tokenizers, stop policies, tool schemas, provider envelopes,
-retrieval budgets, training manifests, and evaluation harnesses a common typed
-semantics. It then runs bounded symbolic execution, finite-language products,
-differential replay, and SMT-backed finite contracts to prove one of four useful
+retrieval budgets, multi-agent handoffs, training manifests, and evaluation
+harnesses a common typed semantics. It then runs bounded symbolic execution,
+finite-language products, differential replay, and SMT-backed finite contracts to
+prove one of four useful
 facts: the interface is safe in the supported fragment, a concrete counterexample
 exists, the checker must abstain, or a versioned artifact has drifted from a
 previously verified contract.
@@ -80,7 +81,7 @@ PromptABI contributes:
   checked independently or only by example;
   \item bounded semantics for chat-template rendering, tokenization, stop
   reachability, structured outputs, provider migration, context budgets,
-  training masks, and evaluation harnesses;
+  multi-agent handoffs, training masks, and evaluation harnesses;
   \item proof-producing diagnostics that distinguish verified safety,
   concrete counterexamples, minimal unsatisfiable deployment cores, and honest
   abstention;
@@ -122,7 +123,7 @@ A prompt interface artifact is a discrete, versioned object that influences the
 string or structured value seen by an LLM subsystem. Examples include chat
 templates, tokenizer configs, stop policies, JSON schemas, tool definitions,
 provider request/response envelopes, truncation policies, prompt segments,
-training manifests, and evaluation manifests.
+multi-agent handoff manifests, training manifests, and evaluation manifests.
 \end{definition}
 
 \begin{definition}[Prompt ABI]
@@ -141,6 +142,14 @@ streaming chunks, stops, and structured-output modes, with per-hop preservation
 obligations checked against recorded provider snapshots. A training or evaluation
 manifest becomes a set of finite obligations about roles, masks, preserved
 context, answer schemas, and private fields.
+
+A multi-agent handoff manifest becomes a concrete edge contract between named
+agents. Each agent declares accepted roles, emitted roles, required provenance
+fields, schema-level type expectations, and forbidden control markers. PromptABI
+replays the actual payload crossing the edge and emits a handoff witness when the
+target rejects the role, a policy hash or case identifier is dropped, a field
+changes JSON type, or unescaped tool/template control text crosses from one
+agent's output into another agent's input.
 
 The tool deliberately does not claim to model arbitrary Python, arbitrary
 Jinja, or arbitrary parser code. Its supported fragments are explicit. Outside
@@ -271,6 +280,12 @@ Protect RAG, training, and eval invariants &
 Context-budget, RAG/tool-schema, mask, role, and private-field obligations &
 Survival proof, missing tool argument, dropped-region witness, finite assignment \\
 \addlinespace
+Debug multi-agent workflows &
+Handoff contracts over roles, provenance fields, schema types, and control
+markers &
+Source/target edge, offending payload field, rendered handoff excerpt, minimal
+adapter fix \\
+\addlinespace
 Maintain reproducible CI &
 Lockfiles, inherited config lineage, signed bundles, replayable solver
 certificates, sliced products &
@@ -317,6 +332,18 @@ the failing product facts. The slicer exhaustively searches the bounded product,
 records omitted artifacts and cut dependency edges, and emits a witness whose
 certificate distinguishes a necessary cross-artifact explanation from incidental
 configuration noise.
+
+\paragraph{Concrete handoff replay.}
+Multi-agent frameworks often convert one agent's answer into another agent's
+input through informal dictionaries. PromptABI treats these dictionaries as
+interface artifacts. The handoff checker does not inspect arbitrary agent code;
+instead, it verifies a concrete manifest extracted from or checked into the
+application: source agent, target agent, payload role, payload fields, required
+provenance, target field types, and forbidden markers. The witness is therefore
+directly replayable: select the edge, replay the payload contract, point to the
+exact role/field/marker that violates the target contract, and suggest the
+smallest adapter such as role normalization, JSON encoding, or provenance
+preservation.
 
 \paragraph{SMT-backed finite contracts.}
 Static contracts that combine budgets, roles, stops, masks, and provider facts
@@ -485,6 +512,19 @@ newest composition layer also checks exported chat-template markers against the
 configured tokenizer: a prompt pack can prove that its structural markers have
 bounded tokenizer evidence, or fail with a concrete user-content witness when a
 downstream tokenizer admits a control token that the pack did not reserve.
+
+\paragraph{Multi-agent handoff witnesses.}
+\texttt{promptabi handoff-witness} verifies concrete handoff manifests for agent
+graphs whose framework code dynamically routes work between specialized agents.
+For each edge, the manifest declares the source and target contracts and the
+payload that crosses the boundary. The checker emits ordinary PromptABI witness
+traces for rejected roles, missing provenance fields, JSON type drift, and
+unescaped control markers. A support escalation example demonstrates all four:
+a triage agent forwards assistant text to a refund agent that accepts only tool
+payloads, drops the policy hash, serializes a numeric refund as a string, and
+passes an unescaped \texttt{</tool\_call>} sentinel in content. The result is a
+small, reproducible witness that an orchestration bug exists before any agent
+loop runs.
 
 \paragraph{Debugging and education.}
 \texttt{promptabi explain} expands one diagnostic into artifact snippets,
@@ -780,9 +820,11 @@ Witnesses are deliberately concrete. A role-boundary witness contains the
 attacker-controlled field, rendered excerpt, token evidence, and forged
 boundary. A stop witness contains the stop, valid full output, returned prefix,
 and parser state. A budget witness contains token counts, truncation decisions,
-and dropped required segments. An SMT witness contains a finite assignment or
-unsat evidence. This makes diagnostics actionable for engineers and replayable
-for maintainers.
+and dropped required segments. A multi-agent handoff witness contains the source
+agent, target agent, payload role, missing field or bad type, and offending
+rendered payload excerpt. An SMT witness contains a finite assignment or unsat
+evidence. This makes diagnostics actionable for engineers and replayable for
+maintainers.
 
 PromptABI also includes witness validation, shrinking, and slicing.
 Counterexamples can be minimized by string length, token count, message count,
