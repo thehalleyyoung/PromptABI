@@ -362,8 +362,13 @@ from .real_bug_benchmarks import (
     write_real_bug_benchmark_manifest,
 )
 from .release import (
+    LTSReleaseError,
     ReleaseReadinessError,
+    build_lts_release_plan,
     build_release_readiness_report,
+    lts_item_from_string,
+    render_lts_release_plan_json,
+    render_lts_release_plan_text,
     render_release_readiness_json,
     render_release_readiness_text,
 )
@@ -1769,6 +1774,41 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     compatibility_audit.add_argument("--output", help="write compatibility audit report to this path instead of stdout")
+    lts_plan = release_subparsers.add_parser(
+        "lts-plan",
+        help="plan a long-term support release train with fixture-backed compatibility metadata",
+    )
+    lts_plan.add_argument("--series", required=True, help="LTS series as MAJOR.MINOR, for example 1.0")
+    lts_plan.add_argument("--base-version", required=True, help="current LTS base semantic version")
+    lts_plan.add_argument("--target-version", required=True, help="target LTS semantic version to ship")
+    lts_plan.add_argument(
+        "--item",
+        action="append",
+        required=True,
+        metavar="CATEGORY:ID[:SUMMARY]",
+        help=(
+            "maintenance item to route; categories are checker_fix, security_patch, "
+            "corpus_update, compatibility_metadata"
+        ),
+    )
+    lts_plan.add_argument(
+        "--candidate-version",
+        action="append",
+        default=[],
+        metavar="SURFACE=VERSION",
+        help=(
+            "fixture-backed compatibility version for tokenizer, template, provider, grammar, or framework; "
+            "defaults to the maintained pinned corpus versions"
+        ),
+    )
+    lts_plan.add_argument("--repo-root", help="repository root to inspect (default: installed PromptABI repository root)")
+    lts_plan.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    lts_plan.add_argument("--output", help="write LTS release plan to this path instead of stdout")
     drift_bisect = release_subparsers.add_parser(
         "drift-bisect",
         help="find the first tokenizer, template, schema, provider, or framework artifact revision that introduced drift",
@@ -3927,6 +3967,43 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         except OSError as exc:
             print(f"promptabi: cannot write compatibility audit report: {exc}", file=sys.stderr)
+            return 2
+        return 0 if report.ok else 1
+
+    if args.command == "release" and args.release_command == "lts-plan":
+        try:
+            candidate_versions = (
+                _parse_candidate_versions(args.candidate_version, parser) if args.candidate_version else None
+            )
+            report = build_lts_release_plan(
+                tuple(lts_item_from_string(value) for value in args.item),
+                series=args.series,
+                base_version=args.base_version,
+                target_version=args.target_version,
+                repo_root=args.repo_root,
+                candidate_versions=candidate_versions,
+            )
+            output = render_lts_release_plan_json(report) if args.format == "json" else render_lts_release_plan_text(report)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                print(f"wrote LTS release plan: {args.output} ({len(report.decisions)} backport(s))")
+            else:
+                print(output, end="")
+        except (
+            LTSReleaseError,
+            CompatibilityAuditError,
+            CorpusVerificationError,
+            EvaluationError,
+            ProviderFixturePackError,
+            RealBugBenchmarkError,
+            SeedCorpusError,
+            StructuredSchemaCorpusError,
+            ValueError,
+        ) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write LTS release plan: {exc}", file=sys.stderr)
             return 2
         return 0 if report.ok else 1
 

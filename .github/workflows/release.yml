@@ -72,6 +72,19 @@ jobs:
               handle.write(f"version={version}\n")
               handle.write(f"tag={tag}\n")
 
+      - name: Plan LTS compatibility metadata
+        run: |
+          python -m pip install -e .
+          promptabi release lts-plan \
+            --series 1.0 \
+            --base-version 1.0.0 \
+            --target-version 1.0.1 \
+            --item checker_fix:role-boundary-nonforgeability \
+            --item security_patch:security-model \
+            --item corpus_update:seed-v1 \
+            --item compatibility_metadata:provider-fixtures-v1 \
+            --format json
+
       - name: Build sdist and wheel
         run: |
           python -m pip install --upgrade pip build twine

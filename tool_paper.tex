@@ -407,7 +407,9 @@ a CPU-only benchmark suite, documentation, and contribution guidance, plus
 grammar/parser/framework fixtures and binary-search local tokenizer, template,
 schema, provider, or framework artifact histories to identify the first
 contract-regressing revision---abstaining rather than certifying unpinned
-upstream releases---and a \texttt{promptabi release readiness} gate that checks version metadata,
+upstream releases---a \texttt{promptabi release lts-plan} gate that routes
+checker backports, security patches, corpus refreshes, and compatibility
+metadata for supported maintenance trains, and a \texttt{promptabi release readiness} gate that checks version metadata,
 changelog, README command anchors, stable CLI paths, GitHub Action and release
 workflows, MkDocs navigation, seed-corpus manifests, formal/Z3-backed check
 registration, theorem-to-test traceability, real-bug replay, the reproducibility

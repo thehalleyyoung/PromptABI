@@ -170,6 +170,7 @@ promptabi fuzz mutations --format text
 promptabi maintain refresh --output-dir maintainer_artifact --force
 promptabi paper reproducibility --output-dir paper_artifact --force  # includes evaluator guide
 promptabi release compatibility-audit --candidate-version tokenizer=seed-v1 --candidate-version template=seed-v1 --candidate-version provider=provider-fixtures-v1 --candidate-version grammar=grammar-differential-v1 --candidate-version framework=structured-schemas-v1
+promptabi release lts-plan --series 1.0 --base-version 1.0.0 --target-version 1.0.1 --item checker_fix:role-boundary-nonforgeability --item security_patch:security-model --item corpus_update:seed-v1 --item compatibility_metadata:provider-fixtures-v1
 promptabi release drift-bisect --surface tokenizer --baseline tok-r0 --revision tok-r1=tok-r1 --revision tok-r2=tok-r2 --bad-field eos_token_id
 promptabi release readiness --format text
 

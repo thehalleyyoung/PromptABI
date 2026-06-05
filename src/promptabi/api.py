@@ -225,8 +225,13 @@ from .theorem_traceability import (
     render_theorem_traceability_text,
 )
 from .release import (
+    LTSMaintenanceItem,
+    LTSReleasePlan,
     ReleaseReadinessReport,
+    build_lts_release_plan,
     build_release_readiness_report,
+    render_lts_release_plan_json,
+    render_lts_release_plan_text,
     render_release_readiness_json,
     render_release_readiness_text,
 )
@@ -1109,6 +1114,35 @@ def release_readiness(
         return render_release_readiness_json(report)
     if output_format == "text":
         return render_release_readiness_text(report)
+    raise ValueError("output_format must be one of: text, json")
+
+
+def lts_release_plan(
+    items: Sequence[LTSMaintenanceItem],
+    *,
+    series: str,
+    base_version: str,
+    target_version: str,
+    repo_root: str | Path | None = None,
+    candidate_versions: Mapping[str, str] | None = None,
+    output_format: str | None = None,
+) -> LTSReleasePlan | str:
+    """Build or render a fixture-backed long-term support release plan."""
+
+    report = build_lts_release_plan(
+        tuple(items),
+        series=series,
+        base_version=base_version,
+        target_version=target_version,
+        repo_root=repo_root,
+        candidate_versions=dict(candidate_versions) if candidate_versions is not None else None,
+    )
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_lts_release_plan_json(report)
+    if output_format == "text":
+        return render_lts_release_plan_text(report)
     raise ValueError("output_format must be one of: text, json")
 
 
