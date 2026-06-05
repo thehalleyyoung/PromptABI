@@ -1156,6 +1156,17 @@ from .abstention_certificate import (
     render_abstention_certificate_json,
     render_abstention_certificate_text,
 )
+from .quantified_pattern_benchmark import (
+    QUANTIFIED_PATTERN_BENCHMARK_VERSION,
+    QuantifiedPattern,
+    QuantifiedPatternBenchmark,
+    QuantifiedPatternResult,
+    QuantifiedVerdict,
+    benchmark_quantified_patterns,
+    first_k_strategy,
+    render_quantified_pattern_json,
+    render_quantified_pattern_text,
+)
 from .provider_fixture_replay import (
     ProviderFixtureReplayCase,
     ProviderFixtureReplayFinding,
@@ -2082,6 +2093,15 @@ __all__ = [
     "classify_fragment",
     "render_abstention_certificate_json",
     "render_abstention_certificate_text",
+    "QUANTIFIED_PATTERN_BENCHMARK_VERSION",
+    "QuantifiedPattern",
+    "QuantifiedPatternBenchmark",
+    "QuantifiedPatternResult",
+    "QuantifiedVerdict",
+    "benchmark_quantified_patterns",
+    "first_k_strategy",
+    "render_quantified_pattern_json",
+    "render_quantified_pattern_text",
     "analyze_parser_compatibility",
     "analyze_tokenizer_grammar_ambiguity",
     "analyze_tokenizer_grammar_emptiness",
