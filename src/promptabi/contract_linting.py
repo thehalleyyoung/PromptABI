@@ -230,6 +230,10 @@ def _lint_rule_shape(rule: StaticContractRule, span: SourceSpan | None) -> tuple
         ("required_regions", rule.required_regions),
         ("schema.requires", tuple(value for obligation in rule.schema_obligations for value in obligation.requires)),
         ("stop.forbid_inside", tuple(policy.forbid_inside for policy in rule.stop_policies if policy.forbid_inside is not None)),
+        ("assume.artifact", tuple(assumption.artifact for assumption in rule.assumptions)),
+        ("assume.requires", tuple(value for assumption in rule.assumptions for value in assumption.requires)),
+        ("guarantee.artifact", tuple(guarantee.artifact for guarantee in rule.guarantees)),
+        ("guarantee.provides", tuple(value for guarantee in rule.guarantees for value in guarantee.provides)),
     ):
         invalid = tuple(value for value in values if not _IDENTIFIER_RE.fullmatch(value))
         if invalid:
@@ -239,6 +243,49 @@ def _lint_rule_shape(rule: StaticContractRule, span: SourceSpan | None) -> tuple
                     "warning",
                     f"{field_name} contains values outside the finite identifier fragment: {', '.join(invalid)}",
                     "Use finite symbolic names and put raw delimiters only in forbid_delimiters or stop sequences.",
+                    rule,
+                    span,
+                )
+            )
+    provided = {
+        provided
+        for guarantee in rule.guarantees
+        for provided in guarantee.provides
+    }
+    for assumption in rule.assumptions:
+        if not assumption.requires:
+            findings.append(
+                _finding(
+                    "vacuous-guarantee",
+                    "warning",
+                    f"assumption for {assumption.artifact!r} requires no guarantee facts",
+                    "List at least one finite guarantee fact after `requires`.",
+                    rule,
+                    span,
+                )
+            )
+            continue
+        unresolved = tuple(fact for fact in assumption.requires if fact not in provided)
+        if unresolved and rule.guarantees:
+            findings.append(
+                _finding(
+                    "unresolved-assumption",
+                    "warning",
+                    f"assumption for {assumption.artifact!r} has no matching guarantee fact in this contract: {', '.join(unresolved)}",
+                    "Add a matching guarantee directive, or compose this contract with the provider contract before enforcing it.",
+                    rule,
+                    span,
+                    evidence=(("available_guarantees", ", ".join(sorted(provided)) or "<none>"),),
+                )
+            )
+    for guarantee in rule.guarantees:
+        if not guarantee.provides:
+            findings.append(
+                _finding(
+                    "vacuous-guarantee",
+                    "warning",
+                    f"guarantee for {guarantee.artifact!r} provides no facts",
+                    "List at least one finite guarantee fact after `provides`.",
                     rule,
                     span,
                 )
@@ -256,6 +303,8 @@ def _lint_rule_semantics(rule: StaticContractRule, span: SourceSpan | None) -> t
             rule.schema_obligations,
             rule.stop_policies,
             rule.invariants,
+            rule.assumptions,
+            rule.guarantees,
         )
     ):
         findings.append(
@@ -263,7 +312,7 @@ def _lint_rule_semantics(rule: StaticContractRule, span: SourceSpan | None) -> t
                 "vacuous-guarantee",
                 "warning",
                 "rule has severity and metadata but no enforceable obligations",
-                "Add roles, required regions, forbidden delimiters, schema requirements, stop policies, or invariants.",
+                "Add roles, required regions, forbidden delimiters, schema requirements, stop policies, invariants, assumptions, or guarantees.",
                 rule,
                 span,
             )

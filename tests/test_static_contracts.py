@@ -23,6 +23,7 @@ from promptabi.artifacts import (
     StaticContractStopPolicy,
     StopPolicyArtifact,
     ToolDefinitionArtifact,
+    TokenizerArtifact,
     TrainingManifestArtifact,
     TrainingPipelineStageVersion,
     TrainingSourceContribution,
@@ -85,6 +86,8 @@ rule app-boundaries type llm-app severity error applies_to chat-template,tool-de
   schema tool_call requires arguments,name
   stop json-response stops "</json>","```" forbid_inside json-string
   invariant required_prompt_tokens <= input_budget_tokens
+  assume prompt-segment requires tokenizer.control-token-stable
+  guarantee tokenizer provides tokenizer.control-token-stable
 """
 
     artifact = parse_static_contract_text(source, name="app-contract", path="app.pabi")
@@ -95,6 +98,8 @@ rule app-boundaries type llm-app severity error applies_to chat-template,tool-de
     assert artifact.rules[0].schema_obligations[0].requires == ("arguments", "name")
     assert artifact.rules[0].stop_policies[0].forbid_inside == "json-string"
     assert artifact.rules[0].invariants[0].op == "<="
+    assert artifact.rules[0].assumptions[0].requires == ("tokenizer.control-token-stable",)
+    assert artifact.rules[0].guarantees[0].artifact == "tokenizer"
     assert parse_static_contract_text(format_static_contract(artifact), name="app-contract").rules == artifact.rules
     assert '"contract_version": "promptabi.contract/v1"' in render_static_contract_json(artifact)
 
@@ -252,6 +257,73 @@ def test_static_contracts_extract_counterexamples_for_real_conflicts() -> None:
     }
     assert violations["stop-control-token-collision"].result.assignment["stop_sequence"] == "</s>"
     assert violations["training-target-role-alignment"].result.assignment == {"target_role": "critic"}
+
+
+def test_static_contracts_discharge_cross_artifact_assume_guarantee_contracts() -> None:
+    location = ArtifactLocation(uri="memory://static-contract")
+    config = VerificationConfig(name="static")
+    contract = parse_static_contract_text(
+        """\
+contract promptabi.contract/v1
+
+rule cross-artifact type static-contract severity error:
+  assume prompt-segment requires tokenizer.control-token-stable,schema.tool-call-json
+  guarantee tokenizer provides tokenizer.control-token-stable
+  guarantee schema provides schema.tool-call-json
+""",
+        name="cross",
+    )
+    loaded = (
+        _loaded(
+            PromptSegmentArtifact(
+                kind=ArtifactKind.PROMPT_SEGMENT,
+                name="segments",
+                location=location,
+                segments=(PromptSegment("system", role="system", required=True, token_count=4),),
+            )
+        ),
+        _loaded(TokenizerArtifact(kind=ArtifactKind.TOKENIZER, name="tok", location=location, added_tokens=("<|im_start|>",))),
+        _loaded(SchemaArtifact(kind=ArtifactKind.SCHEMA, name="answer", location=location)),
+        _loaded(contract),
+    )
+
+    report = analyze_static_contracts(config, loaded, prefer_z3=False)
+
+    finding = next(item for item in report.findings if item.name == "static-contract-assume-guarantee")
+    assert finding.severity == "info"
+    assert dict(finding.evidence)["provided_guarantees"] == "schema.tool-call-json, tokenizer.control-token-stable"
+
+
+def test_static_contracts_report_undischarged_cross_artifact_assumption() -> None:
+    location = ArtifactLocation(uri="memory://static-contract")
+    contract = parse_static_contract_text(
+        """\
+contract promptabi.contract/v1
+
+rule cross-artifact type static-contract severity error:
+  assume prompt-segment requires tokenizer.control-token-stable,provider.envelope-preserving
+  guarantee tokenizer provides tokenizer.control-token-stable
+""",
+        name="cross",
+    )
+    loaded = (
+        _loaded(
+            PromptSegmentArtifact(
+                kind=ArtifactKind.PROMPT_SEGMENT,
+                name="segments",
+                location=location,
+                segments=(PromptSegment("system", role="system", required=True, token_count=4),),
+            )
+        ),
+        _loaded(TokenizerArtifact(kind=ArtifactKind.TOKENIZER, name="tok", location=location)),
+        _loaded(contract),
+    )
+
+    report = analyze_static_contracts(VerificationConfig(name="static"), loaded, prefer_z3=False)
+
+    violation = next(item for item in report.violations if item.name == "static-contract-assume-guarantee")
+    assert violation.result.assignment == {"required_guarantee": "provider.envelope-preserving"}
+    assert dict(violation.evidence)["provided_guarantees"] == "tokenizer.control-token-stable"
 
 
 def test_static_contracts_prove_supervised_spans_stay_inside_rendered_tokenized_masked_regions() -> None:

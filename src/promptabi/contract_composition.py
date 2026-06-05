@@ -11,6 +11,8 @@ from .artifacts import (
     ArtifactKind,
     ArtifactLocation,
     StaticContractArtifact,
+    StaticContractAssumption,
+    StaticContractGuarantee,
     StaticContractInvariant,
     StaticContractRule,
     StaticContractSchemaObligation,
@@ -280,6 +282,8 @@ def _compose_rule_group(
     schema_obligations = _merge_schema_obligations(group)
     stop_policies, stop_conflicts = _merge_stop_policies(group)
     invariants, invariant_conflicts = _merge_invariants(group)
+    assumptions = _merge_assumptions(group)
+    guarantees = _merge_guarantees(group)
     conflicts.extend(stop_conflicts)
     conflicts.extend(invariant_conflicts)
 
@@ -296,6 +300,8 @@ def _compose_rule_group(
             schema_obligations=schema_obligations,
             stop_policies=stop_policies,
             invariants=invariants,
+            assumptions=assumptions,
+            guarantees=guarantees,
         ),
         tuple(conflicts),
     )
@@ -370,6 +376,28 @@ def _merge_invariants(
             else:
                 invariant_by_name[invariant.name] = (invariant, contribution)
     return tuple(item[0] for _, item in sorted(invariant_by_name.items())), tuple(conflicts)
+
+
+def _merge_assumptions(group: tuple[ContractRuleContribution, ...]) -> tuple[StaticContractAssumption, ...]:
+    required_by_artifact: dict[str, set[str]] = {}
+    for contribution in group:
+        for assumption in contribution.rule.assumptions:
+            required_by_artifact.setdefault(assumption.artifact, set()).update(assumption.requires)
+    return tuple(
+        StaticContractAssumption(artifact=artifact, requires=tuple(sorted(requires)))
+        for artifact, requires in sorted(required_by_artifact.items())
+    )
+
+
+def _merge_guarantees(group: tuple[ContractRuleContribution, ...]) -> tuple[StaticContractGuarantee, ...]:
+    provided_by_artifact: dict[str, set[str]] = {}
+    for contribution in group:
+        for guarantee in contribution.rule.guarantees:
+            provided_by_artifact.setdefault(guarantee.artifact, set()).update(guarantee.provides)
+    return tuple(
+        StaticContractGuarantee(artifact=artifact, provides=tuple(sorted(provides)))
+        for artifact, provides in sorted(provided_by_artifact.items())
+    )
 
 
 def _highest_specific(

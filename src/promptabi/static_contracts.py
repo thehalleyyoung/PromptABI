@@ -1126,6 +1126,7 @@ def _explicit_static_contract_obligations(
             findings.extend(_explicit_schema_obligation(contract, rule, loaded_artifacts, schemas, rule_span=rule_span, prefer_z3=prefer_z3))
             findings.extend(_explicit_stop_policy_obligation(contract, rule, stop_policies, rule_span=rule_span, prefer_z3=prefer_z3))
             findings.extend(_explicit_invariant_obligation(contract, rule, config, prompt_segments, truncation_configs, stop_policies, rule_span=rule_span, prefer_z3=prefer_z3))
+            findings.extend(_explicit_assume_guarantee_obligation(contract, rule, loaded_artifacts, rule_span=rule_span, prefer_z3=prefer_z3))
     return tuple(findings)
 
 
@@ -1505,6 +1506,92 @@ def _explicit_invariant_obligation(
     return tuple(findings)
 
 
+def _explicit_assume_guarantee_obligation(
+    contract: StaticContractArtifact,
+    rule: StaticContractRule,
+    loaded_artifacts: tuple[LoadedArtifact, ...],
+    *,
+    rule_span: SourceSpan | None,
+    prefer_z3: bool,
+) -> tuple[StaticContractFinding, ...]:
+    if not rule.assumptions and not rule.guarantees:
+        return ()
+
+    loaded_refs = _loaded_artifact_refs(loaded_artifacts)
+    findings: list[StaticContractFinding] = []
+    provided_by_artifact: dict[str, set[str]] = {}
+    all_provided: set[str] = set()
+    for guarantee in rule.guarantees:
+        if guarantee.artifact not in loaded_refs:
+            findings.append(
+                _explicit_unknown(
+                    contract,
+                    rule,
+                    "static-contract-guarantee-provider",
+                    f"guarantee provider {guarantee.artifact!r} is not a loaded artifact name or kind",
+                    "Reference a loaded artifact name or PromptABI artifact kind in guarantee directives.",
+                    (("provider", guarantee.artifact), ("provides", ", ".join(guarantee.provides))),
+                    rule_span=rule_span,
+                )
+            )
+            continue
+        provided_by_artifact.setdefault(guarantee.artifact, set()).update(guarantee.provides)
+        all_provided.update(guarantee.provides)
+
+    for assumption in rule.assumptions:
+        if assumption.artifact not in loaded_refs:
+            findings.append(
+                _explicit_unknown(
+                    contract,
+                    rule,
+                    "static-contract-assumption-consumer",
+                    f"assumption consumer {assumption.artifact!r} is not a loaded artifact name or kind",
+                    "Reference a loaded artifact name or PromptABI artifact kind in assume directives.",
+                    (("consumer", assumption.artifact), ("requires", ", ".join(assumption.requires))),
+                    rule_span=rule_span,
+                )
+            )
+            continue
+        problem = FiniteContractProblem(
+            name="static-contract-assume-guarantee",
+            variables=(EnumDomain("required_guarantee", assumption.requires),),
+            constraints=(NamedConstraint("assumed-guarantee-not-provided-by-loaded-contracts", Not(InSet(Var("required_guarantee"), all_provided))),),
+        )
+        result = problem.solve(prefer_z3=prefer_z3)
+        missing = str((result.assignment or {}).get("required_guarantee", "<none>"))
+        findings.append(
+            StaticContractFinding(
+                name=problem.name,
+                status=result.status,
+                result=result,
+                problem=problem,
+                severity=_explicit_severity(rule, result.sat),
+                message=(
+                    f"static contract rule {rule.name!r} has an undischarged cross-artifact assumption"
+                    if result.sat
+                    else f"static contract rule {rule.name!r} discharges every cross-artifact assumption"
+                ),
+                suggestion=(
+                    "Add or compose a guarantee from a loaded provider artifact, or remove the stale assumption."
+                    if result.sat
+                    else "Keep assume/guarantee facts in the same review path as artifact and prompt-pack updates."
+                ),
+                evidence=(
+                    ("contract", contract.name),
+                    ("rule", rule.name),
+                    ("consumer", assumption.artifact),
+                    ("requires", ", ".join(assumption.requires)),
+                    ("provided_guarantees", ", ".join(sorted(all_provided)) or "<none>"),
+                    ("providers", "; ".join(f"{artifact}={','.join(sorted(facts))}" for artifact, facts in sorted(provided_by_artifact.items())) or "<none>"),
+                    ("missing_guarantee", missing if result.sat else "<none>"),
+                ),
+                artifacts=(contract.name,),
+                source_span=rule_span,
+            )
+        )
+    return tuple(findings)
+
+
 def _explicit_unknown(
     contract: StaticContractArtifact,
     rule: StaticContractRule,
@@ -1527,6 +1614,14 @@ def _explicit_unknown(
         artifacts=(contract.name,),
         source_span=rule_span,
     )
+
+
+def _loaded_artifact_refs(loaded_artifacts: tuple[LoadedArtifact, ...]) -> frozenset[str]:
+    refs: set[str] = set()
+    for loaded in loaded_artifacts:
+        refs.add(loaded.artifact.name)
+        refs.add(loaded.artifact.kind.value)
+    return frozenset(refs)
 
 
 def _static_contract_rule_span(

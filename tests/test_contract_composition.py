@@ -18,6 +18,8 @@ rule boundary type interface severity error applies_to chat-template,tool-defini
   schema tool_call requires name
   stop json stops "</json>" forbid_inside json-string
   invariant required_prompt_tokens <= input_budget_tokens
+  assume prompt-pack requires tokenizer.control-token-stable
+  guarantee tokenizer provides tokenizer.control-token-stable
 """,
         name="org",
         path="org.pabi",
@@ -33,6 +35,8 @@ rule boundary type interface severity warning applies_to chat-template:
   forbid_delimiters "<tool_call>"
   schema tool_call requires arguments
   stop json stops "```" forbid_inside json-string
+  assume app-config requires schema.tool-call-json
+  guarantee schema provides schema.tool-call-json
 """,
         name="app",
         path="app.pabi",
@@ -55,6 +59,10 @@ rule boundary type interface severity warning applies_to chat-template:
     assert rule.forbidden_delimiters == ("<tool_call>", "<|im_start|>")
     assert rule.schema_obligations[0].requires == ("arguments", "name")
     assert rule.stop_policies[0].stops == ("</json>", "```")
+    assert rule.assumptions[0].requires == ("schema.tool-call-json",)
+    assert rule.assumptions[1].requires == ("tokenizer.control-token-stable",)
+    assert rule.guarantees[0].provides == ("schema.tool-call-json",)
+    assert rule.guarantees[1].provides == ("tokenizer.control-token-stable",)
     assert [conflict.field for conflict in result.conflicts] == ["severity"]
     assert "app-config attempts to weaken severity" in result.conflicts[0].message
 

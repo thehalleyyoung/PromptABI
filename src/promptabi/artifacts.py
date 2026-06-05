@@ -1304,6 +1304,42 @@ class StaticContractInvariant:
 
 
 @dataclass(frozen=True, slots=True)
+class StaticContractAssumption:
+    """A guarantee fact another loaded artifact must provide for this rule."""
+
+    artifact: str
+    requires: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        _require_non_empty("static contract assumption artifact", self.artifact)
+        object.__setattr__(self, "requires", _unique_strings(self.requires, field_name="static contract assumption requires"))
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {"artifact": self.artifact}
+        if self.requires:
+            data["requires"] = list(self.requires)
+        return data
+
+
+@dataclass(frozen=True, slots=True)
+class StaticContractGuarantee:
+    """A guarantee fact provided by a loaded artifact or artifact kind."""
+
+    artifact: str
+    provides: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        _require_non_empty("static contract guarantee artifact", self.artifact)
+        object.__setattr__(self, "provides", _unique_strings(self.provides, field_name="static contract guarantee provides"))
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {"artifact": self.artifact}
+        if self.provides:
+            data["provides"] = list(self.provides)
+        return data
+
+
+@dataclass(frozen=True, slots=True)
 class StaticContractRule:
     """One human-authored static interface rule."""
 
@@ -1318,6 +1354,8 @@ class StaticContractRule:
     schema_obligations: tuple[StaticContractSchemaObligation, ...] = ()
     stop_policies: tuple[StaticContractStopPolicy, ...] = ()
     invariants: tuple[StaticContractInvariant, ...] = ()
+    assumptions: tuple[StaticContractAssumption, ...] = ()
+    guarantees: tuple[StaticContractGuarantee, ...] = ()
 
     def __post_init__(self) -> None:
         _require_non_empty("static contract rule name", self.name)
@@ -1345,6 +1383,14 @@ class StaticContractRule:
         if len({item.name for item in invariants}) != len(invariants):
             raise ValueError("static contract invariant names must be unique")
         object.__setattr__(self, "invariants", invariants)
+        assumptions = tuple(sorted(self.assumptions, key=lambda item: item.artifact))
+        if len({item.artifact for item in assumptions}) != len(assumptions):
+            raise ValueError("static contract assumption artifacts must be unique per rule")
+        object.__setattr__(self, "assumptions", assumptions)
+        guarantees = tuple(sorted(self.guarantees, key=lambda item: item.artifact))
+        if len({item.artifact for item in guarantees}) != len(guarantees):
+            raise ValueError("static contract guarantee artifacts must be unique per rule")
+        object.__setattr__(self, "guarantees", guarantees)
 
     def to_dict(self) -> dict[str, object]:
         data: dict[str, object] = {
@@ -1368,6 +1414,10 @@ class StaticContractRule:
             data["stop_policies"] = [item.to_dict() for item in self.stop_policies]
         if self.invariants:
             data["invariants"] = [item.to_dict() for item in self.invariants]
+        if self.assumptions:
+            data["assumptions"] = [item.to_dict() for item in self.assumptions]
+        if self.guarantees:
+            data["guarantees"] = [item.to_dict() for item in self.guarantees]
         return data
 
 
@@ -2602,6 +2652,8 @@ def _static_contract_rules(spec: dict[str, Any]) -> tuple[StaticContractRule, ..
                 schema_obligations=_static_contract_schema_obligations(item),
                 stop_policies=_static_contract_stop_policies(item),
                 invariants=_static_contract_invariants(item),
+                assumptions=_static_contract_assumptions(item),
+                guarantees=_static_contract_guarantees(item),
             )
         )
     return tuple(rules)
@@ -2667,6 +2719,40 @@ def _static_contract_invariants(spec: dict[str, Any]) -> tuple[StaticContractInv
             )
         )
     return tuple(invariants)
+
+
+def _static_contract_assumptions(spec: dict[str, Any]) -> tuple[StaticContractAssumption, ...]:
+    raw_assumptions = spec.get("assumptions", [])
+    if not isinstance(raw_assumptions, list):
+        raise ValueError("artifact field 'assumptions' must be a list")
+    assumptions: list[StaticContractAssumption] = []
+    for item in raw_assumptions:
+        if not isinstance(item, dict):
+            raise ValueError("static contract assumptions must be objects")
+        assumptions.append(
+            StaticContractAssumption(
+                artifact=_str(item, "artifact"),
+                requires=_tuple_of_str(item, "requires"),
+            )
+        )
+    return tuple(assumptions)
+
+
+def _static_contract_guarantees(spec: dict[str, Any]) -> tuple[StaticContractGuarantee, ...]:
+    raw_guarantees = spec.get("guarantees", [])
+    if not isinstance(raw_guarantees, list):
+        raise ValueError("artifact field 'guarantees' must be a list")
+    guarantees: list[StaticContractGuarantee] = []
+    for item in raw_guarantees:
+        if not isinstance(item, dict):
+            raise ValueError("static contract guarantees must be objects")
+        guarantees.append(
+            StaticContractGuarantee(
+                artifact=_str(item, "artifact"),
+                provides=_tuple_of_str(item, "provides"),
+            )
+        )
+    return tuple(guarantees)
 
 
 def _evaluation_few_shot_examples(spec: dict[str, Any]) -> tuple[EvaluationFewShotExample, ...]:

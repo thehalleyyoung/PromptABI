@@ -13,6 +13,8 @@ from .artifacts import (
     ArtifactKind,
     ArtifactLocation,
     StaticContractArtifact,
+    StaticContractAssumption,
+    StaticContractGuarantee,
     StaticContractInvariant,
     StaticContractRule,
     StaticContractSchemaObligation,
@@ -147,6 +149,10 @@ def format_static_contract(contract: StaticContractArtifact) -> str:
             lines.append(f"  stop {policy.name} stops {_format_values(policy.stops)}{suffix}")
         for invariant in rule.invariants:
             lines.append(f"  invariant {invariant.name}: {invariant.left} {invariant.op} {invariant.right}")
+        for assumption in rule.assumptions:
+            lines.append(f"  assume {assumption.artifact} requires {_format_values(assumption.requires)}")
+        for guarantee in rule.guarantees:
+            lines.append(f"  guarantee {guarantee.artifact} provides {_format_values(guarantee.provides)}")
     return "\n".join(lines) + "\n"
 
 
@@ -198,6 +204,12 @@ def _parse_rule_body_line(line: str, builder: "_RuleBuilder", line_number: int) 
     if line.startswith("invariant "):
         _parse_invariant_line(line, builder, line_number)
         return
+    if line.startswith("assume "):
+        _parse_assumption_line(line, builder, line_number)
+        return
+    if line.startswith("guarantee "):
+        _parse_guarantee_line(line, builder, line_number)
+        return
     raise ContractLanguageError(f"unknown rule directive {line.split()[0]!r}", line_number)
 
 
@@ -240,6 +252,20 @@ def _parse_invariant_line(line: str, builder: "_RuleBuilder", line_number: int) 
     builder.invariants.append(
         StaticContractInvariant(name=name, left=match.group(1), op=match.group(2), right=match.group(3))
     )
+
+
+def _parse_assumption_line(line: str, builder: "_RuleBuilder", line_number: int) -> None:
+    tokens = shlex.split(line)
+    if len(tokens) != 4 or tokens[2] != "requires":
+        raise ContractLanguageError("assume directives must be: assume <artifact-or-kind> requires <fact[,fact...]>", line_number)
+    builder.assumptions.append(StaticContractAssumption(artifact=tokens[1], requires=_parse_values(tokens[3])))
+
+
+def _parse_guarantee_line(line: str, builder: "_RuleBuilder", line_number: int) -> None:
+    tokens = shlex.split(line)
+    if len(tokens) != 4 or tokens[2] != "provides":
+        raise ContractLanguageError("guarantee directives must be: guarantee <artifact-or-kind> provides <fact[,fact...]>", line_number)
+    builder.guarantees.append(StaticContractGuarantee(artifact=tokens[1], provides=_parse_values(tokens[3])))
 
 
 def _parse_values(raw: str) -> tuple[str, ...]:
@@ -302,16 +328,22 @@ class _RuleBuilder:
     schema_obligations: list[StaticContractSchemaObligation] | None = None
     stop_policies: list[StaticContractStopPolicy] | None = None
     invariants: list[StaticContractInvariant] | None = None
+    assumptions: list[StaticContractAssumption] | None = None
+    guarantees: list[StaticContractGuarantee] | None = None
 
     def __post_init__(self) -> None:
         self.schema_obligations = []
         self.stop_policies = []
         self.invariants = []
+        self.assumptions = []
+        self.guarantees = []
 
     def build(self) -> tuple[StaticContractRule, int]:
         assert self.schema_obligations is not None
         assert self.stop_policies is not None
         assert self.invariants is not None
+        assert self.assumptions is not None
+        assert self.guarantees is not None
         return (
             StaticContractRule(
                 name=self.name,
@@ -325,6 +357,8 @@ class _RuleBuilder:
                 schema_obligations=tuple(self.schema_obligations),
                 stop_policies=tuple(self.stop_policies),
                 invariants=tuple(self.invariants),
+                assumptions=tuple(self.assumptions),
+                guarantees=tuple(self.guarantees),
             ),
             self.line,
         )

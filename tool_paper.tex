@@ -726,17 +726,21 @@ their surrounding LLM software weekly.
 
 Beyond built-in checks, PromptABI includes a static contract language for
 declaring allowed roles, required regions, forbidden delimiters, schema
-obligations, stop policies, and solver-backed invariants. The language can be
-formatted, linted, migrated, and composed across organization policies,
-prompt packs, app configs, RAG systems, fine-tuning datasets, and eval
-harnesses.
+obligations, stop policies, solver-backed invariants, and cross-artifact
+assume/guarantee facts. The language can be formatted, linted, migrated, and
+composed across organization policies, prompt packs, app configs, RAG systems,
+fine-tuning datasets, and eval harnesses.
 
 The compiler lowers rules to the same verification backends used elsewhere:
 automata products, SMT formulas, differential checks, and diagnostics with
-source spans. Composition is explicit about precedence. Linting catches
-impossible rules, vacuous guarantees, unsupported fragments, contradictory
-policies, and overly broad suppressions. Migration explains behavior changes
-when rule syntax or solver-backed semantics evolve.
+source spans. Composition is explicit about precedence. Assume/guarantee clauses
+make dependencies reviewable: an app rule can assume that a tokenizer preserves a
+control-token contract or that a schema preserves a tool-call shape, and the
+verifier discharges that assumption only when a loaded provider artifact or
+artifact kind declares the matching guarantee. Linting catches impossible rules,
+vacuous guarantees, unsupported fragments, unresolved assumptions,
+contradictory policies, and overly broad suppressions. Migration explains
+behavior changes when rule syntax or solver-backed semantics evolve.
 
 This is important because production teams rarely want only built-in checks.
 They want local invariants: ``this system message must survive,'' ``these tool

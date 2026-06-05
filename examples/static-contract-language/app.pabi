@@ -8,3 +8,5 @@ rule app-boundaries type llm-app severity error applies_to chat-template,stop-po
   schema tool_call requires arguments,name
   stop json-response stops "</json>","```" forbid_inside json-string
   invariant budget-survival: required_prompt_tokens <= input_budget_tokens
+  assume prompt-segment requires tokenizer.control-token-stable
+  guarantee tokenizer provides tokenizer.control-token-stable
