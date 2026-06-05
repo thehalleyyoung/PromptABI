@@ -1,0 +1,27 @@
+{
+  "name": "support-triage",
+  "version": "1.2.0",
+  "description": "Certified demo pack: routes a customer message to a structured triage record.",
+  "license": "Apache-2.0",
+  "exported_roles": ["system", "user", "assistant"],
+  "template": "<|im_start|>system\nYou are a triage assistant.\nKnowledge: {{retrieved_docs}}<|im_end|>\n<|im_start|>user\n{{user_message}}<|im_end|>\n<|im_start|>assistant\n",
+  "control_markers": ["<|im_start|>", "<|im_end|>"],
+  "extension_points": [
+    {"name": "retrieved_docs", "placeholder": "{{retrieved_docs}}", "sanitizer": "json_escape"},
+    {"name": "user_message", "placeholder": "{{user_message}}", "sanitizer": "json_escape"}
+  ],
+  "stop_sequences": ["<|im_end|>"],
+  "sanitizers": ["json_escape"],
+  "schemas": {
+    "triage": {
+      "type": "object",
+      "properties": {
+        "priority": {"type": "string", "enum": ["low", "medium", "high"]},
+        "category": {"type": "string"},
+        "needs_human": {"type": "boolean"}
+      },
+      "required": ["priority", "category", "needs_human"]
+    }
+  },
+  "models": ["meta-llama/Llama-3.1-8B-Instruct", "Qwen/Qwen2.5-7B-Instruct"]
+}

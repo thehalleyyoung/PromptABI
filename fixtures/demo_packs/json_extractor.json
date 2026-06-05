@@ -1,0 +1,25 @@
+{
+  "name": "json-extractor",
+  "version": "0.4.1",
+  "description": "Certified demo pack: extracts a strict JSON record from free text.",
+  "license": "Apache-2.0",
+  "exported_roles": ["system", "user", "assistant"],
+  "template": "<|im_start|>system\nReturn only JSON.<|im_end|>\n<|im_start|>user\n{{document}}<|im_end|>\n<|im_start|>assistant\n",
+  "control_markers": ["<|im_start|>", "<|im_end|>"],
+  "extension_points": [
+    {"name": "document", "placeholder": "{{document}}", "sanitizer": "json_escape"}
+  ],
+  "stop_sequences": ["<|im_end|>"],
+  "sanitizers": ["json_escape"],
+  "schemas": {
+    "record": {
+      "type": "object",
+      "properties": {
+        "title": {"type": "string", "maxLength": 200},
+        "amount": {"type": "number"}
+      },
+      "required": ["title"]
+    }
+  },
+  "models": ["mistralai/Mistral-7B-Instruct-v0.3"]
+}
