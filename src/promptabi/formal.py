@@ -1037,13 +1037,30 @@ class Ne:
         return {"ne": [self.left.to_dict(), self.right.to_dict()]}
 
 
+def _finite_int_value(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
+
+
 @dataclass(frozen=True, slots=True)
 class Le:
     left: Expression
     right: Expression
 
     def evaluate(self, assignment: Assignment) -> bool:
-        return int(self.left.evaluate(assignment)) <= int(self.right.evaluate(assignment))
+        left = _finite_int_value(self.left.evaluate(assignment))
+        right = _finite_int_value(self.right.evaluate(assignment))
+        if left is None or right is None:
+            raise TypeError("numeric comparison received a non-integer finite value")
+        return left <= right
 
     def to_z3(self, context: "_Z3Context") -> Any:
         return self.left.to_z3(context) <= self.right.to_z3(context)
@@ -1058,7 +1075,11 @@ class Lt:
     right: Expression
 
     def evaluate(self, assignment: Assignment) -> bool:
-        return int(self.left.evaluate(assignment)) < int(self.right.evaluate(assignment))
+        left = _finite_int_value(self.left.evaluate(assignment))
+        right = _finite_int_value(self.right.evaluate(assignment))
+        if left is None or right is None:
+            raise TypeError("numeric comparison received a non-integer finite value")
+        return left < right
 
     def to_z3(self, context: "_Z3Context") -> Any:
         return self.left.to_z3(context) < self.right.to_z3(context)
@@ -1073,7 +1094,11 @@ class Ge:
     right: Expression
 
     def evaluate(self, assignment: Assignment) -> bool:
-        return int(self.left.evaluate(assignment)) >= int(self.right.evaluate(assignment))
+        left = _finite_int_value(self.left.evaluate(assignment))
+        right = _finite_int_value(self.right.evaluate(assignment))
+        if left is None or right is None:
+            raise TypeError("numeric comparison received a non-integer finite value")
+        return left >= right
 
     def to_z3(self, context: "_Z3Context") -> Any:
         return self.left.to_z3(context) >= self.right.to_z3(context)
@@ -1088,7 +1113,11 @@ class Gt:
     right: Expression
 
     def evaluate(self, assignment: Assignment) -> bool:
-        return int(self.left.evaluate(assignment)) > int(self.right.evaluate(assignment))
+        left = _finite_int_value(self.left.evaluate(assignment))
+        right = _finite_int_value(self.right.evaluate(assignment))
+        if left is None or right is None:
+            raise TypeError("numeric comparison received a non-integer finite value")
+        return left > right
 
     def to_z3(self, context: "_Z3Context") -> Any:
         return self.left.to_z3(context) > self.right.to_z3(context)
@@ -1420,6 +1449,13 @@ class FiniteContractProblem:
             if z3_result is not None:
                 return query_cache.put(cache_key, z3_result) if query_cache is not None and cache_key is not None else z3_result
         result = self._solve_by_enumeration(max_assignments=max_assignments, timeout_seconds=timeout_seconds)
+        if (
+            prefer_z3
+            and result.status is SolverStatus.UNKNOWN
+            and result.reason is not None
+            and "unsupported solver fragment" in result.reason
+        ):
+            result = replace(result, backend=SolverBackend.Z3)
         return query_cache.put(cache_key, result) if query_cache is not None and cache_key is not None else result
 
     def normalized_solver_query(
@@ -1566,12 +1602,13 @@ class FiniteContractProblem:
         checked = 0
         hit_assignment_cap = False
         hit_deadline = False
+        unsupported_reason: str | None = None
 
         def timed_out() -> bool:
             return deadline is not None and time.monotonic() >= deadline
 
         def search(index: int, assignment: dict[str, object], assigned: frozenset[str]) -> tuple[str, dict[str, object] | None]:
-            nonlocal checked, hit_assignment_cap, hit_deadline
+            nonlocal checked, hit_assignment_cap, hit_deadline, unsupported_reason
             if timed_out():
                 hit_deadline = True
                 return "unknown", None
@@ -1580,12 +1617,22 @@ class FiniteContractProblem:
                 if max_assignments is not None and checked > max_assignments:
                     hit_assignment_cap = True
                     return "unknown", None
-                if all(bool(constraint.expression.evaluate(assignment)) for constraint in self.constraints):
+                try:
+                    satisfied = all(bool(constraint.expression.evaluate(assignment)) for constraint in self.constraints)
+                except (TypeError, ValueError, AttributeError) as exc:
+                    unsupported_reason = f"unsupported solver fragment: {exc}"
+                    return "unknown", None
+                if satisfied:
                     return "sat", dict(assignment)
                 return "unsat", None
             for constraint, variables in constraint_variables:
-                if variables <= assigned and not bool(constraint.expression.evaluate(assignment)):
-                    return "pruned", None
+                if variables <= assigned:
+                    try:
+                        if not bool(constraint.expression.evaluate(assignment)):
+                            return "pruned", None
+                    except (TypeError, ValueError, AttributeError) as exc:
+                        unsupported_reason = f"unsupported solver fragment: {exc}"
+                        return "unknown", None
             variable = self.variables[index]
             for value in variable.values():
                 assignment[variable.name] = value
@@ -1612,6 +1659,9 @@ class FiniteContractProblem:
             elif hit_assignment_cap:
                 outcome = SolverBudgetOutcome.BOUNDED
                 reason = "finite enumeration stopped at the configured assignment budget"
+            elif unsupported_reason is not None:
+                outcome = SolverBudgetOutcome.ABSTAINED
+                reason = unsupported_reason
             else:
                 outcome = SolverBudgetOutcome.ABSTAINED
                 reason = "finite enumeration returned unknown without a proof object"

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .evaluation import EvaluationError, EvaluationReport, run_evaluation
+from .evaluation_fixture_packs import build_evaluation_fixture_pack_manifest
 from .loaders import ArtifactLoader
 from .provider_fixture_packs import ProviderFixturePackError, load_provider_fixture_pack_corpus
 from .provider_fixture_replay import analyze_provider_fixture_replay
@@ -116,6 +117,7 @@ def run_corpus_verification(
     provider_fixture_root: str | Path | None = None,
     real_bug_benchmark_path: str | Path | None = None,
     evaluation_corpus_path: str | Path | None = None,
+    evaluation_fixture_pack_path: str | Path | None = None,
     smt_benchmark_path: str | Path | None = None,
     thresholds: CorpusVerificationThresholds | None = None,
 ) -> CorpusVerificationReport:
@@ -130,6 +132,7 @@ def run_corpus_verification(
             _verify_structured_schema_corpus(structured_schema_root),
             _verify_provider_fixture_corpus(provider_fixture_root),
             _verify_real_bug_benchmark(real_bug_benchmark_path),
+            _verify_evaluation_fixture_pack(evaluation_fixture_pack_path),
             _verify_labeled_evaluation(evaluation_corpus_path, resolved_thresholds),
             _verify_smt_benchmark(smt_benchmark_path),
         ]
@@ -285,6 +288,28 @@ def _verify_real_bug_benchmark(path: str | Path | None) -> CorpusVerificationChe
         metrics={
             "manifest_sha256": manifest["manifest_sha256"],
             "categories": list(manifest["categories"]),
+        },
+    )
+
+
+def _verify_evaluation_fixture_pack(path: str | Path | None) -> CorpusVerificationCheck:
+    manifest = build_evaluation_fixture_pack_manifest(path)
+    case_count = _int_metric(manifest, "case_count")
+    failures = []
+    if case_count <= 0:
+        failures.append("evaluation fixture pack has no cases")
+    if not manifest.get("all_cases_passed"):
+        failures.append("one or more evaluation fixture cases failed")
+    return CorpusVerificationCheck(
+        name="evaluation-fixture-pack",
+        passed=not failures,
+        summary=f"{case_count} benchmark-interface bug fixtures replayed",
+        coverage_count=case_count,
+        expected_count=case_count,
+        failures=tuple(failures),
+        metrics={
+            "manifest_sha256": manifest["manifest_sha256"],
+            "bug_classes": list(manifest["bug_classes"]),
         },
     )
 

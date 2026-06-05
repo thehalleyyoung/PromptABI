@@ -1,0 +1,56 @@
+{
+  "manifest_version": 1,
+  "methodology": "Secret-free, CPU-only evaluation fixture pack. Each case replays a real PromptABI verification config that models a known benchmark-interface failure mode before scores are trusted or published.",
+  "cases": [
+    {
+      "id": "eval-stop-string-drift",
+      "bug_class": "stop-string",
+      "display_name": "Benchmark stop strings differ from serving stop policy",
+      "config": "examples/evaluation-harness/unsafe.promptabi.json",
+      "evidence": "Harness stops are replayed against the configured stop-policy artifact and must produce evaluation-harness-stop-policy-mismatch.",
+      "labels": ["evaluation-harness", "stop-policy", "benchmark-regression"],
+      "expected_rule_ids": ["evaluation-harness-stop-policy-mismatch"],
+      "expected_absent_rule_ids": ["evaluation-harness-verified"]
+    },
+    {
+      "id": "eval-parser-schema-drift",
+      "bug_class": "parser",
+      "display_name": "Evaluation answer parser points at the wrong schema contract",
+      "config": "examples/evaluation-harness/unsafe.promptabi.json",
+      "evidence": "The unsafe harness declares an answer schema name that cannot be matched to the JSON Schema artifact used by the grader.",
+      "labels": ["evaluation-harness", "parser", "json-schema"],
+      "expected_rule_ids": ["evaluation-harness-answer-parser-mismatch"],
+      "expected_absent_rule_ids": ["evaluation-harness-verified"]
+    },
+    {
+      "id": "eval-truncation-rag-loss",
+      "bug_class": "truncation",
+      "display_name": "Benchmark context construction drops required RAG evidence",
+      "config": "examples/rag-chunking/promptabi.json",
+      "evidence": "The RAG evaluation fixture replays citation loss, payload truncation, overlap accounting, and template-overhead diagnostics from real artifact contracts.",
+      "labels": ["evaluation-harness", "rag", "truncation"],
+      "expected_rule_ids": ["rag-citation-loss", "rag-payload-truncation", "rag-template-overhead"],
+      "expected_absent_rule_ids": ["check-failed"]
+    },
+    {
+      "id": "eval-role-boundary-forgery",
+      "bug_class": "role-boundary",
+      "display_name": "Few-shot benchmark content can forge model role delimiters",
+      "config": "examples/role-boundary/unsafe.promptabi.json",
+      "evidence": "The ChatML-style unsafe template is replayed through role-boundary non-forgeability and yields concrete assistant delimiter witnesses.",
+      "labels": ["evaluation-harness", "role-boundary", "chat-template"],
+      "expected_rule_ids": ["role-boundary-nonforgeability"],
+      "expected_absent_rule_ids": ["role-boundary-abstained"]
+    },
+    {
+      "id": "eval-tokenizer-mismatch",
+      "bug_class": "tokenizer-mismatch",
+      "display_name": "Evaluation tokenizer pin does not match serving tokenizer",
+      "config": "examples/evaluation-harness/unsafe.promptabi.json",
+      "evidence": "The unsafe harness tokenizer name is compared against the configured tokenizer artifact family and must report tokenizer mismatch.",
+      "labels": ["evaluation-harness", "tokenizer", "benchmark-regression"],
+      "expected_rule_ids": ["evaluation-harness-tokenizer-mismatch"],
+      "expected_absent_rule_ids": ["evaluation-harness-verified"]
+    }
+  ]
+}

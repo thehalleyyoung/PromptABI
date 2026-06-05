@@ -18,8 +18,9 @@ def test_evaluation_corpus_expands_real_bug_suite_and_declares_metrics() -> None
     assert "labeled evaluation" in methodology
     assert "precision" in metadata["metrics"]
     assert "solver_result_quality" in metadata["metrics"]
-    assert len(cases) >= 11
+    assert len(cases) >= 16
     assert any(case.case_id.startswith("real-bug:") for case in cases)
+    assert any(case.case_id.startswith("eval-fixture:") for case in cases)
     assert all(case.expected_rule_ids for case in cases)
 
 
@@ -29,7 +30,7 @@ def test_default_evaluation_runs_real_code_paths_and_reports_scoped_metrics() ->
 
     assert promptabi.__version__
     assert payload["passed"] is True
-    assert payload["case_count"] >= 11
+    assert payload["case_count"] >= 16
     assert payload["score"]["precision"] == 1.0
     assert payload["score"]["recall"] == 1.0
     assert payload["runtime_seconds"] >= 0
@@ -42,6 +43,7 @@ def test_default_evaluation_runs_real_code_paths_and_reports_scoped_metrics() ->
     assert by_id["stop-differential-vllm-agreement"]["differential_agreements"] == 1
     assert "stop-differential-mismatch" not in by_id["stop-differential-vllm-agreement"]["observed_rule_ids"]
     assert "rag-citation-loss" in by_id["rag-truncation-contracts"]["observed_rule_ids"]
+    assert "evaluation-harness-tokenizer-mismatch" in by_id["eval-fixture:eval-tokenizer-mismatch"]["observed_rule_ids"]
 
 
 def test_evaluation_renderers_and_cli_shape(tmp_path: Path, capsys) -> None:

@@ -60,6 +60,12 @@
       "id_prefix": "real-bug",
       "benchmark": "fixtures/real_bug_benchmarks/benchmark.json",
       "expected_absent_rule_ids": ["check-failed", "artifact-load-failed"]
+    },
+    {
+      "source": "eval-fixture-pack",
+      "id_prefix": "eval-fixture",
+      "pack": "fixtures/evaluation_fixture_packs/pack.json",
+      "expected_absent_rule_ids": ["check-failed", "artifact-load-failed"]
     }
   ]
 }

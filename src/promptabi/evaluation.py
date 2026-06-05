@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .diagnostics import CheckMode, Diagnostic
+from .evaluation_fixture_packs import load_evaluation_fixture_pack
 from .real_bug_benchmarks import load_real_bug_benchmark_suite
 from .session import CHECK_MODE_CATALOG, VerificationSession
 
@@ -344,6 +345,26 @@ def _cases_from_mapping(corpus_path: Path, repo_root: Path, raw: object) -> tupl
                 )
             )
         return tuple(cases)
+    if source == "eval-fixture-pack":
+        pack = raw.get("pack")
+        pack_path = (repo_root / pack).resolve() if isinstance(pack, str) else None
+        fixture_pack = load_evaluation_fixture_pack(pack_path)
+        prefix = _optional_string(corpus_path, raw, "id_prefix") or "eval-fixture"
+        expected_absent = _string_tuple(raw.get("expected_absent_rule_ids", ()), corpus_path, prefix, "expected_absent_rule_ids")
+        cases = []
+        for fixture_case in fixture_pack.cases:
+            cases.append(
+                EvaluationCase(
+                    case_id=f"{prefix}:{fixture_case.case_id}",
+                    source=source,
+                    benchmark_path=pack_path,
+                    expected_rule_ids=fixture_case.expected_rule_ids,
+                    expected_absent_rule_ids=tuple(sorted(set(expected_absent).union(fixture_case.expected_absent_rule_ids))),
+                    labels=fixture_case.labels,
+                    description=fixture_case.display_name,
+                )
+            )
+        return tuple(cases)
     raise EvaluationError(f"{corpus_path} has unsupported evaluation source {source!r}")
 
 
@@ -395,6 +416,13 @@ def _collect_case_observations(case: EvaluationCase) -> tuple[tuple[Diagnostic, 
         if benchmark_result is None:
             raise EvaluationError(f"real-bug benchmark case not found: {case.case_id}")
         return (), benchmark_result.observed_rule_ids
+    if case.source == "eval-fixture-pack":
+        fixture_pack = load_evaluation_fixture_pack(case.benchmark_path)
+        case_id = case.case_id.split(":", 1)[1] if ":" in case.case_id else case.case_id
+        fixture_result = next((result for result in fixture_pack.replay() if result.case_id == case_id), None)
+        if fixture_result is None:
+            raise EvaluationError(f"evaluation fixture case not found: {case.case_id}")
+        return (), fixture_result.observed_rule_ids
     raise EvaluationError(f"{case.case_id} uses unsupported source {case.source!r}")
 
 

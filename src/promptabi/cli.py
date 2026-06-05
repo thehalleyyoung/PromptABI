@@ -73,6 +73,11 @@ from .editor_protocol import (
 )
 from .explain import ExplainError, explain_diagnostic, render_explanation_json, render_explanation_text
 from .evaluation import EvaluationError, render_evaluation_json, render_evaluation_text, run_evaluation
+from .evaluation_fixture_packs import (
+    EvaluationFixturePackError,
+    build_evaluation_fixture_pack_manifest,
+    write_evaluation_fixture_pack_manifest,
+)
 from .first_party_plugins import create_first_party_plugin_registry, render_plugin_capabilities
 from .formal import SolverReplayFile, render_solver_replay_json, render_solver_replay_text
 from .github_action import GitHubActionError, run_github_action
@@ -542,6 +547,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         help="write manifest JSON to this path instead of stdout",
     )
+    evaluation_fixture_pack = corpus_subparsers.add_parser(
+        "evaluation-fixture-pack",
+        help="validate and replay eval bug fixture packs, then emit their manifest",
+    )
+    evaluation_fixture_pack.add_argument(
+        "--path",
+        help="evaluation fixture pack JSON path (default: repository fixtures/evaluation_fixture_packs/pack.json)",
+    )
+    evaluation_fixture_pack.add_argument(
+        "--output",
+        help="write manifest JSON to this path instead of stdout",
+    )
     smt_benchmark = corpus_subparsers.add_parser(
         "smt-benchmark",
         help="validate and replay minimized SMT benchmark obligations, then emit their manifest",
@@ -598,6 +615,10 @@ def build_parser() -> argparse.ArgumentParser:
     corpus_verify.add_argument(
         "--evaluation-corpus",
         help="labeled evaluation corpus JSON path (default: repository fixtures/evaluation/labeled_corpus.json)",
+    )
+    corpus_verify.add_argument(
+        "--evaluation-fixture-pack",
+        help="evaluation fixture pack JSON path (default: repository fixtures/evaluation_fixture_packs/pack.json)",
     )
     corpus_verify.add_argument(
         "--smt-benchmark",
@@ -1658,6 +1679,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         return 0
 
+    if args.command == "corpus" and args.corpus_command == "evaluation-fixture-pack":
+        try:
+            if args.output:
+                manifest = write_evaluation_fixture_pack_manifest(args.output, path=args.path)
+                print(f"wrote evaluation fixture pack manifest: {args.output} ({manifest['case_count']} cases)")
+            else:
+                manifest = build_evaluation_fixture_pack_manifest(args.path)
+                print(json.dumps(manifest, indent=2, sort_keys=True))
+        except EvaluationFixturePackError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write evaluation fixture pack manifest: {exc}", file=sys.stderr)
+            return 2
+        return 0
+
     if args.command == "corpus" and args.corpus_command == "evaluation":
         try:
             report = run_evaluation(args.corpus)
@@ -1717,6 +1754,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 provider_fixture_root=args.provider_fixture_root,
                 real_bug_benchmark_path=args.real_bug_benchmark,
                 evaluation_corpus_path=args.evaluation_corpus,
+                evaluation_fixture_pack_path=args.evaluation_fixture_pack,
                 smt_benchmark_path=args.smt_benchmark,
                 thresholds=thresholds,
             )
@@ -1733,6 +1771,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         except (
             CorpusVerificationError,
             EvaluationError,
+            EvaluationFixturePackError,
             ProviderFixturePackError,
             RealBugBenchmarkError,
             SeedCorpusError,
