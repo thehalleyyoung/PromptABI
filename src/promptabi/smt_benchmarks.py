@@ -78,6 +78,8 @@ class SmtBenchmarkResult:
     query_key: str
     checked_assignments: int
     backend: str
+    solver_budget_outcome: str
+    solver_budget_reason: str | None
     failures: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
@@ -91,6 +93,8 @@ class SmtBenchmarkResult:
             "status": self.status.value,
             "conclusion": self.conclusion.value,
             "backend": self.backend,
+            "solver_budget_outcome": self.solver_budget_outcome,
+            "solver_budget_reason": self.solver_budget_reason,
             "checked_assignments": self.checked_assignments,
             "query_key": self.query_key,
             "passed": self.passed,
@@ -186,14 +190,17 @@ def render_smt_benchmark_text(manifest: dict[str, object]) -> str:
         if not isinstance(entry, dict):
             continue
         lines.append(
-            "- {id}: {status}/{conclusion} via {backend} ({checked} checked)".format(
+            "- {id}: {status}/{conclusion} via {backend} ({checked} checked, budget={budget})".format(
                 id=entry.get("id"),
                 status=entry.get("status"),
                 conclusion=entry.get("conclusion"),
                 backend=entry.get("backend"),
                 checked=entry.get("checked_assignments"),
+                budget=entry.get("solver_budget_outcome"),
             )
         )
+        if entry.get("solver_budget_reason"):
+            lines.append(f"  budget: {entry.get('solver_budget_reason')}")
         for failure in entry.get("failures", ()):
             lines.append(f"  failure: {failure}")
     return "\n".join(lines) + "\n"
@@ -281,6 +288,8 @@ def _replay_case(case: SmtBenchmarkCase) -> SmtBenchmarkResult:
         query_key=report.query_key,
         checked_assignments=actual.checked_assignments,
         backend=actual.backend.value,
+        solver_budget_outcome=actual.budget_outcome.value,
+        solver_budget_reason=actual.budget_reason,
         failures=tuple(failures),
     )
 

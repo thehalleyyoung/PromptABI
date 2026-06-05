@@ -27,8 +27,10 @@ def test_smt_benchmark_replays_all_required_solver_outcomes() -> None:
     assert by_category["unsatisfiable"].conclusion is SolverConclusion.UNSAT_CORE_PROOF
     assert by_category["timeout-prone"].status is SolverStatus.UNKNOWN
     assert by_category["timeout-prone"].checked_assignments >= 5
+    assert by_category["timeout-prone"].solver_budget_outcome == "bounded"
     assert by_category["unsupported"].status is SolverStatus.UNKNOWN
     assert by_category["unsupported"].backend == "z3"
+    assert by_category["unsupported"].solver_budget_outcome == "abstained"
 
 
 def test_smt_benchmark_manifest_is_deterministic_and_redacted() -> None:
@@ -42,6 +44,7 @@ def test_smt_benchmark_manifest_is_deterministic_and_redacted() -> None:
     assert set(manifest["categories"]) == REQUIRED_SMT_BENCHMARK_CATEGORIES
     assert len(str(manifest["manifest_sha256"])) == 64
     assert "PromptABI SMT benchmark corpus" in text
+    assert "budget=bounded" in text
     assert "provider_credentials" not in json.dumps(manifest)
 
 
@@ -53,6 +56,7 @@ def test_smt_benchmark_cli_outputs_json_and_text(capsys) -> None:
     assert exit_code == 0
     assert payload["all_cases_passed"] is True
     assert payload["case_count"] == 4
+    assert any(entry["solver_budget_outcome"] == "bounded" for entry in payload["entries"])
     assert captured.err == ""
 
     exit_code = main(["corpus", "smt-benchmark", "--format", "text"])
@@ -71,4 +75,3 @@ def test_smt_benchmark_rejects_missing_required_category(tmp_path: Path) -> None
 
     with pytest.raises(SmtBenchmarkError, match="missing required categories: unsupported"):
         load_smt_benchmark_suite(path)
-

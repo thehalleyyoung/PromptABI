@@ -953,6 +953,16 @@ class SolverConclusion(StrEnum):
     ABSTENTION = "abstention"
 
 
+class SolverBudgetOutcome(StrEnum):
+    """How completely the solver explored its declared finite/SMT budget."""
+
+    PROVED = "proved"
+    BOUNDED = "bounded"
+    TIMED_OUT = "timed-out"
+    APPROXIMATED = "approximated"
+    ABSTAINED = "abstained"
+
+
 class Expression(Protocol):
     def evaluate(self, assignment: Assignment) -> bool | int | str:
         ...
@@ -1501,6 +1511,8 @@ class FiniteContractProblem:
                     backend=SolverBackend.Z3,
                     assignment=assignment,
                     checked_assignments=1,
+                    budget_outcome=SolverBudgetOutcome.PROVED,
+                    budget_reason="Z3 produced a satisfying model within the configured solver budget.",
                 )
             if status == z3.unsat:
                 core_trackers = tuple(str(item) for item in solver.unsat_core())
@@ -1515,14 +1527,32 @@ class FiniteContractProblem:
                     backend=SolverBackend.Z3,
                     unsat_core=core,
                     checked_assignments=0,
+                    budget_outcome=SolverBudgetOutcome.PROVED,
+                    budget_reason="Z3 proved unsatisfiability within the configured solver budget.",
                 )
-            return SolverResult(status=SolverStatus.UNKNOWN, backend=SolverBackend.Z3, checked_assignments=0)
-        except (TypeError, ValueError, AttributeError, z3.Z3Exception) as exc:
+            reason = str(solver.reason_unknown() or "Z3 returned unknown for the supported fragment.")
+            outcome = (
+                SolverBudgetOutcome.TIMED_OUT
+                if "timeout" in reason.lower()
+                else SolverBudgetOutcome.ABSTAINED
+            )
             return SolverResult(
                 status=SolverStatus.UNKNOWN,
                 backend=SolverBackend.Z3,
                 checked_assignments=0,
-                reason=f"unsupported solver fragment: {exc}",
+                reason=reason,
+                budget_outcome=outcome,
+                budget_reason=reason,
+            )
+        except (TypeError, ValueError, AttributeError, z3.Z3Exception) as exc:
+            reason = f"unsupported solver fragment: {exc}"
+            return SolverResult(
+                status=SolverStatus.UNKNOWN,
+                backend=SolverBackend.Z3,
+                checked_assignments=0,
+                reason=reason,
+                budget_outcome=SolverBudgetOutcome.ABSTAINED,
+                budget_reason=reason,
             )
 
     def _solve_by_enumeration(
@@ -1534,17 +1564,21 @@ class FiniteContractProblem:
         deadline = time.monotonic() + timeout_seconds if timeout_seconds is not None else None
         constraint_variables = tuple((constraint, _expression_variables(constraint.expression)) for constraint in self.constraints)
         checked = 0
+        hit_assignment_cap = False
+        hit_deadline = False
 
         def timed_out() -> bool:
             return deadline is not None and time.monotonic() >= deadline
 
         def search(index: int, assignment: dict[str, object], assigned: frozenset[str]) -> tuple[str, dict[str, object] | None]:
-            nonlocal checked
+            nonlocal checked, hit_assignment_cap, hit_deadline
             if timed_out():
+                hit_deadline = True
                 return "unknown", None
             if index == len(self.variables):
                 checked += 1
                 if max_assignments is not None and checked > max_assignments:
+                    hit_assignment_cap = True
                     return "unknown", None
                 if all(bool(constraint.expression.evaluate(assignment)) for constraint in self.constraints):
                     return "sat", dict(assignment)
@@ -1568,18 +1602,34 @@ class FiniteContractProblem:
                 backend=SolverBackend.FINITE_ENUMERATION,
                 assignment=assignment,
                 checked_assignments=checked,
+                budget_outcome=SolverBudgetOutcome.PROVED,
+                budget_reason="Finite enumeration found a satisfying assignment within the configured solver budget.",
             )
         if status == "unknown":
+            if hit_deadline:
+                outcome = SolverBudgetOutcome.TIMED_OUT
+                reason = "finite enumeration timed out before exhausting the search domain"
+            elif hit_assignment_cap:
+                outcome = SolverBudgetOutcome.BOUNDED
+                reason = "finite enumeration stopped at the configured assignment budget"
+            else:
+                outcome = SolverBudgetOutcome.ABSTAINED
+                reason = "finite enumeration returned unknown without a proof object"
             return SolverResult(
                 status=SolverStatus.UNKNOWN,
                 backend=SolverBackend.FINITE_ENUMERATION,
                 checked_assignments=checked,
+                reason=reason,
+                budget_outcome=outcome,
+                budget_reason=reason,
             )
         return SolverResult(
             status=SolverStatus.UNSAT,
             backend=SolverBackend.FINITE_ENUMERATION,
             unsat_core=self._enumerated_unsat_core(),
             checked_assignments=checked,
+            budget_outcome=SolverBudgetOutcome.PROVED,
+            budget_reason="Finite enumeration exhausted the modeled domain and proved unsatisfiability.",
         )
 
     def _enumerated_unsat_core(self) -> tuple[str, ...]:
@@ -1625,6 +1675,8 @@ class SolverResult:
     unsat_core: tuple[str, ...] = ()
     checked_assignments: int = 0
     reason: str | None = None
+    budget_outcome: SolverBudgetOutcome = SolverBudgetOutcome.ABSTAINED
+    budget_reason: str | None = None
     cache_key: str | None = None
     cache_hit: bool = False
 
@@ -1650,6 +1702,7 @@ class SolverResult:
             "backend": self.backend.value,
             "conclusion": self.conclusion.value,
             "checked_assignments": self.checked_assignments,
+            "solver_budget_outcome": self.budget_outcome.value,
         }
         if self.assignment is not None:
             data["assignment"] = dict(sorted(self.assignment.items()))
@@ -1657,6 +1710,8 @@ class SolverResult:
             data["unsat_core"] = list(self.unsat_core)
         if self.reason is not None:
             data["reason"] = self.reason
+        if self.budget_reason is not None:
+            data["solver_budget_reason"] = self.budget_reason
         if self.cache_key is not None:
             data["cache_key"] = self.cache_key
             data["cache_hit"] = self.cache_hit
@@ -1671,7 +1726,16 @@ class SolverResult:
         if not isinstance(unsat_core, Sequence) or isinstance(unsat_core, (str, bytes)):
             raise ValueError("solver result unsat_core must be a sequence")
         reason = data.get("reason")
+        budget_reason = data.get("solver_budget_reason")
         cache_key = data.get("cache_key")
+        raw_outcome = data.get("solver_budget_outcome")
+        if raw_outcome is None:
+            budget_outcome = _legacy_solver_budget_outcome(
+                SolverStatus(str(data["status"])),
+                str(reason) if reason is not None else None,
+            )
+        else:
+            budget_outcome = SolverBudgetOutcome(str(raw_outcome))
         return cls(
             status=SolverStatus(str(data["status"])),
             backend=SolverBackend(str(data["backend"])),
@@ -1679,12 +1743,22 @@ class SolverResult:
             unsat_core=tuple(str(item) for item in unsat_core),
             checked_assignments=int(data.get("checked_assignments", 0)),
             reason=str(reason) if reason is not None else None,
+            budget_outcome=budget_outcome,
+            budget_reason=str(budget_reason) if budget_reason is not None else None,
             cache_key=str(cache_key) if cache_key is not None else None,
             cache_hit=bool(data.get("cache_hit", False)),
         )
 
     def with_cache_metadata(self, *, cache_key: str, cache_hit: bool) -> "SolverResult":
         return replace(self, cache_key=cache_key, cache_hit=cache_hit)
+
+
+def _legacy_solver_budget_outcome(status: SolverStatus, reason: str | None) -> SolverBudgetOutcome:
+    if status is not SolverStatus.UNKNOWN:
+        return SolverBudgetOutcome.PROVED
+    if reason is not None and "unsupported solver fragment" in reason:
+        return SolverBudgetOutcome.ABSTAINED
+    return SolverBudgetOutcome.ABSTAINED
 
 
 @dataclass(slots=True)

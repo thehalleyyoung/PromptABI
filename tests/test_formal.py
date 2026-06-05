@@ -23,6 +23,7 @@ from promptabi.formal import (
     Not,
     Or,
     SolverConclusion,
+    SolverBudgetOutcome,
     SolverReplayFile,
     SolverQueryCache,
     SolverStatus,
@@ -242,7 +243,37 @@ def test_finite_contract_solver_abstains_when_assignment_limit_is_reached() -> N
 
     assert result.status is SolverStatus.UNKNOWN
     assert result.conclusion is SolverConclusion.ABSTENTION
+    assert result.budget_outcome is SolverBudgetOutcome.BOUNDED
+    assert "assignment budget" in (result.budget_reason or "")
     assert result.checked_assignments == 2
+
+
+def test_finite_contract_solver_reports_timeout_budget_without_false_unsat() -> None:
+    problem = FiniteContractProblem(
+        variables=(BoundedStringDomain("payload", tuple("abcdef"), min_length=1, max_length=5),),
+        constraints=(NamedConstraint("payload-contains-z", Contains(Var("payload"), Value("z"))),),
+    )
+
+    result = problem.solve(prefer_z3=False, timeout_seconds=1e-12)
+
+    assert result.status is SolverStatus.UNKNOWN
+    assert result.budget_outcome is SolverBudgetOutcome.TIMED_OUT
+    assert result.unsat_core == ()
+    assert "timed out" in (result.budget_reason or "")
+
+
+def test_solver_result_serializes_budget_classification() -> None:
+    problem = FiniteContractProblem(
+        variables=(BoolDomain("flag"),),
+        constraints=(NamedConstraint("flag-true", Eq(Var("flag"), Value(True))),),
+    )
+
+    result = problem.solve(prefer_z3=False)
+    round_trip = type(result).from_dict(result.to_dict())
+
+    assert round_trip.budget_outcome is result.budget_outcome
+    assert round_trip.budget_reason == result.budget_reason
+    assert round_trip.to_dict()["solver_budget_outcome"] == "proved"
 
 
 def test_finite_contract_solver_supports_boolean_composition() -> None:

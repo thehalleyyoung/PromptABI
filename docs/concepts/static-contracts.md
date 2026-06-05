@@ -38,7 +38,7 @@ artifacts are present:
 Each obligation produces a `StaticContractFinding` with severity, evidence,
 affected artifacts, and the underlying `SolverResult` when one exists.
 
-## Reading solver outcomes
+## Reading solver outcomes and budgets
 
 | Solver status | Diagnostic interpretation |
 | --- | --- |
@@ -46,10 +46,24 @@ affected artifacts, and the underlying `SolverResult` when one exists.
 | `UNSAT` | No assignment satisfies the unsafe condition; the unsat core names the constraints responsible for safety. |
 | `UNKNOWN` | The fragment, solver, timeout, or assignment limit prevented a proof. |
 
+Every `SolverResult` also carries a solver-budget classification. `proved` means
+the backend established a SAT or UNSAT result inside the declared finite/SMT
+budget. `bounded` means deterministic enumeration reached `max_assignments`
+before exhausting the domain. `timed-out` means the wall-clock solver budget
+expired. `abstained` means the formula exceeded the supported encoding, for
+example because Z3 rejected an unsupported expression fragment. `approximated`
+is reserved for checks that deliberately solve an over- or under-approximation;
+the current finite static-contract obligations prefer a proof, bounded unknown,
+timeout, or abstention instead of silently approximating.
+
 This is why a budget overflow diagnostic can include
 `required_prompt_tokens = 80` and `input_budget_tokens = 56`, while a safe
 sanitized role-region proof can include an unsat core such as
-`controlled-region-contains-boundary-marker`.
+`controlled-region-contains-boundary-marker`. CLI JSON diagnostics include
+`solver_status`, `solver_backend`, `solver_conclusion`,
+`solver_budget_outcome`, `checked_assignments`, and, when applicable, a
+`solver_budget_reason`; text/HTML witnesses include matching
+`classify solver budget` and reason steps.
 
 ## Minimal executable example
 

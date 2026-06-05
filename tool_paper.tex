@@ -731,11 +731,13 @@ assignment pruning, explicit assignment limits, and abstention rather than false
 proofs when a bound is reached. Both backends return a stable result object with
 \texttt{sat}, \texttt{unsat}, or \texttt{unknown} status, backend provenance,
 counterexample assignments for satisfiable bad states, explicit
-counterexample/proof/abstention conclusions, checked-assignment counts, and
-minimal unsat cores when no assignment exists. Z3 cores are deletion-minimized
-against the tracked named constraints while finite-domain restrictions remain
-background assumptions, so the proof object shown to a developer is not merely
-the first raw solver core.
+counterexample/proof/abstention conclusions, checked-assignment counts, and a
+separate solver-budget classification: proved within budget, bounded by an
+assignment cap, timed out, approximated by an explicitly declared abstraction, or
+abstained because the formula exceeded the supported encoding. Z3 cores are
+deletion-minimized against tracked named constraints while finite-domain
+restrictions remain background assumptions, so the proof object shown to a
+developer is not merely the first raw solver core.
 
 Solver calls now have a first-class deterministic cache surface. The cache key
 normalizes the finite problem, sorted named constraints, Z3 s-expressions when
@@ -795,9 +797,10 @@ declarations become a target-role alignment query for supervised data
 pipelines. Satisfiable bad-state queries produce concrete model assignments and
 are reported as counterexample witnesses. Unsatisfiable queries produce proof
 diagnostics with the solver backend, minimized core, and a safety or
-incompatibility classification. Unsupported or insufficiently finite inputs
-abstain explicitly rather than widening into a claim the implementation cannot
-justify.
+incompatibility classification plus the solver-budget reason. Unsupported,
+timeout-limited, assignment-capped, approximated, or insufficiently finite inputs
+are separated explicitly rather than widening into a claim the implementation
+cannot justify.
 
 The core now adds the missing relational layer: finite-state transducers over
 explicit input and output alphabets. A transducer transition carries an input
@@ -836,8 +839,8 @@ counterexample outcomes in the witness trace. The executable-spec tests add an
 orthogonal benchline: they reject malformed DFA paths, detect deliberately wrong
 product-language claims, replay composed render/tokenize transducer witnesses,
 re-check concrete finite-contract assignments, confirm minimal unsat cores, and
-prove that artificial solver cutoffs surface as abstentions rather than false
-safety.
+prove that artificial solver cutoffs surface as bounded or timed-out unknowns
+rather than false safety.
 This is the first formal benchline on which role-boundary, stop-reachability,
 grammar-emptiness, and must-survive budget checkers can be built.
 

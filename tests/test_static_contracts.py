@@ -19,7 +19,7 @@ from promptabi.artifacts import (
 )
 from promptabi.cli import main
 from promptabi.config import VerificationConfig
-from promptabi.formal import BoolDomain, FiniteContractProblem, NamedConstraint, SolverStatus
+from promptabi.formal import BoolDomain, FiniteContractProblem, NamedConstraint, SolverBudgetOutcome, SolverStatus
 from promptabi.loaders import LoadedArtifact
 from promptabi.static_contracts import analyze_static_contracts
 
@@ -52,9 +52,11 @@ def test_finite_contract_solver_abstains_on_unsupported_z3_fragment() -> None:
     result = problem.solve(prefer_z3=True)
 
     assert result.status is SolverStatus.UNKNOWN
+    assert result.budget_outcome is SolverBudgetOutcome.ABSTAINED
     assert result.reason is not None
     assert "unsupported solver fragment" in result.reason
     assert result.to_dict()["reason"] == result.reason
+    assert result.to_dict()["solver_budget_outcome"] == "abstained"
 
 
 def test_static_contracts_prove_budget_and_stop_exclusion_with_enumeration() -> None:
@@ -368,10 +370,15 @@ def test_verify_static_contracts_cli_reports_z3_backed_contract(tmp_path: Path, 
     steps = diagnostics[0]["witness"]["steps"]
     assert any(step["action"] == "solve finite contract" for step in steps)
     assert any(
+        step["action"] == "classify solver budget" and step["output"] == "proved"
+        for step in steps
+    )
+    assert any(
         step["action"] == "classify SMT diagnostic" and step["output"] == "proof of safety"
         for step in steps
     )
     assert any(step["action"].endswith("unsat core") for step in steps)
+    assert diagnostics[0]["properties"]["solver_budget_outcome"] == "proved"
 
 
 def test_verify_static_contracts_cli_reports_concrete_counterexample(tmp_path: Path, capsys) -> None:
@@ -416,6 +423,10 @@ def test_verify_static_contracts_cli_reports_concrete_counterexample(tmp_path: P
     steps = diagnostics[0]["witness"]["steps"]
     assert any(
         step["action"] == "classify SMT diagnostic" and step["output"] == "concrete counterexample witness"
+        for step in steps
+    )
+    assert any(
+        step["action"] == "classify solver budget" and step["output"] == "proved"
         for step in steps
     )
     assert any(step["action"] in {"extract Z3 model", "extract finite model"} for step in steps)

@@ -391,7 +391,7 @@ def _abstentions(result: VerificationResult) -> tuple[GalleryAcceptedRisk, ...]:
         explanation = diagnostic.message
         if diagnostic.witness is not None:
             for step in diagnostic.witness.steps:
-                if step.action == "record solver abstention reason" and step.output is not None:
+                if step.action in {"record solver abstention reason", "record solver unknown reason"} and step.output is not None:
                     explanation = step.output
                     break
         abstentions.append(

@@ -1717,6 +1717,13 @@ def _static_contract_finding_diagnostic(report: StaticContractReport, finding: S
         )
         steps.append(
             WitnessStep(
+                action="classify solver budget",
+                input=f"{finding.result.checked_assignments} assignments checked",
+                output=finding.result.budget_outcome.value,
+            )
+        )
+        steps.append(
+            WitnessStep(
                 action="classify SMT diagnostic",
                 input=finding.result.conclusion.value,
                 output=_static_contract_outcome(finding),
@@ -1731,7 +1738,9 @@ def _static_contract_finding_diagnostic(report: StaticContractReport, finding: S
             core_action = "extract minimized Z3 unsat core" if finding.result.backend.value == "z3" else "extract minimal unsat core"
             steps.append(WitnessStep(action=core_action, output=", ".join(finding.result.unsat_core)))
         if finding.result.reason is not None:
-            steps.append(WitnessStep(action="record solver abstention reason", output=finding.result.reason))
+            steps.append(WitnessStep(action="record solver unknown reason", output=finding.result.reason))
+        if finding.result.budget_reason is not None:
+            steps.append(WitnessStep(action="record solver budget reason", output=finding.result.budget_reason))
     steps.extend(
         WitnessStep(action="record contract evidence", input=key, output=value)
         for key, value in finding.evidence
@@ -1746,11 +1755,19 @@ def _static_contract_finding_diagnostic(report: StaticContractReport, finding: S
         check_modes=CHECK_MODE_CATALOG[rule_id],
         suggestions=(finding.suggestion,),
         witness=WitnessTrace(summary=summary, steps=tuple(steps)),
+        properties=_static_contract_properties(finding),
     )
 
 
 def _static_contract_outcome(finding: StaticContractFinding) -> str:
     if finding.result is None or finding.status is SolverStatus.UNKNOWN:
+        if finding.result is not None:
+            if finding.result.budget_outcome.value == "bounded":
+                return "bounded solver budget without proof"
+            if finding.result.budget_outcome.value == "timed-out":
+                return "solver timeout without proof"
+            if finding.result.budget_outcome.value == "approximated":
+                return "approximated solver result"
         return "abstention outside the finite modeled fragment"
     if finding.result.sat:
         if finding.severity == "error":
@@ -1761,6 +1778,24 @@ def _static_contract_outcome(finding: StaticContractFinding) -> str:
             return "proof of incompatibility"
         return "proof of safety"
     return "abstention outside the finite modeled fragment"
+
+
+def _static_contract_properties(finding: StaticContractFinding) -> tuple[tuple[str, object], ...]:
+    if finding.result is None:
+        return finding.evidence
+    return (
+        ("solver_status", finding.result.status.value),
+        ("solver_backend", finding.result.backend.value),
+        ("solver_conclusion", finding.result.conclusion.value),
+        ("solver_budget_outcome", finding.result.budget_outcome.value),
+        ("checked_assignments", finding.result.checked_assignments),
+        *(
+            (("solver_budget_reason", finding.result.budget_reason),)
+            if finding.result.budget_reason is not None
+            else ()
+        ),
+        *finding.evidence,
+    )
 
 
 def _token_budget_finding_diagnostic(report: TokenBudgetReport, finding: TokenBudgetFinding) -> Diagnostic:

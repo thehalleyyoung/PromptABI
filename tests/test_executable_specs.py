@@ -9,6 +9,7 @@ from promptabi.formal import (
     FiniteContractProblem,
     FiniteStateTransducer,
     NamedConstraint,
+    SolverBudgetOutcome,
     SolverConclusion,
     SolverStatus,
     Value,
@@ -135,4 +136,5 @@ def test_executable_spec_checks_unknown_is_only_abstention() -> None:
 
     assert result.status is SolverStatus.UNKNOWN
     assert result.conclusion is SolverConclusion.ABSTENTION
+    assert result.budget_outcome is SolverBudgetOutcome.BOUNDED
     assert report.passed
