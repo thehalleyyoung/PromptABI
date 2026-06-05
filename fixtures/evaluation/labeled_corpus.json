@@ -1,0 +1,65 @@
+{
+  "manifest_version": 1,
+  "methodology": "CPU-only labeled evaluation over real PromptABI verification configs and replayable real-bug reductions. Precision is scoped to explicitly labeled positive and absent rule IDs so unrelated informational diagnostics do not count as false positives.",
+  "metadata": {
+    "metrics": [
+      "precision",
+      "recall",
+      "abstention_rate",
+      "runtime_seconds",
+      "peak_memory_bytes",
+      "witness_quality_score",
+      "solver_result_quality",
+      "differential_agreement_rate"
+    ]
+  },
+  "cases": [
+    {
+      "id": "stop-differential-vllm-agreement",
+      "source": "config",
+      "config": "examples/stop-policies/promptabi.json",
+      "description": "Recorded vLLM-style stop traces agree with PromptABI's stop simulator.",
+      "labels": ["stop-policy", "differential", "real-library-semantics"],
+      "expected_rule_ids": ["stop-differential-agreement"],
+      "expected_absent_rule_ids": ["stop-differential-mismatch", "stop-differential-abstained"]
+    },
+    {
+      "id": "provider-fixture-replay",
+      "source": "config",
+      "config": "fixtures/provider_fixture_packs/promptabi.json",
+      "description": "Secret-free provider fixture packs replay request and response contracts.",
+      "labels": ["provider-fixtures", "offline-replay"],
+      "expected_rule_ids": ["provider-fixture-replay"],
+      "expected_absent_rule_ids": ["artifact-load-failed", "check-failed"]
+    },
+    {
+      "id": "tool-serialization-contract",
+      "source": "config",
+      "config": "fixtures/structured_schemas/tool-serialization-contract/promptabi.json",
+      "description": "Tool schema ingestion and serialization contract checks fire on a real structured-output fixture.",
+      "labels": ["tool-calling", "structured-output"],
+      "expected_rule_ids": ["tool-schema-ingestion", "tool-serialization"],
+      "expected_absent_rule_ids": ["artifact-load-failed", "check-failed"]
+    },
+    {
+      "id": "rag-truncation-contracts",
+      "source": "config",
+      "config": "examples/rag-chunking/promptabi.json",
+      "description": "RAG truncation reductions surface citation, overlap, payload, metadata, and tokenizer issues.",
+      "labels": ["rag", "truncation", "token-budget"],
+      "expected_rule_ids": [
+        "rag-citation-loss",
+        "rag-overlap-accounting",
+        "rag-template-overhead",
+        "rag-tokenizer-mismatch"
+      ],
+      "expected_absent_rule_ids": ["check-failed"]
+    },
+    {
+      "source": "real-bug-benchmark",
+      "id_prefix": "real-bug",
+      "benchmark": "fixtures/real_bug_benchmarks/benchmark.json",
+      "expected_absent_rule_ids": ["check-failed", "artifact-load-failed"]
+    }
+  ]
+}

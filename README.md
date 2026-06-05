@@ -25,6 +25,8 @@ promptabi diff promptabi.baseline.json promptabi.json
 promptabi matrix --format json
 # GitHub code scanning with cache + lockfile gates:
 promptabi github-action --config examples/minimal/promptabi.json --require-lockfile
+# labeled precision/recall/runtime/witness evaluation:
+promptabi corpus evaluation --format text
 # local commit gate for changed prompt artifacts:
 promptabi pre-commit install --config examples/minimal/promptabi.json
 ```
@@ -110,7 +112,10 @@ that pinpoint the firing line/column, parser state, valid prefix, and malformed 
 prematurely accepted result. A real-world bug corpus reduces public llama.cpp,
 vLLM, and Hugging Face reports into synthetic, offline fixtures and proves the
 current role-boundary and stop-overreachability checkers catch the same failure
-classes without copying upstream code. Grammar ingestion now normalizes JSON
+classes without copying upstream code. `promptabi corpus evaluation` now expands
+labeled real-bug and fixture-backed cases into precision/recall, abstention,
+runtime, peak-memory, witness-quality, solver-quality, and differential-agreement
+metrics. Grammar ingestion now normalizes JSON
 Schema, regex, EBNF, Outlines, xgrammar, llguidance, and PromptABI grammars into
 typed rules, terminals, source spans, and explicit abstentions; the JSON Schema
 path compiles the supported subset into a bounded grammar IR and DFA witness with

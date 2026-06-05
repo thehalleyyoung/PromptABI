@@ -118,6 +118,10 @@ parser-boundary stops, a replayable real-bug benchmark manifest that extends
 those reductions with tokenizer-differential drift, provider migration,
 structured-output parser mismatch, RAG truncation, and supervised
 target-role-alignment failures under one deterministic CPU-only command, a
+labeled evaluation runner that expands real-bug and fixture-backed cases into
+scoped precision/recall, abstention rate, runtime, peak-memory,
+witness-quality, solver-quality, and real-library differential-agreement
+metrics, a
 grammar ingestion layer that normalizes JSON Schema,
 regex, EBNF,
 Outlines, xgrammar, llguidance, and PromptABI grammars into typed rules,
@@ -1446,6 +1450,8 @@ Cold/warm cache & Direct measurement of token-budget analysis before and after p
 \hline
 Real-bug benchmark & \texttt{promptabi corpus real-bug-benchmark} validates and replays the labeled real-bug suite across popular templates, tokenizers, tool schemas, provider migrations, structured-output parsers, RAG truncation, and training manifests, emitting observed rule IDs and a stable manifest hash. \\
 \hline
+Labeled evaluation & \texttt{promptabi corpus evaluation} runs the default evaluation corpus, expands the real-bug benchmark into per-case labels, measures scoped precision/recall/F1, abstention rate, runtime, peak memory, witness quality, Z3-backed solver decisiveness, and differential agreement while keeping unrelated informational diagnostics out of false-positive counts. \\
+\hline
 \end{tabular}
 \end{center}
 
@@ -1493,7 +1499,7 @@ witnesses, rendered excerpts, token tables, exact boundary locations, and fix su
 \clearpage
 \section{Evaluation Design}
 
-The evaluation should answer four questions.
+The evaluation answers five questions.
 
 \begin{enumerate}
 \item Does PromptABI find real interface bugs in popular LLM application stacks?
@@ -1503,14 +1509,19 @@ The evaluation should answer four questions.
 \item Is the runtime low enough for pull-request CI?
 \end{enumerate}
 
-The experimental setup should include labeled corpora, differential agreement
-tests, mutation-based stress cases, and version-drift tests. Precision and recall
-can be measured on synthetic and real-bug corpora where ground truth is known.
-Differential agreement can be measured against tokenizer libraries, chat
-template rendering, schema validators, grammar backends, and provider fixture
-replay. Runtime can be reported for individual checks and corpus-wide runs.
-Witness quality can be evaluated by minimization size, reproducibility, and
-whether the witness includes enough artifact context to file an upstream bug.
+The deployed setup now includes a labeled evaluation corpus,
+\texttt{fixtures/evaluation/labeled\_corpus.json}, and a first-class CLI runner,
+\texttt{promptabi corpus evaluation}. The runner executes real verification
+configs plus every replayable real-bug benchmark case, then reports
+precision/recall/F1 over an explicit per-case rule universe. That scoped
+definition is important: always-on informational diagnostics such as repository
+health checks are neutral unless the label file declares them expected or absent.
+The same report measures abstaining diagnostics over total diagnostics, per-case
+runtime, peak traced memory, warning/error witness completeness, Z3-backed solver
+decisiveness, and agreement/mismatch/abstention for differential checks against
+recorded real-library semantics. Runtime and memory are emitted as measurements,
+not golden values, while rule IDs and labels remain deterministic.
+Future experiments can add mutation-based stress cases and version-drift tests.
 The deployed seed corpus already supplies the first corpus-wide experimental
 unit: a run can validate ten families, materialize twenty PromptABI artifacts,
 and compare the resulting manifest hash across revisions. Future experiments can
@@ -1710,6 +1721,8 @@ Token-budget and RAG modeling & \texttt{promptabi verify --config examples/token
 Tokenizer/config drift & Focused analyzer and CLI tests compare baseline/current tokenizer directories and flag special-token ID, added-token, normalizer, chat-template, BOS/EOS, and stop-policy deltas with revision witnesses. \\
 \hline
 Performance benchmarks & \texttt{benchmarks/benchmark\_smoke.py} emits JSON for tokenizer analysis, symbolic template execution, grammar emptiness, stop checks, SMT static contracts, budget checks, corpus-wide verification, and cold/warm cache behavior, with focused tests asserting real fixture-backed metrics and wrapper behavior. \\
+\hline
+Evaluation runner & \texttt{promptabi corpus evaluation} reports labeled precision/recall/F1, abstention rate, runtime, peak memory, witness quality, solver decisiveness, and differential agreement for fixture-backed configs plus the expanded real-bug benchmark suite; tests assert expansion, metric shape, CLI output, public API access, and validation failures without snapshotting nondeterministic timings. \\
 \hline
 Docs smoke & MkDocs-ready navigation and pages exist for the initial structure. \\
 \hline

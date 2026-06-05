@@ -20,6 +20,7 @@ from .compatibility_matrix import (
 )
 from .diff import diff_config_files
 from .explain import ExplainError, explain_diagnostic, render_explanation_json, render_explanation_text
+from .evaluation import EvaluationError, render_evaluation_json, render_evaluation_text, run_evaluation
 from .first_party_plugins import create_first_party_plugin_registry, render_plugin_capabilities
 from .github_action import GitHubActionError, run_github_action
 from .init import InitError, available_stacks, scaffold_promptabi_project
@@ -285,6 +286,24 @@ def build_parser() -> argparse.ArgumentParser:
     real_bug_benchmark.add_argument(
         "--output",
         help="write manifest JSON to this path instead of stdout",
+    )
+    evaluation = corpus_subparsers.add_parser(
+        "evaluation",
+        help="run labeled-corpus evaluation metrics over real PromptABI analyzers",
+    )
+    evaluation.add_argument(
+        "--corpus",
+        help="evaluation corpus JSON path (default: repository fixtures/evaluation/labeled_corpus.json)",
+    )
+    evaluation.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="json",
+        help="output format (default: json)",
+    )
+    evaluation.add_argument(
+        "--output",
+        help="write evaluation report to this path instead of stdout",
     )
 
     plugins = subparsers.add_parser("plugins", help="inspect PromptABI plugin capabilities")
@@ -695,6 +714,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"promptabi: cannot write real-bug benchmark manifest: {exc}", file=sys.stderr)
             return 2
         return 0
+
+    if args.command == "corpus" and args.corpus_command == "evaluation":
+        try:
+            report = run_evaluation(args.corpus)
+            output = render_evaluation_text(report) if args.format == "text" else render_evaluation_json(report)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                print(f"wrote evaluation report: {args.output} ({len(report.results)} cases)")
+            else:
+                print(output, end="")
+        except EvaluationError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write evaluation report: {exc}", file=sys.stderr)
+            return 2
+        return 0 if all(result.passed for result in report.results) else 1
 
     if args.command == "plugins":
         try:

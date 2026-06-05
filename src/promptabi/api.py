@@ -13,6 +13,12 @@ from .compatibility_matrix import (
     render_compatibility_matrix_text,
 )
 from .diagnostics import Diagnostic
+from .evaluation import (
+    EvaluationReport,
+    render_evaluation_json,
+    render_evaluation_text,
+    run_evaluation,
+)
 from .bug_reports import BugReport, generate_bug_report, render_bug_report
 from .explain import DiagnosticExplanation, explain_diagnostic, render_explanation_json, render_explanation_text
 from .loaders import ArtifactLoader, LoadedArtifact
@@ -262,6 +268,23 @@ def render_compatibility_matrix(
         return render_compatibility_matrix_text(resolved)
     if output_format == "json":
         return render_compatibility_matrix_json(resolved)
+    raise ValueError("output_format must be one of: text, json")
+
+
+def evaluate_corpus(
+    path: str | Path | None = None,
+    *,
+    output_format: str | None = None,
+) -> EvaluationReport | str:
+    """Run the labeled PromptABI evaluation corpus, optionally rendering it."""
+
+    report = run_evaluation(path)
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_evaluation_json(report)
+    if output_format == "text":
+        return render_evaluation_text(report)
     raise ValueError("output_format must be one of: text, json")
 
 
