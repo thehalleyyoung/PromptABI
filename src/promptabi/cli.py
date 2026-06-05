@@ -28,6 +28,12 @@ from .corpus_verification import (
 )
 from .diff import diff_config_files
 from .doctor import render_doctor_json, render_doctor_text, run_doctor
+from .editor_protocol import (
+    EditorProtocolError,
+    build_editor_diagnostic_report,
+    render_editor_diagnostic_json,
+    render_editor_diagnostic_text,
+)
 from .explain import ExplainError, explain_diagnostic, render_explanation_json, render_explanation_text
 from .evaluation import EvaluationError, render_evaluation_json, render_evaluation_text, run_evaluation
 from .first_party_plugins import create_first_party_plugin_registry, render_plugin_capabilities
@@ -552,6 +558,39 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: json)",
     )
     diagnostics_catalog.add_argument("--output", help="write the catalog to this path instead of stdout")
+    diagnostics_lsp = diagnostics_subparsers.add_parser(
+        "lsp",
+        help="emit language-server-style publishDiagnostics payloads for editors",
+    )
+    diagnostics_lsp.add_argument(
+        "--config",
+        help="path to a PromptABI JSON config; defaults to discovering promptabi.json upward from cwd",
+    )
+    diagnostics_lsp.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        metavar="NAME=PATH_OR_URI",
+        help="override or add an artifact location for this run; may be repeated",
+    )
+    diagnostics_lsp.add_argument(
+        "--workspace-root",
+        help="workspace root used in diagnostic data (default: config directory)",
+    )
+    diagnostics_lsp.add_argument(
+        "--plugin",
+        action="append",
+        default=[],
+        metavar="MODULE[:OBJECT]",
+        help="import an additional PromptABI plugin before running editor diagnostics; may be repeated",
+    )
+    diagnostics_lsp.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="json",
+        help="output format (default: json)",
+    )
+    diagnostics_lsp.add_argument("--output", help="write the editor diagnostics to this path instead of stdout")
 
     maintain = subparsers.add_parser("maintain", help="maintainer corpus, fixture, and release-note workflows")
     maintain_subparsers = maintain.add_subparsers(dest="maintain_command", required=True)
@@ -878,6 +917,34 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"promptabi: cannot write diagnostic catalog: {exc}", file=sys.stderr)
             return 2
         return 0
+
+    if args.command == "diagnostics" and args.diagnostics_command == "lsp":
+        try:
+            config_path = Path(args.config).resolve() if args.config else discover_config()
+            overrides = _parse_artifact_overrides(args.artifact, parser)
+            plugin_registry = _load_cli_plugins(args.plugin)
+            report = build_editor_diagnostic_report(
+                config_path=config_path,
+                artifact_overrides=overrides,
+                workspace_root=args.workspace_root,
+                plugin_registry=plugin_registry,
+            )
+            output = (
+                render_editor_diagnostic_text(report)
+                if args.format == "text"
+                else render_editor_diagnostic_json(report)
+            )
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+            else:
+                print(output, end="")
+        except (ConfigError, EditorProtocolError, PluginError, ValueError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write editor diagnostics: {exc}", file=sys.stderr)
+            return 2
+        return 0 if report.ok else 1
 
     if args.command == "diff":
         started_at = time.perf_counter()

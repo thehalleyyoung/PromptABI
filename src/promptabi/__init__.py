@@ -14,6 +14,7 @@ from .api import (
     collect_diagnostics,
     create_session,
     diagnostic_message_catalog,
+    editor_diagnostics,
     evaluate_corpus,
     explain_result,
     fuzz_mutations,

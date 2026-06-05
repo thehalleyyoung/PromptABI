@@ -222,6 +222,13 @@ Diagnostic messages now also expose localization-ready catalog keys and strict
 placeholder metadata, with \texttt{promptabi diagnostics catalog} emitting a
 deterministic English source catalog from real verification output while existing
 CI renderers continue to display stable English text.
+The same diagnostic objects now feed \texttt{promptabi diagnostics lsp}, a
+language-server-style \texttt{textDocument/publishDiagnostics} protocol that
+groups config and artifact findings by document URI, converts source spans to
+zero-based editor ranges, preserves fingerprints, suggestions, witnesses, and
+proof modes in diagnostic data, and publishes empty diagnostic arrays for watched
+local schemas, templates, stop policies, training manifests, and artifact bundles
+so editor shims can clear stale inline findings deterministically.
 The adjacent \texttt{promptabi bug-report} command uses the same selector and
 verification path but emits an upstream-ready markdown issue rather than a local
 tutorial, so the strongest evaluation unit---a maintainer-actionable bug
@@ -1755,9 +1762,9 @@ manifest pipeline, and the first sanitizer-aware role-boundary checker have begu
 the experimental layer. The next phase should deepen stop-reachability,
 grammar-emptiness, and
 budget-survival checkers. Corpus growth, lockfiles, drift
-detection, SARIF, GitHub Actions, pre-commit hooks, HTML reports, suppression
-policies, and plugin APIs turn the verifier from a library into an everyday CI
-tool.
+detection, SARIF, GitHub Actions, pre-commit hooks, HTML reports, editor
+\texttt{publishDiagnostics} payloads, suppression policies, and plugin APIs turn
+the verifier from a library into an everyday CI and IDE tool.
 
 The research roadmap adds executable specifications,
 proof sketches for supported fragments, richer formal-methods documentation, and
@@ -1855,6 +1862,8 @@ Evaluation runner & \texttt{promptabi corpus evaluation} reports labeled precisi
 Maintainer tooling & \texttt{promptabi maintain refresh} writes seed, structured-schema, provider-fixture, real-bug, corpus-verification, expected-diagnostic, diff, snapshot, and release-note artifacts; focused tests run the workflow against real corpora, assert repository-relative diagnostic paths, compare mutated snapshots, and exercise the CLI baseline mode. \\
 \hline
 Verified configuration gallery & \texttt{promptabi gallery} reruns five curated configurations covering pinned OpenAI-style tools, sanitized ChatML role boundaries, training-to-serving static contracts, RAG truncation budgets, and audited accepted-risk suppressions; focused tests assert deterministic JSON/text renderers, actual solver-backend summaries, lockfile/pin badges, and risk explanations. \\
+\hline
+Editor diagnostics & \texttt{promptabi diagnostics lsp} emits stable LSP-style \texttt{publishDiagnostics} JSON for configs and local artifacts; focused tests verify URI grouping, zero-based ranges, invalid-JSON config failures, watched-artifact clearing, public API rendering, and CLI exit codes against real PromptABI configs. \\
 \hline
 Docs smoke & MkDocs-ready navigation includes architecture, checks, concepts, and the security model; focused tests assert that the security model references real CLI privacy, bug-report, minimization, and provider-fixture safety behavior. \\
 \hline

@@ -95,6 +95,7 @@ promptabi gallery --format text
 # Diagnose the local environment, optional backends, cache, plugins, and artifacts.
 promptabi doctor --config examples/minimal/promptabi.json
 promptabi diagnostics catalog --config examples/minimal/promptabi.json --format json
+promptabi diagnostics lsp --config examples/minimal/promptabi.json --format json
 
 # Run labeled benchmarks, mutation fuzzing, and paper artifact regeneration.
 promptabi corpus verify --format text

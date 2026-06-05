@@ -20,6 +20,12 @@ from .corpus_verification import (
     run_corpus_verification,
 )
 from .diagnostics import Diagnostic
+from .editor_protocol import (
+    EditorDiagnosticReport,
+    build_editor_diagnostic_report,
+    render_editor_diagnostic_json,
+    render_editor_diagnostic_text,
+)
 from .evaluation import (
     EvaluationReport,
     render_evaluation_json,
@@ -282,6 +288,31 @@ def diagnostic_message_catalog(
         return render_diagnostic_catalog_json(catalog)
     if output_format == "text":
         return render_diagnostic_catalog_text(catalog)
+    raise ValueError("output_format must be one of: text, json")
+
+
+def editor_diagnostics(
+    *,
+    config_path: str | Path | None = None,
+    artifact_overrides: Mapping[str, str] | None = None,
+    workspace_root: str | Path | None = None,
+    plugin_registry: PluginRegistry | None = None,
+    output_format: str | None = None,
+) -> EditorDiagnosticReport | str:
+    """Run PromptABI and return or render LSP-style editor diagnostics."""
+
+    report = build_editor_diagnostic_report(
+        config_path=config_path,
+        artifact_overrides=dict(artifact_overrides) if artifact_overrides is not None else None,
+        workspace_root=workspace_root,
+        plugin_registry=plugin_registry,
+    )
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_editor_diagnostic_json(report)
+    if output_format == "text":
+        return render_editor_diagnostic_text(report)
     raise ValueError("output_format must be one of: text, json")
 
 
