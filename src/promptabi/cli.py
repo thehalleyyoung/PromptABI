@@ -179,6 +179,12 @@ from .runtime_attestation import (
     runtime_contract_refs_from_cli,
     write_runtime_attestation_hooks,
 )
+from .runtime_alarms import (
+    RuntimeAlarmError,
+    build_runtime_alarm_report,
+    render_runtime_alarm_json,
+    render_runtime_alarm_text,
+)
 from .editor_protocol import (
     EditorProtocolError,
     build_editor_diagnostic_report,
@@ -1887,6 +1893,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--force",
         action="store_true",
         help="overwrite existing generated runtime-attestation files",
+    )
+
+    runtime_alarms = subparsers.add_parser(
+        "runtime-alarms",
+        help="compare runtime attestation against lockfile, policy, corpus baseline, and known-bad artifact versions",
+    )
+    runtime_alarms.add_argument("attestation", help="runtime-attestation JSON manifest path")
+    runtime_alarms.add_argument("--lockfile", help="latest PromptABI lockfile to compare against")
+    runtime_alarms.add_argument("--policy-pack", help="JSON policy pack with runtime_alarms requirements")
+    runtime_alarms.add_argument("--corpus-baseline", help="JSON corpus baseline with artifact_baseline entries")
+    runtime_alarms.add_argument("--known-bad", help="JSON manifest of known_bad_artifacts")
+    runtime_alarms.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
     )
 
     fuzz = subparsers.add_parser("fuzz", help="mutation-based fuzzing workflows")
@@ -4256,6 +4278,25 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"promptabi: cannot write runtime attestation hooks: {exc}", file=sys.stderr)
             return 2
         return 0 if ok else 1
+
+    if args.command == "runtime-alarms":
+        try:
+            report = build_runtime_alarm_report(
+                args.attestation,
+                lockfile=args.lockfile,
+                policy_pack=args.policy_pack,
+                corpus_baseline=args.corpus_baseline,
+                known_bad=args.known_bad,
+            )
+            output = render_runtime_alarm_json(report) if args.format == "json" else render_runtime_alarm_text(report)
+            print(output, end="")
+        except (RuntimeAlarmError, LockfileError, ValueError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot read runtime alarm evidence: {exc}", file=sys.stderr)
+            return 2
+        return 0 if report.ok else 1
 
     if args.command == "fuzz" and args.fuzz_command == "mutations":
         try:

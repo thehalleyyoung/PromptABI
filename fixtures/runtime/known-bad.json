@@ -1,0 +1,17 @@
+{
+  "manifest_version": "promptabi.runtime-known-bad.v1",
+  "known_bad_artifacts": [
+    {
+      "kind": "schema",
+      "name": "answer-schema",
+      "reason": "example known-bad schema version that admitted debug-only fields into structured output",
+      "version": "schema-bad-v2"
+    },
+    {
+      "kind": "provider-config",
+      "name": "provider-config",
+      "reason": "example provider contract version with incompatible tool-call argument serialization",
+      "revision": "provider-fixtures-known-bad"
+    }
+  ]
+}

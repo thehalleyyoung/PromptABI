@@ -379,6 +379,15 @@ contract is live here?'' without reading private prompt contents. Drift alarms
 are intentionally a separate policy layer; this workflow is the trustworthy
 self-reporting primitive.
 
+\paragraph{Runtime drift alarms.}
+\texttt{promptabi runtime-alarms} consumes that self-report and compares it with
+the newest lockfile, runtime policy pack, corpus baseline, and known-bad artifact
+manifest. This separates service inventory from enforcement: a running service
+can expose only non-content hashes and version metadata, while the platform
+decides whether the live contract has drifted from reviewed artifacts, violates
+approved signing-key or environment policy, fell behind corpus baselines, or
+matches a known-bad tokenizer, schema, provider, or prompt version.
+
 \paragraph{Training preflight.}
 \texttt{promptabi verify-training} builds or loads a training manifest and checks
 role layouts, tokenizer/template consistency, packing windows, loss masks,

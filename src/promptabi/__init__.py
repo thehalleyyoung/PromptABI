@@ -64,6 +64,7 @@ from .api import (
     render_result,
     refresh_maintainer_tooling,
     run_verification,
+    runtime_alarms,
     runtime_attestation,
     semantic_version_gate,
     team_dashboard,
@@ -177,6 +178,17 @@ from .runtime_attestation import (
     render_runtime_attestation_write_summary,
     runtime_contract_refs_from_cli,
     write_runtime_attestation_hooks,
+)
+from .runtime_alarms import (
+    RUNTIME_ALARM_REPORT_VERSION,
+    RuntimeAlarm,
+    RuntimeAlarmError,
+    RuntimeAlarmReport,
+    RuntimeAlarmSeverity,
+    RuntimeAlarmSource,
+    build_runtime_alarm_report,
+    render_runtime_alarm_json,
+    render_runtime_alarm_text,
 )
 from .model_registry import (
     MODEL_REGISTRY_MANIFEST_VERSION,

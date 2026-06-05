@@ -89,6 +89,12 @@ from .runtime_attestation import (
     render_runtime_attestation_json,
     render_runtime_attestation_text,
 )
+from .runtime_alarms import (
+    RuntimeAlarmReport,
+    build_runtime_alarm_report,
+    render_runtime_alarm_json,
+    render_runtime_alarm_text,
+)
 from .enterprise import (
     EnterpriseSettings,
     enterprise_readiness_diagnostics,
@@ -399,6 +405,33 @@ def local_metrics(
         return render_local_metrics_json(report)
     if output_format == "text":
         return render_local_metrics_text(report)
+    raise ValueError("output_format must be 'json' or 'text'")
+
+
+def runtime_alarms(
+    attestation: str | Path | Mapping[str, object] | RuntimeAttestationReport,
+    *,
+    lockfile: str | Path | None = None,
+    policy_pack: str | Path | Mapping[str, object] | None = None,
+    corpus_baseline: str | Path | Mapping[str, object] | None = None,
+    known_bad: str | Path | Mapping[str, object] | None = None,
+    output_format: str | None = None,
+) -> RuntimeAlarmReport | str:
+    """Compare runtime attestation against latest deployment evidence and render alarms."""
+
+    report = build_runtime_alarm_report(
+        attestation,
+        lockfile=lockfile,
+        policy_pack=policy_pack,
+        corpus_baseline=corpus_baseline,
+        known_bad=known_bad,
+    )
+    if output_format is None:
+        return report
+    if output_format == "text":
+        return render_runtime_alarm_text(report)
+    if output_format == "json":
+        return render_runtime_alarm_json(report)
     raise ValueError("output_format must be 'json' or 'text'")
 
 
