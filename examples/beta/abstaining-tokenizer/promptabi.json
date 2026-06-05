@@ -1,0 +1,16 @@
+{
+  "name": "beta-abstaining-tokenizer",
+  "checks": ["stop-tokenizer-analysis"],
+  "artifacts": {
+    "tokenizer": {
+      "kind": "tokenizer",
+      "uri": "memory://beta-byte-tokenizer",
+      "family": "byte-level",
+      "metadata": {"normalization": 123}
+    },
+    "stops": {
+      "kind": "stop-policy",
+      "path": "stops.json"
+    }
+  }
+}

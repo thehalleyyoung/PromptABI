@@ -1,5 +1,5 @@
 \documentclass[10pt]{article}
-\usepackage[margin=0.7in]{geometry}
+\usepackage[margin=0.58in]{geometry}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
 \usepackage{hyperref}
@@ -166,7 +166,10 @@ target-role-alignment failures under one deterministic CPU-only command, a
 labeled evaluation runner that expands real-bug and fixture-backed cases into
 scoped precision/recall, abstention rate, runtime, peak-memory,
 witness-quality, solver-quality, and real-library differential-agreement
-metrics, a deterministic generated-property suite that exercises every public
+metrics, an offline beta-program replay that runs open-source-style case-study
+configs, records upstream issue evidence, checks tuned-absent false-positive
+rules, and gates abstention messages on actionable witnesses and setup
+suggestions, a deterministic generated-property suite that exercises every public
 checker entry point over real safe, unsafe, ambiguous, unsupported, satisfiable,
 unsatisfiable, and abstaining artifacts without adding runtime dependencies, a
 grammar ingestion layer that normalizes JSON Schema,
@@ -1699,6 +1702,8 @@ Cold/warm cache & Direct measurement of token-budget analysis before and after p
 \hline
 Real-bug benchmark & \texttt{promptabi corpus real-bug-benchmark} validates and replays the labeled real-bug suite across popular templates, tokenizers, tool schemas, provider migrations, structured-output parsers, RAG truncation, and training manifests, emitting observed rule IDs and a stable manifest hash. \\
 \hline
+Beta report & \texttt{promptabi corpus beta-report} replays open-source-style beta case studies, upstream issue records, tuned-absent false-positive expectations, and a synthetic abstention-message regression, requiring actionable abstention witnesses rather than success-shaped unknowns. \\
+\hline
 Labeled evaluation & \texttt{promptabi corpus evaluation} runs the default evaluation corpus, expands the real-bug benchmark into per-case labels, measures scoped precision/recall/F1, abstention rate, runtime, peak memory, witness quality, Z3-backed solver decisiveness, and differential agreement while keeping unrelated informational diagnostics out of false-positive counts. \\
 \hline
 \end{tabular}
@@ -1778,6 +1783,11 @@ runtime, peak traced memory, warning/error witness completeness, Z3-backed solve
 decisiveness, and agreement/mismatch/abstention for differential checks against
 recorded real-library semantics. Runtime and memory are emitted as measurements,
 not golden values, while rule IDs and labels remain deterministic.
+The companion \texttt{promptabi corpus beta-report} command answers a different
+question: whether beta evidence is maintainable. It replays open-source-style
+case studies, keeps upstream issue records beside the configs that reproduce
+them, checks tuned-absent rule IDs so false-positive regressions are visible, and
+requires abstentions to include actionable witnesses and setup suggestions.
 The maintainer-facing \texttt{promptabi corpus verify} command composes this
 evaluation with seed-corpus manifests, structured-schema config replays, provider
 fixture replay coverage, real-bug benchmark replay, and optional runtime/Python
@@ -2018,6 +2028,8 @@ Tokenizer/config drift & Focused analyzer and CLI tests compare baseline/current
 Performance benchmarks & \texttt{benchmarks/benchmark\_smoke.py} emits JSON for tokenizer analysis, symbolic template execution, grammar emptiness, stop checks, SMT static contracts, budget checks, corpus-wide verification, and cold/warm cache behavior, with focused tests asserting real fixture-backed metrics and wrapper behavior. \\
 \hline
 Evaluation runner & \texttt{promptabi corpus evaluation} reports labeled precision/recall/F1, abstention rate, runtime, peak memory, witness quality, solver decisiveness, and differential agreement for fixture-backed configs plus the expanded real-bug benchmark suite; tests assert expansion, metric shape, CLI output, public API access, and validation failures without snapshotting nondeterministic timings. \\
+\hline
+Beta report & \texttt{promptabi corpus beta-report} replays seven beta case studies over real configs, records upstream issue evidence, checks tuned-absent false-positive rules, and requires actionable abstention witnesses; tests cover manifest validation, real-code replay, JSON/text rendering, CLI output, and public API access. \\
 \hline
 Maintainer tooling & \texttt{promptabi maintain refresh} writes seed, structured-schema, provider-fixture, real-bug, corpus-verification, expected-diagnostic, diff, snapshot, and release-note artifacts; focused tests run the workflow against real corpora, assert repository-relative diagnostic paths, compare mutated snapshots, and exercise the CLI baseline mode. \\
 \hline

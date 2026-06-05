@@ -19,6 +19,12 @@ from .corpus_verification import (
     render_corpus_verification_text,
     run_corpus_verification,
 )
+from .beta import (
+    BetaProgramReport,
+    render_beta_program_json,
+    render_beta_program_text,
+    run_beta_program,
+)
 from .diagnostics import Diagnostic
 from .enterprise import (
     EnterpriseSettings,
@@ -429,6 +435,23 @@ def verify_corpora(
         return render_corpus_verification_json(report)
     if output_format == "text":
         return render_corpus_verification_text(report)
+    raise ValueError("output_format must be one of: text, json")
+
+
+def beta_program(
+    path: str | Path | None = None,
+    *,
+    output_format: str | None = None,
+) -> BetaProgramReport | str:
+    """Run the offline beta-program case-study replay, optionally rendering it."""
+
+    report = run_beta_program(path)
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_beta_program_json(report)
+    if output_format == "text":
+        return render_beta_program_text(report)
     raise ValueError("output_format must be one of: text, json")
 
 

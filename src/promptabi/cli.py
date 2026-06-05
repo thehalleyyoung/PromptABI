@@ -13,6 +13,12 @@ from pathlib import Path
 
 from ._version import __version__
 from .bug_reports import BugReportError, generate_bug_report, render_bug_report
+from .beta import (
+    BetaProgramError,
+    render_beta_program_json,
+    render_beta_program_text,
+    run_beta_program,
+)
 from .config import ConfigError, discover_config, load_config
 from .compatibility_matrix import (
     build_compatibility_matrix,
@@ -404,6 +410,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     corpus_verify.add_argument("--output", help="write corpus verification report to this path instead of stdout")
+    beta_report = corpus_subparsers.add_parser(
+        "beta-report",
+        help="replay beta case studies, upstream issue evidence, and abstention/false-positive tuning",
+    )
+    beta_report.add_argument(
+        "--path",
+        help="beta program JSON path (default: repository fixtures/beta/beta_program.json)",
+    )
+    beta_report.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    beta_report.add_argument("--output", help="write beta report to this path instead of stdout")
 
     plugins = subparsers.add_parser("plugins", help="inspect PromptABI plugin capabilities")
     plugins.add_argument(
@@ -1146,6 +1167,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"promptabi: cannot write corpus verification report: {exc}", file=sys.stderr)
             return 2
         return 0 if report.ok else 1
+
+    if args.command == "corpus" and args.corpus_command == "beta-report":
+        try:
+            report = run_beta_program(args.path)
+            output = render_beta_program_json(report) if args.format == "json" else render_beta_program_text(report)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                print(f"wrote beta report: {args.output} ({len(report.results)} cases)")
+            else:
+                print(output, end="")
+        except BetaProgramError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write beta report: {exc}", file=sys.stderr)
+            return 2
+        return 0 if report.passed else 1
 
     if args.command == "plugins":
         try:

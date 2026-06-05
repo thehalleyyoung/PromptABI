@@ -106,6 +106,7 @@ promptabi diagnostics lsp --config examples/minimal/promptabi.json --format json
 
 # Run labeled benchmarks, mutation fuzzing, and paper artifact regeneration.
 promptabi corpus verify --format text
+promptabi corpus beta-report --format text
 promptabi corpus evaluation --format text
 promptabi fuzz mutations --format text
 promptabi maintain refresh --output-dir maintainer_artifact --force

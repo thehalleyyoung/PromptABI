@@ -1,0 +1,192 @@
+{
+  "manifest_version": 1,
+  "methodology": "Offline beta replay over open-source-style LLM app reductions and one explicitly synthetic abstention-message fixture. Each case runs a real PromptABI config, checks expected and tuned-absent rule IDs, records upstreamable issues, and stores concise case-study notes without copying upstream source.",
+  "cases": [
+    {
+      "id": "chatml-role-boundary-beta",
+      "app_name": "ChatML agent template",
+      "repository": "https://github.com/ggml-org/llama.cpp",
+      "source_kind": "public-github-synthetic-reduction",
+      "config": "examples/role-boundary/unsafe.promptabi.json",
+      "labels": ["chat-template", "role-boundary", "open-source-beta"],
+      "expected_rule_ids": ["role-boundary-nonforgeability"],
+      "expected_absent_rule_ids": ["check-failed", "artifact-load-failed", "role-boundary-abstained"],
+      "issues": [
+        {
+          "title": "User text can render as assistant control delimiter in ChatML-style templates",
+          "url": "https://github.com/ggml-org/llama.cpp/pull/18462",
+          "status": "triaged",
+          "rule_ids": ["role-boundary-nonforgeability"]
+        }
+      ],
+      "tuning_actions": [
+        "Kept the finding scoped to structural delimiter forgery rather than semantic prompt-injection claims.",
+        "Added tuned-absent role-boundary-abstained coverage so unsupported-template regressions are not mistaken for proved bugs."
+      ],
+      "case_study": {
+        "summary": "A role delimiter supplied inside user-controlled content becomes indistinguishable from model control structure after rendering.",
+        "root_cause": "The template concatenates trusted role markers and unescaped user content in the same byte language.",
+        "production_symptom": "A downstream model or parser may receive a prompt containing a forged assistant prefix.",
+        "fix": "Escape, JSON-encode, or otherwise wrap user-controlled fields before placing them beside role delimiters."
+      }
+    },
+    {
+      "id": "structured-output-parser-beta",
+      "app_name": "Open-source ticket classifier",
+      "repository": "https://github.com/thehalleyyoung/PromptABI",
+      "source_kind": "open-source-agent-synthetic-reduction",
+      "config": "fixtures/structured_schemas/open-source-agent-ticket/promptabi.json",
+      "labels": ["structured-output", "json-schema", "parser-compatibility"],
+      "expected_rule_ids": ["parser-compatibility-mismatch"],
+      "expected_absent_rule_ids": ["parser-compatibility-abstained", "check-failed", "artifact-load-failed"],
+      "issues": [
+        {
+          "title": "Application parser accepts ticket states outside the constrained schema",
+          "url": "https://github.com/thehalleyyoung/PromptABI",
+          "status": "local-fixture",
+          "rule_ids": ["parser-compatibility-mismatch"]
+        }
+      ],
+      "tuning_actions": [
+        "Recorded parser-compatibility-abstained as an absent rule to keep mismatch evidence decisive.",
+        "Preserved the minimized ticket schema as a case study instead of relying on prose-only bug claims."
+      ],
+      "case_study": {
+        "summary": "A structured-output parser accepts strings that the declared schema excludes.",
+        "root_cause": "The application parser and constrained-decoding schema encode different languages.",
+        "production_symptom": "CI can pass schema generation while runtime accepts malformed or semantically invalid tickets.",
+        "fix": "Align parser validation with the exact schema language or narrow the runtime parser."
+      }
+    },
+    {
+      "id": "tool-serialization-beta",
+      "app_name": "Tool-calling assistant",
+      "repository": "https://github.com/thehalleyyoung/PromptABI",
+      "source_kind": "open-source-agent-synthetic-reduction",
+      "config": "fixtures/structured_schemas/tool-serialization-contract/promptabi.json",
+      "labels": ["tool-calling", "provider-contract", "serialization"],
+      "expected_rule_ids": ["tool-schema-ingestion", "tool-serialization"],
+      "expected_absent_rule_ids": ["check-failed", "artifact-load-failed"],
+      "issues": [
+        {
+          "title": "Tool argument serialization drifts from provider envelope assumptions",
+          "url": "https://github.com/thehalleyyoung/PromptABI",
+          "status": "local-fixture",
+          "rule_ids": ["tool-serialization"]
+        }
+      ],
+      "tuning_actions": [
+        "Separated schema ingestion success from serialization warnings so valid schemas do not hide provider-envelope bugs."
+      ],
+      "case_study": {
+        "summary": "Tool schemas load correctly, but the provider/template/parser path serializes arguments incompatibly.",
+        "root_cause": "Provider envelope fields and runtime parser assumptions disagree on argument encoding and IDs.",
+        "production_symptom": "The app receives a tool call whose name or arguments cannot be routed reliably.",
+        "fix": "Pin a provider envelope contract and replay representative serialized tool calls before deployment."
+      }
+    },
+    {
+      "id": "rag-truncation-beta",
+      "app_name": "RAG support bot",
+      "repository": "https://github.com/thehalleyyoung/PromptABI",
+      "source_kind": "rag-synthetic-reduction",
+      "config": "examples/rag-chunking/promptabi.json",
+      "labels": ["rag", "token-budget", "truncation"],
+      "expected_rule_ids": ["rag-citation-loss", "rag-overlap-accounting", "rag-template-overhead", "rag-tokenizer-mismatch"],
+      "expected_absent_rule_ids": ["token-budget-abstained", "check-failed", "artifact-load-failed"],
+      "issues": [
+        {
+          "title": "RAG chunk metadata and template overhead drop required citations",
+          "url": "https://github.com/thehalleyyoung/PromptABI",
+          "status": "local-fixture",
+          "rule_ids": ["rag-citation-loss", "rag-template-overhead"]
+        }
+      ],
+      "tuning_actions": [
+        "Added citation-loss and overlap-accounting expectations to avoid counting generic budget warnings as the case-study bug."
+      ],
+      "case_study": {
+        "summary": "Retrieved chunks fit in isolation but lose citations once metadata and prompt-template overhead are counted.",
+        "root_cause": "The retrieval tokenizer and prompt-budget tokenizer account for chunk boundaries differently.",
+        "production_symptom": "The model sees answer text without the citation field required by the application.",
+        "fix": "Verify retrieval payloads with the serving tokenizer and mark citations as must-survive prompt regions."
+      }
+    },
+    {
+      "id": "provider-migration-beta",
+      "app_name": "OpenAI-compatible migration",
+      "repository": "https://github.com/thehalleyyoung/PromptABI",
+      "source_kind": "provider-migration-synthetic-reduction",
+      "config": "fixtures/provider_migration/promptabi.json",
+      "labels": ["provider-migration", "streaming", "tool-calling"],
+      "expected_rule_ids": ["provider-migration"],
+      "expected_absent_rule_ids": ["check-failed", "artifact-load-failed"],
+      "issues": [
+        {
+          "title": "Provider migration loses tool IDs, streaming chunks, and structured-output fields",
+          "url": "https://github.com/thehalleyyoung/PromptABI",
+          "status": "local-fixture",
+          "rule_ids": ["provider-migration"]
+        }
+      ],
+      "tuning_actions": [
+        "Grouped provider findings by migration edge so a single incompatible target does not inflate false-positive counts."
+      ],
+      "case_study": {
+        "summary": "A nominally OpenAI-compatible target changes tool-call and streaming semantics.",
+        "root_cause": "The target provider omits or renames fields that the source-side application treats as stable.",
+        "production_symptom": "Streaming reconstruction, tool routing, or structured-output validation breaks after migration.",
+        "fix": "Replay source and target provider fixtures and gate migration on compatible envelope fields."
+      }
+    },
+    {
+      "id": "training-target-alignment-beta",
+      "app_name": "Chat SFT data builder",
+      "repository": "https://github.com/thehalleyyoung/PromptABI",
+      "source_kind": "training-pipeline-synthetic-reduction",
+      "config": "examples/end-to-end/training-alignment/buggy.promptabi.json",
+      "labels": ["training-manifest", "static-contract", "fine-tuning"],
+      "expected_rule_ids": ["static-contract-violation"],
+      "expected_absent_rule_ids": ["static-contract-abstained", "check-failed", "artifact-load-failed"],
+      "issues": [
+        {
+          "title": "SFT target roles include a role absent from the serving chat template",
+          "url": "https://github.com/thehalleyyoung/PromptABI",
+          "status": "local-fixture",
+          "rule_ids": ["static-contract-violation"]
+        }
+      ],
+      "tuning_actions": [
+        "Kept training target-role alignment as a static-contract violation so unsupported solver fragments remain visible as abstentions."
+      ],
+      "case_study": {
+        "summary": "The data builder can place supervised target spans outside the intended assistant role.",
+        "root_cause": "Training manifest target roles drift from the serving chat-template role set.",
+        "production_symptom": "Fine-tuning may train on user or tool text as if it were assistant output.",
+        "fix": "Pin the training tokenizer/template pair and prove target masks align with rendered assistant regions."
+      }
+    },
+    {
+      "id": "abstention-message-beta",
+      "app_name": "Synthetic tokenizer backend triage",
+      "repository": "https://github.com/thehalleyyoung/PromptABI",
+      "source_kind": "synthetic-abstention-message-regression",
+      "config": "examples/beta/abstaining-tokenizer/promptabi.json",
+      "labels": ["abstention", "stop-policy", "tokenizer"],
+      "expected_rule_ids": ["stop-tokenizer-abstained"],
+      "expected_absent_rule_ids": ["check-failed", "artifact-load-failed"],
+      "abstention_focus": true,
+      "issues": [],
+      "tuning_actions": [
+        "Requires abstentions to carry a witness and concrete setup suggestion instead of silently passing as unknown.",
+        "Labels this case as synthetic so beta evidence does not overclaim real-world provenance."
+      ],
+      "case_study": {
+        "summary": "A malformed tokenizer metadata field prevents stop-tokenizer analysis from making a proof claim.",
+        "root_cause": "The tokenizer backend cannot be constructed because normalization metadata is not a supported string or list.",
+        "production_symptom": "CI reports an explicit abstention rather than pretending stop-policy/tokenizer compatibility was checked.",
+        "fix": "Correct the tokenizer metadata or switch to a supported local tokenizer artifact before relying on the stop analysis."
+      }
+    }
+  ]
+}
