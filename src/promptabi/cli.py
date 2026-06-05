@@ -48,6 +48,13 @@ from .minimization import (
     render_minimization_json,
     render_minimization_text,
 )
+from .mutation_fuzzing import (
+    ALL_FUZZ_SURFACES,
+    MutationFuzzingError,
+    render_mutation_fuzz_json,
+    render_mutation_fuzz_text,
+    run_mutation_fuzzing,
+)
 from .plugins import PluginError, PluginRegistry, load_plugin_modules
 from .render import SarifRenderOptions, render_github_annotations, render_html, render_json, render_sarif, render_text
 from .seed_corpus import SeedCorpusError, build_seed_corpus_manifest, write_seed_corpus_manifest
@@ -339,6 +346,27 @@ def build_parser() -> argparse.ArgumentParser:
         default="text",
         help="output format (default: text)",
     )
+
+    fuzz = subparsers.add_parser("fuzz", help="mutation-based fuzzing workflows")
+    fuzz_subparsers = fuzz.add_subparsers(dest="fuzz_command", required=True)
+    mutation_fuzz = fuzz_subparsers.add_parser(
+        "mutations",
+        help="run deterministic mutation fuzzing over PromptABI artifact contracts",
+    )
+    mutation_fuzz.add_argument(
+        "--surface",
+        action="append",
+        default=[],
+        choices=("all", *(surface.value for surface in ALL_FUZZ_SURFACES)),
+        help="artifact surface to fuzz; may be repeated (default: all)",
+    )
+    mutation_fuzz.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="json",
+        help="output format (default: json)",
+    )
+    mutation_fuzz.add_argument("--output", help="write mutation-fuzzing report to this path instead of stdout")
 
     paper = subparsers.add_parser("paper", help="paper artifact and reproducibility commands")
     paper_subparsers = paper.add_subparsers(dest="paper_command", required=True)
@@ -782,6 +810,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         print(output, end="")
         return 0
+
+    if args.command == "fuzz" and args.fuzz_command == "mutations":
+        try:
+            report = run_mutation_fuzzing(args.surface or ("all",))
+            output = render_mutation_fuzz_text(report) if args.format == "text" else render_mutation_fuzz_json(report)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                print(f"wrote mutation-fuzzing report: {args.output} ({report.mutation_count} mutations)")
+            else:
+                print(output, end="")
+        except MutationFuzzingError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write mutation-fuzzing report: {exc}", file=sys.stderr)
+            return 2
+        return 0 if report.introduced_violation_count else 1
 
     if args.command == "paper" and args.paper_command == "reproducibility":
         try:

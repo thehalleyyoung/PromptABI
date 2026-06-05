@@ -149,5 +149,42 @@
     },
     "witness_quality_score": 0.975124
   },
-  "manifest_version": 1
+  "manifest_version": 1,
+  "mutation_fuzzing": {
+    "case_count": 24,
+    "discovered_rule_ids": [
+      "chat-template-unsupported-construct",
+      "grammar-grammar-undefined-start",
+      "grammar-missing-start-rule",
+      "grammar-regex-lookaround",
+      "prompt-segment-budget",
+      "prompt-segment-survival-violation",
+      "schema-empty-enum",
+      "schema-json-schema-invalid-enum",
+      "schema-json-schema-recursion-limit",
+      "smt-counterexample",
+      "stop-overreachability",
+      "stop-prefix-collision",
+      "stop-token-unreachable",
+      "tokenizer-control-token-reachable",
+      "tokenizer-normalization-drift",
+      "tool-provider-mismatch",
+      "tool-schema-missing-description",
+      "tool-schema-non-object-parameters",
+      "tool-schema-open-parameters",
+      "tool-schema-precondition-satisfiability"
+    ],
+    "introduced_violation_count": 34,
+    "mutation_count": 16,
+    "surfaces": [
+      "chat-templates",
+      "tokenizers",
+      "stop-policies",
+      "schemas",
+      "grammars",
+      "tool-definitions",
+      "truncation-configs",
+      "smt-encodings"
+    ]
+  }
 }

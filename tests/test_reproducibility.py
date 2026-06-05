@@ -20,6 +20,8 @@ def test_reproducibility_package_freezes_real_corpora_and_stable_expected_tables
     assert package.expected_tables["evaluation"]["passed"] is True
     assert package.expected_tables["evaluation"]["precision"] == 1.0
     assert package.expected_tables["corpus_manifests"]["real_bug_benchmark"]["all_cases_passed"] is True
+    assert package.expected_tables["mutation_fuzzing"]["mutation_count"] == 16
+    assert "smt-counterexample" in package.expected_tables["mutation_fuzzing"]["discovered_rule_ids"]
 
     benchmark_names = {row["benchmark"] for row in package.expected_tables["benchmarks"]}
     assert benchmark_names == {
@@ -36,6 +38,7 @@ def test_reproducibility_package_freezes_real_corpora_and_stable_expected_tables
     assert all("second" not in key for row in package.expected_tables["benchmarks"] for key in row["metrics"])
     assert "python -m pip install -e ." in package.reproduction_commands
     assert "promptabi corpus evaluation --format json" in package.reproduction_commands
+    assert "promptabi fuzz mutations --format json" in package.reproduction_commands
     assert package.environment["solver"]["z3_available"] in {True, False}
     if package.environment["solver"]["z3_available"]:
         assert str(package.environment["solver"]["reproduction_pin"]).startswith("z3-solver==")

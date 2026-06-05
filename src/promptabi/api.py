@@ -31,6 +31,13 @@ from .minimization import (
     render_minimization_json,
     render_minimization_text,
 )
+from .mutation_fuzzing import (
+    FuzzSurface,
+    MutationFuzzReport,
+    render_mutation_fuzz_json,
+    render_mutation_fuzz_text,
+    run_mutation_fuzzing,
+)
 from .plugins import PluginRegistry
 from .policies import Suppression, VerificationPolicy, apply_policy_diagnostics, load_policy_file
 from .reproducibility import (
@@ -311,6 +318,23 @@ def create_reproducibility_package(
         benchmark_iterations=benchmark_iterations,
         force=force,
     )
+
+
+def fuzz_mutations(
+    surfaces: Sequence[str | FuzzSurface] = ("all",),
+    *,
+    output_format: str | None = None,
+) -> MutationFuzzReport | str:
+    """Run deterministic mutation fuzzing over PromptABI artifact contracts."""
+
+    report = run_mutation_fuzzing(surfaces)
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_mutation_fuzz_json(report)
+    if output_format == "text":
+        return render_mutation_fuzz_text(report)
+    raise ValueError("output_format must be one of: text, json")
 
 
 def _resolve_config(config: str | Path | VerificationConfig) -> VerificationConfig:

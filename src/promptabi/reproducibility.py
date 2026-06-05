@@ -14,6 +14,7 @@ from typing import Any
 from ._version import __version__
 from .benchmarks import benchmark_cases, repo_root, run_benchmarks
 from .evaluation import run_evaluation
+from .mutation_fuzzing import run_mutation_fuzzing
 from .provider_fixture_packs import DEFAULT_PROVIDER_FIXTURE_PACK_ROOT, build_provider_fixture_pack_manifest
 from .real_bug_benchmarks import DEFAULT_REAL_BUG_BENCHMARK_PATH, build_real_bug_benchmark_manifest
 from .seed_corpus import DEFAULT_SEED_CORPUS_ROOT, build_seed_corpus_manifest
@@ -156,6 +157,7 @@ def _manifest(
             "evaluation_case_count": expected_tables["evaluation"]["case_count"],  # type: ignore[index]
             "evaluation_passed": expected_tables["evaluation"]["passed"],  # type: ignore[index]
             "benchmark_count": len(expected_tables["benchmarks"]),  # type: ignore[arg-type]
+            "mutation_fuzz_surfaces": len(expected_tables["mutation_fuzzing"]["surfaces"]),  # type: ignore[index]
             "z3_available": environment["solver"]["z3_available"],  # type: ignore[index]
         },
     }
@@ -196,6 +198,7 @@ def _expected_tables(inputs: ReproducibilityInputs, *, benchmark_iterations: int
     real_bug_manifest = build_real_bug_benchmark_manifest(inputs.real_bug_benchmark_path)
     evaluation = run_evaluation(inputs.evaluation_corpus_path).to_dict()
     benchmarks = run_benchmarks(("all",), iterations=benchmark_iterations, root=inputs.repository_root)
+    fuzzing = run_mutation_fuzzing().to_dict()
     return {
         "manifest_version": REPRODUCIBILITY_PACKAGE_VERSION,
         "corpus_manifests": {
@@ -240,6 +243,13 @@ def _expected_tables(inputs: ReproducibilityInputs, *, benchmark_iterations: int
             }
             for result in benchmarks
         ],
+        "mutation_fuzzing": {
+            "surfaces": fuzzing["surfaces"],
+            "case_count": fuzzing["case_count"],
+            "mutation_count": fuzzing["mutation_count"],
+            "introduced_violation_count": fuzzing["introduced_violation_count"],
+            "discovered_rule_ids": fuzzing["discovered_rule_ids"],
+        },
     }
 
 
@@ -286,6 +296,7 @@ def _reproduction_commands(inputs: ReproducibilityInputs, *, benchmark_iteration
         "promptabi corpus provider-fixture-manifest --output provider-fixture-manifest.json\n"
         "promptabi corpus real-bug-benchmark --output real-bug-benchmark-manifest.json\n"
         "promptabi corpus evaluation --format json --output evaluation-report.json\n"
+        "promptabi fuzz mutations --format json --output mutation-fuzzing-report.json\n"
         f"promptabi paper reproducibility --output-dir paper_artifact --benchmark-iterations {benchmark_iterations} --force\n"
     )
 

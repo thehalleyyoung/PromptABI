@@ -9,4 +9,5 @@ promptabi corpus structured-schema-manifest --output structured-schema-manifest.
 promptabi corpus provider-fixture-manifest --output provider-fixture-manifest.json
 promptabi corpus real-bug-benchmark --output real-bug-benchmark-manifest.json
 promptabi corpus evaluation --format json --output evaluation-report.json
+promptabi fuzz mutations --format json --output mutation-fuzzing-report.json
 promptabi paper reproducibility --output-dir paper_artifact --benchmark-iterations 1 --force
