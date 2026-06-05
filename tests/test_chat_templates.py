@@ -162,6 +162,44 @@ def test_symbolic_executor_bounds_seed_corpus_conditionals_and_loops() -> None:
     assert any(path.loop_iterations == (("messages", 2),) for path in execution.paths)
 
 
+def test_symbolic_executor_handles_empty_string_set_literal_without_crashing() -> None:
+    # Real-world templates (Qwen3, QwQ, many tool-calling templates) initialize an
+    # accumulator with `{% set content = '' %}`. The empty-string literal must not
+    # crash the symbolic executor; it renders nothing and is dropped from output.
+    parsed = parse_hf_chat_template_config(
+        {
+            "chat_template": (
+                "{% set content = '' %}"
+                "{% for message in messages %}"
+                "{{ content }}{{ message['content'] }}"
+                "{% endfor %}"
+            )
+        }
+    )
+
+    execution = symbolically_execute_chat_template(
+        parsed,
+        bounds=ChatTemplateSymbolicBounds(max_messages=1, max_paths=4),
+    )
+
+    assert execution.supported
+    assert all(
+        not (segment.kind == "literal" and segment.value == "")
+        for path in execution.paths
+        for segment in path.segments
+    )
+
+
+def test_symbolic_executor_renders_bound_empty_string_set_as_no_output() -> None:
+    parsed = parse_hf_chat_template_config(
+        {"chat_template": "{% set prefix = '' %}{{ prefix }}done"}
+    )
+
+    rendered = render_chat_template_supported_fragment(parsed, messages=())
+
+    assert rendered == "done"
+
+
 def test_symbolic_executor_records_filters_sets_tools_and_path_budget() -> None:
     parsed = parse_hf_chat_template_config(
         {

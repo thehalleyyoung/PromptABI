@@ -219,7 +219,10 @@ class ChatTemplateSymbolicSegment:
     def __post_init__(self) -> None:
         if self.kind not in {"literal", "variable", "constant", "unknown"}:
             raise ValueError(f"unsupported symbolic segment kind: {self.kind}")
-        if not self.value:
+        # An empty-string literal (e.g. `{% set content = '' %}`) is a legitimate,
+        # meaningful segment that renders nothing; only non-literal kinds must carry
+        # a non-empty value.
+        if not self.value and self.kind != "literal":
             raise ValueError("symbolic segment value must be non-empty")
         object.__setattr__(self, "filters", tuple(self.filters))
 
@@ -1182,8 +1185,15 @@ class _SymbolicExecutor:
         base, filters = _split_filters(expression)
         parts = _split_top_level_concat(base)
         if filters or len(parts) <= 1:
-            return (self._expression_segment(expression, environment, bindings),)
-        return tuple(self._expression_segment(part, environment, bindings) for part in parts)
+            produced = (self._expression_segment(expression, environment, bindings),)
+        else:
+            produced = tuple(self._expression_segment(part, environment, bindings) for part in parts)
+        # Empty-string literals render nothing; drop them so output paths stay clean.
+        return tuple(
+            segment
+            for segment in produced
+            if not (segment.kind == "literal" and segment.value == "")
+        )
 
     def _bound_name(self, expression: str, environment: dict[str, str]) -> str | None:
         path = _variable_path(expression)
