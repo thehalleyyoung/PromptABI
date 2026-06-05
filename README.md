@@ -123,7 +123,9 @@ metrics; `promptabi paper reproducibility` writes the frozen fixture hashes,
 solver pins, regeneration script, and stable expected tables used by the paper
 artifact. `promptabi fuzz mutations` now mutates chat templates, tokenizers,
 stops, schemas, grammars, tools, truncation configs, and SMT encodings against
-real analyzers to surface newly introduced contract violations. Grammar
+real analyzers to surface newly introduced contract violations, and generated
+checker properties exercise every public analyzer over safe, unsafe, ambiguous,
+unsupported, satisfiable, unsatisfiable, and abstaining artifacts. Grammar
 ingestion now normalizes JSON
 Schema, regex, EBNF, Outlines, xgrammar, llguidance, and PromptABI grammars into
 typed rules, terminals, source spans, and explicit abstentions; the JSON Schema
