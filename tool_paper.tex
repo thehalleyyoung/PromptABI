@@ -382,6 +382,64 @@ schema cannot be modeled, or a source-derived value cannot be recovered,
 PromptABI reports that fact. It does not silently turn an unsupported case into
 a safe result.
 
+\subsection{The Solver-Trust Layer}
+
+A sound verifier is only as credible as the evidence that its own decision
+procedure is correct, deterministic, and honestly scoped. PromptABI therefore
+ships a self-certifying solver-trust layer that treats the solver as an artifact
+to be verified rather than an oracle to be trusted.
+
+\paragraph{Cross-strategy portfolio replay.}
+Every finite obligation can be discharged through a portfolio of independent
+strategies---the Z3 backend and an exhaustive finite-enumeration backend---and
+the layer requires that all strategies that terminate \emph{agree} on the
+verdict before any safety claim is emitted. The portfolio result is replayable:
+re-running the recorded lemmas reproduces the same per-strategy verdicts
+bit-for-bit, so a proof can be audited without the original private artifacts.
+
+\paragraph{Mechanized minimal encodings and conformance suites.}
+The supported fragment is pinned down by a published corpus of \emph{smallest}
+encodings---for each expression construct, the minimal finite problem that
+exercises it together with the verdict it must yield. Each encoding is mechanized
+on both backends, and a separate \emph{solver-fragment conformance suite} labels
+representative satisfiable, unsatisfiable, and out-of-fragment instances. A new
+solver release, an alternative engine, or a downstream re-implementation is
+certified by passing the suite; the same suite is regression protection for
+PromptABI itself.
+
+\paragraph{Proof-carrying caches and lemma reuse.}
+Cached solver results carry their evidence: a satisfying model for SAT entries
+and an unsat core for UNSAT entries. Every cache hit is re-validated against the
+carried proof and rejected if the entry has been tampered with, so reuse never
+weakens soundness. A complementary lemma cache memoizes reusable sub-obligations
+across runs under the same fingerprinting discipline.
+
+\paragraph{Witnesses, certificates, and source spans.}
+SMT counterexamples are minimized into human-readable witnesses that drop
+structurally irrelevant variables and report the flexible value ranges that
+still violate the contract, and each counterexample variable is mapped back to
+its originating source span. Abstentions are themselves certified: an abstention
+certificate classifies a refused formula against the supported node and domain
+registries, naming every out-of-fragment construct, which turns ``the solver
+gave up'' into an auditable statement rather than a silent gap.
+
+\paragraph{Graceful degradation under resource limits.}
+Because enumeration is exponential in the worst case, the layer profiles each
+problem across a timeout ladder and certifies \emph{degradation soundness}: under
+tighter budgets the solver may return fewer conclusive verdicts, but no
+conclusive verdict it does return may ever contradict the ground truth computed
+under a generous budget. Solver-version gates and migration interpolants extend
+the same discipline across provider and solver upgrades.
+
+\paragraph{Capability signatures for reusable packs.}
+The same canonicalization machinery is applied above the solver. A reusable
+prompt pack is distilled into an order-independent capability signature---its
+exported templates, expected roles, tool schemas, stop policies, and supported
+model families, plus a stable digest---so a consumer's requirements can be
+matched against a pack by set containment, and an upgrade can be certified
+backward compatible (or flagged as a silently breaking ``patch'' release) by
+differencing two signatures.
+
 \begin{theorem}[Bounded counterexample soundness]
 For a supported checker fragment, every unsafe PromptABI diagnostic contains a
 witness that is accepted by the artifact semantics used by that checker and
@@ -429,6 +487,24 @@ dependent cut, and the cache lookup key equals the fingerprint recomputed from
 the current config, relevant artifacts, and dependency metadata. Any failed
 obligation causes recomputation.
 \end{proof}
+
+\begin{theorem}[Cross-strategy verdict agreement]
+For a supported finite obligation, PromptABI emits a verdict only when every
+portfolio strategy that terminates returns the same verdict, and any conclusive
+verdict produced under a reduced time budget equals the verdict produced under a
+generous one.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+The portfolio runs the Z3 backend and an exhaustive finite-enumeration backend
+on the identical lowered problem. The enumeration backend is a decision procedure
+over the finite domain product, so when it terminates it is exact; a recorded
+disagreement is therefore surfaced as a finding rather than a verdict. The
+degradation profiler computes a ground-truth verdict under a generous budget and
+compares every timeout-laddered run against it, asserting that timing out yields
+an inconclusive status that is never reported as a safe or unsafe claim.
+\end{proof}
+
 
 \section{Implementation}
 
@@ -755,6 +831,29 @@ Grammar-backend, tokenizer-family, provider-fixture, and framework-truncation
 conformance suites compare PromptABI abstractions to real or fixture-backed
 library behavior. These suites defend against abstraction drift: if the checker
 no longer matches the deployed library fragment, it should fail or abstain.
+
+\paragraph{Solver-trust benchlines.}
+A dedicated family of tests certifies the decision procedure itself.
+\texttt{tests/test\_minimal\_encodings.py} mechanizes the smallest verdict-bearing
+encoding of every supported construct on both backends; the
+solver-fragment conformance suite labels satisfiable, unsatisfiable, and
+out-of-fragment instances and fails on any verdict or classification mismatch;
+\texttt{tests/test\_solver\_portfolio\_replay.py} proves cross-strategy agreement
+and bit-for-bit replay determinism; the proof-carrying cache tests reject
+tampered SAT models and UNSAT cores on reuse; and
+\texttt{tests/test\_timeout\_degradation.py} profiles a timeout ladder and asserts
+that no conclusive verdict under a tight budget contradicts the generous-budget
+ground truth. These are unit cells of the soundness argument rather than
+performance numbers.
+
+\paragraph{Unicode and cross-field decision benchlines.}
+\texttt{tests/test\_unicode\_normalization.py} models NFC/NFKC normalization of a
+finite alphabet, cross-validates the ``already normalized'' set against the
+finite solver, and detects confusables and non-idempotent forms; the cross-field
+obligation tests prove consistency and entailment of multi-field JSON-schema
+obligations (ordering, mutual exclusion, sum bounds, required-if) that a
+property-at-a-time validator cannot express.
+
 
 \paragraph{Maintainer refresh.}
 \paragraph{Corpus release gate.}

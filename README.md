@@ -236,7 +236,10 @@ user-controlled field can structurally forge a role delimiter; it cannot prove
 the model will obey that forged role. It can prove a stop string can terminate
 inside a valid JSON string before the object is complete; it cannot prove the
 model will emit that string. This narrower claim is what makes the tool fast,
-offline, reproducible, and suitable for CI.
+offline, reproducible, and suitable for CI. The decision procedure is itself
+verified: a portfolio of independent solver strategies must agree, caches carry
+re-validated proofs, the supported fragment is pinned by mechanized minimal
+encodings, and conclusive verdicts never degrade under tighter time budgets.
 
 The security model is local and non-telemetric: provider fixtures are validated
 for credential-like values, solver inputs stay on the runner, bug reports are
