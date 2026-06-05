@@ -127,6 +127,13 @@ a \texttt{promptabi diff} workflow that compares two full model/provider/framewo
 configurations and emits contract-breaking tokenizer, provider, framework,
 artifact-set, check-surface, and context-budget changes with structured
 witnesses and migration guidance,
+a \texttt{promptabi launch-assets} workflow that regenerates comparison tables
+against prompt linters, schema validators, constrained decoders, tokenizer diff
+tools, and generic static analyzers; a Mermaid architecture diagram; a terminal
+demo script with a valid GIF placeholder; SVG benchmark charts; bug-gallery
+markdown; Hacker News/GitHub positioning copy; and a manifest whose headline
+counts are sourced from the live benchmark, evaluation, beta, and real-bug replay
+code paths rather than hand-edited launch claims,
 a stop-policy parser that normalizes OpenAI-compatible request snapshots,
 Hugging Face generation configs, llama.cpp/Ollama options, vLLM sampling params,
 LiteLLM passthrough params, and common framework wrapper kwargs into one typed
@@ -475,7 +482,9 @@ discover newly introduced contract violations, and writes a paper reproducibilit
 package with frozen fixture hashes, stable expected tables, solver-version pins,
 environment metadata, and one-command regeneration scripts, plus a maintainer
 artifact bundle with model/corpus/provider manifests, expected diagnostic
-baselines, corpus diffs, and generated release notes.
+baselines, corpus diffs, generated release notes, and a launch asset bundle whose
+comparison table, diagram, benchmark chart, bug gallery, demo script, and concise
+positioning are checked by focused tests.
 
 The repository layout is designed to scale:
 
@@ -505,6 +514,8 @@ The repository layout is designed to scale:
 \texttt{fixtures} and \texttt{paper\_artifact} & Curated seed corpus, real-world bug reductions, grammar differential cases, labeled structured-schema/tool-calling fixtures, secret-free provider packs, and a generated paper artifact containing fixture hashes, expected tables, solver pins, and regeneration commands. \\
 \hline
 \texttt{benchmarks} and \texttt{promptabi fuzz} & CPU-only benchmark entrypoints plus deterministic mutation fuzzing for tokenizer analysis, symbolic template execution, grammar products, stop checks, SMT contracts, budget modeling, corpus verification, cache reuse, and cross-artifact violation discovery. \\
+\hline
+\texttt{promptabi launch-assets} & Evidence-backed launch material: comparison table, architecture diagram, demo GIF source script, SVG benchmark chart, bug gallery, positioning copy, and a manifest generated from real evaluation, benchmark, beta, and real-bug replay code paths. \\
 \hline
 \texttt{docs} & MkDocs-ready documentation for architecture, check families, artifact modeling, integration guides for major LLM stacks, the formal transducer/SMT basis, tokenizer-template composition, role boundaries, stop reachability, grammar emptiness, must-survive budgets, and the local structural security model. \\
 \hline

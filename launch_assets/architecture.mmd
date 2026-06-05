@@ -1,0 +1,15 @@
+%% PromptABI launch architecture diagram.
+flowchart LR
+  A[PromptABI config] --> B[Artifact loaders]
+  B --> C[Chat templates]
+  B --> D[Tokenizers]
+  B --> E[Stops / grammars / tools]
+  B --> F[Provider, RAG, training contracts]
+  C --> G[Automata + transducer products]
+  D --> G
+  E --> G
+  F --> H[Z3-backed finite contracts]
+  G --> I[Diagnostics with witnesses]
+  H --> I
+  I --> J[CLI / JSON / SARIF / HTML / editor protocol]
+  I --> K[Real-bug benchmark + paper artifact]

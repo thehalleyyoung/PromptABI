@@ -1,0 +1,98 @@
+{
+  "benchmarks": [
+    {
+      "benchmark": "tokenizer-analysis",
+      "iterations": 1,
+      "metrics": {
+        "exact_round_trips": 40,
+        "samples": 50,
+        "tokens": 1500
+      },
+      "runs_per_second": 379.73,
+      "seconds": 0.002633
+    },
+    {
+      "benchmark": "template-symbolic-execution",
+      "iterations": 1,
+      "metrics": {
+        "abstentions": 0,
+        "symbolic_paths": 163,
+        "templates": 10
+      },
+      "runs_per_second": 99.44,
+      "seconds": 0.010056
+    },
+    {
+      "benchmark": "grammar-emptiness",
+      "iterations": 1,
+      "metrics": {
+        "checked_candidates": 1,
+        "grammar_accepts": 1,
+        "grammar_states": 58,
+        "status": "satisfiable"
+      },
+      "runs_per_second": 1073.59,
+      "seconds": 0.000931
+    },
+    {
+      "benchmark": "stop-checks",
+      "iterations": 1,
+      "metrics": {
+        "collisions": 0,
+        "overreach_findings": 5,
+        "stop_sequences": 4,
+        "stop_token_ids": 3,
+        "unreachable_token_ids": 1
+      },
+      "runs_per_second": 4608.29,
+      "seconds": 0.000217
+    },
+    {
+      "benchmark": "z3-static-contracts",
+      "iterations": 1,
+      "metrics": {
+        "findings": 2,
+        "violations": 2
+      },
+      "runs_per_second": 192.34,
+      "seconds": 0.005199
+    },
+    {
+      "benchmark": "budget-checks",
+      "iterations": 1,
+      "metrics": {
+        "findings": 4,
+        "input_budget_tokens": 60,
+        "required_prompt_tokens": 91,
+        "segments": 4
+      },
+      "runs_per_second": 4163.77,
+      "seconds": 0.00024
+    },
+    {
+      "benchmark": "corpus-wide-verification",
+      "iterations": 1,
+      "metrics": {
+        "configs": 6,
+        "diagnostics": 40,
+        "failing_configs": 4
+      },
+      "runs_per_second": 47.27,
+      "seconds": 0.021157
+    },
+    {
+      "benchmark": "cache-cold-warm",
+      "iterations": 1,
+      "metrics": {
+        "cache_reused": true,
+        "cold_findings": 4,
+        "cold_seconds": 0.00013,
+        "loaded_artifacts": 2,
+        "warm_findings": 4,
+        "warm_pair_seconds": 6.2e-05
+      },
+      "runs_per_second": 2889.13,
+      "seconds": 0.000346
+    }
+  ]
+}

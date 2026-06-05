@@ -108,6 +108,7 @@ promptabi diagnostics lsp --config examples/minimal/promptabi.json --format json
 promptabi corpus verify --format text
 promptabi corpus beta-report --format text
 promptabi corpus evaluation --format text
+promptabi launch-assets --output-dir launch_assets --force
 promptabi fuzz mutations --format text
 promptabi maintain refresh --output-dir maintainer_artifact --force
 promptabi paper reproducibility --output-dir paper_artifact --force

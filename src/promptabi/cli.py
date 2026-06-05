@@ -46,6 +46,11 @@ from .first_party_plugins import create_first_party_plugin_registry, render_plug
 from .github_action import GitHubActionError, run_github_action
 from .gallery import GalleryError, build_gallery, render_gallery_json, render_gallery_text
 from .init import InitError, available_stacks, scaffold_promptabi_project
+from .launch_assets import (
+    LaunchAssetError,
+    render_launch_asset_summary,
+    write_launch_assets,
+)
 from .local_workflows import (
     LocalWorkflowError,
     install_pre_commit_hook,
@@ -504,6 +509,31 @@ def build_parser() -> argparse.ArgumentParser:
     gallery.add_argument(
         "--output",
         help="write gallery report to this path instead of stdout",
+    )
+
+    launch_assets = subparsers.add_parser(
+        "launch-assets",
+        help="generate launch comparison, diagram, demo, benchmark, bug-gallery, and positioning assets",
+    )
+    launch_assets.add_argument(
+        "--output-dir",
+        default="launch_assets",
+        help="directory to write launch assets (default: launch_assets)",
+    )
+    launch_assets.add_argument(
+        "--repo-root",
+        help="repository root containing examples/ and fixtures/ (default: installed PromptABI repository root)",
+    )
+    launch_assets.add_argument(
+        "--benchmark-iterations",
+        type=int,
+        default=1,
+        help="iterations per benchmark case used for the benchmark chart (default: 1)",
+    )
+    launch_assets.add_argument(
+        "--force",
+        action="store_true",
+        help="overwrite existing generated launch asset files",
     )
 
     fuzz = subparsers.add_parser("fuzz", help="mutation-based fuzzing workflows")
@@ -1241,6 +1271,29 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"promptabi: cannot write gallery report: {exc}", file=sys.stderr)
             return 2
         return 0 if report.ok else 1
+
+    if args.command == "launch-assets":
+        try:
+            bundle = write_launch_assets(
+                args.output_dir,
+                repo_root=args.repo_root,
+                benchmark_iterations=args.benchmark_iterations,
+                force=args.force,
+            )
+        except (
+            LaunchAssetError,
+            EvaluationError,
+            RealBugBenchmarkError,
+            BetaProgramError,
+            ValueError,
+        ) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write launch assets: {exc}", file=sys.stderr)
+            return 2
+        print(render_launch_asset_summary(bundle), end="")
+        return 0
 
     if args.command == "fuzz" and args.fuzz_command == "mutations":
         try:

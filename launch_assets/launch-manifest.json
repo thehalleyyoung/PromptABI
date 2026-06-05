@@ -1,0 +1,52 @@
+{
+  "asset_payload_sha256": "af612116e9659ac156db8e6eaad7d25e3ee116baaa6c2d1e14fae7e3dc94af63",
+  "benchmark_iterations": 1,
+  "files": [
+    "comparison.md",
+    "architecture.mmd",
+    "demo-script.md",
+    "benchmark-chart.svg",
+    "benchmark-data.json",
+    "bug-gallery.md",
+    "positioning.md",
+    "launch-manifest.json",
+    "demo.gif"
+  ],
+  "manifest_version": 1,
+  "promptabi_version": "0.1.0",
+  "purpose": "Launch assets generated from real PromptABI benchmark, evaluation, beta, and real-bug replay code paths.",
+  "source_reports": {
+    "benchmark_names": [
+      "tokenizer-analysis",
+      "template-symbolic-execution",
+      "grammar-emptiness",
+      "stop-checks",
+      "z3-static-contracts",
+      "budget-checks",
+      "corpus-wide-verification",
+      "cache-cold-warm"
+    ],
+    "beta_passed": true,
+    "evaluation_passed": true,
+    "real_bug_manifest_sha256": "55e97fcc422a647f5bb13f98dcd1c2c24974d607580f6ea73fd949517d7a0ab8"
+  },
+  "summary": {
+    "all_real_bug_cases_passed": true,
+    "benchmark_cases": 8,
+    "beta_projects": 7,
+    "evaluation_cases": 11,
+    "evaluation_precision": 1.0,
+    "evaluation_recall": 1.0,
+    "real_bug_cases": 7,
+    "real_bug_categories": [
+      "popular-template",
+      "provider-migration",
+      "rag-truncation",
+      "structured-output-library",
+      "tokenizer",
+      "tool-schema",
+      "training-pipeline"
+    ],
+    "upstream_issue_count": 6
+  }
+}
