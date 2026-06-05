@@ -114,6 +114,13 @@ from .release import (
     render_release_readiness_json,
     render_release_readiness_text,
 )
+from .version_gates import (
+    VersionGatePolicy,
+    VersionGateReport,
+    render_version_gate_json,
+    render_version_gate_text,
+    run_version_gate,
+)
 from .reproducibility import (
     ReproducibilityInputs,
     ReproducibilityPackage,
@@ -429,6 +436,33 @@ def compatibility_audit(
         return render_compatibility_audit_json(report)
     if output_format == "text":
         return render_compatibility_audit_text(report)
+    raise ValueError("output_format must be one of: text, json")
+
+
+def semantic_version_gate(
+    baseline_path: str | Path,
+    current_path: str | Path,
+    *,
+    allowed_impact: str = "patch-safe",
+    policy: VersionGatePolicy | None = None,
+    policy_path: str | Path | None = None,
+    output_format: str | None = None,
+) -> VersionGateReport | str:
+    """Run or render a semantic-version gate over two verified contract configs."""
+
+    report = run_version_gate(
+        baseline_path,
+        current_path,
+        allowed_impact=allowed_impact,
+        policy=policy,
+        policy_path=policy_path,
+    )
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_version_gate_json(report)
+    if output_format == "text":
+        return render_version_gate_text(report)
     raise ValueError("output_format must be one of: text, json")
 
 

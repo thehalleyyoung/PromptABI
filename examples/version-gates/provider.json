@@ -1,0 +1,56 @@
+{
+  "migration_compatibility": {
+    "errors": {
+      "code_path": "error.code",
+      "rate_limit_path": "error.type"
+    },
+    "limits": {
+      "max_input_tokens": 128000,
+      "max_output_tokens": 4096
+    },
+    "provider_family": "openai",
+    "request": {
+      "required_fields": [
+        "messages",
+        "tools"
+      ]
+    },
+    "response": {
+      "required_fields": [
+        "choices",
+        "tool_calls"
+      ]
+    },
+    "stops": {
+      "sequences": [
+        "</tool_call>"
+      ]
+    },
+    "streaming": {
+      "emits_argument_fragments": true
+    },
+    "structured_outputs": {
+      "modes": [
+        "json_schema"
+      ]
+    },
+    "tools": {
+      "argument_encoding": "json-object",
+      "id_path": "choices[].message.tool_calls[].id",
+      "supports_parallel_tool_calls": true
+    }
+  },
+  "provider": "OpenAI",
+  "request_shape": {
+    "required_fields": [
+      "messages",
+      "tools"
+    ]
+  },
+  "response_shape": {
+    "required_fields": [
+      "choices",
+      "tool_calls"
+    ]
+  }
+}

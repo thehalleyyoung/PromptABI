@@ -128,6 +128,12 @@ from .usage_analytics import (
     render_usage_summary_text,
     summarize_local_command_usage,
 )
+from .version_gates import (
+    SemverImpact,
+    render_version_gate_json,
+    render_version_gate_text,
+    run_version_gate,
+)
 from .provider_fixture_packs import (
     ProviderFixturePackError,
     build_provider_fixture_pack_manifest,
@@ -295,6 +301,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="import a PromptABI plugin module for renderer extensions; may be repeated",
     )
     _add_local_summary_argument(diff)
+
+    version_gate = subparsers.add_parser(
+        "version-gate",
+        help="gate a config diff against declared patch/minor/major contract impact",
+    )
+    version_gate.add_argument("baseline", help="baseline PromptABI JSON config")
+    version_gate.add_argument("current", help="current PromptABI JSON config")
+    version_gate.add_argument(
+        "--allowed-impact",
+        choices=tuple(item.value for item in SemverImpact),
+        default=SemverImpact.PATCH_SAFE.value,
+        help="maximum semantic-version impact allowed by this deployment gate (default: patch-safe)",
+    )
+    version_gate.add_argument("--policy", help="JSON policy file with semver impact overrides")
+    version_gate.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    version_gate.add_argument("--output", help="write version-gate report to this path instead of stdout")
 
     init = subparsers.add_parser("init", help="scaffold a PromptABI config for a common LLM stack")
     init.add_argument(
@@ -1159,6 +1186,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         print(output, end="")
         return exit_code
+
+    if args.command == "version-gate":
+        try:
+            report = run_version_gate(
+                Path(args.baseline).resolve(),
+                Path(args.current).resolve(),
+                allowed_impact=args.allowed_impact,
+                policy_path=args.policy,
+            )
+            output = render_version_gate_json(report) if args.format == "json" else render_version_gate_text(report)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                print(f"wrote version-gate report: {args.output} ({len(report.findings)} findings)")
+            else:
+                print(output, end="")
+        except (ConfigError, ValueError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write version-gate report: {exc}", file=sys.stderr)
+            return 2
+        return 0 if report.ok else 1
 
     if args.command == "init":
         try:

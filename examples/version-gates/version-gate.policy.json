@@ -1,0 +1,14 @@
+{
+  "default_unknown_impact": "minor-breaking",
+  "rules": [
+    {
+      "impact": "minor-breaking",
+      "match": {
+        "kind": "chat-template-change",
+        "rule_id": "diff-tokenizer-drift"
+      },
+      "rationale": "The deployment explicitly reviews chat-template delimiter changes before minor releases."
+    }
+  ],
+  "version_gate_policy_version": 1
+}

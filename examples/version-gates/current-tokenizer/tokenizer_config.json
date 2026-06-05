@@ -1,0 +1,14 @@
+{
+  "add_bos_token": false,
+  "added_tokens": [
+    {
+      "content": "</s>",
+      "id": 2,
+      "special": true
+    }
+  ],
+  "bos_token": "<s>",
+  "chat_template": "<|start_header_id|>{{ messages[0].role }}<|end_header_id|>",
+  "eos_token": "</s>",
+  "eos_token_id": 2
+}

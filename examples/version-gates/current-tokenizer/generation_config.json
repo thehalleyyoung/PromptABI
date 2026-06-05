@@ -1,0 +1,6 @@
+{
+  "eos_token_id": 2,
+  "stop_strings": [
+    "</tool_call>"
+  ]
+}

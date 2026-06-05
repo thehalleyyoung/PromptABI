@@ -90,6 +90,7 @@ promptabi bug-report --config examples/role-boundary/unsafe.promptabi.json --ind
 
 # Compare an upgrade before merge and audit supported guarantees.
 promptabi diff promptabi.baseline.json promptabi.json
+promptabi version-gate promptabi.baseline.json promptabi.json --allowed-impact patch-safe
 promptabi matrix --format text
 promptabi api-docs --format markdown
 promptabi proofs --format text

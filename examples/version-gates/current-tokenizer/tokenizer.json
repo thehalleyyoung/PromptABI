@@ -1,0 +1,12 @@
+{
+  "added_tokens": [
+    {
+      "content": "</s>",
+      "id": 2,
+      "special": true
+    }
+  ],
+  "normalizer": {
+    "type": "NFC"
+  }
+}

@@ -40,6 +40,7 @@ from .api import (
     render_result,
     refresh_maintainer_tooling,
     run_verification,
+    semantic_version_gate,
     visualize_grammar_product,
     visualize_smt_constraints,
     visualize_stop_reachability,
@@ -157,6 +158,21 @@ from .compatibility_audit import (
     render_compatibility_audit_json,
     render_compatibility_audit_text,
     run_compatibility_audit,
+)
+from .version_gates import (
+    VERSION_GATE_POLICY_VERSION,
+    SemverImpact,
+    VersionGateFinding,
+    VersionGateFindingStatus,
+    VersionGatePolicy,
+    VersionGateReport,
+    VersionGateRule,
+    empty_version_gate_policy,
+    load_version_gate_policy,
+    render_version_gate_json,
+    render_version_gate_text,
+    run_version_gate,
+    version_gate_policy_from_mapping,
 )
 from .diagnostics import (
     ArtifactRef,

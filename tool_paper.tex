@@ -132,7 +132,9 @@ custom JSON Schema outputs,
 a \texttt{promptabi diff} workflow that compares two full model/provider/framework
 configurations and emits contract-breaking tokenizer, provider, framework,
 artifact-set, check-surface, and context-budget changes with structured
-witnesses and migration guidance,
+witnesses and migration guidance, plus a \texttt{promptabi version-gate} workflow
+that classifies each real diff diagnostic as patch-safe, minor-breaking, or
+major-breaking under deployment policy overrides,
 a \texttt{promptabi launch-assets} workflow that regenerates comparison tables
 against prompt linters, schema validators, constrained decoders, tokenizer diff
 tools, and generic static analyzers; a Mermaid architecture diagram; a terminal

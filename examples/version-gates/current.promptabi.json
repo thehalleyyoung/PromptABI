@@ -1,0 +1,19 @@
+{
+  "artifacts": {
+    "provider": {
+      "kind": "provider-config",
+      "path": "provider.json",
+      "provider": "OpenAI"
+    },
+    "tok": {
+      "kind": "tokenizer",
+      "path": "current-tokenizer",
+      "version": "current"
+    }
+  },
+  "checks": [
+    "tokenizer-config-drift",
+    "provider-migration"
+  ],
+  "name": "version-gate-current"
+}
