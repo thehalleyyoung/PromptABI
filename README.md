@@ -60,7 +60,7 @@ The same local verifier covers:
 | **Prompt packs + contracts** | reusable templates and assume/guarantee contracts with compositional tokenizer/template/role/tool/stop/model-family/RAG/truncation guarantees, inherited proof-obligation lineage, locks, monotone extension certificates, registries, signing, and offline mirrors |
 | **Budgets + RAG** | must-survive regions, dropped citations, tokenizer/metadata drift, framework truncation, context overflow, and RAG chunks that fail the tool schemas consuming them |
 | **Provenance** | artifact hashes, licenses, trusted sources, reproducible HF revisions, lockfile drift, offline fixture integrity, and upstream bug/fix/workaround links |
-| **Enterprise + platform posture** | org policy packs, no-network mirrors, access-controlled private indexes/prompt packs/policy packs, audit-bundle retention, approved fixtures, privacy rules, governance gates, stable payloads for CI/IDEs/registries, and TS/Go/Rust readers for reports, lockfiles, and bundles |
+| **Enterprise + platform posture** | org policy packs, no-network mirrors, access-controlled private indexes/prompt packs/policy packs, audit-bundle retention, approved fixtures, privacy rules, governance gates, proved incremental-cache reuse, stable payloads for CI/IDEs/registries, and TS/Go/Rust readers |
 | **Training/eval contracts** | target-role alignment, benchmark-tokenizer drift, eval-harness prompt/few-shot/multi-turn/grading-parser/stop/private-field/cross-provider compatibility, proof-carrying streaming shards, data-loader adapters, synthetic-generator preflight, invalid roles/tools/JSON/stops, packing, loss masks, leakage, drift, RLHF/DPO defects, and real-bug benchmarks |
 
 Under the hood, PromptABI combines a declarative static contract language,
@@ -69,8 +69,9 @@ transducers, executable specs for witnesses/products/SMT outcomes, differential
 checks against real tokenizer/template libraries, mechanized proof experiments
 for small automata/SMT fragments, and a Z3-backed finite
 contract layer over booleans, enums, integer ranges, membership, lengths, and
-bounded strings. Solver queries are cacheable by normalized formulas, artifact
-hashes, supported-fragment metadata, and solver-version fingerprints. Every
+bounded strings. Solver and incremental-check reuse are cacheable by normalized
+formulas, dependency metadata, artifact hashes, supported-fragment metadata, and
+solver-version fingerprints. Every
 diagnostic states its guarantee mode--`sound`, `complete`, `bounded`,
 `z3-backed-smt`, `heuristic`, or `abstaining`--and formal counterexamples can be
 shrunk or sliced to minimal strings, token paths, solver assignments, and

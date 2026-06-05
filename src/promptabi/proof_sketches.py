@@ -10,6 +10,7 @@ from pathlib import Path
 from .budgets import MustSurviveProof
 from .formal import AutomatonWitness, DeterministicFiniteAutomaton, SolverStatus
 from .grammar_emptiness import GrammarTokenizerEmptinessReport, GrammarTokenizerEmptinessStatus
+from .incremental import IncrementalCacheCertificate
 from .role_boundaries import RoleBoundaryNonforgeabilityReport
 from .specs import SpecCheck, check_contract_result, check_dfa_witness
 from .static_contracts import StaticContractFinding
@@ -381,6 +382,33 @@ def prove_static_contract(finding: StaticContractFinding) -> ProofSketch:
     )
 
 
+def prove_incremental_cache_soundness(certificates: tuple[IncrementalCacheCertificate, ...]) -> ProofSketch:
+    """Build an executable proof sketch for incremental-check cache reuse."""
+
+    checks: list[SpecCheck] = []
+    for certificate in certificates:
+        checks.extend(
+            SpecCheck(
+                f"{certificate.check_name}:{name}",
+                passed,
+                detail,
+            )
+            for name, passed, detail in certificate.checks
+        )
+    if not certificates:
+        checks.append(SpecCheck("certificate-present", False, "no incremental cache certificates supplied"))
+    outcome = ProofOutcome.PROVEN if certificates and all(certificate.reusable for certificate in certificates) else ProofOutcome.ABSTAINED
+    return _sketch(
+        "incremental-cache-soundness",
+        outcome,
+        checks=tuple(checks),
+        evidence=tuple(
+            (f"{certificate.check_name}.cache_key", certificate.cache_key)
+            for certificate in certificates
+        ),
+    )
+
+
 def build_supported_proof_catalog() -> ProofSketchReport:
     """Return theorem sketches for the built-in proof families."""
 
@@ -393,6 +421,7 @@ def build_supported_proof_catalog() -> ProofSketchReport:
                 "grammar-tokenizer-emptiness",
                 "must-survive-budget",
                 "z3-backed-finite-contract",
+                "incremental-cache-soundness",
             )
         )
     )
@@ -611,6 +640,27 @@ _THEOREMS: dict[str, tuple[str, str, tuple[str, ...], tuple[ProofLemma, ...]]] =
                 "core soundness",
                 "UNSAT cores name known constraints and are deletion-minimal in finite enumeration.",
                 "The executable spec rechecks core unsatisfiability without trusting Z3.",
+            ),
+        ),
+    ),
+    "incremental-cache-soundness": (
+        "Incremental verification cache soundness",
+        "A skipped check may reuse cached diagnostics iff changed artifact kinds are disjoint from its declared dependencies, dependency closure is unchanged, and the cache key fingerprints the current config, relevant artifacts, and dependency metadata.",
+        (
+            "check dependency metadata is complete for the registered checker",
+            "changed paths are normalized against the verified config directory",
+            "cache entries are addressed only by the certificate's current SHA-256 fingerprint",
+        ),
+        (
+            ProofLemma(
+                "dependency cut",
+                "Skipped checks are separated from changed artifact kinds and from selected prerequisite/dependent checks.",
+                "IncrementalCacheCertificate rechecks the planner's skipped set against declared artifact_kinds and after edges.",
+            ),
+            ProofLemma(
+                "fingerprint preservation",
+                "A reused cache entry is keyed by the current config, relevant loaded artifact hashes, and dependency metadata.",
+                "The certificate compares the lookup key with _check_cache_key computed from current in-memory artifacts.",
             ),
         ),
     ),

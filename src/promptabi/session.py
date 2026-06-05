@@ -111,7 +111,7 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "enterprise-solver-sandbox-incomplete": (CheckMode.SOUND, CheckMode.COMPLETE),
     "enterprise-solver-sandbox-unsafe": (CheckMode.SOUND, CheckMode.COMPLETE),
     "incremental-cache-miss": (CheckMode.SOUND, CheckMode.COMPLETE),
-    "incremental-check-reused": (CheckMode.HEURISTIC,),
+    "incremental-check-reused": (CheckMode.SOUND, CheckMode.COMPLETE),
     "lockfile-artifact-added": LOCKFILE_CHECK_MODES,
     "lockfile-artifact-drift": LOCKFILE_CHECK_MODES,
     "lockfile-artifact-missing": LOCKFILE_CHECK_MODES,

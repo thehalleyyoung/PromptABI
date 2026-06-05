@@ -275,6 +275,10 @@ Lockfiles, inherited config lineage, signed bundles, replayable solver
 certificates, sliced products &
 Artifact hash, diagnostic fingerprint, replay hash, minimal artifact cover \\
 \addlinespace
+Scale monorepo verification &
+Incremental plans with cache-soundness certificates &
+Dependency cut, current cache fingerprint, relevant artifact hashes \\
+\addlinespace
 Block stale deploys &
 Kubernetes, Terraform, GitHub Environment, and release-system gates &
 Current bundle hash, reproducibility hash, gate manifest \\
@@ -328,6 +332,17 @@ file contributed each proof obligation. Static-contract findings include this
 lineage, so an unsafe budget witness can say that the prompt came from a service
 config while the finite context bound came from a platform base config.
 
+\paragraph{Incremental cache certificates.}
+Changed-artifact verification in monorepos is safe only if skipped checks are
+separated from the changed dependency cut and the reused cache entry is addressed
+by the current inputs. PromptABI now emits an executable cache-soundness
+certificate for each reused check: it rechecks the planner's skipped set against
+declared artifact kinds and \texttt{after} edges, rejects remote or unknown
+dependencies that require a full run, and compares the lookup key with a
+SHA-256 fingerprint of the current config, relevant loaded artifact hashes, and
+dependency metadata. A stale or under-specified cache entry is recomputed rather
+than reported as safe.
+
 \paragraph{Differential replay.}
 Where a library is the specification, PromptABI runs small differential cases
 against real tokenizer/template/parser behavior. This catches divergence between
@@ -369,6 +384,24 @@ claiming success. Unsupported constructs are recorded in the diagnostic model,
 and release tests require abstentions to remain visible.
 \end{proof}
 
+\begin{theorem}[Incremental cache reuse soundness]
+Under complete checker dependency metadata, a PromptABI incremental run reuses
+diagnostics for a skipped check only when no changed artifact kind, selected
+prerequisite, selected dependent, remote dependency, or stale cache fingerprint
+can affect that check.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+The planner maps changed paths to typed artifact kinds and closes the selected
+set over direct dependency edges. Before a cache hit is trusted, an
+\texttt{IncrementalCacheCertificate} independently checks that the skipped check
+was requested, the run was not forced full, changed kinds are disjoint from the
+check's declared artifact kinds, selected checks do not cross the prerequisite or
+dependent cut, and the cache lookup key equals the fingerprint recomputed from
+the current config, relevant artifacts, and dependency metadata. Any failed
+obligation causes recomputation.
+\end{proof}
+
 \section{Implementation}
 
 PromptABI is a Python tool with a deterministic command-line interface and an
@@ -400,7 +433,9 @@ The core command is \texttt{promptabi verify}. It discovers or accepts a
 configuration file, loads typed artifacts, applies policy packs, runs selected
 checks, and emits deterministic text, JSON, SARIF, GitHub annotations, or static
 HTML. CI usage can require a lockfile, compare changed artifacts only, and
-upload SARIF without contacting an LLM provider.
+upload SARIF without contacting an LLM provider. Changed-artifact mode now
+attaches cache-soundness proof obligations to every reused diagnostic, so a
+monorepo gate can distinguish a proved reuse from a forced recomputation.
 
 \paragraph{Deployment gates.}
 \texttt{promptabi deployment-gates} regenerates signed verification-bundle
@@ -649,6 +684,12 @@ tokenizer analysis, grammar emptiness, stop checks, SMT-backed static
 contracts, budget checks, and corpus-wide verification. The goal is not GPU
 throughput; it is whether static verification is cheap enough to run before
 merge.
+
+\paragraph{Incremental-cache proof tests.}
+\texttt{tests/test\_incremental\_verification.py} exercises real incremental
+plans, cache reuse, stale-key rejection, and the public proof-sketch API. The
+same certificate fields are emitted in JSON diagnostics, so CI evidence contains
+the exact dependency cut and cache fingerprint that justified reuse.
 
 \paragraph{Real-bug benchmark.}
 \texttt{promptabi corpus real-bug-benchmark} loads labeled real-world bug

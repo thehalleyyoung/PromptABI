@@ -4,15 +4,17 @@ from promptabi.artifacts import (
     ArtifactBundle,
     ArtifactKind,
     ArtifactLocation,
+    ChatTemplateArtifact,
     FrameworkTruncationConfigArtifact,
     PromptSegment,
     PromptSegmentArtifact,
     SchemaArtifact,
 )
 from promptabi.cli import main
-from promptabi.incremental import plan_incremental_checks
+from promptabi.incremental import incremental_cache_certificate, plan_incremental_checks
 from promptabi.loaders import LoadedArtifact
-from promptabi import VerificationConfig, VerificationSession
+from promptabi import VerificationConfig, VerificationSession, prove_incremental_cache_soundness
+from promptabi.proof_sketches import ProofOutcome
 
 
 def test_incremental_cli_reuses_cached_unchanged_check_results(tmp_path, capsys) -> None:
@@ -80,6 +82,9 @@ def test_incremental_cli_reuses_cached_unchanged_check_results(tmp_path, capsys)
     assert reused["properties"]["changed_artifacts"] == ["schema"]
     assert reused["properties"]["selected_checks"] == ["parser-compatibility"]
     assert reused["properties"]["skipped_checks"] == ["role-boundary-nonforgeability"]
+    assert reused["properties"]["reusable"] is True
+    assert reused["check_modes"] == ["complete", "sound"]
+    assert all(check["passed"] for check in reused["properties"]["incremental_soundness_checks"])
 
 
 def test_incremental_planner_forces_full_run_when_config_changes(tmp_path) -> None:
@@ -150,3 +155,99 @@ def test_incremental_planner_closes_dependent_checks_for_prompt_budget(tmp_path)
     assert plan.changed_kinds == (ArtifactKind.PROMPT_SEGMENT,)
     assert plan.selected_checks == ("rag-chunking-compatibility", "token-budget-model")
     assert plan.skipped_checks == ("parser-compatibility",)
+
+
+def test_incremental_cache_soundness_certificate_proves_safe_reuse(tmp_path) -> None:
+    schema_path = (tmp_path / "schema.json").resolve()
+    template_path = (tmp_path / "tokenizer_config.json").resolve()
+    schema_path.write_text('{"type": "object"}', encoding="utf-8")
+    template_path.write_text('{"chat_template": "{{ messages[0][\\"content\\"] }}"}', encoding="utf-8")
+    schema = SchemaArtifact(
+        kind=ArtifactKind.SCHEMA,
+        name="schema",
+        location=ArtifactLocation(path=str(schema_path)),
+    )
+    template = ChatTemplateArtifact(
+        kind=ArtifactKind.CHAT_TEMPLATE,
+        name="template",
+        location=ArtifactLocation(path=str(template_path)),
+        roles=("user", "assistant"),
+    )
+    session = VerificationSession(
+        VerificationConfig(
+            name="incremental-proof",
+            checks=("parser-compatibility", "role-boundary-nonforgeability"),
+            artifact_bundle=ArtifactBundle((schema, template)),
+        )
+    )
+    loaded = (
+        LoadedArtifact(schema, "json-schema", pinned=False, resolved=False, actual_sha256="schema-v1"),
+        LoadedArtifact(template, "hf-tokenizer-config", pinned=False, resolved=False, actual_sha256="template-v1"),
+    )
+    plan = plan_incremental_checks(
+        session,
+        changed_paths=(schema_path,),
+        config_path=tmp_path / "promptabi.json",
+        loaded_artifacts=loaded,
+    )
+
+    certificate = incremental_cache_certificate(
+        session,
+        plan,
+        loaded_artifacts=loaded,
+        check_name="role-boundary-nonforgeability",
+    )
+    sketch = prove_incremental_cache_soundness((certificate,))
+
+    assert certificate.reusable
+    assert plan.selected_checks == ("parser-compatibility",)
+    assert plan.skipped_checks == ("role-boundary-nonforgeability",)
+    assert sketch.outcome is ProofOutcome.PROVEN
+    assert sketch.passed
+    assert any(check.name.endswith("cache-key-matches-current-inputs") for check in sketch.checks)
+
+
+def test_incremental_cache_certificate_rejects_stale_lookup_key(tmp_path) -> None:
+    schema_path = (tmp_path / "schema.json").resolve()
+    template_path = (tmp_path / "tokenizer_config.json").resolve()
+    schema = SchemaArtifact(kind=ArtifactKind.SCHEMA, name="schema", location=ArtifactLocation(path=str(schema_path)))
+    template = ChatTemplateArtifact(
+        kind=ArtifactKind.CHAT_TEMPLATE,
+        name="template",
+        location=ArtifactLocation(path=str(template_path)),
+        roles=("user", "assistant"),
+    )
+    session = VerificationSession(
+        VerificationConfig(
+            name="stale-cache-proof",
+            checks=("parser-compatibility", "role-boundary-nonforgeability"),
+            artifact_bundle=ArtifactBundle((schema, template)),
+        )
+    )
+    loaded = (
+        LoadedArtifact(schema, "json-schema", pinned=False, resolved=False, actual_sha256="schema-v1"),
+        LoadedArtifact(template, "hf-tokenizer-config", pinned=False, resolved=False, actual_sha256="template-v2"),
+    )
+    plan = plan_incremental_checks(
+        session,
+        changed_paths=(schema_path,),
+        config_path=tmp_path / "promptabi.json",
+        loaded_artifacts=loaded,
+    )
+
+    certificate = incremental_cache_certificate(
+        session,
+        plan,
+        loaded_artifacts=loaded,
+        check_name="role-boundary-nonforgeability",
+        cache_key="stale",
+    )
+    sketch = prove_incremental_cache_soundness((certificate,))
+
+    assert not certificate.reusable
+    assert sketch.outcome is ProofOutcome.ABSTAINED
+    assert not sketch.passed
+    assert any(
+        check.name.endswith("cache-key-matches-current-inputs") and not check.passed
+        for check in sketch.checks
+    )

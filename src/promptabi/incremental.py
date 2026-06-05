@@ -14,6 +14,7 @@ from .artifacts import ArtifactKind
 from .diagnostics import CheckMode, Diagnostic, DiagnosticSeverity, WitnessStep, WitnessTrace, diagnostic_sort_key
 from .loaders import LoadedArtifact
 from .session import (
+    CheckDependency,
     CheckContext,
     ScheduledDiagnostic,
     VerificationResult,
@@ -47,6 +48,44 @@ class IncrementalPlan:
             ("full_run_reason", self.full_run_reason),
             ("selected_checks", list(self.selected_checks)),
             ("skipped_checks", list(self.skipped_checks)),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class IncrementalCacheCertificate:
+    """Proof obligations for reusing one skipped check's cached diagnostics."""
+
+    check_name: str
+    cache_key: str
+    dependency_kinds: tuple[ArtifactKind, ...]
+    dependency_after: tuple[str, ...]
+    relevant_artifacts: tuple[tuple[str, str, str | None], ...]
+    checks: tuple[tuple[str, bool, str], ...]
+
+    @property
+    def reusable(self) -> bool:
+        return all(passed for _name, passed, _detail in self.checks)
+
+    def to_properties(self) -> tuple[tuple[str, object], ...]:
+        return (
+            ("cache_key", self.cache_key),
+            ("dependency_after", list(self.dependency_after)),
+            ("dependency_kinds", [kind.value for kind in self.dependency_kinds]),
+            (
+                "incremental_soundness_checks",
+                [
+                    {"name": name, "passed": passed, "detail": detail}
+                    for name, passed, detail in self.checks
+                ],
+            ),
+            (
+                "relevant_artifacts",
+                [
+                    {"kind": kind, "name": name, "fingerprint": fingerprint}
+                    for kind, name, fingerprint in self.relevant_artifacts
+                ],
+            ),
+            ("reusable", self.reusable),
         )
 
 
@@ -95,6 +134,24 @@ def run_incremental_verification(
 
     for check_name in plan.skipped_checks:
         key = _check_cache_key(session, check_name, loaded_artifacts)
+        certificate = incremental_cache_certificate(
+            session,
+            plan,
+            loaded_artifacts=loaded_artifacts,
+            check_name=check_name,
+            cache_key=key,
+        )
+        if not certificate.reusable:
+            checks_to_run.append(check_name)
+            cache_notes.append(
+                ScheduledDiagnostic(
+                    check_ordinals.get(check_name, len(config_checks)),
+                    0,
+                    _incremental_cache_miss_diagnostic(check_name, plan, certificate=certificate),
+                    check_name=check_name,
+                )
+            )
+            continue
         cached = check_cache.get(key)
         if cached is None:
             checks_to_run.append(check_name)
@@ -102,7 +159,7 @@ def run_incremental_verification(
                 ScheduledDiagnostic(
                     check_ordinals.get(check_name, len(config_checks)),
                     0,
-                    _incremental_cache_miss_diagnostic(check_name, plan),
+                    _incremental_cache_miss_diagnostic(check_name, plan, certificate=certificate),
                     check_name=check_name,
                 )
             )
@@ -116,7 +173,7 @@ def run_incremental_verification(
             ScheduledDiagnostic(
                 ordinal,
                 len(cached),
-                _incremental_reused_diagnostic(check_name, len(cached), plan),
+                _incremental_reused_diagnostic(check_name, len(cached), plan, certificate=certificate),
                 check_name=check_name,
             )
         )
@@ -179,6 +236,87 @@ def plan_incremental_checks(
         selected_checks=selected,
         skipped_checks=skipped,
         full_run_reason=reason,
+    )
+
+
+def incremental_cache_certificate(
+    session: VerificationSession,
+    plan: IncrementalPlan,
+    *,
+    loaded_artifacts: Sequence[LoadedArtifact],
+    check_name: str,
+    cache_key: str | None = None,
+) -> IncrementalCacheCertificate:
+    """Build an executable certificate for reusing a skipped-check cache entry.
+
+    The certificate is intentionally independent of the cache file. It proves
+    that the current incremental plan is allowed to skip ``check_name`` and that
+    the key used for lookup is the fingerprint of the current config, relevant
+    artifacts, and declared dependency metadata.
+    """
+
+    dependency = session.check_dependencies.get(check_name)
+    dependency_kinds = tuple(dependency.artifact_kinds if dependency is not None else ())
+    dependency_after = tuple(dependency.after if dependency is not None else ())
+    expected_cache_key = _check_cache_key(session, check_name, loaded_artifacts)
+    actual_cache_key = cache_key or expected_cache_key
+    selected = set(plan.selected_checks)
+    changed_kind_set = set(plan.changed_kinds)
+    dependent_selected = sorted(
+        selected_check
+        for selected_check in selected
+        if check_name in session.check_dependencies.get(selected_check, CheckDependency()).after
+    )
+    checks = (
+        ("check-is-requested", check_name in session.config.checks, check_name),
+        ("check-is-skipped", check_name in plan.skipped_checks, ",".join(plan.skipped_checks)),
+        ("run-is-not-forced-full", not plan.full_run, plan.full_run_reason or "incremental"),
+        ("dependency-metadata-known", dependency is not None, check_name),
+        (
+            "changed-kinds-disjoint",
+            bool(dependency_kinds) and changed_kind_set.isdisjoint(dependency_kinds),
+            f"changed={_artifact_kind_values(plan.changed_kinds)} dependency={_artifact_kind_values(dependency_kinds)}",
+        ),
+        (
+            "no-remote-artifact-dependency",
+            not any(
+                loaded.artifact.kind in dependency_kinds and loaded.artifact.location.uri is not None
+                for loaded in loaded_artifacts
+            ),
+            check_name,
+        ),
+        (
+            "prerequisites-unchanged",
+            selected.isdisjoint(dependency_after),
+            f"selected={sorted(selected)} after={list(dependency_after)}",
+        ),
+        (
+            "dependents-unchanged",
+            not dependent_selected,
+            f"selected_dependents={dependent_selected}",
+        ),
+        (
+            "cache-key-matches-current-inputs",
+            actual_cache_key == expected_cache_key,
+            actual_cache_key,
+        ),
+    )
+    relevant_artifacts = tuple(
+        (
+            loaded.artifact.kind.value,
+            loaded.artifact.name,
+            loaded.actual_sha256 or loaded.manifest_sha256 or loaded.artifact.provenance.ref_version,
+        )
+        for loaded in sorted(loaded_artifacts, key=lambda item: (item.artifact.kind.value, item.artifact.name))
+        if not dependency_kinds or loaded.artifact.kind in dependency_kinds
+    )
+    return IncrementalCacheCertificate(
+        check_name=check_name,
+        cache_key=expected_cache_key,
+        dependency_kinds=dependency_kinds,
+        dependency_after=dependency_after,
+        relevant_artifacts=relevant_artifacts,
+        checks=checks,
     )
 
 
@@ -336,25 +474,41 @@ def _config_cache_name(session: VerificationSession, config_path: Path) -> str:
     return hashlib.sha256(encoded).hexdigest() + ".json"
 
 
-def _incremental_cache_miss_diagnostic(check_name: str, plan: IncrementalPlan) -> Diagnostic:
+def _incremental_cache_miss_diagnostic(
+    check_name: str,
+    plan: IncrementalPlan,
+    *,
+    certificate: IncrementalCacheCertificate | None = None,
+) -> Diagnostic:
     return Diagnostic(
         rule_id="incremental-cache-miss",
         severity=DiagnosticSeverity.INFO,
         message=f"incremental cache had no reusable result for '{check_name}', so the check was recomputed",
         check_modes=(CheckMode.SOUND, CheckMode.COMPLETE),
         witness=_incremental_witness("cache miss", check_name, plan),
-        properties=(("check", check_name), *plan.to_properties()),
+        properties=(("check", check_name), *plan.to_properties(), *_certificate_properties(certificate)),
     )
 
 
-def _incremental_reused_diagnostic(check_name: str, diagnostic_count: int, plan: IncrementalPlan) -> Diagnostic:
+def _incremental_reused_diagnostic(
+    check_name: str,
+    diagnostic_count: int,
+    plan: IncrementalPlan,
+    *,
+    certificate: IncrementalCacheCertificate,
+) -> Diagnostic:
     return Diagnostic(
         rule_id="incremental-check-reused",
         severity=DiagnosticSeverity.INFO,
         message=f"reused {diagnostic_count} cached diagnostic(s) for unchanged check '{check_name}'",
-        check_modes=(CheckMode.HEURISTIC,),
+        check_modes=(CheckMode.SOUND, CheckMode.COMPLETE),
         witness=_incremental_witness("reuse cached check", check_name, plan),
-        properties=(("check", check_name), ("diagnostic_count", diagnostic_count), *plan.to_properties()),
+        properties=(
+            ("check", check_name),
+            ("diagnostic_count", diagnostic_count),
+            *plan.to_properties(),
+            *certificate.to_properties(),
+        ),
     )
 
 
@@ -367,6 +521,14 @@ def _incremental_witness(action: str, check_name: str, plan: IncrementalPlan) ->
             WitnessStep(action=action, input=check_name, output=", ".join(plan.changed_kinds) or "no artifact kind"),
         ),
     )
+
+
+def _certificate_properties(certificate: IncrementalCacheCertificate | None) -> tuple[tuple[str, object], ...]:
+    return certificate.to_properties() if certificate is not None else ()
+
+
+def _artifact_kind_values(kinds: Sequence[ArtifactKind]) -> list[str]:
+    return [kind.value for kind in kinds]
 
 
 def _path_matches_artifact(changed_path: Path, artifact_path: Path) -> bool:
