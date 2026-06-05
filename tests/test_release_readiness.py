@@ -26,6 +26,7 @@ def test_release_readiness_gate_passes_against_live_repository() -> None:
         "docs-site",
         "seed-corpus",
         "formal-checks",
+        "theorem-traceability",
         "real-bug-benchmark",
         "reproducibility-package",
         "paper-preprint",

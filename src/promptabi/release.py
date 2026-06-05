@@ -21,6 +21,7 @@ from .proof_sketches import build_supported_proof_catalog
 from .real_bug_benchmarks import build_real_bug_benchmark_manifest
 from .reproducibility import ReproducibilityInputs, build_reproducibility_package
 from .seed_corpus import build_seed_corpus_manifest
+from .theorem_traceability import build_theorem_traceability_report
 
 
 DEFAULT_RELEASE_VERSION = "1.0.0"
@@ -104,6 +105,7 @@ def build_release_readiness_report(
         _docs_site_check(root),
         _seed_corpus_check(root),
         _formal_checks_check(),
+        _theorem_traceability_check(root),
         _real_bug_benchmark_check(root),
         _reproducibility_check(root),
         _paper_check(root),
@@ -323,6 +325,21 @@ def _formal_checks_check() -> ReleaseReadinessCheck:
             ("missing_checks", list(missing)),
             ("static_contract_modes", sorted(mode.value for mode in static_modes)),
             ("missing_proofs", list(missing_proofs)),
+        ),
+    )
+
+
+def _theorem_traceability_check(root: Path) -> ReleaseReadinessCheck:
+    report = build_theorem_traceability_report(root)
+    failed = tuple(trace.property_id for trace in report.traces if not trace.passed)
+    return _check(
+        "theorem-traceability",
+        report.passed,
+        "each core proof claim maps to executable specs, property tests, corpus fixtures, and release gates",
+        "theorem-to-test traceability has missing or stale evidence",
+        (
+            ("theorem_count", report.theorem_count),
+            ("failed", list(failed)),
         ),
     )
 

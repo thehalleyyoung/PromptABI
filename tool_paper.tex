@@ -400,8 +400,9 @@ contract-regressing revision---abstaining rather than certifying unpinned
 upstream releases---and a \texttt{promptabi release readiness} gate that checks version metadata,
 changelog, README command anchors, stable CLI paths, GitHub Action and release
 workflows, MkDocs navigation, seed-corpus manifests, formal/Z3-backed check
-registration, real-bug replay, the reproducibility bundle, and this paper
-preprint against live repository code before declaring a 1.0 shipment.
+registration, theorem-to-test traceability, real-bug replay, the reproducibility
+bundle, and this paper preprint against live repository code before declaring a
+1.0 shipment.
 The CLI now also includes \texttt{promptabi explain}, which replays verification,
 deduplicates repeated logical diagnostics, selects one finding by fingerprint,
 rule, or index, and renders a tutorial explanation with source snippets, the
@@ -957,6 +958,17 @@ specifications are deliberately slower and simpler than the optimized algorithms
 their purpose is to make the paper's central claims executable against real
 objects produced by the repository.
 
+The repository now makes that connection explicit through
+\texttt{promptabi proofs --traceability}. The report starts from the proof
+catalog, then requires every core theorem family---role-boundary
+non-forgeability, stop overreachability, tokenizer/grammar emptiness,
+must-survive budget survival, and finite SMT contracts---to name repository-local
+executable specs, generated property tests, corpus or fixture cases, and a
+release-blocking gate. Each reference is validated by path and symbol lookup, so
+a renamed test, deleted fixture, or missing release gate turns theorem
+traceability into a failing CI artifact rather than a stale paragraph in the
+paper.
+
 The documentation now exposes the same decision boundary used by the code:
 automata for finite language reachability, transducers for replayable interface
 relations, Z3 or finite enumeration for bounded symbolic contracts, composed
@@ -1431,6 +1443,7 @@ promptabi explain --config examples/minimal/promptabi.json --rule-id repository-
 promptabi minimize repro.json --keep-substring "<|im_start|>" --format json
 promptabi init --stack openai-tools --output-dir .promptabi-demo
 promptabi gallery --format text
+promptabi proofs --traceability --format json
 promptabi verify --artifact schema=schemas/answer.json --fail-on warning
 promptabi verify --config examples/minimal/promptabi.json --format json
 promptabi verify --config examples/minimal/promptabi.json --format sarif
@@ -1875,16 +1888,18 @@ than a vague "context quality" concern.
 \clearpage
 \section{Differential Validation}
 
-The new soundness audit report is the bridge between proof claims and empirical
-evidence. For role-boundary non-forgeability, stop overreachability,
-grammar-tokenizer emptiness, and finite static contracts, it points to concrete
-proof-sketch replay functions and focused tests; for the remaining built-in
-families it derives scope from scheduler metadata and the compatibility matrix,
-then records the focused test module, conformance suite, fixture pack, or corpus
-that keeps the abstraction honest. This makes the repository's guarantees
-auditable as code: reviewers can ask not only ``what does the checker report?''
-but also ``what assumptions, fragments, obligations, evidence, and blind spots
-justify that report?''
+The soundness audit and theorem traceability reports are the bridge between
+proof claims and empirical evidence. For role-boundary non-forgeability, stop
+overreachability, grammar-tokenizer emptiness, must-survive budgets, and finite
+static contracts, they point to concrete proof-sketch replay functions,
+executable specs, generated property tests, corpus fixtures, and release gates;
+for the remaining built-in families the audit derives scope from scheduler
+metadata and the compatibility matrix, then records the focused test module,
+conformance suite, fixture pack, or corpus that keeps the abstraction honest.
+This makes the repository's guarantees auditable as code: reviewers can ask not
+only ``what does the checker report?'' but also ``what assumptions, fragments,
+obligations, evidence, blind spots, and release-blocking regressions justify that
+report?''
 
 PromptABI's abstractions must be checked against the libraries developers
 actually use. The verifier should not implement a tokenizer, chat-template

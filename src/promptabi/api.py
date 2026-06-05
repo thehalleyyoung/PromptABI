@@ -212,6 +212,12 @@ from .soundness_audits import (
     render_soundness_audit_markdown,
     render_soundness_audit_text,
 )
+from .theorem_traceability import (
+    TheoremTraceabilityReport,
+    build_theorem_traceability_report,
+    render_theorem_traceability_json,
+    render_theorem_traceability_text,
+)
 from .release import (
     ReleaseReadinessReport,
     build_release_readiness_report,
@@ -363,6 +369,19 @@ def proof_sketch_notebooks(
     """Write executable educational proof-sketch notebooks for core proof families."""
 
     return write_proof_sketch_notebooks(output_dir, force=force)
+
+
+def theorem_traceability(*, output_format: str | None = None) -> TheoremTraceabilityReport | str:
+    """Render or return theorem-to-test traceability for core proof claims."""
+
+    report = build_theorem_traceability_report()
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_theorem_traceability_json(report)
+    if output_format == "text":
+        return render_theorem_traceability_text(report)
+    raise ValueError("output_format must be 'json' or 'text'")
 
 
 def grammar_conformance_suite(

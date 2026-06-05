@@ -285,6 +285,11 @@ from .soundness_audits import (
     render_soundness_audit_markdown,
     render_soundness_audit_text,
 )
+from .theorem_traceability import (
+    build_theorem_traceability_report,
+    render_theorem_traceability_json,
+    render_theorem_traceability_text,
+)
 from .render import SarifRenderOptions, render_github_annotations, render_html, render_json, render_sarif, render_text
 from .seed_corpus import SeedCorpusError, build_seed_corpus_manifest, write_seed_corpus_manifest
 from .session import VerificationResult, VerificationSession
@@ -1468,6 +1473,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--force",
         action="store_true",
         help="overwrite existing notebooks when used with --write-notebooks",
+    )
+    proofs.add_argument(
+        "--traceability",
+        action="store_true",
+        help="show theorem-to-test traceability instead of the proof catalog",
     )
     soundness_audit = subparsers.add_parser(
         "soundness-audit",
@@ -3546,6 +3556,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "proofs":
+        if args.traceability:
+            report = build_theorem_traceability_report()
+            output = render_theorem_traceability_json(report) if args.format == "json" else render_theorem_traceability_text(report)
+            print(output, end="")
+            return 0 if report.passed else 1
         if args.write_notebooks:
             try:
                 notebook_report = write_proof_sketch_notebooks(args.write_notebooks, force=args.force)
