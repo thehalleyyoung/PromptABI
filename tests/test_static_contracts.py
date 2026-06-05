@@ -1067,3 +1067,61 @@ def test_static_contract_language_loads_from_cli_config_and_proves_rule(tmp_path
     proved = [diagnostic for diagnostic in payload["diagnostics"] if diagnostic["rule_id"] == "static-contract-proved"]
     assert any(diagnostic["message"] == "static contract invariant 'required-fits-budget' holds over loaded artifact metrics" for diagnostic in proved)
     assert any(diagnostic["properties"].get("contract") == "contract" for diagnostic in proved)
+
+
+def test_static_contract_language_compiles_to_diagnostic_with_rule_span(tmp_path: Path, capsys) -> None:
+    contract = tmp_path / "policy.pabi"
+    segments = tmp_path / "segments.json"
+    contract.write_text(
+        """\
+contract promptabi.contract/v1
+
+rule no-user-control type llm-app severity warning applies_to prompt-segment:
+  description "controlled regions cannot contain app delimiters"
+  forbid_delimiters "<bad>"
+""",
+        encoding="utf-8",
+    )
+    segments.write_text(
+        json.dumps({"segments": [{"name": "user", "role": "user", "content": "hello <bad>"}]}),
+        encoding="utf-8",
+    )
+    config = tmp_path / "promptabi.json"
+    config.write_text(
+        json.dumps(
+            {
+                "name": "static-contract-dsl-cli",
+                "checks": ["static-contracts"],
+                "artifacts": {
+                    "contract": {"kind": "static-contract", "path": contract.name},
+                    "prompt": {
+                        "kind": "prompt-segment",
+                        "path": segments.name,
+                        "segments": [{"name": "user", "role": "user", "content": "hello <bad>"}],
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["verify", "--config", str(config), "--format", "json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    diagnostic = next(item for item in payload["diagnostics"] if item["rule_id"] == "static-contract-violation")
+    assert diagnostic["severity"] == "warning"
+    assert "no-user-control" in diagnostic["message"]
+    assert diagnostic["span"]["path"] == str(contract)
+    assert diagnostic["span"]["start_line"] == 3
+    assert diagnostic["properties"]["rule"] == "no-user-control"
+    assert diagnostic["properties"]["contract"] == "contract"
+    assert diagnostic["properties"]["solver_status"] == "sat"
+    assert any(
+        step["action"] == "record contract evidence" and step["input"] == "rule" and step["output"] == "no-user-control"
+        for step in diagnostic["witness"]["steps"]
+    )
+    assert any(
+        step["action"] == "classify SMT diagnostic" and step["output"] == "concrete counterexample witness"
+        for step in diagnostic["witness"]["steps"]
+    )

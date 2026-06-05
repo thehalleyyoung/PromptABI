@@ -2361,9 +2361,9 @@ def _evaluation_harness_finding_diagnostic(
 
 def _static_contract_finding_diagnostic(report: StaticContractReport, finding: StaticContractFinding) -> Diagnostic:
     del report
-    if finding.severity == "error":
+    if finding.result is not None and finding.result.sat and finding.severity in {"error", "warning"}:
         rule_id = "static-contract-violation"
-        severity = DiagnosticSeverity.ERROR
+        severity = DiagnosticSeverity.ERROR if finding.severity == "error" else DiagnosticSeverity.WARNING
         summary = "PromptABI extracted a concrete counterexample for a satisfiable finite static contract."
     elif finding.status.value == "unknown" or finding.result is None:
         rule_id = "static-contract-abstained" if finding.name == "static-contract-abstained" else "static-contract-unknown"
@@ -2428,6 +2428,7 @@ def _static_contract_finding_diagnostic(report: StaticContractReport, finding: S
         rule_id=rule_id,
         severity=severity,
         message=finding.message,
+        span=finding.source_span,
         check_modes=CHECK_MODE_CATALOG[rule_id],
         suggestions=(finding.suggestion,),
         witness=WitnessTrace(summary=summary, steps=tuple(steps)),
@@ -2446,7 +2447,7 @@ def _static_contract_outcome(finding: StaticContractFinding) -> str:
                 return "approximated solver result"
         return "abstention outside the finite modeled fragment"
     if finding.result.sat:
-        if finding.severity == "error":
+        if finding.severity in {"error", "warning"}:
             return "concrete counterexample witness"
         return "proof of incompatibility"
     if finding.result.unsat:

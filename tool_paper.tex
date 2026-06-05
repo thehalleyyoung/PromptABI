@@ -41,7 +41,9 @@ specifications that replay witnesses, bounded product-language laws, and SMT
 proof objects, a declarative static contract language with a canonical
 \texttt{.pabi} parser, formatter, JSON lowering path, CLI check mode, and
 reviewable examples for LLM apps, fine-tuning datasets, RAG systems, and
-evaluation harnesses, lowered to a finite-contract solver with compressed lazy product witnesses,
+evaluation harnesses, now compiled into source-mapped finite obligations whose
+diagnostics preserve human rule names, rule-line spans, solver models, and proof
+or counterexample classification, lowered to a finite-contract solver with compressed lazy product witnesses,
 incremental DFA minimization, indexed transducer composition/projection, solver
 timeouts, constraint-sliced finite enumeration, and a deterministic solver-query
 cache keyed by normalized Z3 formulas, artifact hashes, supported-fragment
@@ -376,6 +378,10 @@ human-authored \texttt{.pabi} contracts, emits the exact lowered JSON artifact
 shape, and lets reviews enforce stable rule names, severities, allowed roles,
 required regions, forbidden delimiters, schema obligations, stop obligations,
 and finite invariants before those rules enter the same verification pipeline.
+Those same rule names and source spans now survive compilation into
+\texttt{static-contracts} diagnostics, so a warning- or error-level rule can
+point from a Z3/finite counterexample or proof directly back to the governing
+\texttt{.pabi} line.
 A concrete VS Code extension now consumes that payload directly: it registers
 quick-check, explanation, and witness-preview commands, maps PromptABI spans to
 native diagnostics, attaches code actions to findings, and previews the exact

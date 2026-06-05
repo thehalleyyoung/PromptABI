@@ -23,6 +23,7 @@ from .artifacts import (
     TrainingTextSourceKind,
 )
 from .config import VerificationConfig
+from .diagnostics import SourceSpan
 from .formal import (
     BoundedStringDomain,
     Contains,
@@ -60,6 +61,7 @@ class StaticContractFinding:
     severity: str
     evidence: tuple[tuple[str, str], ...] = ()
     artifacts: tuple[str, ...] = ()
+    source_span: SourceSpan | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +101,11 @@ def analyze_static_contracts(
     schemas = tuple(artifact for artifact in artifacts if isinstance(artifact, SchemaArtifact))
     prompt_packs = tuple(artifact for artifact in artifacts if isinstance(artifact, PromptPackArtifact))
     static_contracts = tuple(artifact for artifact in artifacts if isinstance(artifact, StaticContractArtifact))
+    static_contract_source_spans = {
+        loaded.artifact.name: {name: span for name, span in loaded.source_spans}
+        for loaded in loaded_artifacts
+        if isinstance(loaded.artifact, StaticContractArtifact)
+    }
     training_manifests = tuple(
         artifact for artifact in artifacts
         if isinstance(artifact, TrainingManifestArtifact)
@@ -127,6 +134,7 @@ def analyze_static_contracts(
         _explicit_static_contract_obligations(
             config,
             static_contracts,
+            static_contract_source_spans,
             loaded_artifacts,
             prompt_segments,
             truncation_configs,
@@ -1096,6 +1104,7 @@ def _preference_pair_contract_obligation(
 def _explicit_static_contract_obligations(
     config: VerificationConfig,
     contracts: tuple[StaticContractArtifact, ...],
+    contract_source_spans: dict[str, dict[str, SourceSpan]],
     loaded_artifacts: tuple[LoadedArtifact, ...],
     prompt_segments: tuple[PromptSegmentArtifact, ...],
     truncation_configs: tuple[FrameworkTruncationConfigArtifact, ...],
@@ -1110,12 +1119,13 @@ def _explicit_static_contract_obligations(
     findings: list[StaticContractFinding] = []
     for contract in contracts:
         for rule in contract.rules:
-            findings.extend(_explicit_allowed_roles_obligation(contract, rule, prompt_segments, templates, training_manifests, prefer_z3=prefer_z3))
-            findings.extend(_explicit_required_regions_obligation(contract, rule, prompt_segments, prompt_packs, prefer_z3=prefer_z3))
-            findings.extend(_explicit_forbidden_delimiters_obligation(contract, rule, prompt_segments, prefer_z3=prefer_z3))
-            findings.extend(_explicit_schema_obligation(contract, rule, loaded_artifacts, schemas, prefer_z3=prefer_z3))
-            findings.extend(_explicit_stop_policy_obligation(contract, rule, stop_policies, prefer_z3=prefer_z3))
-            findings.extend(_explicit_invariant_obligation(contract, rule, config, prompt_segments, truncation_configs, stop_policies, prefer_z3=prefer_z3))
+            rule_span = _static_contract_rule_span(contract, rule, contract_source_spans)
+            findings.extend(_explicit_allowed_roles_obligation(contract, rule, prompt_segments, templates, training_manifests, rule_span=rule_span, prefer_z3=prefer_z3))
+            findings.extend(_explicit_required_regions_obligation(contract, rule, prompt_segments, prompt_packs, rule_span=rule_span, prefer_z3=prefer_z3))
+            findings.extend(_explicit_forbidden_delimiters_obligation(contract, rule, prompt_segments, rule_span=rule_span, prefer_z3=prefer_z3))
+            findings.extend(_explicit_schema_obligation(contract, rule, loaded_artifacts, schemas, rule_span=rule_span, prefer_z3=prefer_z3))
+            findings.extend(_explicit_stop_policy_obligation(contract, rule, stop_policies, rule_span=rule_span, prefer_z3=prefer_z3))
+            findings.extend(_explicit_invariant_obligation(contract, rule, config, prompt_segments, truncation_configs, stop_policies, rule_span=rule_span, prefer_z3=prefer_z3))
     return tuple(findings)
 
 
@@ -1126,6 +1136,7 @@ def _explicit_allowed_roles_obligation(
     templates: tuple[ChatTemplateArtifact, ...],
     training_manifests: tuple[TrainingManifestArtifact, ...],
     *,
+    rule_span: SourceSpan | None,
     prefer_z3: bool,
 ) -> tuple[StaticContractFinding, ...]:
     if not rule.allowed_roles:
@@ -1148,7 +1159,7 @@ def _explicit_allowed_roles_obligation(
         )
     )
     if not observed_roles:
-        return (_explicit_unknown(contract, rule, "static-contract-allowed-roles", "allowed roles are declared but no role-bearing artifacts are loaded", "Load chat-template, prompt-segment, or training-manifest artifacts so declared role policy can be checked.", (("allowed_roles", ", ".join(rule.allowed_roles)),)),)
+        return (_explicit_unknown(contract, rule, "static-contract-allowed-roles", "allowed roles are declared but no role-bearing artifacts are loaded", "Load chat-template, prompt-segment, or training-manifest artifacts so declared role policy can be checked.", (("allowed_roles", ", ".join(rule.allowed_roles)),), rule_span=rule_span),)
     problem = FiniteContractProblem(
         name="static-contract-allowed-roles",
         variables=(EnumDomain("observed_role", observed_roles),),
@@ -1179,6 +1190,7 @@ def _explicit_allowed_roles_obligation(
                 ("observed_roles", ", ".join(observed_roles)),
             ),
             artifacts=(contract.name,),
+            source_span=rule_span,
         ),
     )
 
@@ -1189,6 +1201,7 @@ def _explicit_required_regions_obligation(
     prompt_segments: tuple[PromptSegmentArtifact, ...],
     prompt_packs: tuple[PromptPackArtifact, ...],
     *,
+    rule_span: SourceSpan | None,
     prefer_z3: bool,
 ) -> tuple[StaticContractFinding, ...]:
     if not rule.required_regions:
@@ -1206,7 +1219,7 @@ def _explicit_required_regions_obligation(
         )
     )
     if not observed_regions:
-        return (_explicit_unknown(contract, rule, "static-contract-required-regions", "required prompt regions are declared but no region-bearing artifacts are loaded", "Load prompt-segment or prompt-pack artifacts so required regions can be checked.", (("required_regions", ", ".join(rule.required_regions)),)),)
+        return (_explicit_unknown(contract, rule, "static-contract-required-regions", "required prompt regions are declared but no region-bearing artifacts are loaded", "Load prompt-segment or prompt-pack artifacts so required regions can be checked.", (("required_regions", ", ".join(rule.required_regions)),), rule_span=rule_span),)
     problem = FiniteContractProblem(
         name="static-contract-required-regions",
         variables=(EnumDomain("required_region", rule.required_regions),),
@@ -1237,6 +1250,7 @@ def _explicit_required_regions_obligation(
                 ("observed_regions", ", ".join(observed_regions)),
             ),
             artifacts=(contract.name,),
+            source_span=rule_span,
         ),
     )
 
@@ -1246,6 +1260,7 @@ def _explicit_forbidden_delimiters_obligation(
     rule: StaticContractRule,
     prompt_segments: tuple[PromptSegmentArtifact, ...],
     *,
+    rule_span: SourceSpan | None,
     prefer_z3: bool,
 ) -> tuple[StaticContractFinding, ...]:
     if not rule.forbidden_delimiters:
@@ -1257,7 +1272,7 @@ def _explicit_forbidden_delimiters_obligation(
         if (segment.role or "").lower() in {"user", "tool", "function", "retrieval"} and segment.content is not None
     )
     if not controlled:
-        return (_explicit_unknown(contract, rule, "static-contract-forbidden-delimiters", "forbidden delimiters are declared but no controlled prompt content is materialized", "Provide content or bounded examples for user/tool/retrieval prompt segments so delimiter exclusion can be checked.", (("forbidden_delimiters", ", ".join(rule.forbidden_delimiters)),)),)
+        return (_explicit_unknown(contract, rule, "static-contract-forbidden-delimiters", "forbidden delimiters are declared but no controlled prompt content is materialized", "Provide content or bounded examples for user/tool/retrieval prompt segments so delimiter exclusion can be checked.", (("forbidden_delimiters", ", ".join(rule.forbidden_delimiters)),), rule_span=rule_span),)
     region_candidates = tuple(sorted(_region_candidate(segment.name, segment.content or "") for segment in controlled))
     problem = FiniteContractProblem(
         name="static-contract-forbidden-delimiters",
@@ -1296,6 +1311,7 @@ def _explicit_forbidden_delimiters_obligation(
             ),
             evidence=tuple(evidence),
             artifacts=(contract.name,),
+            source_span=rule_span,
         ),
     )
 
@@ -1306,6 +1322,7 @@ def _explicit_schema_obligation(
     loaded_artifacts: tuple[LoadedArtifact, ...],
     schemas: tuple[SchemaArtifact, ...],
     *,
+    rule_span: SourceSpan | None,
     prefer_z3: bool,
 ) -> tuple[StaticContractFinding, ...]:
     findings: list[StaticContractFinding] = []
@@ -1314,11 +1331,11 @@ def _explicit_schema_obligation(
     for obligation in rule.schema_obligations:
         schema = schema_by_name.get(obligation.schema)
         if schema is None:
-            findings.append(_explicit_unknown(contract, rule, "static-contract-schema-obligations", f"schema obligation {obligation.schema!r} targets no loaded schema artifact", "Load the referenced schema artifact or update the contract schema name.", (("schema", obligation.schema), ("requires", ", ".join(obligation.requires)))))
+            findings.append(_explicit_unknown(contract, rule, "static-contract-schema-obligations", f"schema obligation {obligation.schema!r} targets no loaded schema artifact", "Load the referenced schema artifact or update the contract schema name.", (("schema", obligation.schema), ("requires", ", ".join(obligation.requires))), rule_span=rule_span))
             continue
         required_names = _metadata_tuple(metadata_by_name.get(schema.name, {}).get("required_property_names"))
         if not required_names:
-            findings.append(_explicit_unknown(contract, rule, "static-contract-schema-obligations", f"schema obligation {obligation.schema!r} cannot be checked because required properties were not extracted", "Use a JSON Schema object with a supported required list so PromptABI can prove schema obligations.", (("schema", obligation.schema), ("requires", ", ".join(obligation.requires)))))
+            findings.append(_explicit_unknown(contract, rule, "static-contract-schema-obligations", f"schema obligation {obligation.schema!r} cannot be checked because required properties were not extracted", "Use a JSON Schema object with a supported required list so PromptABI can prove schema obligations.", (("schema", obligation.schema), ("requires", ", ".join(obligation.requires))), rule_span=rule_span))
             continue
         problem = FiniteContractProblem(
             name="static-contract-schema-obligations",
@@ -1351,6 +1368,7 @@ def _explicit_schema_obligation(
                     ("schema_required_properties", ", ".join(required_names)),
                 ),
                 artifacts=(contract.name, schema.name),
+                source_span=rule_span,
             )
         )
     return tuple(findings)
@@ -1361,16 +1379,17 @@ def _explicit_stop_policy_obligation(
     rule: StaticContractRule,
     stop_policies: tuple[StopPolicyArtifact, ...],
     *,
+    rule_span: SourceSpan | None,
     prefer_z3: bool,
 ) -> tuple[StaticContractFinding, ...]:
     findings: list[StaticContractFinding] = []
     observed_stops = tuple(sorted({sequence for policy in stop_policies for sequence in policy.stop_sequences}))
     for policy in rule.stop_policies:
         if not policy.stops:
-            findings.append(_explicit_unknown(contract, rule, "static-contract-stop-policies", f"static contract stop policy {policy.name!r} declares no stops", "Add concrete stop strings to the contract stop policy before checking it.", (("stop_policy", policy.name),)))
+            findings.append(_explicit_unknown(contract, rule, "static-contract-stop-policies", f"static contract stop policy {policy.name!r} declares no stops", "Add concrete stop strings to the contract stop policy before checking it.", (("stop_policy", policy.name),), rule_span=rule_span))
             continue
         if not observed_stops:
-            findings.append(_explicit_unknown(contract, rule, "static-contract-stop-policies", "stop policy obligations are declared but no stop-policy artifact is loaded", "Load a stop-policy artifact so declared stops can be checked against real request/generation settings.", (("declared_stops", ", ".join(policy.stops)),)))
+            findings.append(_explicit_unknown(contract, rule, "static-contract-stop-policies", "stop policy obligations are declared but no stop-policy artifact is loaded", "Load a stop-policy artifact so declared stops can be checked against real request/generation settings.", (("declared_stops", ", ".join(policy.stops)),), rule_span=rule_span))
             continue
         problem = FiniteContractProblem(
             name="static-contract-stop-policies",
@@ -1404,6 +1423,7 @@ def _explicit_stop_policy_obligation(
                     ("forbid_inside", policy.forbid_inside or "<unspecified>"),
                 ),
                 artifacts=(contract.name,),
+                source_span=rule_span,
             )
         )
     return tuple(findings)
@@ -1417,6 +1437,7 @@ def _explicit_invariant_obligation(
     truncation_configs: tuple[FrameworkTruncationConfigArtifact, ...],
     stop_policies: tuple[StopPolicyArtifact, ...],
     *,
+    rule_span: SourceSpan | None,
     prefer_z3: bool,
 ) -> tuple[StaticContractFinding, ...]:
     findings: list[StaticContractFinding] = []
@@ -1439,6 +1460,7 @@ def _explicit_invariant_obligation(
                     f"static contract invariant {invariant.name!r} could not be resolved",
                     "Use supported finite metrics such as required_prompt_tokens, input_budget_tokens, reserved_tokens, max_context_tokens, required_region_count, and stop_policy_count, or integer constants.",
                     (("invariant", invariant.name), ("expression", f"{invariant.left} {invariant.op} {invariant.right}"), ("reason", reason)),
+                    rule_span=rule_span,
                 )
             )
             continue
@@ -1477,6 +1499,7 @@ def _explicit_invariant_obligation(
                     ("right_value", str(right)),
                 ),
                 artifacts=(contract.name,),
+                source_span=rule_span,
             )
         )
     return tuple(findings)
@@ -1489,6 +1512,8 @@ def _explicit_unknown(
     message: str,
     suggestion: str,
     evidence: tuple[tuple[str, str], ...],
+    *,
+    rule_span: SourceSpan | None,
 ) -> StaticContractFinding:
     return StaticContractFinding(
         name=name,
@@ -1500,7 +1525,16 @@ def _explicit_unknown(
         suggestion=suggestion,
         evidence=(("contract", contract.name), ("rule", rule.name), *evidence),
         artifacts=(contract.name,),
+        source_span=rule_span,
     )
+
+
+def _static_contract_rule_span(
+    contract: StaticContractArtifact,
+    rule: StaticContractRule,
+    source_spans: dict[str, dict[str, SourceSpan]],
+) -> SourceSpan | None:
+    return source_spans.get(contract.name, {}).get(f"rules.{rule.name}") or contract.source_span
 
 
 def _explicit_severity(rule: StaticContractRule, violated: bool) -> str:
