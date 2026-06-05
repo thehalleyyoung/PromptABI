@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 
 from .budgets import MustSurviveProof
 from .formal import AutomatonWitness, DeterministicFiniteAutomaton, SolverStatus
@@ -92,6 +93,63 @@ class ProofSketchReport:
             "passed": self.passed,
             "sketches": [sketch.to_dict() for sketch in self.sketches],
         }
+
+
+@dataclass(frozen=True, slots=True)
+class ProofSketchNotebook:
+    """Deterministic educational notebook for one executable proof family."""
+
+    property_id: str
+    filename: str
+    title: str
+    summary: str
+    cells: tuple[dict[str, object], ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "nbformat": 4,
+            "nbformat_minor": 5,
+            "metadata": {
+                "kernelspec": {
+                    "display_name": "Python 3",
+                    "language": "python",
+                    "name": "python3",
+                },
+                "language_info": {"name": "python", "pygments_lexer": "ipython3"},
+                "promptabi": {
+                    "property_id": self.property_id,
+                    "deterministic": True,
+                    "executes_real_promptabi_code": True,
+                },
+            },
+            "cells": list(self.cells),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ProofSketchNotebookWrite:
+    """One notebook written to disk."""
+
+    property_id: str
+    path: str
+    code_cells: int
+
+    def to_dict(self) -> dict[str, object]:
+        return {"property_id": self.property_id, "path": self.path, "code_cells": self.code_cells}
+
+
+@dataclass(frozen=True, slots=True)
+class ProofSketchNotebookReport:
+    """Summary for generated proof-sketch notebooks."""
+
+    notebooks: tuple[ProofSketchNotebookWrite, ...]
+
+    @property
+    def passed(self) -> bool:
+        return bool(self.notebooks)
+
+    def to_dict(self) -> dict[str, object]:
+        return {"passed": self.passed, "notebooks": [notebook.to_dict() for notebook in self.notebooks]}
 
 
 def prove_role_boundary_nonforgeability(report: RoleBoundaryNonforgeabilityReport) -> ProofSketch:
@@ -340,6 +398,66 @@ def build_supported_proof_catalog() -> ProofSketchReport:
     )
 
 
+def build_proof_sketch_notebooks() -> tuple[ProofSketchNotebook, ...]:
+    """Build executable educational notebooks for the core proof sketches."""
+
+    return tuple(
+        ProofSketchNotebook(
+            property_id=spec["property_id"],
+            filename=spec["filename"],
+            title=spec["title"],
+            summary=spec["summary"],
+            cells=(
+                _markdown_cell(f"# {spec['title']}\n\n{spec['summary']}"),
+                _markdown_cell("The code cell below builds a minimal in-memory artifact, runs the real PromptABI checker, and asserts the proof obligation."),
+                _code_cell(spec["code"]),
+            ),
+        )
+        for spec in _NOTEBOOK_SPECS
+    )
+
+
+def write_proof_sketch_notebooks(
+    output_dir: str | Path,
+    *,
+    force: bool = False,
+) -> ProofSketchNotebookReport:
+    """Write all proof-sketch notebooks as deterministic .ipynb files."""
+
+    root = Path(output_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    written: list[ProofSketchNotebookWrite] = []
+    for notebook in build_proof_sketch_notebooks():
+        path = root / notebook.filename
+        if path.exists() and not force:
+            raise FileExistsError(f"notebook already exists: {path}")
+        path.write_text(json.dumps(notebook.to_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        code_cells = sum(1 for cell in notebook.cells if cell.get("cell_type") == "code")
+        written.append(
+            ProofSketchNotebookWrite(
+                property_id=notebook.property_id,
+                path=str(path),
+                code_cells=code_cells,
+            )
+        )
+    return ProofSketchNotebookReport(notebooks=tuple(written))
+
+
+def render_proof_sketch_notebook_report_json(report: ProofSketchNotebookReport) -> str:
+    """Render generated-notebook summary as stable JSON."""
+
+    return json.dumps(report.to_dict(), indent=2, sort_keys=True) + "\n"
+
+
+def render_proof_sketch_notebook_report_text(report: ProofSketchNotebookReport) -> str:
+    """Render generated-notebook summary as CLI text."""
+
+    lines = ["PromptABI proof-sketch notebooks", f"status: {'PASS' if report.passed else 'FAIL'}"]
+    for notebook in report.notebooks:
+        lines.append(f"- {notebook.property_id}: {notebook.path} ({notebook.code_cells} code cell)")
+    return "\n".join(lines) + "\n"
+
+
 def render_proof_sketch_report_json(report: ProofSketchReport) -> str:
     """Render proof sketches as stable JSON."""
 
@@ -366,6 +484,29 @@ def render_proof_sketch_report_text(report: ProofSketchReport) -> str:
         for check in failed:
             lines.append(f"    - {check.name}: {check.detail}")
     return "\n".join(lines) + "\n"
+
+
+def _markdown_cell(source: str) -> dict[str, object]:
+    return {"cell_type": "markdown", "metadata": {}, "source": _source_lines(source)}
+
+
+def _code_cell(source: str) -> dict[str, object]:
+    return {
+        "cell_type": "code",
+        "execution_count": None,
+        "metadata": {"promptabi_executes_real_code": True},
+        "outputs": [],
+        "source": _source_lines(source),
+    }
+
+
+def _source_lines(source: str) -> list[str]:
+    lines = source.strip("\n").splitlines(keepends=True)
+    if not lines:
+        return []
+    if not lines[-1].endswith("\n"):
+        lines[-1] += "\n"
+    return lines
 
 
 _THEOREMS: dict[str, tuple[str, str, tuple[str, ...], tuple[ProofLemma, ...]]] = {
@@ -474,6 +615,194 @@ _THEOREMS: dict[str, tuple[str, str, tuple[str, ...], tuple[ProofLemma, ...]]] =
         ),
     ),
 }
+
+
+_NOTEBOOK_SPECS: tuple[dict[str, str], ...] = (
+    {
+        "property_id": "role-boundary-nonforgeability",
+        "filename": "01-role-boundary-nonforgeability.ipynb",
+        "title": "Role-boundary non-forgeability",
+        "summary": "Demonstrates how a ChatML-style template lets user-controlled content forge an assistant control marker, then validates the witness certificate.",
+        "code": """
+from promptabi import ChatTemplateSymbolicBounds, parse_hf_chat_template_config
+from promptabi import analyze_role_boundary_nonforgeability, prove_role_boundary_nonforgeability
+from promptabi.proof_sketches import ProofOutcome
+
+parsed = parse_hf_chat_template_config({
+    "chat_template": (
+        "{% for message in messages %}"
+        "<|im_start|>{{ message['role'] }}\\n"
+        "{{ message['content'] }}<|im_end|>\\n"
+        "{% endfor %}"
+    ),
+    "additional_special_tokens": ["<|im_start|>", "<|im_end|>"],
+})
+report = analyze_role_boundary_nonforgeability(
+    parsed,
+    bounds=ChatTemplateSymbolicBounds(max_messages=1, max_tools=0, max_loop_iterations=1, max_paths=8),
+)
+sketch = prove_role_boundary_nonforgeability(report)
+
+assert report.findings
+assert sketch.outcome is ProofOutcome.COUNTEREXAMPLE
+assert sketch.passed
+sketch.to_dict()
+""",
+    },
+    {
+        "property_id": "stop-overreachability",
+        "filename": "02-stop-reachability.ipynb",
+        "title": "Stop reachability",
+        "summary": "Builds an XML/tool-call stop policy and proves the configured stop can fire inside a still-valid structured output prefix.",
+        "code": """
+from promptabi import ArtifactKind, ArtifactLocation, StopPolicyArtifact
+from promptabi import analyze_stop_overreachability, prove_stop_reachability
+from promptabi.proof_sketches import ProofOutcome
+
+policy = StopPolicyArtifact(
+    kind=ArtifactKind.STOP_POLICY,
+    name="xml-tool-stop",
+    location=ArtifactLocation(uri="memory://xml-tool-stop"),
+    stop_sequences=("</arguments>",),
+)
+report = analyze_stop_overreachability(policy)
+sketch = prove_stop_reachability(report)
+
+assert report.findings
+assert sketch.outcome is ProofOutcome.COUNTEREXAMPLE
+assert sketch.passed
+sketch.to_dict()
+""",
+    },
+    {
+        "property_id": "grammar-tokenizer-emptiness",
+        "filename": "03-grammar-emptiness.ipynb",
+        "title": "Grammar emptiness",
+        "summary": "Compiles a JSON Schema fragment, runs the tokenizer x grammar emptiness check, and replays the witness through the compiled DFA.",
+        "code": """
+import json
+import tempfile
+from pathlib import Path
+
+from promptabi import ArtifactKind, ArtifactLocation, SchemaArtifact, TokenizerArtifact
+from promptabi import analyze_tokenizer_grammar_emptiness, prove_grammar_emptiness
+from promptabi.json_schema import compile_json_schema_mapping
+from promptabi.proof_sketches import ProofOutcome
+from promptabi.tokenizers import ByteLevelTokenizer
+
+schema = {"type": "object", "additionalProperties": False}
+compiled = compile_json_schema_mapping(schema)
+with tempfile.TemporaryDirectory() as tempdir:
+    schema_path = Path(tempdir) / "empty-object.schema.json"
+    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+    tokenizer_artifact = TokenizerArtifact(
+        kind=ArtifactKind.TOKENIZER,
+        name="byte",
+        location=ArtifactLocation(uri="memory://byte-tokenizer"),
+        family="byte-level",
+    )
+    schema_artifact = SchemaArtifact(
+        kind=ArtifactKind.SCHEMA,
+        name="empty-object",
+        location=ArtifactLocation(path=str(schema_path)),
+    )
+    report = analyze_tokenizer_grammar_emptiness(tokenizer_artifact, schema_artifact, ByteLevelTokenizer())
+    sketch = prove_grammar_emptiness(report, automaton=compiled.grammar.automaton)
+
+assert sketch.outcome is ProofOutcome.PROVEN
+assert sketch.passed
+sketch.to_dict()
+""",
+    },
+    {
+        "property_id": "must-survive-budget",
+        "filename": "04-budget-survival.ipynb",
+        "title": "Must-survive budget",
+        "summary": "Constructs a truncation budget where an old required user turn is dropped, then validates the minimized survival counterexample.",
+        "code": """
+from promptabi import ArtifactKind, ArtifactLocation, FrameworkTruncationConfigArtifact
+from promptabi import PromptSegment, PromptSegmentArtifact, TruncationStrategy, VerificationConfig
+from promptabi import analyze_token_budget, prove_must_survive_budget
+from promptabi.loaders import ArtifactLoader
+from promptabi.proof_sketches import ProofOutcome
+
+segments = PromptSegmentArtifact(
+    kind=ArtifactKind.PROMPT_SEGMENT,
+    name="conversation",
+    location=ArtifactLocation(uri="memory://segments"),
+    segments=(
+        PromptSegment("system", role="system", required=True, token_count=18),
+        PromptSegment("old-user", role="user", required=True, token_count=26),
+        PromptSegment("latest-user", role="user", required=True, token_count=20),
+    ),
+)
+budget = FrameworkTruncationConfigArtifact(
+    kind=ArtifactKind.FRAMEWORK_TRUNCATION_CONFIG,
+    name="langchain-budget",
+    location=ArtifactLocation(uri="memory://budget"),
+    framework="langchain",
+    strategy=TruncationStrategy.OLDEST_MESSAGE,
+    max_context_tokens=50,
+)
+report = analyze_token_budget(
+    VerificationConfig(name="budget"),
+    (ArtifactLoader().load(segments), ArtifactLoader().load(budget)),
+)
+sketch = prove_must_survive_budget(report.must_survive_proof)
+
+assert sketch.outcome is ProofOutcome.COUNTEREXAMPLE
+assert sketch.passed
+assert dict(sketch.evidence)["dropped_required"] == "old-user"
+sketch.to_dict()
+""",
+    },
+    {
+        "property_id": "training-mask-alignment",
+        "filename": "05-training-mask-alignment.ipynb",
+        "title": "Training-mask alignment",
+        "summary": "Creates a finite training manifest where the supervised assistant target is not covered by the loss mask and proves the packing checker reports the defect.",
+        "code": """
+from promptabi import ArtifactKind, ArtifactLocation, LossMaskPolicy, LossMaskStrategy
+from promptabi import PackingStrategy, PackingWindow, TrainingDatasetKind, TrainingDatasetSpec
+from promptabi import TrainingManifestArtifact, TrainingPackingFindingKind, TrainingSpanContract
+from promptabi import analyze_training_packing
+
+manifest = TrainingManifestArtifact(
+    kind=ArtifactKind.TRAINING_MANIFEST,
+    name="mask-defect",
+    location=ArtifactLocation(uri="memory://mask-defect"),
+    datasets=(TrainingDatasetSpec(name="sft", kind=TrainingDatasetKind.SUPERVISED, format="chat-jsonl"),),
+    loss_mask_policy=LossMaskPolicy(strategy=LossMaskStrategy.ASSISTANT_ONLY, target_roles=("assistant",)),
+    packing_window=PackingWindow(
+        strategy=PackingStrategy.SAMPLE_PACKING,
+        max_tokens=64,
+        boundary_token="<eos>",
+        preserve_example_boundaries=True,
+    ),
+    supervised_spans=(
+        TrainingSpanContract(
+            span_id="row-1.assistant",
+            target_role="assistant",
+            rendered_region_role="assistant",
+            start_token=12,
+            end_token=20,
+            region_start_token=10,
+            region_end_token=22,
+            supervised_target=True,
+            loss_masked=False,
+        ),
+    ),
+)
+report = analyze_training_packing(manifest)
+mask_findings = [finding for finding in report.findings if finding.kind is TrainingPackingFindingKind.MASK_DROPPED]
+
+assert mask_findings
+assert mask_findings[0].span_id == "row-1.assistant"
+assert "loss mask" in mask_findings[0].message
+report
+""",
+    },
+)
 
 
 def _sketch(

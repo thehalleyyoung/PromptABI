@@ -10,6 +10,7 @@ The command-line catalog is:
 ```bash
 promptabi proofs
 promptabi proofs --format json
+promptabi proofs --write-notebooks examples/proof-sketch-notebooks --force
 ```
 
 ## Supported proof families
@@ -50,3 +51,13 @@ print(render_proof_sketch_report_text(report))
 For concrete checker results, call `prove_role_boundary_nonforgeability`,
 `prove_stop_reachability`, `prove_grammar_emptiness`,
 `prove_must_survive_budget`, or `prove_static_contract` directly.
+
+## Executable teaching notebooks
+
+`promptabi proofs --write-notebooks DIR` writes deterministic `.ipynb` files for
+role-boundary non-forgeability, stop reachability, grammar emptiness,
+must-survive budgets, and training-mask alignment. Each notebook is intentionally
+small: one code cell builds an in-memory artifact, runs the real checker, and
+asserts the theorem or counterexample obligation. The notebooks are therefore
+safe for tutorials and paper artifact review without requiring model weights,
+provider calls, or private datasets.

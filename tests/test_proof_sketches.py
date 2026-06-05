@@ -20,14 +20,18 @@ from promptabi import (
     analyze_stop_overreachability,
     analyze_token_budget,
     analyze_tokenizer_grammar_emptiness,
+    build_proof_sketch_notebooks,
     parse_hf_chat_template_config,
+    proof_sketch_notebooks,
     proof_sketches,
     prove_grammar_emptiness,
     prove_must_survive_budget,
     prove_role_boundary_nonforgeability,
     prove_static_contract,
     prove_stop_reachability,
+    render_proof_sketch_notebook_report_text,
     render_proof_sketch_report_text,
+    write_proof_sketch_notebooks,
 )
 from promptabi.cli import main
 from promptabi.formal import SolverStatus
@@ -230,3 +234,57 @@ def test_proof_catalog_api_and_cli_render_supported_families(capsys) -> None:
         "z3-backed-finite-contract",
     }
     assert captured.err == ""
+
+
+def test_proof_sketch_notebooks_are_deterministic_and_execute_real_code(tmp_path) -> None:
+    notebooks = build_proof_sketch_notebooks()
+
+    assert {notebook.property_id for notebook in notebooks} == {
+        "role-boundary-nonforgeability",
+        "stop-overreachability",
+        "grammar-tokenizer-emptiness",
+        "must-survive-budget",
+        "training-mask-alignment",
+    }
+    for notebook in notebooks:
+        payload = notebook.to_dict()
+        assert payload["nbformat"] == 4
+        assert payload["metadata"]["promptabi"]["executes_real_promptabi_code"] is True
+        code_sources = [
+            "".join(cell["source"])
+            for cell in payload["cells"]
+            if cell["cell_type"] == "code"
+        ]
+        assert code_sources
+        namespace: dict[str, object] = {}
+        for source in code_sources:
+            exec(source, namespace)
+
+    report = write_proof_sketch_notebooks(tmp_path)
+    rendered = render_proof_sketch_notebook_report_text(report)
+    paths = sorted(tmp_path.glob("*.ipynb"))
+
+    assert report.passed
+    assert len(paths) == 5
+    assert "training-mask-alignment" in rendered
+    assert [path.name for path in paths] == sorted(notebook.filename for notebook in notebooks)
+
+    api_report = proof_sketch_notebooks(tmp_path, force=True)
+    assert api_report.passed
+
+
+def test_cli_writes_executable_proof_sketch_notebooks(tmp_path, capsys) -> None:
+    exit_code = main(["proofs", "--write-notebooks", str(tmp_path), "--format", "json"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert captured.err == ""
+    assert payload["passed"] is True
+    assert len(payload["notebooks"]) == 5
+    assert (tmp_path / "01-role-boundary-nonforgeability.ipynb").exists()
+
+    exit_code = main(["proofs", "--write-notebooks", str(tmp_path)])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "already exists" in captured.err

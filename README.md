@@ -120,6 +120,7 @@ promptabi contract lint examples/static-contract-language/app.pabi
 promptabi contract compose --contract organization-policy=examples/static-contract-language/app.pabi --contract app-config=examples/static-contract-language/rag.pabi
 promptabi api-docs --format markdown
 promptabi proofs --format text
+promptabi proofs --write-notebooks examples/proof-sketch-notebooks --force
 
 # In notebooks, inspect tokenizer/template/stop/grammar/SMT/budget witnesses as rich reprs.
 python -c "from promptabi import visualize_tokenization; from promptabi.tokenizers import ByteLevelTokenizer; print(visualize_tokenization('<|im_start|> hi', ByteLevelTokenizer(added_tokens=('<|im_start|>',))))"

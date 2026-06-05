@@ -198,10 +198,12 @@ from .policies import (
     policy_forbids_local_summary,
 )
 from .proof_sketches import (
+    ProofSketchNotebookReport,
     ProofSketchReport,
     build_supported_proof_catalog,
     render_proof_sketch_report_json,
     render_proof_sketch_report_text,
+    write_proof_sketch_notebooks,
 )
 from .soundness_audits import (
     SoundnessAuditReport,
@@ -351,6 +353,16 @@ def generate_adversarial_cases(*, output_format: str | None = None) -> Adversari
     if output_format == "text":
         return render_adversarial_corpus_text(report)
     raise ValueError("output_format must be 'json' or 'text'")
+
+
+def proof_sketch_notebooks(
+    output_dir: str | Path,
+    *,
+    force: bool = False,
+) -> ProofSketchNotebookReport:
+    """Write executable educational proof-sketch notebooks for core proof families."""
+
+    return write_proof_sketch_notebooks(output_dir, force=force)
 
 
 def grammar_conformance_suite(

@@ -273,8 +273,11 @@ from .prompt_packs import (
 )
 from .proof_sketches import (
     build_supported_proof_catalog,
+    render_proof_sketch_notebook_report_json,
+    render_proof_sketch_notebook_report_text,
     render_proof_sketch_report_json,
     render_proof_sketch_report_text,
+    write_proof_sketch_notebooks,
 )
 from .soundness_audits import (
     build_soundness_audit_report,
@@ -1455,6 +1458,16 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("text", "json"),
         default="text",
         help="output format (default: text)",
+    )
+    proofs.add_argument(
+        "--write-notebooks",
+        metavar="DIR",
+        help="write executable educational proof-sketch notebooks to DIR",
+    )
+    proofs.add_argument(
+        "--force",
+        action="store_true",
+        help="overwrite existing notebooks when used with --write-notebooks",
     )
     soundness_audit = subparsers.add_parser(
         "soundness-audit",
@@ -3533,6 +3546,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "proofs":
+        if args.write_notebooks:
+            try:
+                notebook_report = write_proof_sketch_notebooks(args.write_notebooks, force=args.force)
+            except FileExistsError as exc:
+                print(f"promptabi: {exc}", file=sys.stderr)
+                return 2
+            output = (
+                render_proof_sketch_notebook_report_json(notebook_report)
+                if args.format == "json"
+                else render_proof_sketch_notebook_report_text(notebook_report)
+            )
+            print(output, end="")
+            return 0 if notebook_report.passed else 1
         report = build_supported_proof_catalog()
         output = render_proof_sketch_report_json(report) if args.format == "json" else render_proof_sketch_report_text(report)
         print(output, end="")
