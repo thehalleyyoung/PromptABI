@@ -13,6 +13,7 @@ from ._version import __version__
 from .benchmarks import repo_root as default_repo_root
 from .benchmarks import run_benchmarks
 from .beta import run_beta_program
+from .bug_gallery import build_public_bug_gallery, render_public_bug_gallery_markdown
 from .evaluation import run_evaluation
 from .real_bug_benchmarks import build_real_bug_benchmark_manifest
 
@@ -59,7 +60,10 @@ def build_launch_asset_payloads(
     if benchmark_iterations <= 0:
         raise LaunchAssetError("benchmark_iterations must be positive")
     root = Path(repo_root).resolve() if repo_root is not None else default_repo_root()
-    real_bug_manifest = build_real_bug_benchmark_manifest(root / "fixtures" / "real_bug_benchmarks" / "benchmark.json")
+    real_bug_path = root / "fixtures" / "real_bug_benchmarks" / "benchmark.json"
+    real_bug_manifest = build_real_bug_benchmark_manifest(real_bug_path)
+    bug_gallery_report = build_public_bug_gallery(real_bug_path)
+    bug_gallery = bug_gallery_report.to_dict()
     evaluation = run_evaluation(root / "fixtures" / "evaluation" / "labeled_corpus.json").to_dict()
     beta = run_beta_program(root / "fixtures" / "beta" / "beta_program.json").to_dict()
     benchmarks = [result.to_dict() for result in run_benchmarks(("all",), iterations=benchmark_iterations, root=root)]
@@ -68,6 +72,7 @@ def build_launch_asset_payloads(
         "evaluation": evaluation,
         "beta": beta,
         "benchmarks": benchmarks,
+        "bug_gallery": bug_gallery,
     }
     payloads = {
         "comparison.md": _render_comparison(evidence),
@@ -75,7 +80,7 @@ def build_launch_asset_payloads(
         "demo-script.md": _render_demo_script(evidence),
         "benchmark-chart.svg": _render_benchmark_chart(benchmarks),
         "benchmark-data.json": json.dumps({"benchmarks": benchmarks}, indent=2, sort_keys=True) + "\n",
-        "bug-gallery.md": _render_bug_gallery(real_bug_manifest),
+        "bug-gallery.md": render_public_bug_gallery_markdown(bug_gallery_report),
         "positioning.md": _render_positioning(evidence),
     }
     manifest = _build_manifest(payloads=payloads, evidence=evidence, benchmark_iterations=benchmark_iterations)
@@ -135,6 +140,7 @@ def _build_manifest(
     evaluation = evidence["evaluation"]
     beta = evidence["beta"]
     benchmarks = evidence["benchmarks"]
+    bug_gallery = evidence["bug_gallery"]
     manifest: dict[str, object] = {
         "manifest_version": LAUNCH_ASSET_VERSION,
         "promptabi_version": __version__,
@@ -143,6 +149,7 @@ def _build_manifest(
         "files": list(LAUNCH_ASSET_FILENAMES),
         "summary": {
             "real_bug_cases": real_bug_manifest["case_count"],
+            "public_bug_gallery_entries": bug_gallery["summary"]["entries"],
             "real_bug_categories": real_bug_manifest["categories"],
             "all_real_bug_cases_passed": real_bug_manifest["all_cases_passed"],
             "evaluation_cases": evaluation["case_count"],
@@ -154,6 +161,7 @@ def _build_manifest(
         },
         "source_reports": {
             "real_bug_manifest_sha256": real_bug_manifest["manifest_sha256"],
+            "public_bug_gallery_sha256": bug_gallery["report_sha256"],
             "evaluation_passed": evaluation["passed"],
             "beta_passed": beta["passed"],
             "benchmark_names": [row["benchmark"] for row in benchmarks],
@@ -249,32 +257,6 @@ def _render_benchmark_chart(benchmarks: list[dict[str, Any]]) -> str:
         + "\n".join(rows)
         + "\n</svg>\n"
     )
-
-
-def _render_bug_gallery(real_bug_manifest: dict[str, Any]) -> str:
-    lines = [
-        "# PromptABI bug gallery",
-        "",
-        f"All {real_bug_manifest['case_count']} replayed reductions passed against local PromptABI analyzers.",
-        "",
-        "| Case | Category | Bug class | Evidence |",
-        "| --- | --- | --- | --- |",
-    ]
-    for entry in real_bug_manifest["entries"]:
-        lines.append(
-            "| "
-            + " | ".join(
-                (
-                    str(entry["display_name"]).replace("|", "\\|"),
-                    str(entry["category"]).replace("|", "\\|"),
-                    str(entry["bug_class"]).replace("|", "\\|"),
-                    str(entry["evidence_summary"]).replace("|", "\\|"),
-                )
-            )
-            + " |"
-        )
-    lines.append("")
-    return "\n".join(lines)
 
 
 def _render_positioning(evidence: dict[str, Any]) -> str:

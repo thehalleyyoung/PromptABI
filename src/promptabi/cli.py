@@ -37,6 +37,14 @@ from .autofix import (
     run_low_risk_autofix,
 )
 from .bug_reports import BugReportError, generate_bug_report, render_bug_report
+from .bug_gallery import (
+    PublicBugGalleryError,
+    build_public_bug_gallery,
+    render_public_bug_gallery_json,
+    render_public_bug_gallery_markdown,
+    render_public_bug_gallery_text,
+    write_public_bug_gallery,
+)
 from .bundles import (
     VerificationBundleError,
     create_signed_verification_bundle,
@@ -1028,6 +1036,24 @@ def build_parser() -> argparse.ArgumentParser:
     real_bug_benchmark.add_argument(
         "--output",
         help="write manifest JSON to this path instead of stdout",
+    )
+    bug_gallery = corpus_subparsers.add_parser(
+        "bug-gallery",
+        help="replay real-bug cases and emit a sanitized public bug gallery",
+    )
+    bug_gallery.add_argument(
+        "--path",
+        help="real-bug benchmark JSON path (default: repository fixtures/real_bug_benchmarks/benchmark.json)",
+    )
+    bug_gallery.add_argument(
+        "--format",
+        choices=("text", "json", "markdown"),
+        default="text",
+        help="output format (default: text)",
+    )
+    bug_gallery.add_argument(
+        "--output",
+        help="write bug-gallery report to this path instead of stdout",
     )
     evaluation_fixture_pack = corpus_subparsers.add_parser(
         "evaluation-fixture-pack",
@@ -2914,6 +2940,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         except OSError as exc:
             print(f"promptabi: cannot write real-bug benchmark manifest: {exc}", file=sys.stderr)
+            return 2
+        return 0
+
+    if args.command == "corpus" and args.corpus_command == "bug-gallery":
+        try:
+            if args.output:
+                report = write_public_bug_gallery(args.output, path=args.path, output_format=args.format)
+                print(f"wrote public bug gallery: {args.output} ({len(report.entries)} entries)")
+            else:
+                report = build_public_bug_gallery(args.path)
+                if args.format == "json":
+                    print(render_public_bug_gallery_json(report), end="")
+                elif args.format == "markdown":
+                    print(render_public_bug_gallery_markdown(report))
+                else:
+                    print(render_public_bug_gallery_text(report), end="")
+        except PublicBugGalleryError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write public bug gallery: {exc}", file=sys.stderr)
             return 2
         return 0
 

@@ -9,6 +9,7 @@ def test_launch_assets_are_generated_from_real_reports() -> None:
     payloads, gif_bytes, manifest = build_launch_asset_payloads(benchmark_iterations=1)
 
     assert manifest["summary"]["real_bug_cases"] >= 7
+    assert manifest["summary"]["public_bug_gallery_entries"] == manifest["summary"]["real_bug_cases"]
     assert manifest["summary"]["all_real_bug_cases_passed"] is True
     assert manifest["summary"]["evaluation_precision"] == 1.0
     assert manifest["summary"]["evaluation_recall"] == 1.0
@@ -18,7 +19,8 @@ def test_launch_assets_are_generated_from_real_reports() -> None:
     assert "flowchart LR" in payloads["architecture.mmd"]
     assert "promptabi verify --config examples/role-boundary/unsafe.promptabi.json" in payloads["demo-script.md"]
     assert "<svg" in payloads["benchmark-chart.svg"]
-    assert "PromptABI bug gallery" in payloads["bug-gallery.md"]
+    assert "PromptABI public bug gallery" in payloads["bug-gallery.md"]
+    assert "Root cause" in payloads["bug-gallery.md"]
     assert "Hacker News title" in payloads["positioning.md"]
     assert gif_bytes.startswith(b"GIF89a")
 

@@ -139,6 +139,7 @@ promptabi fix --config examples/role-boundary/unsafe.promptabi.json --preview-ri
 
 # Run labeled benchmarks, mutation fuzzing, and paper artifact regeneration.
 promptabi corpus verify --format text
+promptabi corpus bug-gallery --format markdown > bug-gallery.md
 promptabi corpus beta-report --format text
 promptabi corpus evaluation --format text
 promptabi corpus evaluation-reproducibility --config examples/evaluation-harness/safe.promptabi.json --format json

@@ -682,8 +682,11 @@ package with frozen fixture hashes, stable expected tables, solver-version pins,
 environment metadata, and one-command regeneration scripts, plus a maintainer
 artifact bundle with model/corpus/provider manifests, expected diagnostic
 baselines, corpus diffs, generated release notes, and a launch asset bundle whose
-comparison table, diagram, benchmark chart, bug gallery, demo script, and concise
-positioning are checked by focused tests, and validates contribution
+comparison table, diagram, benchmark chart, public bug gallery, demo script, and concise
+positioning are checked by focused tests, adds a \texttt{promptabi corpus bug-gallery}
+path that converts replayed real-bug benchmarks into sanitized artifacts,
+minimized structural witnesses, root-cause explanations, fixes, and upstream
+patch links, and validates contribution
 infrastructure---issue templates, labels, contributor guides, docs navigation, and
 CI triggers---through the same local CLI/API path used by maintainers.
 
@@ -732,7 +735,7 @@ The repository layout is designed to scale:
 \hline
 \texttt{benchmarks} and \texttt{promptabi fuzz} & CPU-only benchmark entrypoints plus deterministic mutation fuzzing for tokenizer analysis, symbolic template execution, grammar products, stop checks, SMT contracts, budget modeling, corpus verification, cache reuse, and cross-artifact violation discovery. \\
 \hline
-\texttt{promptabi launch-assets} & Evidence-backed launch material: comparison table, architecture diagram, demo GIF source script, SVG benchmark chart, bug gallery, positioning copy, and a manifest generated from real evaluation, benchmark, beta, and real-bug replay code paths. \\
+\texttt{promptabi launch-assets} & Evidence-backed launch material: comparison table, architecture diagram, demo GIF source script, SVG benchmark chart, public bug gallery, positioning copy, and a manifest generated from real evaluation, benchmark, beta, and real-bug replay code paths. \\
 \hline
 \texttt{docs} & MkDocs-ready documentation for architecture, check families, artifact modeling, public API stability, integration guides for major LLM stacks, the formal transducer/SMT basis, tokenizer-template composition, role boundaries, stop reachability, grammar emptiness, must-survive budgets, and the local structural security model. \\
 \hline
@@ -1980,6 +1983,8 @@ Cold/warm cache & Direct measurement of token-budget analysis before and after p
 \hline
 Real-bug benchmark & \texttt{promptabi corpus real-bug-benchmark} validates and replays the labeled real-bug suite across popular templates, tokenizers, tool schemas, provider migrations, structured-output parsers, RAG truncation, and training manifests, including target-role, source-leakage, synthetic-generator, and stage-drift contracts, emitting observed rule IDs and a stable manifest hash. \\
 \hline
+Public bug gallery & \texttt{promptabi corpus bug-gallery} reruns the same benchmark cases, then emits a public-facing text, JSON, or Markdown gallery with sanitized artifact digests, minimized repro metadata, replay hashes, root-cause explanations, concrete fixes, and public GitHub patch or issue links without copying upstream source or private payloads. \\
+\hline
 Beta report & \texttt{promptabi corpus beta-report} replays open-source-style beta case studies, upstream issue records, tuned-absent false-positive expectations, and a synthetic abstention-message regression, requiring actionable abstention witnesses rather than success-shaped unknowns. \\
 \hline
 Labeled evaluation & \texttt{promptabi corpus evaluation} runs the default evaluation corpus, expands the real-bug benchmark and eval fixture pack into per-case labels, measures scoped precision/recall/F1, abstention rate, runtime, peak memory, witness quality, Z3-backed solver decisiveness, and differential agreement while keeping unrelated informational diagnostics out of false-positive counts. \\
@@ -2125,6 +2130,14 @@ regression target for practical prompt-interface failures: a tokenizer oracle
 drift, a provider migration mismatch, a parser broader-than-schema bug, a RAG
 chunking/citation loss, and a discrete training target-role violation are tested
 beside public template and tool-stop reductions.
+
+The public bug gallery is the human-facing counterpart to that manifest. It is
+not a hand-edited marketing page: \texttt{promptabi corpus bug-gallery} loads the
+same benchmark suite, replays each case, hashes the sanitized replay payload,
+keeps only minimized structural witness metadata, and attaches root-cause text,
+fixed-version/workaround guidance, and public GitHub issue or patch links. The
+launch-assets command consumes that exact report, so the website-facing gallery
+and the release-blocking benchmark cannot drift apart silently.
 
 The grammar-emptiness benchline adds a complementary satisfiability experiment:
 one fixture proves that an ordinary byte-level tokenizer can produce the bounded
@@ -2272,13 +2285,13 @@ Tokenizer/template tests & Byte-level normalization, added/special tokens, Huggi
 \hline
 Role-boundary checker tests & Bounded non-forgeability catches dynamic role-header and delimiter forgery across ChatML, Llama, Mistral, XML tool tags, markdown fences, and fine-tune hash headers with minimized witnesses and sanitizer-aware false-positive suppression. \\
 \hline
-Real-world bugs & Eight public llama.cpp/vLLM/Hugging Face bug patterns plus the real-bug benchmark suite are reduced to synthetic offline fixtures and detected with concrete witnesses. \\
+Real-world bugs & Eight public llama.cpp/vLLM/Hugging Face bug patterns plus the real-bug benchmark suite are reduced to synthetic offline fixtures, detected with concrete witnesses, and rendered as a sanitized public bug gallery with replay hashes, fixes, and upstream patch links. \\
 \hline
 Stop/provider/structured-output tests & Recorded provider chunks replay through CPU-only simulators; parser compatibility, tool-schema ingestion, tool serialization, grammar emptiness, grammar ambiguity, and stop overreachability run through real CLI fixtures. \\
 \hline
 Evaluation-harness tests & \texttt{examples/evaluation-harness/*.promptabi.json} prove provider/model/tokenizer/template/grading-parser/application-parser/stop/few-shot compatibility, catch eval-tokenizer drift, and reject private eval fields rendered into prompts. \\
 \hline
-Corpus commands & \texttt{promptabi corpus manifest}, \texttt{promptabi corpus structured-schema-manifest}, \texttt{promptabi corpus real-bug-benchmark}, \texttt{promptabi corpus evaluation-fixture-pack}, \texttt{promptabi corpus smt-benchmark}, \texttt{promptabi corpus verify}, \texttt{promptabi corpus evaluation}, and \texttt{promptabi corpus beta-report} validate fixture coverage, metrics, witness quality, hashes, and CLI/public-API renderers. \\
+Corpus commands & \texttt{promptabi corpus manifest}, \texttt{promptabi corpus structured-schema-manifest}, \texttt{promptabi corpus real-bug-benchmark}, \texttt{promptabi corpus bug-gallery}, \texttt{promptabi corpus evaluation-fixture-pack}, \texttt{promptabi corpus smt-benchmark}, \texttt{promptabi corpus verify}, \texttt{promptabi corpus evaluation}, and \texttt{promptabi corpus beta-report} validate fixture coverage, metrics, witness quality, hashes, and CLI/public-API renderers. \\
 \hline
 Budget/RAG/drift tests & \texttt{examples/token-budget/promptabi.json} and \texttt{examples/rag-chunking/promptabi.json} cover must-survive segments, framework reservations, truncation decisions, citation loss, overlap errors, metadata inflation, tokenizer mismatch, and config/tokenizer drift. \\
 \hline
