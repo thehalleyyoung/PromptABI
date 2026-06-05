@@ -108,6 +108,13 @@ from .compatibility_matrix import (
     render_compatibility_matrix_json,
     render_compatibility_matrix_text,
 )
+from .comparative_studies import (
+    ComparativeStudyError,
+    build_comparative_study_report,
+    render_comparative_study_json,
+    render_comparative_study_markdown,
+    render_comparative_study_text,
+)
 from .conference_demos import (
     ConferenceDemoError,
     render_conference_demo_json,
@@ -1247,6 +1254,25 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         help="write evaluation report to this path instead of stdout",
     )
+    comparative_study = corpus_subparsers.add_parser(
+        "comparative-study",
+        help="compare PromptABI against prompt linters, schema validators, constrained decoders, tokenizer diff tools, and generic static analyzers",
+    )
+    comparative_study.add_argument(
+        "--evaluation-corpus",
+        help="labeled evaluation corpus JSON path (default: repository fixtures/evaluation/labeled_corpus.json)",
+    )
+    comparative_study.add_argument(
+        "--real-bug-benchmark",
+        help="real-bug benchmark JSON path (default: repository fixtures/real_bug_benchmarks/benchmark.json)",
+    )
+    comparative_study.add_argument(
+        "--format",
+        choices=("text", "json", "markdown"),
+        default="text",
+        help="output format (default: text)",
+    )
+    comparative_study.add_argument("--output", help="write comparative study report to this path instead of stdout")
     leaderboard = corpus_subparsers.add_parser(
         "leaderboard",
         help=(
@@ -3289,6 +3315,31 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"promptabi: cannot write evaluation report: {exc}", file=sys.stderr)
             return 2
         return 0 if all(result.passed for result in report.results) else 1
+
+    if args.command == "corpus" and args.corpus_command == "comparative-study":
+        try:
+            report = build_comparative_study_report(
+                evaluation_corpus_path=args.evaluation_corpus,
+                real_bug_benchmark_path=args.real_bug_benchmark,
+            )
+            if args.format == "json":
+                output = render_comparative_study_json(report)
+            elif args.format == "markdown":
+                output = render_comparative_study_markdown(report)
+            else:
+                output = render_comparative_study_text(report)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                print(f"wrote comparative study report: {args.output} ({report.case_count} cases)")
+            else:
+                print(output, end="")
+        except ComparativeStudyError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write comparative study report: {exc}", file=sys.stderr)
+            return 2
+        return 0 if report.passed else 1
 
     if args.command == "corpus" and args.corpus_command == "leaderboard":
         try:

@@ -14,6 +14,7 @@ from .benchmarks import repo_root as default_repo_root
 from .benchmarks import run_benchmarks
 from .beta import run_beta_program
 from .bug_gallery import build_public_bug_gallery, render_public_bug_gallery_markdown
+from .comparative_studies import build_comparative_study_report, render_comparative_study_markdown
 from .evaluation import run_evaluation
 from .real_bug_benchmarks import build_real_bug_benchmark_manifest
 
@@ -65,11 +66,18 @@ def build_launch_asset_payloads(
     bug_gallery_report = build_public_bug_gallery(real_bug_path)
     bug_gallery = bug_gallery_report.to_dict()
     evaluation = run_evaluation(root / "fixtures" / "evaluation" / "labeled_corpus.json").to_dict()
+    comparative_study_report = build_comparative_study_report(
+        evaluation_corpus_path=root / "fixtures" / "evaluation" / "labeled_corpus.json",
+        real_bug_benchmark_path=real_bug_path,
+    )
+    comparative_study = comparative_study_report.to_dict()
     beta = run_beta_program(root / "fixtures" / "beta" / "beta_program.json").to_dict()
     benchmarks = [result.to_dict() for result in run_benchmarks(("all",), iterations=benchmark_iterations, root=root)]
     evidence = {
         "real_bug_manifest": real_bug_manifest,
         "evaluation": evaluation,
+        "comparative_study": comparative_study,
+        "comparative_study_report": comparative_study_report,
         "beta": beta,
         "benchmarks": benchmarks,
         "bug_gallery": bug_gallery,
@@ -141,6 +149,7 @@ def _build_manifest(
     beta = evidence["beta"]
     benchmarks = evidence["benchmarks"]
     bug_gallery = evidence["bug_gallery"]
+    comparative_study = evidence["comparative_study"]
     manifest: dict[str, object] = {
         "manifest_version": LAUNCH_ASSET_VERSION,
         "promptabi_version": __version__,
@@ -158,6 +167,8 @@ def _build_manifest(
             "benchmark_cases": len(benchmarks),
             "beta_projects": beta["project_count"],
             "upstream_issue_count": beta["upstream_issue_count"],
+            "comparative_baselines": len(comparative_study["baselines"]),
+            "comparative_study_passed": comparative_study["passed"],
         },
         "source_reports": {
             "real_bug_manifest_sha256": real_bug_manifest["manifest_sha256"],
@@ -178,21 +189,7 @@ def _build_manifest(
 
 
 def _render_comparison(evidence: dict[str, Any]) -> str:
-    evaluation = evidence["evaluation"]
-    real_bug_manifest = evidence["real_bug_manifest"]
-    return (
-        "# PromptABI comparison\n\n"
-        f"Evidence: {evaluation['case_count']} labeled cases, "
-        f"{real_bug_manifest['case_count']} replayed real-bug reductions, "
-        f"precision={evaluation['score']['precision']}, recall={evaluation['score']['recall']}.\n\n"
-        "| System class | What it checks | What PromptABI adds |\n"
-        "| --- | --- | --- |\n"
-        "| Prompt linters | textual heuristics over prompts | finite artifacts, source spans, witnesses, and explicit proof/abstention modes |\n"
-        "| Schema validators | final JSON/object shape | tokenizer x grammar emptiness, ambiguity, parser compatibility, and stop overreachability before inference |\n"
-        "| Constrained decoders | runtime token masking | offline checks that the declared tokenizer, grammar backend, parser, stop policy, and provider envelope agree |\n"
-        "| Tokenizer diff tools | revision changes | end-to-end contract drift across templates, stops, tools, providers, budgets, and lockfiles |\n"
-        "| Generic static analyzers | application code smells | LLM-interface contracts over chat templates, tool calls, RAG chunks, provider fixtures, and training manifests |\n"
-    )
+    return render_comparative_study_markdown(evidence["comparative_study_report"])
 
 
 def _render_architecture() -> str:

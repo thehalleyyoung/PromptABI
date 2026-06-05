@@ -15,7 +15,10 @@ def test_launch_assets_are_generated_from_real_reports() -> None:
     assert manifest["summary"]["evaluation_recall"] == 1.0
     assert manifest["summary"]["benchmark_cases"] == 8
     assert manifest["summary"]["upstream_issue_count"] >= 1
-    assert "PromptABI comparison" in payloads["comparison.md"]
+    assert manifest["summary"]["comparative_baselines"] == 5
+    assert manifest["summary"]["comparative_study_passed"] is True
+    assert "PromptABI comparative study" in payloads["comparison.md"]
+    assert "Generic static analyzers" in payloads["comparison.md"]
     assert "flowchart LR" in payloads["architecture.mmd"]
     assert "promptabi verify --config examples/role-boundary/unsafe.promptabi.json" in payloads["demo-script.md"]
     assert "<svg" in payloads["benchmark-chart.svg"]

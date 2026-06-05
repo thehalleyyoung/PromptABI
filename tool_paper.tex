@@ -247,13 +247,15 @@ artifact-set, check-surface, and context-budget changes with structured
 witnesses and migration guidance, plus a \texttt{promptabi version-gate} workflow
 that classifies each real diff diagnostic as patch-safe, minor-breaking, or
 major-breaking under deployment policy overrides,
-a \texttt{promptabi launch-assets} workflow that regenerates comparison tables
+a \texttt{promptabi corpus comparative-study} workflow and a
+\texttt{promptabi launch-assets} workflow that regenerate comparison tables
 against prompt linters, schema validators, constrained decoders, tokenizer diff
-tools, and generic static analyzers; a Mermaid architecture diagram; a terminal
-demo script with a valid GIF placeholder; SVG benchmark charts; bug-gallery
-markdown; Hacker News/GitHub positioning copy; and a manifest whose headline
-counts are sourced from the live benchmark, evaluation, beta, and real-bug replay
-code paths rather than hand-edited launch claims,
+tools, and generic static analyzers from live evaluation and real-bug replay
+evidence; a Mermaid architecture diagram; a terminal demo script with a valid GIF
+placeholder; SVG benchmark charts; bug-gallery markdown; Hacker News/GitHub
+positioning copy; and a manifest whose headline counts are sourced from the live
+benchmark, evaluation, beta, comparative-study, and real-bug replay code paths
+rather than hand-edited launch claims,
 a stop-policy parser that normalizes OpenAI-compatible request snapshots,
 Hugging Face generation configs, llama.cpp/Ollama options, vLLM sampling params,
 LiteLLM passthrough params, and common framework wrapper kwargs into one typed
@@ -758,6 +760,8 @@ The repository layout is designed to scale:
 \texttt{benchmarks} and \texttt{promptabi fuzz} & CPU-only benchmark entrypoints plus deterministic mutation fuzzing for tokenizer analysis, symbolic template execution, grammar products, stop checks, SMT contracts, budget modeling, corpus verification, cache reuse, and cross-artifact violation discovery. \\
 \hline
 \texttt{promptabi launch-assets} / \texttt{conference-demo} & Evidence-backed launch material plus stage-ready demos for deploy, fine-tuning, eval-publication, and provider-migration gates, all generated from real verification, benchmark, beta, and real-bug replay code paths. \\
+\hline
+\texttt{src/promptabi/comparative\_studies.py} & Live comparative-study reports that project replayed labeled cases and real-bug reductions against prompt-linter, schema-validator, constrained-decoder, tokenizer-diff, and generic-static-analyzer capability classes, with text, JSON, and Markdown renderers. \\
 \hline
 \texttt{docs} & MkDocs-ready documentation for architecture, check families, artifact modeling, public API stability, integration guides for major LLM stacks, the formal transducer/SMT basis, tokenizer-template composition, role boundaries, stop reachability, grammar emptiness, must-survive budgets, and the local structural security model. \\
 \hline
@@ -2082,6 +2086,8 @@ Beta report & \texttt{promptabi corpus beta-report} replays open-source-style be
 \hline
 Labeled evaluation & \texttt{promptabi corpus evaluation} runs the default evaluation corpus, expands the real-bug benchmark and eval fixture pack into per-case labels, measures scoped precision/recall/F1, abstention rate, runtime, peak memory, witness quality, Z3-backed solver decisiveness, and differential agreement while keeping unrelated informational diagnostics out of false-positive counts. \\
 \hline
+Comparative study & \texttt{promptabi corpus comparative-study} reruns the labeled evaluation and real-bug suites, then projects 16 labeled cases against five adjacent capability classes: prompt linters, schema validators, constrained decoders, tokenizer diff tools, and generic static analyzers. The default report detects all 16 cases with PromptABI and records that each baseline class misses at least one cross-boundary case. \\
+\hline
 \end{tabular}
 \end{center}
 
@@ -2169,6 +2175,19 @@ leakage diagnostics against real source-mapped JSON. The same
 report measures abstentions, runtime, memory, witness completeness, Z3-backed
 solver decisiveness, and differential agreement against recorded real-library
 semantics.
+\texttt{promptabi corpus comparative-study} reuses that exact evaluation run and
+the real-bug benchmark manifest to avoid a hand-written comparison table. The
+default study currently replays 16 labeled cases and seven real-bug reductions
+across seven categories, detects all labeled cases with PromptABI, and projects
+the same cases onto five adjacent capability classes. The resulting coverage
+rates are deliberately capability-class baselines rather than named-product
+claims: prompt linters cover 0.12 of the cases under their textual prompt scope,
+schema validators 0.25, constrained decoders 0.31, tokenizer diff tools 0.19,
+and generic static analyzers 0.00. These numbers are not meant to diminish those
+tools; they quantify why a separate composition verifier is necessary for
+cross-artifact failures involving provider envelopes, RAG budgets, training and
+evaluation manifests, stop policies, parser compatibility, and tokenizer/template
+interactions.
 Published eval scores also need a replayable contract freeze rather than only a
 metrics table. PromptABI now includes \texttt{promptabi corpus
 evaluation-reproducibility}, a harness-driven mode that loads real
@@ -2322,6 +2341,11 @@ template, tool, grammar, provider, and budget artifacts agree. It should
 integrate with existing libraries rather than replace them: validators provide
 ground truth for schema fragments, tokenizer libraries provide differential
 oracles, and provider fixtures define offline request/response semantics.
+The comparative-study command operationalizes this distinction: it credits a
+baseline capability class only for cases inside that class's artifact scope, then
+surfaces the PromptABI-only rules that remain, such as provider migration,
+evaluation-harness tokenizer or stop mismatches, RAG citation loss, and training
+target-role alignment.
 
 The closest analogy is a static analyzer for ABI compatibility. The concern is
 not whether either side of an interface is individually well-written; it is

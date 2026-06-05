@@ -150,6 +150,7 @@ promptabi corpus verify --format text
 promptabi corpus bug-gallery --format markdown > bug-gallery.md
 promptabi corpus beta-report --format text
 promptabi corpus evaluation --format text
+promptabi corpus comparative-study --format markdown
 promptabi corpus evaluation-reproducibility --config examples/evaluation-harness/safe.promptabi.json --format json
 promptabi verify --config examples/evaluation-harness/safe.promptabi.json
 promptabi corpus grammar-conformance --format text
