@@ -51,6 +51,9 @@ hashes, BOS/EOS flags and IDs, and generation stop-policy deltas,
 deterministic PromptABI lockfiles that pin verified artifact hashes, upstream
 revisions, library versions, provider fixture versions, supported-fragment
 metadata, and expected diagnostic fingerprints for CI enforcement,
+a curated \texttt{promptabi gallery} that reruns real pinned configurations,
+emits compatibility badges, summarizes actual solver backends rather than merely
+advertised solver capability, and explains abstentions plus accepted risks,
 a reusable GitHub Action and \texttt{promptabi github-action} runner that restore
 analysis caches, enforce lockfiles, skip pull requests whose diffs do not touch
 configured PromptABI inputs, write markdown job summaries, emit workflow
@@ -403,6 +406,8 @@ The repository layout is designed to scale:
 \texttt{examples/stop-policies} & A vLLM sampling-parameter fixture that exercises real stop-policy artifact loading and normalization. \\
 \hline
 \texttt{examples/end-to-end} & Paired buggy and fixed mini apps for tool-calling serialization, JSON structured-output parsers, citation-preserving RAG packing, provider migration shims, and training target-role alignment. \\
+\hline
+\texttt{examples/gallery} & Curated real-world-style configurations that rerun pinned OpenAI-tool, ChatML role-boundary, training/static-contract, RAG-budget, and accepted-risk policy examples with deterministic proof, badge, and risk summaries. \\
 \hline
 \texttt{fixtures} and \texttt{paper\_artifact} & Curated seed corpus, real-world bug reductions, grammar differential cases, labeled structured-schema/tool-calling fixtures, secret-free provider packs, and a generated paper artifact containing fixture hashes, expected tables, solver pins, and regeneration commands. \\
 \hline
@@ -958,6 +963,7 @@ promptabi explain --config examples/role-boundary/unsafe.promptabi.json --index 
 promptabi explain --config examples/minimal/promptabi.json --rule-id repository-skeleton --format json
 promptabi minimize repro.json --keep-substring "<|im_start|>" --format json
 promptabi init --stack openai-tools --output-dir .promptabi-demo
+promptabi gallery --format text
 promptabi verify --artifact schema=schemas/answer.json --fail-on warning
 promptabi verify --config examples/minimal/promptabi.json --format json
 promptabi verify --config examples/minimal/promptabi.json --format sarif
@@ -1032,6 +1038,11 @@ The public helpers \texttt{create\_session}, \texttt{load\_artifacts},
 The same embedding surface now exposes \texttt{create\_bug\_report} and
 \texttt{render\_bug\_report}, allowing downstream CI systems to attach
 sanitized upstream issues or maintainer tickets without scraping text output.
+The gallery command uses the same session path, but changes the unit of
+presentation: each curated entry is a real config run with resolved/pinned
+artifacts, deterministic diagnostic counts, compatibility badges, actual finite
+solver backend provenance such as \texttt{z3} versus
+\texttt{finite-enumeration}, and visible accepted-risk or abstention explanations.
 The point is not that the current checker is deep. The point is that all later
 checkers have an integration path. The built-in plugin pack, a pre-commit hook,
 a GitHub Action, a notebook visualization, and a provider-fixture replay harness
@@ -1812,6 +1823,8 @@ Performance benchmarks & \texttt{benchmarks/benchmark\_smoke.py} emits JSON for 
 \hline
 Evaluation runner & \texttt{promptabi corpus evaluation} reports labeled precision/recall/F1, abstention rate, runtime, peak memory, witness quality, solver decisiveness, and differential agreement for fixture-backed configs plus the expanded real-bug benchmark suite; tests assert expansion, metric shape, CLI output, public API access, and validation failures without snapshotting nondeterministic timings. \\
 \hline
+Verified configuration gallery & \texttt{promptabi gallery} reruns five curated configurations covering pinned OpenAI-style tools, sanitized ChatML role boundaries, training-to-serving static contracts, RAG truncation budgets, and audited accepted-risk suppressions; focused tests assert deterministic JSON/text renderers, actual solver-backend summaries, lockfile/pin badges, and risk explanations. \\
+\hline
 Docs smoke & MkDocs-ready navigation includes architecture, checks, concepts, and the security model; focused tests assert that the security model references real CLI privacy, bug-report, minimization, and provider-fixture safety behavior. \\
 \hline
 \end{tabular}
@@ -1854,7 +1867,8 @@ constrained output, provider protocols, truncation policies, and application
 parsing. The repository now combines a typed package, formal automata and SMT
 core, deterministic CLI and API surfaces, source-mapped diagnostics, minimized
 witnesses, real fixture corpora, precision/recall evaluation, CPU-only
-benchmarks, mutation-fuzzing experiments, policy gates, GitHub integration, and
+benchmarks, mutation-fuzzing experiments, a verified configuration gallery,
+policy gates, GitHub integration, and
 a generated paper artifact with frozen hashes and regeneration commands.
 
 The research foundation is the transducer view of prompts, tokenizers, grammars,

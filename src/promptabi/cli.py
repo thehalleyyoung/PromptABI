@@ -24,6 +24,7 @@ from .explain import ExplainError, explain_diagnostic, render_explanation_json, 
 from .evaluation import EvaluationError, render_evaluation_json, render_evaluation_text, run_evaluation
 from .first_party_plugins import create_first_party_plugin_registry, render_plugin_capabilities
 from .github_action import GitHubActionError, run_github_action
+from .gallery import GalleryError, build_gallery, render_gallery_json, render_gallery_text
 from .init import InitError, available_stacks, scaffold_promptabi_project
 from .local_workflows import (
     LocalWorkflowError,
@@ -356,6 +357,22 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("text", "json"),
         default="text",
         help="output format (default: text)",
+    )
+
+    gallery = subparsers.add_parser("gallery", help="run the curated verified configuration gallery")
+    gallery.add_argument(
+        "--root",
+        help="gallery root containing manifest.json (default: repository examples/gallery)",
+    )
+    gallery.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    gallery.add_argument(
+        "--output",
+        help="write gallery report to this path instead of stdout",
     )
 
     fuzz = subparsers.add_parser("fuzz", help="mutation-based fuzzing workflows")
@@ -860,6 +877,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         print(output, end="")
         return 0
+
+    if args.command == "gallery":
+        try:
+            report = build_gallery(args.root)
+            output = render_gallery_json(report) if args.format == "json" else render_gallery_text(report)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                print(f"wrote gallery report: {args.output} ({len(report.entries)} entries)")
+            else:
+                print(output, end="")
+        except (GalleryError, ConfigError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write gallery report: {exc}", file=sys.stderr)
+            return 2
+        return 0 if report.ok else 1
 
     if args.command == "fuzz" and args.fuzz_command == "mutations":
         try:

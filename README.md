@@ -89,6 +89,9 @@ promptabi bug-report --config examples/role-boundary/unsafe.promptabi.json --ind
 promptabi diff promptabi.baseline.json promptabi.json
 promptabi matrix --format text
 
+# Show pinned, verified real-world-style configs with proof/risk badges.
+promptabi gallery --format text
+
 # Run labeled benchmarks, mutation fuzzing, and paper artifact regeneration.
 promptabi corpus evaluation --format text
 promptabi fuzz mutations --format text

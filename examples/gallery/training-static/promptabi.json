@@ -1,0 +1,23 @@
+{
+  "name": "gallery-training-serving-static",
+  "checks": ["static-contracts"],
+  "artifacts": {
+    "serving-template": {
+      "kind": "chat-template",
+      "path": "../../end-to-end/training-alignment/tokenizer_config.json",
+      "sha256": "7798f364e7002e1801e1cb07eaf14096edcd223e50aec231655854477fcb3a9a",
+      "roles": ["system", "user", "assistant"],
+      "source": "gallery-training-serving-static"
+    },
+    "training-manifest": {
+      "kind": "training-manifest",
+      "uri": "memory://gallery-training-serving-manifest",
+      "dataset_format": "chat-jsonl",
+      "message_roles": ["system", "user", "assistant"],
+      "target_roles": ["assistant"],
+      "example_count": 128,
+      "packed": true,
+      "source": "gallery-training-serving-static"
+    }
+  }
+}

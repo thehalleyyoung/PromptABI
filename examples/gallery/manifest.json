@@ -1,0 +1,45 @@
+{
+  "entries": [
+    {
+      "id": "minimal-openai-tools",
+      "title": "Pinned OpenAI-style tool contract",
+      "summary": "A small deployable assistant contract pins prompt segments, a JSON Schema response envelope, and OpenAI tool definitions, then verifies the repository skeleton and lockfile baseline used by CI.",
+      "config": "../minimal/promptabi.json",
+      "lockfile": "../minimal/promptabi.lock.json",
+      "surfaces": ["prompt-segments", "json-schema", "openai-tools", "lockfile"],
+      "real_world": "OpenAI-compatible customer-support assistant with a refund tool and structured answer envelope."
+    },
+    {
+      "id": "safe-chatml-boundary",
+      "title": "Sanitized ChatML role-boundary contract",
+      "summary": "A ChatML-style tokenizer_config is pinned by SHA-256 and verified for bounded role-boundary non-forgeability, demonstrating how escaping keeps user content from rendering as assistant control.",
+      "config": "../role-boundary/safe.promptabi.json",
+      "surfaces": ["huggingface-chat-template", "role-boundaries", "special-tokens"],
+      "real_world": "ChatML-family local model served behind an OpenAI-compatible chat API."
+    },
+    {
+      "id": "training-serving-static",
+      "title": "Training-to-serving static contract",
+      "summary": "A serving chat template and fine-tuning manifest are checked as finite static contracts so supervised targets remain aligned with the assistant role used at inference time.",
+      "config": "training-static/promptabi.json",
+      "surfaces": ["training-manifest", "chat-template", "static-contracts", "smt"],
+      "real_world": "Instruction-tuning pipeline that must preserve serving-time role assumptions."
+    },
+    {
+      "id": "rag-budget-fixed",
+      "title": "Pinned RAG truncation budget",
+      "summary": "A retrieval payload and framework truncation policy are pinned and verified for citation survival, chunk-boundary stability, overlap accounting, metadata overhead, and payload limits.",
+      "config": "rag-budget/promptabi.json",
+      "surfaces": ["rag", "token-budget", "framework-truncation", "tokenizer"],
+      "real_world": "RAG question-answering service where citations and system policy must survive context-window pressure."
+    },
+    {
+      "id": "audited-accepted-risk",
+      "title": "Audited accepted-risk policy",
+      "summary": "A policy file suppresses an intentionally missing documentation fixture with owner, expiration, justification, and accepted-risk text, proving the gallery can explain risk rather than hiding it.",
+      "config": "../policy/promptabi.json",
+      "surfaces": ["policy", "suppression", "accepted-risk"],
+      "real_world": "Enterprise CI configuration that needs temporary, auditable exceptions without weakening unrelated checks."
+    }
+  ]
+}
