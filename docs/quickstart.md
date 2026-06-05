@@ -9,6 +9,7 @@ promptabi verify --config examples/role-boundary/unsafe.promptabi.json
 promptabi verify --config examples/token-budget/promptabi.json --format json
 promptabi verify --config examples/minimal/promptabi.json --format sarif > promptabi.sarif
 promptabi github-action --config examples/minimal/promptabi.json --require-lockfile
+promptabi verify --config examples/end-to-end/training-quickstart/fixed.promptabi.json
 ```
 
 The first workflow intentionally stays small: it proves that the CLI, typed API,
@@ -28,6 +29,11 @@ writes a markdown job summary.
 For stack-specific setup, see the integration guides for LangChain, LlamaIndex,
 vLLM, llama.cpp, Hugging Face Transformers, OpenAI-compatible servers, LiteLLM,
 MCP tools, custom agent frameworks, and training pipelines.
+
+For fine-tuning data, the training quickstart verifies a one-row chat SFT
+dataset end to end from rendered roles through token spans, packing boundaries,
+loss masks, tokenizer/template stage pins, and redacted witness hashes without
+loading model weights.
 
 For a concrete structural security check, run the role-boundary example. The
 unsafe ChatML-style template fails because raw message fields can render as

@@ -18,6 +18,10 @@ SCENARIOS = {
         "bug_rules": {"static-contract-violation"},
         "fixed_rules": {"static-contract-proved"},
     },
+    "training-quickstart": {
+        "bug_rules": {"static-contract-violation", "training-packing-boundary"},
+        "fixed_rules": {"static-contract-proved", "training-packing-verified", "training-redaction-verified"},
+    },
 }
 
 
@@ -74,4 +78,3 @@ def test_end_to_end_examples_document_every_contract_pair() -> None:
         assert (directory / "buggy.promptabi.json").is_file(), scenario
         assert (directory / "fixed.promptabi.json").is_file(), scenario
         assert f"`{scenario}`" in overview
-

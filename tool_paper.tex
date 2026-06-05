@@ -589,7 +589,7 @@ The repository layout is designed to scale:
 \hline
 \texttt{examples/stop-policies} & A vLLM sampling-parameter fixture that exercises real stop-policy artifact loading and normalization. \\
 \hline
-\texttt{examples/end-to-end} & Paired buggy and fixed mini apps for tool-calling serialization, JSON structured-output parsers, citation-preserving RAG packing, provider migration shims, and training target-role alignment. \\
+\texttt{examples/end-to-end} & Paired buggy and fixed mini apps for tool-calling serialization, JSON parsers, citation-preserving RAG, provider migration, training role alignment, and a GPU-free chat SFT quickstart. \\
 \hline
 \texttt{examples/gallery} & Curated real-world-style configurations that rerun pinned OpenAI-tool, ChatML role-boundary, training/static-contract, RAG-budget, and accepted-risk policy examples with deterministic proof, badge, and risk summaries. \\
 \hline
@@ -1870,23 +1870,17 @@ contribution guide states the central norms: deterministic output, CPU-only
 tests, minimized fixtures, typed public APIs, and explicit soundness boundaries.
 
 The examples directory is equally important. It now contains the minimal
-typed-artifact workflow, a role-delimiter injection example with failing and
-fixed bundles, token-budget overflow fixtures, and a RAG chunking example that
-exposes citation loss, boundary drift, overlap accounting, metadata inflation,
-template overhead, and retrieval payload truncation. PromptABI should continue
-accumulating small applications that intentionally contain bugs: stop overreach
-in JSON, provider migration that changes a tool-call AST, and tokenizer drift
-that changes special-token behavior. Each example should include both the
-failing artifact bundle and the fixed version. That gives users practical recipes
-and gives maintainers stable regression tests.
+typed-artifact workflow, role-delimiter injection, token-budget overflow, RAG
+chunking, provider migration, structured-output, and a chat SFT quickstart that
+checks rendered roles, token spans, packing, loss masks, stage pins, and
+redacted witnesses without model weights. PromptABI should keep adding small
+buggy/fixed applications for stop overreach, provider AST drift, tokenizer drift,
+and training/eval contracts; each pair gives users a recipe and maintainers a
+stable regression.
 
-The CLI should remain terse by default and expandable on demand. A CI run needs
-deterministic diagnostics and exit codes. A local debugging session needs
-witnesses, rendered excerpts, token tables, exact boundary locations, and fix
-suggestions. \texttt{promptabi explain} bridges those modes, \texttt{promptabi
-bug-report} turns one finding into reviewed sanitized markdown, and
-\texttt{--local-summary} gives maintainers privacy-preserving local adoption
-signals without ever serializing user artifacts or transmitting telemetry.
+The CLI remains terse in CI and expandable locally: \texttt{promptabi explain}
+adds witnesses and fixes, \texttt{promptabi bug-report} emits sanitized upstream
+markdown, and \texttt{--local-summary} records only aggregate local usage.
 
 \clearpage
 \section{Evaluation Design}
@@ -1901,21 +1895,16 @@ The evaluation answers five questions.
 \item Is the runtime low enough for pull-request CI?
 \end{enumerate}
 
-The deployed setup now includes a labeled evaluation corpus,
-\texttt{fixtures/evaluation/labeled\_corpus.json}, and a first-class CLI runner,
-\texttt{promptabi corpus evaluation}. The runner executes real verification
-configs plus every replayable real-bug benchmark case, then reports
-precision/recall/F1 over an explicit per-case rule universe. That scoped
-definition is important: always-on informational diagnostics such as repository
-health checks are neutral unless the label file declares them expected or absent.
-The training slice now includes \texttt{fixtures/training\_rlhf}, where clean DPO
-contracts prove safety and defective RLHF/DPO manifests trigger exact static
-counterexamples for prompt-hash, mask-policy, truncation, role-layout,
-response-start, and packing-boundary bugs. The same report measures abstaining diagnostics over total diagnostics, per-case
-runtime, peak traced memory, warning/error witness completeness, Z3-backed solver
-decisiveness, and agreement/mismatch/abstention for differential checks against
-recorded real-library semantics. Runtime and memory are emitted as measurements,
-not golden values, while rule IDs and labels remain deterministic.
+The deployed setup includes \texttt{fixtures/evaluation/labeled\_corpus.json}
+and \texttt{promptabi corpus evaluation}, which executes real configs plus every
+replayable real-bug benchmark case and reports precision/recall/F1 over an
+explicit per-case rule universe. The training slice includes RLHF/DPO fixtures
+and the SFT quickstart; clean manifests prove safety, while defective manifests
+trigger static counterexamples for source leakage, prompt-hash, mask-policy,
+truncation, role-layout, response-start, and packing-boundary bugs. The same
+report measures abstentions, runtime, memory, witness completeness, Z3-backed
+solver decisiveness, and differential agreement against recorded real-library
+semantics.
 The companion \texttt{promptabi corpus beta-report} command answers a different
 question: whether beta evidence is maintainable. It replays open-source-style
 case studies, keeps upstream issue records beside the configs that reproduce

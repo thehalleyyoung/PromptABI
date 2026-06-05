@@ -1,0 +1,132 @@
+{
+  "dataset_format": "chat-jsonl",
+  "datasets": [
+    {
+      "name": "quickstart-sft",
+      "kind": "supervised",
+      "path": "train.jsonl",
+      "split": "train",
+      "format": "chat-jsonl",
+      "example_count": 1,
+      "content_fields": ["messages"]
+    }
+  ],
+  "message_roles": ["system", "user", "assistant"],
+  "target_roles": ["assistant"],
+  "example_count": 1,
+  "packed": true,
+  "system_message_policy": {
+    "required": true,
+    "allow_override": false,
+    "allowed_hashes": ["sha256:1111111111111111111111111111111111111111111111111111111111111111"],
+    "max_tokens": 64
+  },
+  "role_labels": [
+    {
+      "source_role": "system",
+      "canonical_role": "system",
+      "trainable": false,
+      "required": true
+    },
+    {
+      "source_role": "user",
+      "canonical_role": "user",
+      "trainable": false
+    },
+    {
+      "source_role": "assistant",
+      "canonical_role": "assistant",
+      "supervised_target": true,
+      "trainable": true
+    }
+  ],
+  "loss_mask_policy": {
+    "strategy": "assistant-only",
+    "target_roles": ["assistant"],
+    "ignored_roles": ["system", "user"],
+    "label_pad_token_id": -100
+  },
+  "packing_window": {
+    "strategy": "sample-packing",
+    "max_tokens": 128,
+    "stride_tokens": 0,
+    "boundary_token": "<|eot_id|>",
+    "preserve_example_boundaries": true,
+    "reset_position_ids": true
+  },
+  "chat_template_version": {
+    "name": "quickstart-chat-template",
+    "version": "quickstart-v1",
+    "tokenizer_name": "quickstart-tokenizer",
+    "add_generation_prompt": false
+  },
+  "pipeline_stages": [
+    {
+      "stage": "dataset-preparation",
+      "tokenizer_name": "quickstart-tokenizer",
+      "tokenizer_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "chat_template_name": "quickstart-chat-template",
+      "chat_template_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "add_generation_prompt": false
+    },
+    {
+      "stage": "training",
+      "tokenizer_name": "quickstart-tokenizer",
+      "tokenizer_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "chat_template_name": "quickstart-chat-template",
+      "chat_template_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "add_generation_prompt": false
+    },
+    {
+      "stage": "evaluation",
+      "tokenizer_name": "quickstart-tokenizer",
+      "tokenizer_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "chat_template_name": "quickstart-chat-template",
+      "chat_template_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "add_generation_prompt": false
+    },
+    {
+      "stage": "serving",
+      "tokenizer_name": "quickstart-tokenizer",
+      "tokenizer_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "chat_template_name": "quickstart-chat-template",
+      "chat_template_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "add_generation_prompt": false
+    }
+  ],
+  "supervised_spans": [
+    {
+      "span_id": "train-0001.assistant-0",
+      "target_role": "assistant",
+      "rendered_region_role": "assistant",
+      "start_token": 18,
+      "end_token": 30,
+      "region_start_token": 16,
+      "region_end_token": 32,
+      "supervised_target": true,
+      "loss_masked": true,
+      "packed_example_id": "train-0001",
+      "crosses_packing_boundary": true,
+      "source_contributions": [
+        {
+          "source_id": "train-0001.user-column-shift",
+          "source_kind": "user",
+          "start_token": 20,
+          "end_token": 24,
+          "transform": "buggy-column-shift",
+          "source_field": "user_shift_sha",
+          "text_sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+        }
+      ]
+    }
+  ],
+  "redaction_policy": {
+    "mode": "hash-only",
+    "require_text_hashes": true,
+    "allow_raw_text_in_witnesses": false,
+    "allowed_report_fields": ["source_id", "source_kind", "span_id", "target_role", "text_sha256", "token_range"],
+    "forbidden_report_fields": ["content", "prompt", "raw_text", "messages"],
+    "restricted_metadata_keys": ["api_key", "authorization", "email"],
+    "secret_patterns": ["provider-key", "bearer-token"]
+  }
+}

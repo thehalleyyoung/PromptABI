@@ -1,0 +1,6 @@
+{
+  "add_bos_token": true,
+  "add_eos_token": true,
+  "chat_template": "{% for message in messages %}<|start_header_id|>{{ message['role'] }}<|end_header_id|>\n{{ message['content'] }}<|eot_id|>{% endfor %}",
+  "model_max_length": 4096
+}

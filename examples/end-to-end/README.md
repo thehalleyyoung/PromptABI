@@ -11,4 +11,4 @@ verify` and is covered by `tests/test_end_to_end_examples.py`.
 | `rag-truncation` | Citation-required chunks can lose citations or exceed retrieval payload budgets. | Retrieval chunks carry citations, use the serving tokenizer, and fit the packed prompt. |
 | `provider-migration` | An OpenAI-style stack is migrated to a provider with incompatible tool, stop, response, and structured-output contracts. | The target fixture preserves the source provider contract. |
 | `training-alignment` | Supervised training targets include a role absent from the serving chat template. | Training targets align with the serving template's role universe. |
-
+| `training-quickstart` | A chat SFT data builder leaks user text into a supervised target and crosses a packed-example boundary. | One small dataset proves role spans, masks, packing, stage pins, and redacted witnesses without GPUs. |

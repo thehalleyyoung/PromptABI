@@ -1,0 +1,1 @@
+{"id":"train-0001","messages":[{"role":"system","content":"Answer with short facts."},{"role":"user","content":"What is PromptABI?"},{"role":"assistant","content":"PromptABI verifies LLM interface contracts."}]}

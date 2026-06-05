@@ -88,6 +88,7 @@ promptabi init --stack openai-tools --output-dir .promptabi-demo
 
 # Replay paired buggy/fixed app contracts across tools, JSON, RAG, providers, and training.
 promptabi verify --config examples/end-to-end/tool-calling/buggy.promptabi.json --fail-on never
+promptabi verify --config examples/end-to-end/training-quickstart/fixed.promptabi.json
 
 # Shrink a failure into an upstreamable repro and sanitized issue.
 promptabi minimize repro.json --keep-substring "<|im_start|>" --format json

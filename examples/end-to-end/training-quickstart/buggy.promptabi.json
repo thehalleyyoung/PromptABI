@@ -1,0 +1,19 @@
+{
+  "name": "end-to-end-training-quickstart-buggy",
+  "checks": ["static-contracts", "training-packing", "training-redaction"],
+  "artifacts": {
+    "serving-template": {
+      "kind": "chat-template",
+      "path": "tokenizer_config.json",
+      "roles": ["system", "user", "assistant"],
+      "source": "end-to-end-training-quickstart",
+      "version": "quickstart-v1"
+    },
+    "training-manifest": {
+      "kind": "training-manifest",
+      "path": "buggy.training-manifest.json",
+      "source": "end-to-end-training-quickstart",
+      "version": "quickstart-v1"
+    }
+  }
+}
