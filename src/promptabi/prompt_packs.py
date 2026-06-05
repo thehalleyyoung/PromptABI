@@ -15,16 +15,19 @@ from typing import Any
 from .artifacts import (
     Artifact,
     ChatTemplateArtifact,
+    FrameworkTruncationConfigArtifact,
     PromptPackArtifact,
     PromptPackStopPolicy,
     PromptPackTemplate,
     PromptPackToolSchema,
+    PromptSegment,
     PromptSegmentArtifact,
     ProviderConfigArtifact,
     StopPolicyArtifact,
     TokenizerArtifact,
     ToolDefinitionArtifact,
 )
+from .budgets import TokenBudgetReport, TokenBudgetSegment
 from .diagnostics import (
     ArtifactRef,
     CheckMode,
@@ -66,6 +69,12 @@ class PromptPackFindingKind(StrEnum):
     TOOL_MISSING = "tool-missing"
     STOP_MISSING = "stop-missing"
     MODEL_FAMILY_UNSUPPORTED = "model-family-unsupported"
+    COMPOSITION_CONTEXT_ROLE_UNSUPPORTED = "composition-context-role-unsupported"
+    COMPOSITION_REQUIRED_REGION_UNDECLARED = "composition-required-region-undeclared"
+    COMPOSITION_REQUIRED_REGION_NOT_MUST_SURVIVE = "composition-required-region-not-must-survive"
+    COMPOSITION_REQUIRED_REGION_TRUNCATED = "composition-required-region-truncated"
+    COMPOSITION_RAG_UNBOUNDED = "composition-rag-unbounded"
+    COMPOSITION_VERIFIED = "composition-verified"
     VERIFIED = "verified"
 
 
@@ -82,6 +91,9 @@ class PromptPackFinding:
     expected: tuple[str, ...] = ()
     observed: tuple[str, ...] = ()
     span: SourceSpan | None = None
+    subject: str | None = None
+    evidence: tuple[tuple[str, str], ...] = ()
+    severity: DiagnosticSeverity = DiagnosticSeverity.ERROR
 
 
 @dataclass(frozen=True, slots=True)
@@ -384,6 +396,7 @@ def analyze_prompt_pack_contracts(
     artifacts: tuple[Artifact, ...],
     *,
     source_spans: dict[str, SourceSpan] | None = None,
+    token_budget_report: TokenBudgetReport | None = None,
 ) -> PromptPackReport:
     """Check a reusable prompt pack against its own and app-level ABI promises."""
 
@@ -500,19 +513,45 @@ def analyze_prompt_pack_contracts(
             )
         )
 
-    if not findings:
-        findings.append(
-            PromptPackFinding(
-                kind=PromptPackFindingKind.VERIFIED,
-                pack=prompt_pack,
-                message=(
-                    f"prompt pack '{prompt_pack.pack_name}' exports {len(prompt_pack.exported_templates)} "
-                    "template contract(s) compatible with configured app artifacts"
-                ),
-                expected=tuple(sorted(expected_roles)),
-                observed=tuple(sorted(app_roles)),
-            )
+    findings.extend(
+        _prompt_pack_composition_findings(
+            prompt_pack,
+            artifacts,
+            source_spans=source_spans,
+            token_budget_report=token_budget_report,
         )
+    )
+
+    if not findings:
+        if _has_composition_evidence(artifacts, token_budget_report):
+            findings.append(
+                PromptPackFinding(
+                    kind=PromptPackFindingKind.COMPOSITION_VERIFIED,
+                    pack=prompt_pack,
+                    message=(
+                        f"prompt pack '{prompt_pack.pack_name}' guarantees compose with downstream "
+                        "context, RAG, and truncation artifacts"
+                    ),
+                    expected=tuple(sorted(expected_roles)),
+                    observed=tuple(sorted(app_roles)),
+                    severity=DiagnosticSeverity.INFO,
+                    evidence=_composition_evidence(artifacts, token_budget_report),
+                )
+            )
+        else:
+            findings.append(
+                PromptPackFinding(
+                    kind=PromptPackFindingKind.VERIFIED,
+                    pack=prompt_pack,
+                    message=(
+                        f"prompt pack '{prompt_pack.pack_name}' exports {len(prompt_pack.exported_templates)} "
+                        "template contract(s) compatible with configured app artifacts"
+                    ),
+                    expected=tuple(sorted(expected_roles)),
+                    observed=tuple(sorted(app_roles)),
+                    severity=DiagnosticSeverity.INFO,
+                )
+            )
     return PromptPackReport(tuple(findings))
 
 
@@ -1339,6 +1378,226 @@ def _application_roles(artifacts: tuple[Artifact, ...]) -> set[str]:
         elif isinstance(artifact, PromptSegmentArtifact):
             roles.update(segment.role for segment in artifact.segments if segment.role is not None)
     return roles
+
+
+def _prompt_pack_composition_findings(
+    prompt_pack: PromptPackArtifact,
+    artifacts: tuple[Artifact, ...],
+    *,
+    source_spans: dict[str, SourceSpan],
+    token_budget_report: TokenBudgetReport | None,
+) -> tuple[PromptPackFinding, ...]:
+    if not _has_composition_evidence(artifacts, token_budget_report):
+        return ()
+
+    findings: list[PromptPackFinding] = []
+    segments = _application_prompt_segments(artifacts)
+    segment_by_name = {segment.name: segment for segment in segments}
+    pack_roles = _prompt_pack_declared_roles(prompt_pack)
+    added_roles = tuple(
+        sorted(
+            {
+                segment.role
+                for segment in segments
+                if segment.role is not None
+                and segment.role not in pack_roles
+                and not _raw_segment_is_retrieval(segment)
+            }
+        )
+    )
+    if added_roles:
+        findings.append(
+            PromptPackFinding(
+                kind=PromptPackFindingKind.COMPOSITION_CONTEXT_ROLE_UNSUPPORTED,
+                pack=prompt_pack,
+                message=(
+                    f"downstream context adds role(s) outside prompt-pack guarantees: "
+                    f"{', '.join(added_roles)}"
+                ),
+                expected=tuple(sorted(pack_roles)),
+                observed=added_roles,
+                span=source_spans.get("expected_roles"),
+                subject="context roles",
+                severity=DiagnosticSeverity.WARNING,
+                evidence=(("added_roles", ", ".join(added_roles)),),
+            )
+        )
+
+    required_regions = _prompt_pack_required_regions(prompt_pack)
+    if required_regions:
+        missing_regions = tuple(region for region in required_regions if region not in segment_by_name)
+        if missing_regions:
+            findings.append(
+                PromptPackFinding(
+                    kind=PromptPackFindingKind.COMPOSITION_REQUIRED_REGION_UNDECLARED,
+                    pack=prompt_pack,
+                    message=(
+                        "downstream composition does not declare prompt-pack required region(s): "
+                        f"{', '.join(missing_regions)}"
+                    ),
+                    expected=required_regions,
+                    observed=tuple(sorted(segment_by_name)),
+                    span=source_spans.get("exported_templates"),
+                    subject="required regions",
+                    evidence=(("missing_regions", ", ".join(missing_regions)),),
+                )
+            )
+        optional_regions = tuple(
+            region
+            for region in required_regions
+            if (segment := segment_by_name.get(region)) is not None and not segment.required
+        )
+        if optional_regions:
+            findings.append(
+                PromptPackFinding(
+                    kind=PromptPackFindingKind.COMPOSITION_REQUIRED_REGION_NOT_MUST_SURVIVE,
+                    pack=prompt_pack,
+                    message=(
+                        "downstream composition declares prompt-pack required region(s) without "
+                        f"must-survive protection: {', '.join(optional_regions)}"
+                    ),
+                    expected=required_regions,
+                    observed=tuple(
+                        sorted(segment.name for segment in segments if segment.required)
+                    ),
+                    span=source_spans.get("exported_templates"),
+                    subject="must-survive regions",
+                    evidence=(("optional_required_regions", ", ".join(optional_regions)),),
+                )
+            )
+
+    proof = token_budget_report.must_survive_proof if token_budget_report is not None else None
+    if proof is not None and proof.status == "violated":
+        dropped_required = tuple(region for region in required_regions if region in proof.dropped_segments)
+        if dropped_required:
+            findings.append(
+                PromptPackFinding(
+                    kind=PromptPackFindingKind.COMPOSITION_REQUIRED_REGION_TRUNCATED,
+                    pack=prompt_pack,
+                    message=(
+                        "framework truncation can drop prompt-pack required region(s): "
+                        f"{', '.join(dropped_required)}"
+                    ),
+                    expected=required_regions,
+                    observed=tuple(proof.survived_segments),
+                    span=source_spans.get("exported_templates"),
+                    subject="truncation proof",
+                    evidence=(
+                        ("dropped_required_regions", ", ".join(dropped_required)),
+                        ("policy", f"{proof.policy.framework}:{proof.policy.strategy}"),
+                        ("input_budget_tokens", str(proof.input_budget_tokens)),
+                    ),
+                )
+            )
+
+    unbounded_chunks = tuple(
+        chunk.name
+        for chunk in _composition_rag_chunks(segments, token_budget_report)
+        if not _rag_chunk_has_runtime_bound(chunk)
+    )
+    if unbounded_chunks:
+        findings.append(
+            PromptPackFinding(
+                kind=PromptPackFindingKind.COMPOSITION_RAG_UNBOUNDED,
+                pack=prompt_pack,
+                message=(
+                    "downstream RAG context has no runtime token bound for prompt-pack composition: "
+                    f"{', '.join(unbounded_chunks)}"
+                ),
+                expected=("max_tokens", "retrieval_payload_limit_tokens"),
+                observed=unbounded_chunks,
+                span=source_spans.get("exported_templates"),
+                subject="RAG bounds",
+                evidence=(("unbounded_chunks", ", ".join(unbounded_chunks)),),
+            )
+        )
+
+    return tuple(findings)
+
+
+def _has_composition_evidence(
+    artifacts: tuple[Artifact, ...],
+    token_budget_report: TokenBudgetReport | None,
+) -> bool:
+    return any(isinstance(artifact, FrameworkTruncationConfigArtifact) for artifact in artifacts) or bool(
+        _composition_rag_chunks(_application_prompt_segments(artifacts), token_budget_report)
+    )
+
+
+def _composition_evidence(
+    artifacts: tuple[Artifact, ...],
+    token_budget_report: TokenBudgetReport | None,
+) -> tuple[tuple[str, str], ...]:
+    rag_chunks = _composition_rag_chunks(_application_prompt_segments(artifacts), token_budget_report)
+    budgets = tuple(artifact.name for artifact in artifacts if isinstance(artifact, FrameworkTruncationConfigArtifact))
+    evidence = [
+        ("framework_truncation_configs", ", ".join(budgets) or "<none>"),
+        ("rag_chunks", ", ".join(chunk.name for chunk in rag_chunks) or "<none>"),
+    ]
+    if token_budget_report is not None and token_budget_report.must_survive_proof is not None:
+        evidence.append(("must_survive_status", token_budget_report.must_survive_proof.status))
+    return tuple(evidence)
+
+
+def _application_prompt_segments(artifacts: tuple[Artifact, ...]) -> tuple[PromptSegment, ...]:
+    return tuple(
+        segment
+        for artifact in artifacts
+        if isinstance(artifact, PromptSegmentArtifact)
+        for segment in artifact.segments
+    )
+
+
+def _prompt_pack_declared_roles(prompt_pack: PromptPackArtifact) -> set[str]:
+    roles = set(prompt_pack.expected_roles)
+    for template in prompt_pack.exported_templates:
+        roles.update(template.roles)
+    return roles
+
+
+def _prompt_pack_required_regions(prompt_pack: PromptPackArtifact) -> tuple[str, ...]:
+    return tuple(
+        sorted(
+            {
+                region
+                for template in prompt_pack.exported_templates
+                for region in template.required_regions
+            }
+        )
+    )
+
+
+def _composition_rag_chunks(
+    segments: tuple[PromptSegment, ...],
+    token_budget_report: TokenBudgetReport | None,
+) -> tuple[PromptSegment | TokenBudgetSegment, ...]:
+    if token_budget_report is not None:
+        return tuple(segment for segment in token_budget_report.segments if segment.is_retrieval_chunk)
+    return tuple(segment for segment in segments if _raw_segment_is_retrieval(segment))
+
+
+def _raw_segment_is_retrieval(segment: PromptSegment) -> bool:
+    return (
+        segment.role == "retrieval"
+        or segment.chunk_id is not None
+        or segment.document_id is not None
+        or segment.chunk_tokenizer is not None
+        or segment.source_start is not None
+        or segment.source_end is not None
+        or segment.chunk_start is not None
+        or segment.chunk_end is not None
+        or segment.expected_overlap_tokens is not None
+        or segment.actual_overlap_tokens is not None
+        or segment.citation is not None
+        or segment.citation_required
+        or segment.metadata_tokens > 0
+        or segment.template_overhead_tokens > 0
+        or segment.retrieval_payload_limit_tokens is not None
+    )
+
+
+def _rag_chunk_has_runtime_bound(segment: PromptSegment | TokenBudgetSegment) -> bool:
+    return segment.max_tokens is not None or segment.retrieval_payload_limit_tokens is not None
 
 
 def _application_tools(artifacts: tuple[Artifact, ...]) -> set[str]:

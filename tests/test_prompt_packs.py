@@ -254,6 +254,134 @@ def test_prompt_pack_contracts_report_real_app_mismatches(tmp_path: Path) -> Non
     assert all(diagnostic.witness is not None for diagnostic in result.diagnostics)
 
 
+def test_prompt_pack_composition_reuses_guarantees_with_bounded_rag_and_truncation(tmp_path: Path) -> None:
+    pack = tmp_path / "support.prompt-pack.json"
+    _write_prompt_pack(pack)
+    config = tmp_path / "promptabi.json"
+    config.write_text(
+        json.dumps(
+            {
+                "name": "prompt-pack-composed-safe",
+                "checks": ["prompt-pack-contracts"],
+                "artifacts": {
+                    "support": {"kind": "prompt-pack", "path": pack.name, "version": "1.0.0"},
+                    "messages": {
+                        "kind": "prompt-segment",
+                        "uri": "memory://messages",
+                        "segments": [
+                            {"name": "system-policy", "role": "system", "required": True, "token_count": 10},
+                            {"name": "retrieval-a", "role": "retrieval", "token_count": 8, "max_tokens": 16, "chunk_id": "doc:a"},
+                            {"name": "user-request", "role": "user", "required": True, "token_count": 7},
+                            {"name": "assistant-answer", "role": "assistant", "token_count": 4},
+                        ],
+                    },
+                    "budget": {
+                        "kind": "framework-truncation-config",
+                        "uri": "memory://budget",
+                        "framework": "custom-rag-pipeline",
+                        "strategy": "priority",
+                        "max_context_tokens": 64,
+                        "drop_roles": ["retrieval"],
+                        "preserve_system": True,
+                    },
+                    "tools": {
+                        "kind": "tool-definition",
+                        "uri": "memory://tools",
+                        "provider": "openai",
+                        "tool_names": ["refund_user"],
+                    },
+                    "stops": {
+                        "kind": "stop-policy",
+                        "uri": "memory://stops",
+                        "stop_sequences": ["</tool_call>"],
+                    },
+                    "provider": {
+                        "kind": "provider-config",
+                        "uri": "memory://provider",
+                        "provider": "openai-compatible",
+                    },
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+    result = VerificationSession.from_config_file(config).run()
+
+    assert result.ok
+    assert [diagnostic.rule_id for diagnostic in result.diagnostics] == ["prompt-pack-composition-verified"]
+    assert "context, RAG, and truncation" in result.diagnostics[0].message
+    assert dict(result.diagnostics[0].properties)["finding_kind"] == "composition-verified"
+
+
+def test_prompt_pack_composition_reports_rag_and_truncation_regressions(tmp_path: Path) -> None:
+    pack = tmp_path / "support.prompt-pack.json"
+    _write_prompt_pack(pack)
+    config = tmp_path / "promptabi.json"
+    config.write_text(
+        json.dumps(
+            {
+                "name": "prompt-pack-composed-unsafe",
+                "checks": ["prompt-pack-contracts"],
+                "artifacts": {
+                    "support": {"kind": "prompt-pack", "path": pack.name, "version": "1.0.0"},
+                    "messages": {
+                        "kind": "prompt-segment",
+                        "uri": "memory://messages",
+                        "segments": [
+                            {"name": "system-policy", "role": "system", "required": True, "token_count": 30},
+                            {"name": "user-request", "role": "user", "required": True, "token_count": 20},
+                            {"name": "retrieval-a", "role": "retrieval", "token_count": 25, "chunk_id": "doc:a"},
+                            {"name": "assistant-answer", "role": "assistant", "token_count": 4},
+                        ],
+                    },
+                    "budget": {
+                        "kind": "framework-truncation-config",
+                        "uri": "memory://budget",
+                        "framework": "vllm",
+                        "max_context_tokens": 45,
+                    },
+                    "tools": {
+                        "kind": "tool-definition",
+                        "uri": "memory://tools",
+                        "provider": "openai",
+                        "tool_names": ["refund_user"],
+                    },
+                    "stops": {
+                        "kind": "stop-policy",
+                        "uri": "memory://stops",
+                        "stop_sequences": ["</tool_call>"],
+                    },
+                    "provider": {
+                        "kind": "provider-config",
+                        "uri": "memory://provider",
+                        "provider": "openai-compatible",
+                    },
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+    result = VerificationSession.from_config_file(config).run()
+
+    assert not result.ok
+    rule_ids = {diagnostic.rule_id for diagnostic in result.diagnostics}
+    assert "prompt-pack-composition-rag-unbounded" in rule_ids
+    assert "prompt-pack-composition-required-region-truncated" in rule_ids
+    truncated = next(
+        diagnostic
+        for diagnostic in result.diagnostics
+        if diagnostic.rule_id == "prompt-pack-composition-required-region-truncated"
+    )
+    assert "system-policy" in truncated.message
+    assert truncated.witness is not None
+
+
 def test_prompt_pack_lockfile_pins_package_contracts_and_diagnostics(tmp_path: Path) -> None:
     pack = tmp_path / "support.prompt-pack.json"
     _write_prompt_pack(pack)

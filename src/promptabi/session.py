@@ -140,6 +140,12 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "parser-compatibility-agreement": (CheckMode.HEURISTIC,),
     "parser-compatibility-mismatch": (CheckMode.HEURISTIC,),
     "prompt-pack-app-role-missing": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "prompt-pack-composition-context-role-unsupported": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "prompt-pack-composition-rag-unbounded": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "prompt-pack-composition-required-region-not-must-survive": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "prompt-pack-composition-required-region-truncated": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "prompt-pack-composition-required-region-undeclared": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "prompt-pack-composition-verified": (CheckMode.SOUND, CheckMode.BOUNDED),
     "prompt-pack-empty": (CheckMode.SOUND, CheckMode.COMPLETE),
     "prompt-pack-lock-added": LOCKFILE_CHECK_MODES,
     "prompt-pack-lock-drift": LOCKFILE_CHECK_MODES,
@@ -414,12 +420,14 @@ CHECK_DEPENDENCIES: dict[str, CheckDependency] = {
         artifact_kinds=(
             ArtifactKind.PROMPT_PACK,
             ArtifactKind.CHAT_TEMPLATE,
+            ArtifactKind.FRAMEWORK_TRUNCATION_CONFIG,
             ArtifactKind.PROMPT_SEGMENT,
             ArtifactKind.TOOL_DEFINITION,
             ArtifactKind.STOP_POLICY,
             ArtifactKind.PROVIDER_CONFIG,
             ArtifactKind.TOKENIZER,
         ),
+        resources=("token-budget-report", "tokenizer-adapter"),
     ),
     "provider-fixture-replay": CheckDependency(artifact_kinds=(ArtifactKind.PROVIDER_CONFIG, ArtifactKind.TOOL_DEFINITION)),
     "provider-migration": CheckDependency(artifact_kinds=(ArtifactKind.PROVIDER_CONFIG, ArtifactKind.TOOL_DEFINITION)),
@@ -1218,11 +1226,17 @@ class VerificationSession:
     def _prompt_pack_contracts_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
         diagnostics: list[Diagnostic] = []
         artifacts = tuple(loaded.artifact for loaded in context.loaded_artifacts)
+        token_budget_report = self._analyze_token_budget_context(context)
         for loaded in context.loaded_artifacts:
             if not isinstance(loaded.artifact, PromptPackArtifact):
                 continue
             spans = {name: span for name, span in loaded.source_spans}
-            report = analyze_prompt_pack_contracts(loaded.artifact, artifacts, source_spans=spans)
+            report = analyze_prompt_pack_contracts(
+                loaded.artifact,
+                artifacts,
+                source_spans=spans,
+                token_budget_report=token_budget_report,
+            )
             diagnostics.extend(_prompt_pack_finding_diagnostic(loaded, finding) for finding in report.findings)
         return tuple(diagnostics)
 
@@ -2713,13 +2727,19 @@ _PROMPT_PACK_RULE_IDS: dict[PromptPackFindingKind, str] = {
     PromptPackFindingKind.TOOL_MISSING: "prompt-pack-tool-missing",
     PromptPackFindingKind.STOP_MISSING: "prompt-pack-stop-missing",
     PromptPackFindingKind.MODEL_FAMILY_UNSUPPORTED: "prompt-pack-model-family-unsupported",
+    PromptPackFindingKind.COMPOSITION_CONTEXT_ROLE_UNSUPPORTED: "prompt-pack-composition-context-role-unsupported",
+    PromptPackFindingKind.COMPOSITION_REQUIRED_REGION_UNDECLARED: "prompt-pack-composition-required-region-undeclared",
+    PromptPackFindingKind.COMPOSITION_REQUIRED_REGION_NOT_MUST_SURVIVE: "prompt-pack-composition-required-region-not-must-survive",
+    PromptPackFindingKind.COMPOSITION_REQUIRED_REGION_TRUNCATED: "prompt-pack-composition-required-region-truncated",
+    PromptPackFindingKind.COMPOSITION_RAG_UNBOUNDED: "prompt-pack-composition-rag-unbounded",
+    PromptPackFindingKind.COMPOSITION_VERIFIED: "prompt-pack-composition-verified",
     PromptPackFindingKind.VERIFIED: "prompt-pack-verified",
 }
 
 
 def _prompt_pack_finding_diagnostic(loaded: LoadedArtifact, finding: PromptPackFinding) -> Diagnostic:
     rule_id = _PROMPT_PACK_RULE_IDS[finding.kind]
-    severity = DiagnosticSeverity.INFO if finding.kind is PromptPackFindingKind.VERIFIED else DiagnosticSeverity.ERROR
+    severity = finding.severity
     steps = [
         WitnessStep(
             action="load prompt-pack contract",
@@ -2735,6 +2755,12 @@ def _prompt_pack_finding_diagnostic(loaded: LoadedArtifact, finding: PromptPackF
         steps.append(WitnessStep(action="inspect required tool schema", input=finding.tool.name, output=finding.tool.provider or "provider-independent"))
     if finding.stop_policy is not None:
         steps.append(WitnessStep(action="inspect stop policy", input=finding.stop_policy.name, output=_join_or_none(finding.stop_policy.stop_sequences)))
+    if finding.subject is not None:
+        steps.append(WitnessStep(action="inspect composition subject", input=finding.subject))
+    steps.extend(
+        WitnessStep(action="inspect composition evidence", input=key, output=value)
+        for key, value in finding.evidence
+    )
     return Diagnostic(
         rule_id=rule_id,
         severity=severity,
@@ -2742,9 +2768,14 @@ def _prompt_pack_finding_diagnostic(loaded: LoadedArtifact, finding: PromptPackF
         artifact=loaded.artifact.to_ref(),
         span=finding.span or _artifact_span(loaded.artifact),
         check_modes=CHECK_MODE_CATALOG[rule_id],
-        suggestions=(_prompt_pack_suggestion(finding.kind),) if finding.kind is not PromptPackFindingKind.VERIFIED else (),
+        suggestions=(
+            ()
+            if finding.kind
+            in {PromptPackFindingKind.VERIFIED, PromptPackFindingKind.COMPOSITION_VERIFIED}
+            else (_prompt_pack_suggestion(finding.kind),)
+        ),
         witness=WitnessTrace(
-            summary="PromptABI checked reusable prompt-pack contracts against configured app artifacts.",
+            summary="PromptABI checked reusable prompt-pack contracts against configured app and composition artifacts.",
             steps=tuple(steps),
             artifacts=(loaded.artifact.to_ref(),),
         ),
@@ -2769,6 +2800,16 @@ def _prompt_pack_suggestion(kind: PromptPackFindingKind) -> str:
         return "Configure a downstream stop-policy artifact that includes the prompt-pack stop contract."
     if kind is PromptPackFindingKind.MODEL_FAMILY_UNSUPPORTED:
         return "Use a supported provider/model family or update the prompt pack after compatibility verification."
+    if kind is PromptPackFindingKind.COMPOSITION_CONTEXT_ROLE_UNSUPPORTED:
+        return "Declare the added role in the prompt pack, split it into a separately verified pack, or document why the extra role cannot affect the reused guarantee."
+    if kind is PromptPackFindingKind.COMPOSITION_REQUIRED_REGION_UNDECLARED:
+        return "Add prompt-segment entries for every prompt-pack required_region before composing the pack with app context."
+    if kind is PromptPackFindingKind.COMPOSITION_REQUIRED_REGION_NOT_MUST_SURVIVE:
+        return "Mark prompt-pack required regions as required/must_survive in the downstream prompt-segment artifact."
+    if kind is PromptPackFindingKind.COMPOSITION_REQUIRED_REGION_TRUNCATED:
+        return "Increase the context budget or change truncation policy so prompt-pack required regions survive composition."
+    if kind is PromptPackFindingKind.COMPOSITION_RAG_UNBOUNDED:
+        return "Give each retrieval chunk a runtime max_tokens or retrieval_payload_limit_tokens bound before reusing pack-level guarantees."
     return "Inspect the prompt-pack contract."
 
 

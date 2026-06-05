@@ -116,7 +116,11 @@ and revalidates them offline before use,
 validating, pinning, and proving upgrade preservation for exported templates,
 role-boundary and budget hashes, tool schemas, stop policies, supported
 model/provider families, package hashes, and diagnostic baselines against
-downstream application artifacts, plus an agent-framework adapter that turns
+downstream application artifacts, plus compositional prompt-pack diagnostics that
+reuse library-level guarantees when an app adds bounded RAG chunks, extra
+context, tools, and framework truncation policies, proving required pack regions
+remain declared, must-survive, and not truncated under the same token-budget
+model used by RAG checks, plus an agent-framework adapter that turns
 LangChain/LlamaIndex-style runtime prompt assembly specs into ordinary PromptABI
 configs and proves the selected reusable prompt pack still matches dynamic
 segments, tools, stops, and provider family choices,
@@ -548,7 +552,13 @@ provider/template/schema contract verified for serving,
 loads reusable prompt packs as first-class artifacts, locks them with
 package-manager-style contract hashes, and checks that their
 exported templates, expected roles, required tools, stop sequences, and supported
-model/provider families remain compatible with the app that imports them, while
+model/provider families remain compatible with the app that imports them, then
+activates a bounded composition layer when the app supplies retrieval chunks or a
+framework truncation policy: required prompt-pack regions must be declared as
+must-survive prompt segments, the existing budget proof must not drop them,
+retrieval payloads must carry runtime token bounds, and any added non-retrieval
+roles are surfaced as explicit guarantee-boundary warnings rather than silently
+absorbed into the pack proof, while
 the public registry format converts the same verified state into contract hashes,
 hash-only template/tool/stop proofs, diagnostic fingerprints, supported-fragment
 counts, and reproducible source metadata suitable for publishing outside a
@@ -643,7 +653,7 @@ The repository layout is designed to scale:
 \hline
 \texttt{src/promptabi/plugins.py} & Typed extension registry for artifact loaders, dependency-aware checks, diagnostic renderers, and capability metadata covering provider adapters, grammar backends, template dialects, truncation policies, and solver encodings. \\
 \hline
-\texttt{src/promptabi/prompt\_packs.py} & Prompt-pack compatibility checker for reusable prompt libraries, package lock/upgrade gates, public registry manifests with non-sensitive proof hashes, signed provenance manifests, and checksum-verified local mirror manifests for air-gapped private prompt-pack indexes. \\
+\texttt{src/promptabi/prompt\_packs.py} & Prompt-pack compatibility and composition checker for reusable prompt libraries, including downstream role/tool/stop/provider matching, required-region survival under truncation, bounded RAG payload checks, package lock/upgrade gates, public registry manifests with non-sensitive proof hashes, signed provenance manifests, and checksum-verified local mirror manifests for air-gapped private prompt-pack indexes. \\
 \hline
 \texttt{src/promptabi/agent\_frameworks.py} & Dynamic agent-framework adapter that loads prompt-pack assembly specs, validates selected templates against runtime segments and dynamic context sources, renders previews, and writes ordinary PromptABI configs verified by the real prompt-pack checker. \\
 \hline
@@ -657,7 +667,7 @@ The repository layout is designed to scale:
 \hline
 \texttt{examples/minimal} & A typed artifact config, messages file, tool schema, and answer schema used by tests and docs. \\
 \hline
-\texttt{examples/prompt-packs} & A reusable support prompt-pack fixture and downstream app contract proving prompt-library imports preserve role, tool, stop, and model-family assumptions. \\
+\texttt{examples/prompt-packs} & A reusable support prompt-pack fixture and downstream app contract proving prompt-library imports preserve role, tool, stop, model-family, bounded RAG, and truncation-survival assumptions. \\
 \hline
 \texttt{examples/agent-frameworks} & Safe and intentionally drifted dynamic agent prompt-pack specs plus a runnable generator that materializes runtime prompt assembly into \texttt{promptabi.json} before deployment. \\
 \hline

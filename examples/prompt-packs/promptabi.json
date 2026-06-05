@@ -11,10 +11,20 @@
       "kind": "prompt-segment",
       "uri": "memory://prompt-pack/messages",
       "segments": [
-        { "name": "system-policy", "role": "system", "required": true },
-        { "name": "user-request", "role": "user", "required": true },
-        { "name": "assistant-answer", "role": "assistant" }
+        { "name": "system-policy", "role": "system", "required": true, "token_count": 12 },
+        { "name": "retrieval-context", "role": "retrieval", "token_count": 18, "max_tokens": 32, "chunk_id": "kb:refund-policy", "citation": "kb/refunds" },
+        { "name": "user-request", "role": "user", "required": true, "token_count": 10 },
+        { "name": "assistant-answer", "role": "assistant", "token_count": 6 }
       ]
+    },
+    "budget": {
+      "kind": "framework-truncation-config",
+      "uri": "memory://prompt-pack/budget",
+      "framework": "custom-rag-pipeline",
+      "strategy": "priority",
+      "max_context_tokens": 96,
+      "drop_roles": ["retrieval"],
+      "preserve_system": true
     },
     "tools": {
       "kind": "tool-definition",

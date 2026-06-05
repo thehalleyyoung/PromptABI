@@ -57,7 +57,7 @@ The same local verifier covers:
 | **Stops** | unreachable stops, tokenizer normalization ambiguity, special-token collisions, and stops that can fire inside JSON/tool/string fields |
 | **Grammars + schemas** | JSON Schema/regex/EBNF/Outlines/xgrammar/llguidance fragments that are empty, ambiguous, or parser-incompatible under tokenizer assumptions |
 | **Tools + providers** | OpenAI, Anthropic, MCP, LangChain, Pydantic, TypeScript-style, vLLM, llama.cpp, LiteLLM, Gemini, Bedrock, Groq, Together, and Ollama serialization drift |
-| **Prompt packs** | reusable prompt-library templates, locks, upgrade gates, public registries, signed provenance, and offline mirrors for role/tool/stop/model-family guarantees |
+| **Prompt packs** | reusable templates with compositional role/tool/stop/model-family/RAG/truncation guarantees, locks, upgrade gates, registries, signing, and offline mirrors |
 | **Budgets + RAG** | must-survive prompt segments, dropped citations, metadata inflation, tokenizer mismatch, framework truncation, and context-window overflow |
 | **Provenance** | artifact hashes, licenses, trusted sources, reproducible HF revisions, lockfile drift, and offline fixture integrity |
 | **Enterprise posture** | org policy packs for required checks, severity, supported fragments, solver caps, privacy rules, approved fixtures, and no-network mirrors |
