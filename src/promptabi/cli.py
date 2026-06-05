@@ -327,6 +327,12 @@ from .compositional_proof_benchmarks import (
     render_compositional_proof_benchmark_text,
     run_compositional_proof_benchmarks,
 )
+from .provider_downgrade_paths import (
+    render_provider_downgrade_paths_json,
+    render_provider_downgrade_paths_text,
+    verify_provider_downgrade_paths,
+)
+from .loaders import ArtifactLoader
 from .lockfiles import (
     LockfileError,
     build_lockfile,
@@ -813,6 +819,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     _add_local_summary_argument(compositional_bench)
+
+    provider_downgrade = subparsers.add_parser(
+        "provider-downgrade",
+        help="verify that provider downgrade migrations mitigate every recorded capability loss",
+    )
+    provider_downgrade.add_argument(
+        "--config",
+        help="path to a PromptABI JSON config; defaults to discovering promptabi.json upward from cwd",
+    )
+    provider_downgrade.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    _add_local_summary_argument(provider_downgrade)
 
     explain = subparsers.add_parser("explain", help="expand one diagnostic into a tutorial-style explanation")
     explain.add_argument(
@@ -3616,6 +3638,37 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "format": args.format,
                 "passed": report.passed,
                 "total": report.total,
+            },
+        ):
+            return 2
+        print(output, end="")
+        return exit_code
+
+    if args.command == "provider-downgrade":
+        started_at = time.perf_counter()
+        try:
+            config_path = Path(args.config).resolve() if args.config else discover_config()
+            config = load_config(config_path)
+            loaded = tuple(ArtifactLoader().load(artifact) for artifact in config.artifact_bundle)
+            report = verify_provider_downgrade_paths(loaded)
+        except (ConfigError, OSError, ValueError) as exc:
+            print(f"promptabi: cannot verify provider downgrade paths: {exc}", file=sys.stderr)
+            return 2
+        output = (
+            render_provider_downgrade_paths_json(report)
+            if args.format == "json"
+            else render_provider_downgrade_paths_text(report)
+        )
+        exit_code = 0 if report.ok else 1
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="provider-downgrade",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={
+                "format": args.format,
+                "downgrades_checked": report.downgrades_checked,
+                "blocking": len(report.blocking),
             },
         ):
             return 2

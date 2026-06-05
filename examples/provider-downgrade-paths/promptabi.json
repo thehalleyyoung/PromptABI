@@ -1,0 +1,24 @@
+{
+  "name": "provider-downgrade-paths",
+  "checks": ["provider-migration"],
+  "artifacts": {
+    "openai-source": {
+      "kind": "provider-config",
+      "provider": "openai",
+      "api_family": "openai",
+      "path": "openai-source.json"
+    },
+    "anthropic-target": {
+      "kind": "provider-config",
+      "provider": "anthropic",
+      "api_family": "anthropic",
+      "path": "anthropic-target.json"
+    },
+    "ollama-target": {
+      "kind": "provider-config",
+      "provider": "ollama",
+      "api_family": "ollama",
+      "path": "ollama-target.json"
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "provider": "openai",
+  "request_shape": {"messages": "array", "tools": "array"},
+  "response_shape": {"choices": "array", "tool_calls": "array"},
+  "streaming_deltas": {"tool_calls": "array"},
+  "provider_migration": {
+    "targets": ["anthropic-target", "ollama-target"],
+    "downgrade_plans": {
+      "anthropic-target": {
+        "mitigations": [
+          {"loss": "request-field-loss", "fields": ["tool_choice", "response_format"], "fallback": "drop tool_choice; emulate response_format with a forced tool schema"},
+          {"loss": "response-field-loss", "fields": ["choices", "finish_reason", "tool_calls"], "fallback": "translate content[] blocks into OpenAI choices/tool_calls and map stop_reason to finish_reason"},
+          {"loss": "tool-argument-encoding-mismatch", "fallback": "serialize Anthropic json-object tool arguments back into json-string"},
+          {"loss": "streaming-chunk-mismatch", "fallback": "buffer content_block_delta events and re-emit OpenAI tool_call argument fragments"},
+          {"loss": "stop-behavior-mismatch", "fallback": "re-apply the source stop sequences client-side after each completion"},
+          {"loss": "structured-output-mismatch", "fallback": "compile json_schema/json_object requests into Anthropic tool_schema"},
+          {"loss": "error-shape-mismatch", "fallback": "map Anthropic error.type back onto OpenAI error.code at the boundary"}
+        ]
+      },
+      "ollama-target": {
+        "mitigations": [
+          {"loss": "request-field-loss", "fields": ["tool_choice", "response_format"], "fallback": "drop unsupported request params"}
+        ]
+      }
+    }
+  },
+  "migration_compatibility": {
+    "provider_family": "openai",
+    "request": {"required_fields": ["messages", "model", "tools", "tool_choice", "response_format"]},
+    "response": {"required_fields": ["choices", "finish_reason", "tool_calls", "usage"]},
+    "tools": {
+      "argument_encoding": "json-string",
+      "id_path": "choices[].message.tool_calls[].id",
+      "supports_parallel_tool_calls": true
+    },
+    "streaming": {"emits_argument_fragments": true},
+    "stops": {"sequences": ["</tool_call>", "<|end|>"]},
+    "limits": {"max_input_tokens": 128000, "max_output_tokens": 4096},
+    "structured_outputs": {"modes": ["json_schema", "json_object"]},
+    "errors": {"code_path": "error.code", "rate_limit_path": "error.type"}
+  }
+}

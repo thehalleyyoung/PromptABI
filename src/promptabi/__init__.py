@@ -1002,6 +1002,17 @@ from .provider_migration import (
     analyze_provider_migration,
     canonical_provider_family,
 )
+from .provider_downgrade_paths import (
+    DOWNGRADE_LOSS_KINDS,
+    PROVIDER_DOWNGRADE_PATH_VERSION,
+    DowngradeMitigation,
+    DowngradePathStatus,
+    DowngradePathVerification,
+    ProviderDowngradePathReport,
+    render_provider_downgrade_paths_json,
+    render_provider_downgrade_paths_text,
+    verify_provider_downgrade_paths,
+)
 from .provider_fixture_replay import (
     ProviderFixtureReplayCase,
     ProviderFixtureReplayFinding,
@@ -1796,6 +1807,15 @@ __all__ = [
     "analyze_grammar_differential_mapping",
     "analyze_provider_fixture_replay",
     "analyze_provider_migration",
+    "DOWNGRADE_LOSS_KINDS",
+    "PROVIDER_DOWNGRADE_PATH_VERSION",
+    "DowngradeMitigation",
+    "DowngradePathStatus",
+    "DowngradePathVerification",
+    "ProviderDowngradePathReport",
+    "render_provider_downgrade_paths_json",
+    "render_provider_downgrade_paths_text",
+    "verify_provider_downgrade_paths",
     "analyze_parser_compatibility",
     "analyze_tokenizer_grammar_ambiguity",
     "analyze_tokenizer_grammar_emptiness",
