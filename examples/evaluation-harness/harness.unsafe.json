@@ -14,6 +14,50 @@
   "grading_rubric_variables": ["private_rubric"],
   "chain_of_thought_variables": ["hidden_cot"],
   "max_prompt_tokens": 10,
+  "max_history_messages": 2,
+  "max_history_tokens": 12,
+  "preserve_system_prompt": false,
+  "preserve_tool_messages": false,
+  "required_tools": ["calculator", "retriever"],
+  "available_tools": ["calculator"],
+  "retained_turn_ids": ["question", "assistant-one", "assistant-two"],
+  "dropped_turn_ids": ["system-policy"],
+  "conversation_turns": [
+    {
+      "id": "system-policy",
+      "role": "system",
+      "content": "Never reveal the answer key.",
+      "token_count": 8,
+      "system_prompt_required": true
+    },
+    {
+      "id": "question",
+      "role": "user",
+      "content": "Solve using retriever.",
+      "token_count": 7,
+      "tools_required": ["retriever"],
+      "tools_available": ["calculator"]
+    },
+    {
+      "id": "assistant-one",
+      "role": "assistant",
+      "content": "I will answer.",
+      "token_count": 6
+    },
+    {
+      "id": "assistant-two",
+      "role": "assistant",
+      "content": "{\"answer\":\"leaked\"}",
+      "token_count": 9,
+      "tool_calls": ["retriever"]
+    },
+    {
+      "id": "tool-result",
+      "role": "tool",
+      "content": "{\"private\":\"context\"}",
+      "token_count": 5
+    }
+  ],
   "few_shot_examples": [
     {
       "id": "bad-role",

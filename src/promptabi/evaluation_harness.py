@@ -100,6 +100,7 @@ def analyze_evaluation_harness_contracts(
     findings.extend(_prompt_variable_findings(harness, spans))
     findings.extend(_leakage_findings(harness, spans))
     findings.extend(_few_shot_findings(harness, spans))
+    findings.extend(_multi_turn_findings(harness, spans))
 
     if not any(finding.severity == "error" for finding in findings):
         findings.append(
@@ -108,7 +109,7 @@ def analyze_evaluation_harness_contracts(
                 severity="info",
                 message=(
                     f"evaluation harness '{harness.name}' matches declared provider, tokenizer, "
-                    "prompt, parser, few-shot, leakage, and stop contracts within the finite manifest"
+                    "prompt, parser, few-shot, leakage, multi-turn, and stop contracts within the finite manifest"
                 ),
                 suggestion="Keep the harness manifest pinned beside benchmark releases so published scores remain reproducible.",
                 witness=(
@@ -544,6 +545,265 @@ def _few_shot_findings(
                     )
                 )
     return tuple(findings)
+
+
+def _multi_turn_findings(
+    harness: EvaluationHarnessArtifact,
+    spans: Mapping[str, SourceSpan],
+) -> tuple[EvaluationHarnessFinding, ...]:
+    if not harness.conversation_turns:
+        return ()
+    findings: list[EvaluationHarnessFinding] = []
+    findings.extend(_role_alternation_findings(harness, spans))
+    findings.extend(_history_truncation_findings(harness, spans))
+    findings.extend(_tool_availability_findings(harness, spans))
+    return tuple(findings)
+
+
+def _role_alternation_findings(
+    harness: EvaluationHarnessArtifact,
+    spans: Mapping[str, SourceSpan],
+) -> tuple[EvaluationHarnessFinding, ...]:
+    findings: list[EvaluationHarnessFinding] = []
+    last_dialog_role: str | None = None
+    previous_role: str | None = None
+    for index, turn in enumerate(harness.conversation_turns):
+        role = turn.role.lower()
+        if role in {"user", "assistant"}:
+            assistant_after_tool_result = role == "assistant" and previous_role in {"tool", "function"}
+            if last_dialog_role == role and not assistant_after_tool_result:
+                findings.append(
+                    _mismatch(
+                        "evaluation-harness-role-alternation-mismatch",
+                        f"conversation_turns[{index}].role",
+                        "multi-turn evaluation history has adjacent user/assistant turns that violate role alternation",
+                        expected=f"role other than {last_dialog_role}",
+                        actual=turn.role,
+                        span=spans.get(f"conversation_turns.{index}.role"),
+                        suggestion="Merge adjacent same-role messages before evaluation or insert the missing response/tool-result turn declared by the provider contract.",
+                    )
+                )
+            last_dialog_role = role
+        previous_role = role
+    return tuple(findings)
+
+
+def _history_truncation_findings(
+    harness: EvaluationHarnessArtifact,
+    spans: Mapping[str, SourceSpan],
+) -> tuple[EvaluationHarnessFinding, ...]:
+    findings: list[EvaluationHarnessFinding] = []
+    turn_ids = {turn.turn_id for turn in harness.conversation_turns}
+    dropped = set(harness.dropped_turn_ids)
+    retained = set(harness.retained_turn_ids)
+    required_system_turns = tuple(
+        (index, turn)
+        for index, turn in enumerate(harness.conversation_turns)
+        if turn.system_prompt_required or turn.role.lower() in {"system", "developer"}
+    )
+    history_message_overflow = (
+        harness.max_history_messages is not None and len(harness.conversation_turns) > harness.max_history_messages
+    )
+    token_counts = tuple(turn.token_count for turn in harness.conversation_turns)
+    history_token_overflow = (
+        harness.max_history_tokens is not None
+        and all(count is not None for count in token_counts)
+        and sum(count for count in token_counts if count is not None) > harness.max_history_tokens
+    )
+    truncation_active = history_message_overflow or history_token_overflow or bool(dropped) or any(turn.truncated for turn in harness.conversation_turns)
+
+    if harness.max_history_messages is not None and history_message_overflow and not (dropped or retained or any(turn.truncated for turn in harness.conversation_turns)):
+        findings.append(
+            _missing(
+                "max_history_messages",
+                "multi-turn evaluation history exceeds max_history_messages but declares no retained/dropped turn facts",
+                spans.get("max_history_messages"),
+            )
+        )
+    if harness.max_history_tokens is not None and any(count is None for count in token_counts):
+        findings.append(
+            _missing(
+                "max_history_tokens",
+                "multi-turn evaluation history declares max_history_tokens but some turn token counts are missing",
+                spans.get("max_history_tokens") or spans.get("conversation_turns"),
+            )
+        )
+    elif harness.max_history_tokens is not None and history_token_overflow and not (dropped or retained or any(turn.truncated for turn in harness.conversation_turns)):
+        findings.append(
+            _missing(
+                "max_history_tokens",
+                "multi-turn evaluation history exceeds max_history_tokens but declares no retained/dropped turn facts",
+                spans.get("max_history_tokens"),
+            )
+        )
+    if harness.max_history_messages is not None and retained and len(retained) > harness.max_history_messages:
+        findings.append(
+            _mismatch(
+                "evaluation-harness-history-truncation-mismatch",
+                "retained_turn_ids",
+                "retained multi-turn evaluation history cannot fit max_history_messages",
+                expected=f"<= {harness.max_history_messages} retained turns",
+                actual=str(len(retained)),
+                span=spans.get("retained_turn_ids") or spans.get("max_history_messages"),
+                suggestion="Reduce retained history turns or raise the benchmark history window to match the provider/framework contract.",
+            )
+        )
+    if harness.max_history_tokens is not None and retained and all(turn.token_count is not None for turn in harness.conversation_turns if turn.turn_id in retained):
+        retained_tokens = sum(turn.token_count or 0 for turn in harness.conversation_turns if turn.turn_id in retained)
+        if retained_tokens > harness.max_history_tokens:
+            findings.append(
+                _mismatch(
+                    "evaluation-harness-history-truncation-mismatch",
+                    "retained_turn_ids",
+                    "retained multi-turn evaluation history cannot fit max_history_tokens",
+                    expected=f"<= {harness.max_history_tokens} retained tokens",
+                    actual=str(retained_tokens),
+                    span=spans.get("retained_turn_ids") or spans.get("max_history_tokens"),
+                    suggestion="Trim retained history or align benchmark token budgeting with the serving truncation policy.",
+                )
+            )
+    unknown_retained = retained.difference(turn_ids)
+    unknown_dropped = dropped.difference(turn_ids)
+    if unknown_retained or unknown_dropped:
+        findings.append(
+            _mismatch(
+                "evaluation-harness-history-truncation-mismatch",
+                "retained_turn_ids",
+                "history truncation facts reference turn IDs that are absent from conversation_turns",
+                expected=", ".join(sorted(turn_ids)),
+                actual=", ".join(sorted(unknown_retained.union(unknown_dropped))),
+                span=spans.get("retained_turn_ids") or spans.get("dropped_turn_ids"),
+                suggestion="Regenerate retained_turn_ids and dropped_turn_ids from the exact message history used by the benchmark.",
+            )
+        )
+    if required_system_turns and truncation_active:
+        if harness.preserve_system_prompt is False:
+            findings.append(_system_prompt_truncated("preserve_system_prompt", "preserve_system_prompt is false", spans.get("preserve_system_prompt")))
+        elif harness.preserve_system_prompt is None:
+            findings.append(
+                _missing(
+                    "preserve_system_prompt",
+                    "multi-turn evaluation truncation is active but system-prompt survival is not declared",
+                    spans.get("preserve_system_prompt") or spans.get("conversation_turns"),
+                )
+            )
+        for index, turn in required_system_turns:
+            if turn.turn_id in dropped:
+                findings.append(
+                    _system_prompt_truncated(
+                        f"conversation_turns[{index}]",
+                        f"required system/developer turn '{turn.turn_id}' is listed in dropped_turn_ids",
+                        spans.get("dropped_turn_ids") or spans.get(f"conversation_turns.{index}.role"),
+                    )
+                )
+            if retained and turn.turn_id not in retained:
+                findings.append(
+                    _system_prompt_truncated(
+                        f"conversation_turns[{index}]",
+                        f"required system/developer turn '{turn.turn_id}' is absent from retained_turn_ids",
+                        spans.get("retained_turn_ids") or spans.get(f"conversation_turns.{index}.role"),
+                    )
+                )
+            if turn.truncated:
+                findings.append(
+                    _system_prompt_truncated(
+                        f"conversation_turns[{index}].truncated",
+                        f"required system/developer turn '{turn.turn_id}' is marked truncated",
+                        spans.get(f"conversation_turns.{index}.truncated") or spans.get(f"conversation_turns.{index}.role"),
+                    )
+                )
+    if harness.preserve_tool_messages is False and any(turn.role.lower() in {"tool", "function"} for turn in harness.conversation_turns):
+        findings.append(
+            _mismatch(
+                "evaluation-harness-history-truncation-mismatch",
+                "preserve_tool_messages",
+                "multi-turn evaluation contains tool/function results but the history policy declares they are not preserved",
+                expected="preserve_tool_messages=true for tool-using eval transcripts",
+                actual="false",
+                span=spans.get("preserve_tool_messages"),
+                suggestion="Preserve tool/function result messages during benchmark truncation or remove tool-dependent turns from the evaluation contract.",
+            )
+        )
+    return tuple(findings)
+
+
+def _tool_availability_findings(
+    harness: EvaluationHarnessArtifact,
+    spans: Mapping[str, SourceSpan],
+) -> tuple[EvaluationHarnessFinding, ...]:
+    findings: list[EvaluationHarnessFinding] = []
+    global_required = set(harness.required_tools)
+    global_available = set(harness.available_tools)
+    if global_required and not global_available:
+        findings.append(
+            _missing(
+                "available_tools",
+                "multi-turn evaluation requires tools but does not declare benchmark tool availability",
+                spans.get("available_tools") or spans.get("required_tools"),
+            )
+        )
+    elif missing := global_required.difference(global_available):
+        findings.append(
+            _tool_unavailable(
+                "required_tools",
+                missing,
+                global_available,
+                spans.get("required_tools") or spans.get("available_tools"),
+            )
+        )
+    for index, turn in enumerate(harness.conversation_turns):
+        available = set(turn.tools_available) if turn.tools_available else global_available
+        needed = set(turn.tools_required).union(turn.tool_calls)
+        if needed and not available:
+            findings.append(
+                _missing(
+                    f"conversation_turns[{index}].tools_available",
+                    f"turn '{turn.turn_id}' requires tools but no per-turn or global available_tools contract is declared",
+                    spans.get(f"conversation_turns.{index}.tools_available") or spans.get("available_tools"),
+                )
+            )
+            continue
+        if missing := needed.difference(available):
+            findings.append(
+                _tool_unavailable(
+                    f"conversation_turns[{index}].tools_required",
+                    missing,
+                    available,
+                    spans.get(f"conversation_turns.{index}.tools_required")
+                    or spans.get(f"conversation_turns.{index}.tool_calls")
+                    or spans.get(f"conversation_turns.{index}.tools_available"),
+                )
+            )
+    return tuple(findings)
+
+
+def _system_prompt_truncated(subject: str, actual: str, span: SourceSpan | None) -> EvaluationHarnessFinding:
+    return _mismatch(
+        "evaluation-harness-system-prompt-truncated",
+        subject,
+        "multi-turn evaluation truncation can drop or truncate a required system/developer prompt",
+        expected="required system/developer turn retained intact",
+        actual=actual,
+        span=span,
+        suggestion="Pin benchmark history truncation to preserve required system/developer turns before publishing multi-turn scores.",
+    )
+
+
+def _tool_unavailable(
+    subject: str,
+    missing: set[str],
+    available: set[str],
+    span: SourceSpan | None,
+) -> EvaluationHarnessFinding:
+    return _mismatch(
+        "evaluation-harness-tool-unavailable",
+        subject,
+        "multi-turn evaluation requires or calls tools that are not available in the benchmark tool contract",
+        expected=", ".join(sorted(available)) or "<none>",
+        actual=", ".join(sorted(missing)),
+        span=span,
+        suggestion="Declare the same tool set for evaluation turns that the provider/application contract exposes at runtime.",
+    )
 
 
 def _leakage_findings(

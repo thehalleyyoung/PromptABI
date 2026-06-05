@@ -110,6 +110,47 @@ class EvaluationFewShotExample:
 
 
 @dataclass(frozen=True, slots=True)
+class EvaluationTurnContract:
+    """One ordered message-history turn emitted by an evaluation harness."""
+
+    turn_id: str
+    role: str
+    content: str = ""
+    token_count: int | None = None
+    system_prompt_required: bool = False
+    tools_required: tuple[str, ...] = ()
+    tools_available: tuple[str, ...] = ()
+    tool_calls: tuple[str, ...] = ()
+    truncated: bool = False
+
+    def __post_init__(self) -> None:
+        _require_non_empty("evaluation turn id", self.turn_id)
+        _require_non_empty("evaluation turn role", self.role)
+        _optional_non_negative("evaluation turn token_count", self.token_count)
+        object.__setattr__(self, "tools_required", _unique_strings(self.tools_required, field_name="evaluation turn tools_required"))
+        object.__setattr__(self, "tools_available", _unique_strings(self.tools_available, field_name="evaluation turn tools_available"))
+        object.__setattr__(self, "tool_calls", _unique_strings(self.tool_calls, field_name="evaluation turn tool_calls"))
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {"id": self.turn_id, "role": self.role}
+        if self.content:
+            data["content"] = self.content
+        if self.token_count is not None:
+            data["token_count"] = self.token_count
+        if self.system_prompt_required:
+            data["system_prompt_required"] = self.system_prompt_required
+        if self.tools_required:
+            data["tools_required"] = list(self.tools_required)
+        if self.tools_available:
+            data["tools_available"] = list(self.tools_available)
+        if self.tool_calls:
+            data["tool_calls"] = list(self.tool_calls)
+        if self.truncated:
+            data["truncated"] = self.truncated
+        return data
+
+
+@dataclass(frozen=True, slots=True)
 class EvaluationTokenizerSnapshot:
     """Benchmark-side tokenizer facts pinned by an evaluation harness."""
 
@@ -1467,7 +1508,16 @@ class EvaluationHarnessArtifact(BaseArtifact):
     grading_rubric_variables: tuple[str, ...] = ()
     chain_of_thought_variables: tuple[str, ...] = ()
     few_shot_examples: tuple[EvaluationFewShotExample, ...] = ()
+    conversation_turns: tuple[EvaluationTurnContract, ...] = ()
     max_prompt_tokens: int | None = None
+    max_history_messages: int | None = None
+    max_history_tokens: int | None = None
+    preserve_system_prompt: bool | None = None
+    preserve_tool_messages: bool | None = None
+    retained_turn_ids: tuple[str, ...] = ()
+    dropped_turn_ids: tuple[str, ...] = ()
+    required_tools: tuple[str, ...] = ()
+    available_tools: tuple[str, ...] = ()
     benchmark_tokenizer: EvaluationTokenizerSnapshot | None = None
 
     def __post_init__(self) -> None:
@@ -1504,6 +1554,14 @@ class EvaluationHarnessArtifact(BaseArtifact):
         if len({example.example_id for example in examples}) != len(examples):
             raise ValueError("evaluation harness few-shot example IDs must be unique")
         object.__setattr__(self, "few_shot_examples", examples)
+        if len({turn.turn_id for turn in self.conversation_turns}) != len(self.conversation_turns):
+            raise ValueError("evaluation harness conversation turn IDs must be unique")
+        for field_name in ("max_history_messages", "max_history_tokens"):
+            _optional_non_negative(f"evaluation harness {field_name}", getattr(self, field_name))
+        object.__setattr__(self, "retained_turn_ids", _unique_strings(self.retained_turn_ids, field_name="evaluation harness retained_turn_ids"))
+        object.__setattr__(self, "dropped_turn_ids", _unique_strings(self.dropped_turn_ids, field_name="evaluation harness dropped_turn_ids"))
+        object.__setattr__(self, "required_tools", _unique_strings(self.required_tools, field_name="evaluation harness required_tools"))
+        object.__setattr__(self, "available_tools", _unique_strings(self.available_tools, field_name="evaluation harness available_tools"))
 
     def to_dict(self) -> dict[str, object]:
         data = BaseArtifact.to_dict(self)
@@ -1528,8 +1586,26 @@ class EvaluationHarnessArtifact(BaseArtifact):
             data["chain_of_thought_variables"] = list(self.chain_of_thought_variables)
         if self.few_shot_examples:
             data["few_shot_examples"] = [example.to_dict() for example in self.few_shot_examples]
+        if self.conversation_turns:
+            data["conversation_turns"] = [turn.to_dict() for turn in self.conversation_turns]
         if self.max_prompt_tokens is not None:
             data["max_prompt_tokens"] = self.max_prompt_tokens
+        if self.max_history_messages is not None:
+            data["max_history_messages"] = self.max_history_messages
+        if self.max_history_tokens is not None:
+            data["max_history_tokens"] = self.max_history_tokens
+        if self.preserve_system_prompt is not None:
+            data["preserve_system_prompt"] = self.preserve_system_prompt
+        if self.preserve_tool_messages is not None:
+            data["preserve_tool_messages"] = self.preserve_tool_messages
+        if self.retained_turn_ids:
+            data["retained_turn_ids"] = list(self.retained_turn_ids)
+        if self.dropped_turn_ids:
+            data["dropped_turn_ids"] = list(self.dropped_turn_ids)
+        if self.required_tools:
+            data["required_tools"] = list(self.required_tools)
+        if self.available_tools:
+            data["available_tools"] = list(self.available_tools)
         if self.benchmark_tokenizer is not None:
             data["benchmark_tokenizer"] = self.benchmark_tokenizer.to_dict()
         return data
@@ -1730,7 +1806,16 @@ def artifact_from_config(
             grading_rubric_variables=_tuple_of_str_aliases(spec, "grading_rubric_variables", "grading_rubric_fields"),
             chain_of_thought_variables=_tuple_of_str_aliases(spec, "chain_of_thought_variables", "chain_of_thought_fields"),
             few_shot_examples=_evaluation_few_shot_examples(spec),
+            conversation_turns=_evaluation_turn_contracts(spec),
             max_prompt_tokens=_optional_int(spec, "max_prompt_tokens"),
+            max_history_messages=_optional_int(spec, "max_history_messages"),
+            max_history_tokens=_optional_int(spec, "max_history_tokens"),
+            preserve_system_prompt=_optional_bool(spec, "preserve_system_prompt"),
+            preserve_tool_messages=_optional_bool(spec, "preserve_tool_messages"),
+            retained_turn_ids=_tuple_of_str(spec, "retained_turn_ids"),
+            dropped_turn_ids=_tuple_of_str(spec, "dropped_turn_ids"),
+            required_tools=_tuple_of_str(spec, "required_tools"),
+            available_tools=_tuple_of_str(spec, "available_tools"),
             benchmark_tokenizer=_evaluation_tokenizer_snapshot(spec),
         )
     raise AssertionError(f"unhandled artifact kind: {kind}")
@@ -2125,6 +2210,30 @@ def _evaluation_few_shot_examples(spec: dict[str, Any]) -> tuple[EvaluationFewSh
             )
         )
     return tuple(examples)
+
+
+def _evaluation_turn_contracts(spec: dict[str, Any]) -> tuple[EvaluationTurnContract, ...]:
+    raw_turns = spec.get("conversation_turns", spec.get("message_history", []))
+    if not isinstance(raw_turns, list):
+        raise ValueError("artifact field 'conversation_turns' must be a list")
+    turns: list[EvaluationTurnContract] = []
+    for index, item in enumerate(raw_turns):
+        if not isinstance(item, dict):
+            raise ValueError("evaluation conversation_turns entries must be objects")
+        turns.append(
+            EvaluationTurnContract(
+                turn_id=_case_id(item, index),
+                role=_str(item, "role"),
+                content=_optional_text(item, "content") or "",
+                token_count=_optional_int(item, "token_count"),
+                system_prompt_required=_bool(item, "system_prompt_required", default=False),
+                tools_required=_tuple_of_str(item, "tools_required"),
+                tools_available=_tuple_of_str(item, "tools_available"),
+                tool_calls=_tuple_of_str(item, "tool_calls"),
+                truncated=_bool(item, "truncated", default=False),
+            )
+        )
+    return tuple(turns)
 
 
 def _evaluation_tokenizer_snapshot(spec: dict[str, Any]) -> EvaluationTokenizerSnapshot | None:

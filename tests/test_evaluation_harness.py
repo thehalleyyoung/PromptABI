@@ -2,7 +2,7 @@ import json
 from hashlib import sha256
 from pathlib import Path
 
-from promptabi.artifacts import ArtifactKind, EvaluationHarnessArtifact, artifact_from_config
+from promptabi.artifacts import ArtifactKind, EvaluationHarnessArtifact, EvaluationTurnContract, artifact_from_config
 from promptabi.cli import main
 from promptabi.evaluation_harness import analyze_evaluation_harness_contracts
 from promptabi.session import CHECK_MODE_CATALOG, VerificationSession
@@ -28,6 +28,30 @@ def test_evaluation_harness_artifact_parses_manifest_fields() -> None:
             "answer_key_variables": ["expected"],
             "grading_rubric_fields": ["private_rubric"],
             "chain_of_thought_variables": ["grader_notes"],
+            "required_tools": ["calculator"],
+            "available_tools": ["calculator", "search"],
+            "max_history_messages": 2,
+            "max_history_tokens": 32,
+            "preserve_system_prompt": True,
+            "preserve_tool_messages": True,
+            "retained_turn_ids": ["system", "question"],
+            "conversation_turns": [
+                {
+                    "id": "system",
+                    "role": "system",
+                    "content": "Follow rubric.",
+                    "token_count": 3,
+                    "system_prompt_required": True,
+                },
+                {
+                    "id": "question",
+                    "role": "user",
+                    "content": "Q",
+                    "token_count": 1,
+                    "tools_required": ["calculator"],
+                    "tools_available": ["calculator"],
+                },
+            ],
             "benchmark_tokenizer": {
                 "harness_family": "helm",
                 "name": "byte-bpe",
@@ -46,6 +70,16 @@ def test_evaluation_harness_artifact_parses_manifest_fields() -> None:
     assert artifact.answer_key_variables == ("expected",)
     assert artifact.grading_rubric_variables == ("private_rubric",)
     assert artifact.chain_of_thought_variables == ("grader_notes",)
+    assert artifact.required_tools == ("calculator",)
+    assert artifact.available_tools == ("calculator", "search")
+    assert artifact.max_history_messages == 2
+    assert artifact.max_history_tokens == 32
+    assert artifact.preserve_system_prompt is True
+    assert artifact.preserve_tool_messages is True
+    assert artifact.retained_turn_ids == ("question", "system")
+    assert isinstance(artifact.conversation_turns[0], EvaluationTurnContract)
+    assert [turn.turn_id for turn in artifact.conversation_turns] == ["system", "question"]
+    assert artifact.conversation_turns[1].tools_required == ("calculator",)
     assert artifact.benchmark_tokenizer is not None
     assert artifact.benchmark_tokenizer.harness_family == "helm"
     assert artifact.benchmark_tokenizer.pinned_fields == ("special_tokens", "added_tokens", "chat_template_sha256")
@@ -80,6 +114,10 @@ def test_unsafe_evaluation_harness_reports_contract_breaks_with_spans() -> None:
         "evaluation-harness-few-shot-role-mismatch",
         "evaluation-harness-few-shot-budget-overflow",
         "evaluation-harness-grading-rubric-leakage",
+        "evaluation-harness-history-truncation-mismatch",
+        "evaluation-harness-role-alternation-mismatch",
+        "evaluation-harness-system-prompt-truncated",
+        "evaluation-harness-tool-unavailable",
     }
     assert result.ok is False
     assert expected.issubset(by_rule)
@@ -87,6 +125,9 @@ def test_unsafe_evaluation_harness_reports_contract_breaks_with_spans() -> None:
     assert ("actual", "answer_key") in by_rule["evaluation-harness-answer-key-leakage"].properties
     assert by_rule["evaluation-harness-chain-of-thought-leakage"].span is not None
     assert by_rule["evaluation-harness-few-shot-role-mismatch"].witness is not None
+    assert by_rule["evaluation-harness-role-alternation-mismatch"].span is not None
+    assert by_rule["evaluation-harness-system-prompt-truncated"].span is not None
+    assert ("actual", "retriever") in by_rule["evaluation-harness-tool-unavailable"].properties
     assert "evaluation-harness-verified" not in by_rule
 
 
@@ -104,6 +145,19 @@ def test_evaluation_harness_cli_json_output(capsys) -> None:
         diagnostic["rule_id"] == "evaluation-harness-grading-rubric-leakage"
         for diagnostic in payload["diagnostics"]
     )
+    assert any(
+        diagnostic["rule_id"] == "evaluation-harness-tool-unavailable"
+        for diagnostic in payload["diagnostics"]
+    )
+
+
+def test_safe_evaluation_harness_covers_multi_turn_contracts() -> None:
+    result = VerificationSession.from_config_file(SAFE_CONFIG).run()
+    verified = next(diagnostic for diagnostic in result.diagnostics if diagnostic.rule_id == "evaluation-harness-verified")
+
+    assert result.ok is True
+    assert all("multi-turn" not in diagnostic.rule_id for diagnostic in result.diagnostics if diagnostic.severity.value == "error")
+    assert any(step.output == "no contract-breaking mismatch found" for step in verified.witness.steps)
 
 
 def test_evaluation_harness_analyzer_emits_missing_contract_abstention() -> None:

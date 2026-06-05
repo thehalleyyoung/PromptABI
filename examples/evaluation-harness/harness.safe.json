@@ -26,6 +26,44 @@
     "eos_token": "</s>"
   },
   "max_prompt_tokens": 64,
+  "max_history_messages": 4,
+  "max_history_tokens": 44,
+  "preserve_system_prompt": true,
+  "preserve_tool_messages": true,
+  "required_tools": ["calculator"],
+  "available_tools": ["calculator", "search"],
+  "retained_turn_ids": ["system-policy", "question", "tool-result", "answer"],
+  "conversation_turns": [
+    {
+      "id": "system-policy",
+      "role": "system",
+      "content": "Answer with JSON and cite tool outputs.",
+      "token_count": 9,
+      "system_prompt_required": true
+    },
+    {
+      "id": "question",
+      "role": "user",
+      "content": "What is 2+2? Use calculator.",
+      "token_count": 10,
+      "tools_required": ["calculator"],
+      "tools_available": ["calculator"]
+    },
+    {
+      "id": "tool-result",
+      "role": "tool",
+      "content": "{\"answer\":4}",
+      "token_count": 6,
+      "tools_available": ["calculator"]
+    },
+    {
+      "id": "answer",
+      "role": "assistant",
+      "content": "{\"answer\":\"4\"}</answer>",
+      "token_count": 8,
+      "tools_available": ["calculator"]
+    }
+  ],
   "few_shot_examples": [
     {
       "id": "warmup-question",
