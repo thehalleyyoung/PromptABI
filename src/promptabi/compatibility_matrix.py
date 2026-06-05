@@ -24,6 +24,11 @@ CHECK_RULE_IDS: dict[str, tuple[str, ...]] = {
         "artifact-provenance-verified",
     ),
     "enterprise-readiness": (
+        "enterprise-access-control-hash-abstained",
+        "enterprise-access-control-hash-mismatch",
+        "enterprise-access-control-incomplete",
+        "enterprise-access-control-retention-weak",
+        "enterprise-access-control-unapproved",
         "enterprise-internal-fixture-unsafe",
         "enterprise-local-resource-hash-abstained",
         "enterprise-local-resource-hash-mismatch",

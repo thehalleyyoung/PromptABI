@@ -121,9 +121,10 @@ plus signed \texttt{promptabi prompt-pack provenance} manifests that bind review
 registry metadata, contract hashes, proof hashes, package checksums, versions,
 and diagnostic baselines under a local HMAC key so downstream teams can verify
 template, schema, and tool-definition bundles without seeing raw prompt-pack
-contents, and a \texttt{promptabi prompt-pack mirror} workflow that copies local
-private pack artifacts into checksum-verified, network-free enterprise mirrors
-and revalidates them offline before use,
+contents, and a \texttt{promptabi prompt-pack mirror} workflow plus enterprise
+access-control checks that copy local private pack artifacts into checksum-verified,
+network-free mirrors, require approved private indexes, prompt packs, and policy
+packs, and carry audit-bundle retention metadata into signed release evidence,
 validating, pinning, and proving upgrade preservation for exported templates,
 role-boundary and budget hashes, tool schemas, stop policies, supported
 model/provider families, package hashes, and diagnostic baselines against

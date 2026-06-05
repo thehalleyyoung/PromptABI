@@ -142,6 +142,17 @@ def build_verification_bundle_payload(
         "artifacts": artifacts,
         "solver_metadata": _solver_metadata(result.diagnostics),
     }
+    if config.enterprise.access_control.configured:
+        payload["audit_retention"] = {
+            "access_control_hash": _stable_json_hash(config.enterprise.access_control.to_dict()),
+            "approved_policy_packs": [item.name for item in config.enterprise.access_control.approved_policy_packs],
+            "approved_private_artifact_indexes": [
+                item.name for item in config.enterprise.access_control.approved_private_artifact_indexes
+            ],
+            "approved_prompt_packs": [item.name for item in config.enterprise.access_control.approved_prompt_packs],
+            "min_replicas": config.enterprise.access_control.audit_bundle_min_replicas,
+            "retention_days": config.enterprise.access_control.audit_bundle_retention_days,
+        }
     payload["reproducibility_hash"] = _stable_json_hash(
         {
             "artifact_hashes": [
