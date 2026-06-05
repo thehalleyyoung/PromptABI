@@ -205,6 +205,12 @@ from .proof_sketches import (
     render_proof_sketch_report_text,
     write_proof_sketch_notebooks,
 )
+from .mechanized_proofs import (
+    MechanizedProofExperimentReport,
+    render_mechanized_proof_experiments_json,
+    render_mechanized_proof_experiments_text,
+    run_mechanized_proof_experiments,
+)
 from .soundness_audits import (
     SoundnessAuditReport,
     build_soundness_audit_report,
@@ -381,6 +387,19 @@ def theorem_traceability(*, output_format: str | None = None) -> TheoremTraceabi
         return render_theorem_traceability_json(report)
     if output_format == "text":
         return render_theorem_traceability_text(report)
+    raise ValueError("output_format must be 'json' or 'text'")
+
+
+def mechanized_proof_experiments(*, output_format: str | None = None) -> MechanizedProofExperimentReport | str:
+    """Run mechanized proof experiments for small automata and finite-contract fragments."""
+
+    report = run_mechanized_proof_experiments()
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_mechanized_proof_experiments_json(report)
+    if output_format == "text":
+        return render_mechanized_proof_experiments_text(report)
     raise ValueError("output_format must be 'json' or 'text'")
 
 

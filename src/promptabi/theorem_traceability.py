@@ -220,6 +220,7 @@ def _trace_evidence() -> dict[str, tuple[TheoremTraceEvidence, ...]]:
         "z3-backed-finite-contract": (
             _evidence(executable, "tests/test_proof_sketches.py", "rechecks finite SAT assignments and deletion-minimal UNSAT cores", symbol="test_static_contract_proof_rechecks_solver_assignment_and_unsat_core"),
             _evidence(executable, "tests/test_executable_specs.py", "independently enumerates finite solver domains and constraints", symbol="test_executable_spec_checks_sat_contract_assignment"),
+            _evidence(executable, "tests/test_mechanized_proofs.py", "runs mechanized finite-contract proof experiments over SAT assignments and UNSAT cores", symbol="test_mechanized_proof_experiments_pass_and_cover_core_fragments"),
             _evidence(property_test, "tests/test_checker_properties.py", "generates safe and unsafe static-contract obligations", symbol="analyze_static_contracts"),
             _evidence(corpus, "fixtures/smt_benchmarks/benchmark.json", "pins SAT/UNSAT/timeout/unsupported SMT benchmark cases"),
             _evidence(corpus, "fixtures/solver_replays/role-region-forgery.solver-replay.json", "stores reduced solver replay evidence without private artifacts"),

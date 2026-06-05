@@ -279,6 +279,11 @@ from .proof_sketches import (
     render_proof_sketch_report_text,
     write_proof_sketch_notebooks,
 )
+from .mechanized_proofs import (
+    render_mechanized_proof_experiments_json,
+    render_mechanized_proof_experiments_text,
+    run_mechanized_proof_experiments,
+)
 from .soundness_audits import (
     build_soundness_audit_report,
     render_soundness_audit_json,
@@ -1478,6 +1483,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--traceability",
         action="store_true",
         help="show theorem-to-test traceability instead of the proof catalog",
+    )
+    proofs.add_argument(
+        "--experiments",
+        action="store_true",
+        help="run mechanized proof experiments for small automata and finite-contract fragments",
     )
     soundness_audit = subparsers.add_parser(
         "soundness-audit",
@@ -3556,6 +3566,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "proofs":
+        if args.experiments:
+            report = run_mechanized_proof_experiments()
+            output = (
+                render_mechanized_proof_experiments_json(report)
+                if args.format == "json"
+                else render_mechanized_proof_experiments_text(report)
+            )
+            print(output, end="")
+            return 0 if report.passed else 1
         if args.traceability:
             report = build_theorem_traceability_report()
             output = render_theorem_traceability_json(report) if args.format == "json" else render_theorem_traceability_text(report)

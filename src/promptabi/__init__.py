@@ -38,6 +38,7 @@ from .api import (
     minimize_failure_repro,
     proof_sketch_notebooks,
     proof_sketches,
+    mechanized_proof_experiments,
     soundness_audits,
     theorem_traceability,
     provider_conformance_suite,
@@ -698,6 +699,14 @@ from .proof_sketches import (
     render_proof_sketch_report_json,
     render_proof_sketch_report_text,
     write_proof_sketch_notebooks,
+)
+from .mechanized_proofs import (
+    MECHANIZED_PROOF_EXPERIMENT_VERSION,
+    MechanizedProofExperiment,
+    MechanizedProofExperimentReport,
+    render_mechanized_proof_experiments_json,
+    render_mechanized_proof_experiments_text,
+    run_mechanized_proof_experiments,
 )
 from .soundness_audits import (
     SOUNDNESS_AUDIT_VERSION,
@@ -1390,6 +1399,7 @@ __all__ = [
     "tokenizer_conformance_suite",
     "proof_sketch_notebooks",
     "proof_sketches",
+    "mechanized_proof_experiments",
     "soundness_audits",
     "theorem_traceability",
     "normalize_adversarial_text",
@@ -1521,6 +1531,8 @@ __all__ = [
     "render_proof_sketch_notebook_report_text",
     "render_proof_sketch_report_json",
     "render_proof_sketch_report_text",
+    "render_mechanized_proof_experiments_json",
+    "render_mechanized_proof_experiments_text",
     "render_soundness_audit_json",
     "render_soundness_audit_markdown",
     "render_soundness_audit_text",
@@ -1570,6 +1582,7 @@ __all__ = [
     "prove_role_boundary_nonforgeability",
     "prove_static_contract",
     "prove_stop_reachability",
+    "run_mechanized_proof_experiments",
     "write_proof_sketch_notebooks",
     "ingest_tool_schema_mapping",
     "analyze_stop_policy_tokenizer",

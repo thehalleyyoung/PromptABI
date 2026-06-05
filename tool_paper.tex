@@ -39,7 +39,8 @@ validated against real Hugging Face \texttt{tokenizers},
 \texttt{tiktoken}, and SentencePiece libraries, deterministic finite automata,
 finite-state transducers with composition and projection, executable
 specifications that replay witnesses, bounded product-language laws, and SMT
-proof objects, a declarative static contract language with a canonical
+proof objects, mechanized proof experiments for the smallest automata and
+finite-contract fragments, a declarative static contract language with a canonical
 \texttt{.pabi} parser, formatter, migration tool, linter, JSON lowering path, CLI check mode,
 and reviewable examples for LLM apps, fine-tuning datasets, RAG systems, and
 evaluation harnesses, now compiled into source-mapped finite obligations whose
@@ -969,6 +970,17 @@ a renamed test, deleted fixture, or missing release gate turns theorem
 traceability into a failing CI artifact rather than a stale paragraph in the
 paper.
 
+For the smallest fragments, the traceability layer now has executable
+mechanization rather than prose alone. \texttt{promptabi proofs --experiments}
+constructs canonical in-memory proof experiments for bounded DFA De Morgan
+equivalence, DFA minimization language preservation, finite-contract SAT
+assignment validity, and deletion-minimal UNSAT cores. Each experiment runs the
+production automata or finite solver, then checks the result with independent
+\texttt{promptabi.specs} obligations. The JSON output records theorem text,
+fragment assumptions, artifacts such as state counts or solver assignments, and
+every executable check, making the smallest paper claims rerunnable without a
+separate proof-assistant toolchain.
+
 The documentation now exposes the same decision boundary used by the code:
 automata for finite language reachability, transducers for replayable interface
 relations, Z3 or finite enumeration for bounded symbolic contracts, composed
@@ -1094,6 +1106,9 @@ This layer is not a substitute for mechanized theorem proving, but it closes an
 important systems gap: every proof-like claim now has a machine-readable theorem,
 explicit assumptions, an executable validation boundary, and a visible outcome of
 \texttt{proven}, \texttt{counterexample}, \texttt{abstained}, or \texttt{sketch}.
+The new mechanized experiment runner complements those certificates by proving
+toy-sized algebraic and finite-SMT obligations end to end with real repository
+code and independently replayed proof obligations.
 
 \clearpage
 \section{Version-Pinned Artifact Loading}
@@ -1444,6 +1459,7 @@ promptabi minimize repro.json --keep-substring "<|im_start|>" --format json
 promptabi init --stack openai-tools --output-dir .promptabi-demo
 promptabi gallery --format text
 promptabi proofs --traceability --format json
+promptabi proofs --experiments --format json
 promptabi verify --artifact schema=schemas/answer.json --fail-on warning
 promptabi verify --config examples/minimal/promptabi.json --format json
 promptabi verify --config examples/minimal/promptabi.json --format sarif
