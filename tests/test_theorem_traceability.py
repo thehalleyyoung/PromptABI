@@ -18,6 +18,7 @@ def test_theorem_traceability_covers_every_core_proof_claim() -> None:
         "grammar-tokenizer-emptiness",
         "must-survive-budget",
         "z3-backed-finite-contract",
+        "incremental-cache-soundness",
     }
     for trace in report.traces:
         assert {item.kind for item in trace.evidence} >= set(TraceEvidenceKind)
@@ -33,7 +34,7 @@ def test_theorem_traceability_renderers_and_public_api_are_stable(capsys) -> Non
     assert "PromptABI theorem traceability" in text
     assert "role-boundary-nonforgeability: PASS" in text
     assert payload["passed"] is True
-    assert payload["theorem_count"] == 5
+    assert payload["theorem_count"] == 6
 
     exit_code = main(["proofs", "--traceability", "--format", "json"])
     captured = capsys.readouterr()

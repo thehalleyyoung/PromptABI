@@ -226,4 +226,11 @@ def _trace_evidence() -> dict[str, tuple[TheoremTraceEvidence, ...]]:
             _evidence(corpus, "fixtures/solver_replays/role-region-forgery.solver-replay.json", "stores reduced solver replay evidence without private artifacts"),
             _evidence(release, "src/promptabi/release.py", "release readiness requires Z3-backed and bounded static-contract modes", symbol="CheckMode.Z3_BACKED_SMT"),
         ),
+        "incremental-cache-soundness": (
+            _evidence(executable, "tests/test_incremental_verification.py", "constructs a real cache certificate and proves safe reuse of skipped diagnostics", symbol="test_incremental_cache_soundness_certificate_proves_safe_reuse"),
+            _evidence(executable, "src/promptabi/proof_sketches.py", "rechecks the planner's skipped set and fingerprint against current inputs", symbol="prove_incremental_cache_soundness"),
+            _evidence(property_test, "tests/test_incremental_verification.py", "rejects a stale lookup key so unsound reuse abstains", symbol="test_incremental_cache_certificate_rejects_stale_lookup_key"),
+            _evidence(corpus, "fixtures/incremental_cache/reuse-soundness.json", "pins a real incremental-cache reuse scenario with its soundness checks"),
+            _evidence(release, "src/promptabi/release.py", "theorem-traceability release gate requires incremental-cache-soundness coverage", symbol="_theorem_traceability_check"),
+        ),
     }

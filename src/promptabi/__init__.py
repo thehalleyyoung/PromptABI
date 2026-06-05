@@ -257,6 +257,16 @@ from .multi_agent_handoffs import (
     render_multi_agent_handoff_json,
     render_multi_agent_handoff_text,
 )
+from .theorem_release_blockers import (
+    REQUIRED_RELEASE_THEOREMS,
+    THEOREM_RELEASE_BLOCKER_VERSION,
+    TheoremReleaseBlocker,
+    TheoremReleaseBlockerKind,
+    TheoremReleaseGateReport,
+    derive_theorem_release_blockers,
+    render_theorem_release_blockers_json,
+    render_theorem_release_blockers_text,
+)
 from .compositional_proof_benchmarks import (
     COMPOSITIONAL_PROOF_BENCHMARK_VERSION,
     CompositionalProofBenchmarkCase,
@@ -2007,6 +2017,14 @@ __all__ = [
     "validate_maintainer_health",
     "write_structured_schema_corpus_manifest",
     "WitnessPrivacyMode",
+    "REQUIRED_RELEASE_THEOREMS",
+    "THEOREM_RELEASE_BLOCKER_VERSION",
+    "TheoremReleaseBlocker",
+    "TheoremReleaseBlockerKind",
+    "TheoremReleaseGateReport",
+    "derive_theorem_release_blockers",
+    "render_theorem_release_blockers_json",
+    "render_theorem_release_blockers_text",
     "COMPOSITIONAL_PROOF_BENCHMARK_VERSION",
     "CompositionalProofBenchmarkCase",
     "CompositionalProofBenchmarkError",

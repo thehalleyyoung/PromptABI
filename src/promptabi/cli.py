@@ -480,6 +480,11 @@ from .reproducibility import (
     ReproducibilityPackageError,
     write_reproducibility_package,
 )
+from .theorem_release_blockers import (
+    derive_theorem_release_blockers,
+    render_theorem_release_blockers_json,
+    render_theorem_release_blockers_text,
+)
 from .team_dashboard import (
     TeamDashboardError,
     append_dashboard_history,
@@ -2277,6 +2282,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     release_readiness.add_argument("--output", help="write release-readiness report to this path instead of stdout")
+    release_blockers = release_subparsers.add_parser(
+        "blockers",
+        help="derive release blockers from theorem-to-test traceability",
+    )
+    release_blockers.add_argument(
+        "--repo-root",
+        help="repository root to inspect (default: installed PromptABI repository root)",
+    )
+    release_blockers.add_argument(
+        "--release-version",
+        default="1.0.0",
+        help="candidate release version to gate (default: 1.0.0)",
+    )
+    release_blockers.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
     compatibility_audit = release_subparsers.add_parser(
         "compatibility-audit",
         help="run the post-1.0 fixture-backed compatibility audit before a minor release",
@@ -4964,6 +4988,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"promptabi: cannot write release-readiness report: {exc}", file=sys.stderr)
             return 2
         return 0 if report.ok else 1
+
+    if args.command == "release" and args.release_command == "blockers":
+        try:
+            gate = derive_theorem_release_blockers(
+                args.repo_root,
+                release_version=args.release_version,
+            )
+        except (ReleaseReadinessError, ValueError, OSError) as exc:
+            print(f"promptabi: cannot derive theorem release blockers: {exc}", file=sys.stderr)
+            return 2
+        output = (
+            render_theorem_release_blockers_json(gate)
+            if args.format == "json"
+            else render_theorem_release_blockers_text(gate)
+        )
+        print(output, end="")
+        return 0 if gate.release_allowed else 1
 
     if args.command == "release" and args.release_command == "compatibility-audit":
         try:

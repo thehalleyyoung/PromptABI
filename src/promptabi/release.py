@@ -28,6 +28,7 @@ from .real_bug_benchmarks import build_real_bug_benchmark_manifest
 from .reproducibility import ReproducibilityInputs, build_reproducibility_package
 from .seed_corpus import build_seed_corpus_manifest
 from .theorem_traceability import build_theorem_traceability_report
+from .theorem_release_blockers import derive_theorem_release_blockers
 
 
 DEFAULT_RELEASE_VERSION = "1.0.0"
@@ -584,14 +585,18 @@ def _formal_checks_check() -> ReleaseReadinessCheck:
 def _theorem_traceability_check(root: Path) -> ReleaseReadinessCheck:
     report = build_theorem_traceability_report(root)
     failed = tuple(trace.property_id for trace in report.traces if not trace.passed)
+    gate = derive_theorem_release_blockers(root)
+    blocked = tuple(blocker.property_id for blocker in gate.blockers)
     return _check(
         "theorem-traceability",
-        report.passed,
+        report.passed and gate.release_allowed,
         "each core proof claim maps to executable specs, property tests, corpus fixtures, and release gates",
-        "theorem-to-test traceability has missing or stale evidence",
+        "theorem-to-test traceability has missing or stale evidence, or a required theorem blocks the release",
         (
             ("theorem_count", report.theorem_count),
             ("failed", list(failed)),
+            ("required_theorems", list(gate.required_theorems)),
+            ("release_blockers", list(blocked)),
         ),
     )
 

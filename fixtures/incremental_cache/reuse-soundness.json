@@ -1,0 +1,73 @@
+{
+  "description": "Real incremental-cache reuse scenario proving cache soundness: editing only the JSON Schema selects parser-compatibility and safely reuses the cached role-boundary diagnostics.",
+  "config": {
+    "name": "incremental-proof",
+    "checks": [
+      "parser-compatibility",
+      "role-boundary-nonforgeability"
+    ]
+  },
+  "changed_paths": [
+    "schema.json"
+  ],
+  "selected_checks": [
+    "parser-compatibility"
+  ],
+  "skipped_checks": [
+    "role-boundary-nonforgeability"
+  ],
+  "certificate": {
+    "check_name": "role-boundary-nonforgeability",
+    "dependency_kinds": [
+      "chat-template"
+    ],
+    "dependency_after": [],
+    "relevant_artifacts": [
+      [
+        "chat-template",
+        "template",
+        "template-v1"
+      ]
+    ],
+    "reusable": true
+  },
+  "soundness_checks": [
+    {
+      "name": "role-boundary-nonforgeability:check-is-requested",
+      "passed": true
+    },
+    {
+      "name": "role-boundary-nonforgeability:check-is-skipped",
+      "passed": true
+    },
+    {
+      "name": "role-boundary-nonforgeability:run-is-not-forced-full",
+      "passed": true
+    },
+    {
+      "name": "role-boundary-nonforgeability:dependency-metadata-known",
+      "passed": true
+    },
+    {
+      "name": "role-boundary-nonforgeability:changed-kinds-disjoint",
+      "passed": true
+    },
+    {
+      "name": "role-boundary-nonforgeability:no-remote-artifact-dependency",
+      "passed": true
+    },
+    {
+      "name": "role-boundary-nonforgeability:prerequisites-unchanged",
+      "passed": true
+    },
+    {
+      "name": "role-boundary-nonforgeability:dependents-unchanged",
+      "passed": true
+    },
+    {
+      "name": "role-boundary-nonforgeability:cache-key-matches-current-inputs",
+      "passed": true
+    }
+  ],
+  "outcome": "proven"
+}
