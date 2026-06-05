@@ -31,6 +31,11 @@ from .formal import (
     TransducerWitness,
     VariableDomain,
 )
+from .role_boundaries import (
+    RoleBoundaryForgeryFinding,
+    RoleBoundaryNonforgeabilityReport,
+)
+from .tokenizers import ByteLevelTokenizer, TokenizerAdapter
 
 
 @dataclass(frozen=True, slots=True)
@@ -229,6 +234,156 @@ def check_contract_result(problem: FiniteContractProblem, result: SolverResult) 
     return ExecutableSpecReport(tuple(checks))
 
 
+def check_role_boundary_forgery_report(
+    report: RoleBoundaryNonforgeabilityReport,
+    *,
+    tokenizer: TokenizerAdapter | None = None,
+) -> ExecutableSpecReport:
+    """Replay every reported role-boundary counterexample through reference predicates.
+
+    The analyzer records compact witnesses. This executable spec independently
+    re-substitutes each malicious input into the bounded role-region model and
+    re-encodes the rendered excerpt with the same deterministic tokenizer surface
+    (or a caller-provided real adapter) before trusting the diagnostic.
+    """
+
+    checks: list[SpecCheck] = [
+        SpecCheck("role-boundary-model-supported", report.model.supported, f"paths={len(report.model.paths)}"),
+    ]
+    for index, finding in enumerate(report.findings):
+        finding_report = check_role_boundary_forgery_finding(report, finding, tokenizer=tokenizer)
+        checks.extend(
+            SpecCheck(
+                f"finding-{index}:{check.name}",
+                check.passed,
+                check.detail,
+            )
+            for check in finding_report.checks
+        )
+    return ExecutableSpecReport(tuple(checks))
+
+
+def check_role_boundary_forgery_finding(
+    report: RoleBoundaryNonforgeabilityReport,
+    finding: RoleBoundaryForgeryFinding,
+    *,
+    tokenizer: TokenizerAdapter | None = None,
+) -> ExecutableSpecReport:
+    """Replay one role-boundary counterexample against the model and tokenizer."""
+
+    checks: list[SpecCheck] = []
+    path = next((item for item in report.model.paths if item.path_index == finding.path_index), None)
+    checks.append(SpecCheck("path-exists", path is not None, f"path_index={finding.path_index}"))
+    if path is None:
+        return ExecutableSpecReport(tuple(checks))
+
+    region = next((item for item in path.regions if item.region_index == finding.region_index), None)
+    checks.append(SpecCheck("region-exists", region is not None, f"region_index={finding.region_index}"))
+    if region is None:
+        return ExecutableSpecReport(tuple(checks))
+
+    expression_start = path.rendered_pattern.find(finding.input_expression)
+    checks.append(
+        SpecCheck(
+            "input-expression-in-pattern",
+            expression_start >= 0,
+            f"expression={finding.input_expression!r}",
+        )
+    )
+    checks.append(
+        SpecCheck(
+            "input-expression-in-region",
+            region.start_offset <= expression_start < region.end_offset,
+            f"expression_start={expression_start} region={region.start_offset}:{region.end_offset}",
+        )
+    )
+    checks.append(
+        SpecCheck(
+            "role-region-snapshot-matches-model",
+            finding.role_region == region.to_dict(),
+            f"finding={finding.role_region!r} model={region.to_dict()!r}",
+        )
+    )
+    if expression_start < 0:
+        return ExecutableSpecReport(tuple(checks))
+
+    rendered = path.rendered_pattern.replace(finding.input_expression, finding.malicious_input, 1)
+    marker_relative_start = finding.malicious_input.find(finding.marker)
+    expected_marker_start = expression_start + marker_relative_start if marker_relative_start >= 0 else -1
+    expected_marker_end = expected_marker_start + len(finding.marker) if expected_marker_start >= 0 else -1
+    checks.append(
+        SpecCheck(
+            "malicious-input-contains-marker",
+            marker_relative_start >= 0,
+            f"malicious_input={finding.malicious_input!r} marker={finding.marker!r}",
+        )
+    )
+    checks.append(
+        SpecCheck(
+            "marker-offsets-replay",
+            (finding.marker_start_offset, finding.marker_end_offset) == (expected_marker_start, expected_marker_end),
+            f"expected={expected_marker_start}:{expected_marker_end} actual={finding.marker_start_offset}:{finding.marker_end_offset}",
+        )
+    )
+    checks.append(
+        SpecCheck(
+            "rendered-marker-at-offset",
+            rendered[finding.marker_start_offset : finding.marker_end_offset] == finding.marker,
+            f"slice={rendered[finding.marker_start_offset:finding.marker_end_offset]!r}",
+        )
+    )
+
+    expected_excerpt = _reference_rendered_excerpt(
+        rendered,
+        finding.marker_start_offset,
+        finding.marker_end_offset,
+    )
+    checks.append(
+        SpecCheck(
+            "rendered-excerpt-replay",
+            finding.rendered_excerpt == expected_excerpt,
+            f"expected={expected_excerpt!r} actual={finding.rendered_excerpt!r}",
+        )
+    )
+    checks.append(
+        SpecCheck(
+            "forged-boundary-describes-offset",
+            f"{finding.marker_start_offset}:{finding.marker_end_offset}" in finding.forged_boundary,
+            finding.forged_boundary,
+        )
+    )
+
+    replay_tokenizer = tokenizer or ByteLevelTokenizer(
+        added_tokens=(finding.marker,),
+        special_tokens={finding.marker: 256},
+    )
+    encoded = replay_tokenizer.encode(finding.rendered_excerpt)
+    marker_tokens = tuple(token for token in encoded.tokens if token.text == finding.marker)
+    checks.append(
+        SpecCheck(
+            "token-ids-replay",
+            encoded.token_ids == finding.token_ids,
+            f"expected={encoded.token_ids} actual={finding.token_ids}",
+        )
+    )
+    checks.append(
+        SpecCheck(
+            "tokenizer-sees-marker",
+            bool(marker_tokens),
+            f"marker={finding.marker!r} tokens={[token.to_dict() for token in encoded.tokens]}",
+        )
+    )
+    if tokenizer is None:
+        checks.append(
+            SpecCheck(
+                "byte-level-marker-is-added-special",
+                any(token.added and token.special for token in marker_tokens),
+                f"marker_tokens={[token.to_dict() for token in marker_tokens]}",
+            )
+        )
+    return ExecutableSpecReport(tuple(checks))
+
+
 def assert_spec_report(report: ExecutableSpecReport) -> None:
     """Raise AssertionError with compact details if an executable spec fails."""
 
@@ -236,6 +391,16 @@ def assert_spec_report(report: ExecutableSpecReport) -> None:
         return
     details = "; ".join(f"{check.name}: {check.detail}" for check in report.failures)
     raise AssertionError(details)
+
+
+def _reference_rendered_excerpt(rendered: str, marker_start: int, marker_end: int) -> str:
+    if marker_start < 0:
+        return rendered[:160]
+    start = max(0, marker_start - 60)
+    end = min(len(rendered), marker_end + 60)
+    prefix = "..." if start > 0 else ""
+    suffix = "..." if end < len(rendered) else ""
+    return prefix + rendered[start:end] + suffix
 
 
 def _bounded_words(alphabet: Sequence[str], max_depth: int) -> Iterable[tuple[str, ...]]:

@@ -139,9 +139,9 @@ capabilities, config validity, artifact path health, and aggregated setup
 problems before CI or local verification,
 lightweight proof-sketch certificates for role-boundary non-forgeability, stop
 overreachability, tokenizer/grammar emptiness, must-survive budgets, and finite
-SMT contracts, with executable checks that replay real witnesses where the
-necessary transition relation or solver proof object is present and explicitly
-downgrade to sketches or abstentions where it is not,
+SMT contracts, with executable checks that replay reported counterexamples
+through the same bounded abstraction and real tokenizer adapters when available,
+while downgrading to sketches or abstentions when no replayable object exists,
 rich diagnostic witness records that carry the human trace plus machine-readable
 rendered strings, exact token IDs, role-region offsets, parser states, solver
 assignments, truncation decisions, and ranked minimal fixes, so a CI failure can
@@ -488,7 +488,9 @@ derives sanitizer-aware role-boundary regions over bounded rendered prompt patte
 emits minimized role-forgery witnesses with attacker input, rendered excerpt,
 token evidence centered on the forged marker, exact boundary offsets, and explicit sanitizer metadata,
 extracts automata, transducer, and solver witnesses for finite formal contracts
-and independently checks those witnesses with executable specifications,
+and independently checks those witnesses with executable specifications, including
+role-boundary counterexamples re-substituted into bounded renders and re-tokenized
+against real adapter behavior,
 tracks check dependencies over artifact kinds, reuses cached tokenizer adapters,
 tokenizer/grammar analysis reports, budget reports, and finite static-contract
 query results keyed by normalized formulas plus artifact/fragment/solver

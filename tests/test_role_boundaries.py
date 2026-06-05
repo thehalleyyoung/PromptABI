@@ -14,6 +14,11 @@ from promptabi import (
 )
 from promptabi.render import render_json, render_text
 from promptabi.session import VerificationSession
+from promptabi.specs import (
+    assert_spec_report,
+    check_role_boundary_forgery_finding,
+    check_role_boundary_forgery_report,
+)
 
 
 ROLE_BOUNDARY_REGRESSION_CASES = (
@@ -291,6 +296,63 @@ def test_role_boundary_nonforgeability_flags_raw_role_and_content_controls() -> 
     assert content_forgery.token_ids
     assert 256 in content_forgery.token_ids
     assert content_forgery.role_region["role"] == "{messages[0].role}"
+    assert_spec_report(check_role_boundary_forgery_finding(report, content_forgery))
+
+
+def test_role_boundary_counterexample_replay_validates_all_reported_findings() -> None:
+    bounds = ChatTemplateSymbolicBounds(max_messages=1, max_tools=0, max_loop_iterations=1, max_paths=32)
+
+    for case_name, config, _expected_witnesses in ROLE_BOUNDARY_REGRESSION_CASES:
+        parsed = parse_hf_chat_template_config(config)
+        report = analyze_role_boundary_nonforgeability(parsed, bounds=bounds)
+
+        assert report.findings, case_name
+        assert_spec_report(check_role_boundary_forgery_report(report))
+
+
+def test_role_boundary_counterexample_replay_rejects_stale_token_witness() -> None:
+    parsed = parse_hf_chat_template_config(
+        {
+            "chat_template": (
+                "{% for message in messages %}"
+                "<|im_start|>{{ message['role'] }}\n"
+                "{{ message['content'] }}<|im_end|>\n"
+                "{% endfor %}"
+            ),
+            "additional_special_tokens": ["<|im_start|>", "<|im_end|>"],
+        }
+    )
+    report = analyze_role_boundary_nonforgeability(
+        parsed,
+        bounds=ChatTemplateSymbolicBounds(max_messages=1, max_tools=0, max_loop_iterations=1, max_paths=16),
+    )
+    finding = next(
+        item
+        for item in report.findings
+        if item.input_expression == "{messages[0].content}" and item.marker == "<|im_start|>"
+    )
+    stale = type(finding)(
+        path_index=finding.path_index,
+        region_index=finding.region_index,
+        input_expression=finding.input_expression,
+        input_role=finding.input_role,
+        marker=finding.marker,
+        marker_kind=finding.marker_kind,
+        malicious_input=finding.malicious_input,
+        rendered_excerpt=finding.rendered_excerpt,
+        tokenized_representation=finding.tokenized_representation,
+        forged_boundary=finding.forged_boundary,
+        marker_start_offset=finding.marker_start_offset,
+        marker_end_offset=finding.marker_end_offset,
+        boundary_description=finding.boundary_description,
+        token_ids=finding.token_ids + (999,),
+        role_region=finding.role_region,
+    )
+
+    replay = check_role_boundary_forgery_finding(report, stale)
+
+    assert not replay.passed
+    assert "token-ids-replay" in {failure.name for failure in replay.failures}
 
 
 def test_role_boundary_diagnostic_emits_rich_witness_formats() -> None:
