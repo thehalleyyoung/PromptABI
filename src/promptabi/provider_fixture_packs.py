@@ -338,6 +338,12 @@ def _reject_secret_like_values(dirname: str, value: object, path: str = "$") -> 
                 )
 
 
+def reject_secret_like_values(dirname: str, value: object, path: str = "$") -> None:
+    """Reject secret-shaped provider fixture content using the shared fixture scanner."""
+
+    _reject_secret_like_values(dirname, value, path)
+
+
 def _read_json_object(path: Path) -> dict[str, object]:
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))

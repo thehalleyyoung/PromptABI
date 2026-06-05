@@ -14,6 +14,7 @@ from .budgets import TokenBudgetFinding, TokenBudgetReport, analyze_token_budget
 from .chat_templates import ChatTemplateParseError, parse_hf_tokenizer_config_chat_template
 from .config import VerificationConfig, load_config
 from .diagnostics import CheckMode, Diagnostic, DiagnosticSeverity, SourceSpan, WitnessStep, WitnessTrace, diagnostic_sort_key
+from .enterprise import enterprise_readiness_diagnostics
 from .formal import SolverStatus
 from .grammar_emptiness import (
     GrammarTokenizerEmptinessReport,
@@ -84,6 +85,15 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "artifact-provenance-untrusted-source": (CheckMode.SOUND, CheckMode.COMPLETE),
     "artifact-provenance-nonreproducible-remote": (CheckMode.SOUND, CheckMode.COMPLETE),
     "artifact-provenance-verified": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "enterprise-internal-fixture-unsafe": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "enterprise-local-resource-hash-abstained": (CheckMode.ABSTAINING, CheckMode.COMPLETE),
+    "enterprise-local-resource-hash-mismatch": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "enterprise-local-resource-missing": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "enterprise-no-network-violation": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "enterprise-private-index-untrusted": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "enterprise-readiness-verified": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "enterprise-solver-sandbox-incomplete": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "enterprise-solver-sandbox-unsafe": (CheckMode.SOUND, CheckMode.COMPLETE),
     "lockfile-artifact-added": LOCKFILE_CHECK_MODES,
     "lockfile-artifact-drift": LOCKFILE_CHECK_MODES,
     "lockfile-artifact-missing": LOCKFILE_CHECK_MODES,
@@ -258,6 +268,7 @@ class ScheduledCheck:
 CHECK_DEPENDENCIES: dict[str, CheckDependency] = {
     "repository-skeleton": CheckDependency(artifact_kinds=tuple(ArtifactKind), resources=("repository-summary",)),
     "artifact-provenance": CheckDependency(artifact_kinds=tuple(ArtifactKind)),
+    "enterprise-readiness": CheckDependency(resources=("enterprise-config",)),
     "role-boundary-nonforgeability": CheckDependency(artifact_kinds=(ArtifactKind.CHAT_TEMPLATE,)),
     "stop-differential": CheckDependency(
         artifact_kinds=(ArtifactKind.STOP_POLICY, ArtifactKind.PROVIDER_CONFIG),
@@ -484,6 +495,7 @@ class VerificationSession:
         self.checks: dict[str, CheckCallable] = {
             "repository-skeleton": self._repository_skeleton_check,
             "artifact-provenance": self._artifact_provenance_check,
+            "enterprise-readiness": self._enterprise_readiness_check,
             "role-boundary-nonforgeability": self._role_boundary_nonforgeability_check,
             "stop-differential": self._stop_differential_check,
             "stop-overreachability": self._stop_overreachability_check,
@@ -676,6 +688,25 @@ class VerificationSession:
                 )
             )
         return tuple(diagnostics)
+
+    def _enterprise_readiness_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        artifact_locations = tuple(
+            location
+            for loaded in context.loaded_artifacts
+            if (location := loaded.artifact.location.ref_path) is not None
+        )
+        artifact_locations = (
+            *artifact_locations,
+            *(
+                location
+                for artifact in context.config.artifact_bundle
+                if (location := artifact.location.ref_path) is not None
+            ),
+        )
+        return enterprise_readiness_diagnostics(
+            context.config.enterprise,
+            artifact_locations=tuple(sorted(set(artifact_locations))),
+        )
 
     def _role_boundary_nonforgeability_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
         diagnostics: list[Diagnostic] = []

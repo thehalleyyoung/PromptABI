@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -87,6 +87,7 @@ class VerificationPolicy:
     require_justification: bool = True
     require_expiration: bool = True
     require_owner: bool = False
+    severity_overrides: tuple[tuple[str, DiagnosticSeverity], ...] = ()
     source_paths: tuple[str, ...] = ()
 
     @property
@@ -97,6 +98,7 @@ class VerificationPolicy:
             or not self.require_justification
             or not self.require_expiration
             or self.require_owner
+            or self.severity_overrides
             or self.source_paths
         )
 
@@ -107,6 +109,10 @@ class VerificationPolicy:
             "require_owner": self.require_owner,
             "suppressions": [suppression.to_dict() for suppression in self.suppressions],
         }
+        if self.severity_overrides:
+            data["severity_overrides"] = {
+                rule_id: severity.value for rule_id, severity in self.severity_overrides
+            }
         if self.severity_threshold is not None:
             data["severity_threshold"] = self.severity_threshold.value
         if self.source_paths:
@@ -202,11 +208,13 @@ def policy_from_mapping(
         require_justification = _optional_bool(data.get("require_justification"), default=True, field_name="require_justification")
         require_expiration = _optional_bool(data.get("require_expiration"), default=True, field_name="require_expiration")
         require_owner = _optional_bool(data.get("require_owner"), default=False, field_name="require_owner")
+        severity_overrides = _severity_overrides(data.get("severity_overrides", {}))
     else:
         severity_threshold = None
         require_justification = True
         require_expiration = True
         require_owner = False
+        severity_overrides = ()
 
     raw_suppressions = data.get("suppressions", [])
     if not isinstance(raw_suppressions, list):
@@ -225,6 +233,7 @@ def policy_from_mapping(
         require_justification=require_justification,
         require_expiration=require_expiration,
         require_owner=require_owner,
+        severity_overrides=severity_overrides,
         source_paths=(source_path,),
     )
 
@@ -241,6 +250,7 @@ def merge_policies(*policies: VerificationPolicy) -> VerificationPolicy:
         require_justification=policies[-1].require_justification,
         require_expiration=policies[-1].require_expiration,
         require_owner=policies[-1].require_owner,
+        severity_overrides=_merged_severity_overrides(policies),
         source_paths=tuple(path for policy in policies for path in policy.source_paths),
     )
 
@@ -256,6 +266,7 @@ def apply_policy_diagnostics(
     if not policy.active:
         return diagnostics
     today = today or date.today()
+    diagnostics = _apply_severity_overrides(diagnostics, policy.severity_overrides)
     invalid_suppression_diagnostics = tuple(_invalid_suppression_diagnostics(policy, today=today))
     remaining: list[Diagnostic] = []
     policy_diagnostics: list[Diagnostic] = list(invalid_suppression_diagnostics)
@@ -409,6 +420,47 @@ def _threshold_diagnostics(diagnostics: tuple[Diagnostic, ...], threshold: Diagn
     )
 
 
+def _apply_severity_overrides(
+    diagnostics: tuple[Diagnostic, ...],
+    overrides: tuple[tuple[str, DiagnosticSeverity], ...],
+) -> tuple[Diagnostic, ...]:
+    if not overrides:
+        return diagnostics
+    override_map = dict(overrides)
+    return tuple(
+        replace(
+            diagnostic,
+            severity=override_map[diagnostic.rule_id],
+            properties=(
+                *diagnostic.properties,
+                ("original_severity", diagnostic.severity.value),
+                ("severity_override", override_map[diagnostic.rule_id].value),
+            ),
+        )
+        if diagnostic.rule_id in override_map and diagnostic.severity is not override_map[diagnostic.rule_id]
+        else diagnostic
+        for diagnostic in diagnostics
+    )
+
+
+def _merged_severity_overrides(policies: tuple[VerificationPolicy, ...]) -> tuple[tuple[str, DiagnosticSeverity], ...]:
+    merged: dict[str, DiagnosticSeverity] = {}
+    for policy in policies:
+        merged.update(policy.severity_overrides)
+    return tuple(sorted(merged.items()))
+
+
+def _severity_overrides(value: Any) -> tuple[tuple[str, DiagnosticSeverity], ...]:
+    if not isinstance(value, dict):
+        raise PolicyError("policy field 'severity_overrides' must be an object")
+    overrides: dict[str, DiagnosticSeverity] = {}
+    for rule_id, severity in value.items():
+        if not isinstance(rule_id, str) or not rule_id.strip():
+            raise PolicyError("policy severity_overrides keys must be non-empty rule ids")
+        overrides[rule_id.strip()] = _required_severity(severity, field_name=f"severity_overrides.{rule_id}")
+    return tuple(sorted(overrides.items()))
+
+
 def _required_string(data: dict[str, Any], field_name: str) -> str:
     value = data.get(field_name)
     if not isinstance(value, str) or not value.strip():
@@ -450,6 +502,13 @@ def _optional_severity(value: Any) -> DiagnosticSeverity | None:
     except ValueError as exc:
         choices = ", ".join(severity.value for severity in DiagnosticSeverity)
         raise PolicyError(f"policy field 'severity_threshold' must be one of: {choices}") from exc
+
+
+def _required_severity(value: Any, *, field_name: str) -> DiagnosticSeverity:
+    severity = _optional_severity(value)
+    if severity is None:
+        raise PolicyError(f"policy field '{field_name}' must be a string")
+    return severity
 
 
 def _optional_date(value: Any) -> date | None:

@@ -56,6 +56,7 @@ The same local verifier covers:
 | **Tools + providers** | OpenAI, Anthropic, MCP, LangChain, Pydantic, TypeScript-style, vLLM, llama.cpp, LiteLLM, Gemini, Bedrock, Groq, Together, and Ollama serialization drift |
 | **Budgets + RAG** | must-survive prompt segments, dropped citations, metadata inflation, tokenizer mismatch, framework truncation, and context-window overflow |
 | **Provenance** | artifact hashes, licenses, trusted sources, reproducible HF revisions, lockfile drift, and offline fixture integrity |
+| **Enterprise posture** | strict no-network configs, offline mirrors, private indexes, internal fixtures, policy packs, severity overrides, and solver sandbox declarations |
 | **Training/eval contracts** | target-role alignment, tokenizer/template drift, supervised-region checks, and fixture-backed real-bug benchmarks |
 
 Under the hood, PromptABI combines deterministic finite automata,

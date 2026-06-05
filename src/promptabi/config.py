@@ -15,7 +15,8 @@ from .artifacts import (
     local_artifact_paths,
 )
 from .diagnostics import SourceSpan
-from .policies import PolicyError, VerificationPolicy, empty_policy, policy_from_config_mapping
+from .enterprise import EnterpriseConfigError, EnterpriseSettings, empty_enterprise_settings, enterprise_from_config_mapping
+from .policies import PolicyError, VerificationPolicy, empty_policy, load_policy_file, merge_policies, policy_from_config_mapping
 from .source import JsonSourceMap, build_json_source_map
 
 
@@ -33,6 +34,7 @@ class VerificationConfig:
     checks: tuple[str, ...] = ("repository-skeleton",)
     max_context_tokens: int | None = None
     policy: VerificationPolicy = field(default_factory=empty_policy)
+    enterprise: EnterpriseSettings = field(default_factory=empty_enterprise_settings)
 
     @classmethod
     def from_mapping(
@@ -79,7 +81,17 @@ class VerificationConfig:
             raise ConfigError("config field 'max_context_tokens' must be a positive integer")
 
         try:
+            enterprise = enterprise_from_config_mapping(data, base_dir=base_dir)
+        except EnterpriseConfigError as exc:
+            raise ConfigError(str(exc)) from exc
+
+        try:
             policy = policy_from_config_mapping(data, base_dir=base_dir, source_map=source_map)
+            if enterprise.policy_packs:
+                policy = merge_policies(
+                    policy,
+                    *(load_policy_file(pack.path) for pack in enterprise.policy_packs),
+                )
         except PolicyError as exc:
             raise ConfigError(str(exc)) from exc
 
@@ -90,6 +102,7 @@ class VerificationConfig:
             checks=checks,
             max_context_tokens=raw_max_context,
             policy=policy,
+            enterprise=enterprise,
         )
 
     def to_dict(self) -> dict[str, object]:
@@ -102,6 +115,8 @@ class VerificationConfig:
         }
         if self.policy.active:
             data["policy"] = self.policy.to_dict()
+        if self.enterprise.active:
+            data["enterprise"] = self.enterprise.to_dict()
         return data
 
     def with_artifact_overrides(self, overrides: dict[str, str], *, base_dir: Path) -> "VerificationConfig":
@@ -125,6 +140,7 @@ class VerificationConfig:
             checks=self.checks,
             max_context_tokens=self.max_context_tokens,
             policy=self.policy,
+            enterprise=self.enterprise,
         )
 
 

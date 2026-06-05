@@ -23,6 +23,17 @@ CHECK_RULE_IDS: dict[str, tuple[str, ...]] = {
         "artifact-provenance-untrusted-source",
         "artifact-provenance-verified",
     ),
+    "enterprise-readiness": (
+        "enterprise-internal-fixture-unsafe",
+        "enterprise-local-resource-hash-abstained",
+        "enterprise-local-resource-hash-mismatch",
+        "enterprise-local-resource-missing",
+        "enterprise-no-network-violation",
+        "enterprise-private-index-untrusted",
+        "enterprise-readiness-verified",
+        "enterprise-solver-sandbox-incomplete",
+        "enterprise-solver-sandbox-unsafe",
+    ),
     "role-boundary-nonforgeability": ("role-boundary-abstained", "role-boundary-nonforgeability"),
     "stop-differential": (
         "stop-differential-abstained",
@@ -273,6 +284,7 @@ def _surface_catalog() -> tuple[CompatibilitySurface, ...]:
             *_provider_surfaces(),
             *_framework_surfaces(),
             *_training_surfaces(),
+            *_enterprise_surfaces(),
         )
     }
     for spec in FIRST_PARTY_PLUGIN_SPECS:
@@ -283,6 +295,14 @@ def _surface_catalog() -> tuple[CompatibilitySurface, ...]:
 
 def _surfaces_for_check(check_name: str, artifact_kinds: tuple[ArtifactKind, ...]) -> tuple[CompatibilitySurface, ...]:
     explicit: dict[str, tuple[CompatibilitySurface, ...]] = {
+        "enterprise-readiness": (
+            _surface("enterprise", "offline-mirrors", None, "covered", "local mirror paths and optional manifest/file digests"),
+            _surface("enterprise", "private-artifact-indexes", None, "covered", "local private indexes with trusted-source allowlists"),
+            _surface("enterprise", "internal-provider-fixtures", ArtifactKind.PROVIDER_CONFIG, "covered", "redacted local fixture JSON checked with the shared secret scanner"),
+            _surface("enterprise", "policy-packs", None, "covered", "JSON policy packs merged into existing severity/suppression policy"),
+            _surface("enterprise", "strict-no-network", None, "covered", "remote artifact locations are rejected when enabled"),
+            _surface("solver", "sandbox-declaration", None, "covered", "timeout, memory, and network posture are checked declaratively"),
+        ),
         "role-boundary-nonforgeability": _template_surfaces(),
         "stop-differential": _provider_surfaces(),
         "stop-overreachability": (*_grammar_surfaces(), *_provider_surfaces()),
@@ -343,6 +363,7 @@ def _surfaces_from_plugin_spec(spec) -> tuple[CompatibilitySurface, ...]:
 
 def _notes_for_check(check_name: str) -> str:
     return {
+        "enterprise-readiness": "declarative enterprise posture check for offline mirrors, private indexes, internal fixtures, policy packs, severity overrides, solver limits, and strict no-network operation",
         "static-contracts": "includes finite SMT obligations for supervised target/message role alignment; richer packed/preference/loss-mask training artifacts remain future surfaces",
         "tokenizer-config-drift": "alias retained for configs that select tokenizer drift under the older check name",
         "tokenizer-drift": "alias of tokenizer-config-drift for user-facing compatibility",
@@ -425,6 +446,17 @@ def _training_surfaces() -> tuple[CompatibilitySurface, ...]:
         _surface("training", "loss-masks", ArtifactKind.TRAINING_MANIFEST, "planned-abstaining", "dedicated loss-mask region proofs are not implemented yet"),
         _surface("training", "packed-datasets", ArtifactKind.TRAINING_MANIFEST, "planned-abstaining", "dataset packing boundary proofs are not implemented yet"),
         _surface("training", "preference-pairs", ArtifactKind.TRAINING_MANIFEST, "planned-abstaining", "preference-pair prefix equivalence is not implemented yet"),
+    )
+
+
+def _enterprise_surfaces() -> tuple[CompatibilitySurface, ...]:
+    return (
+        _surface("enterprise", "offline-mirrors", None, "covered", "local mirror paths and optional manifest/file digests"),
+        _surface("enterprise", "private-artifact-indexes", None, "covered", "local private indexes with trusted-source allowlists"),
+        _surface("enterprise", "internal-provider-fixtures", ArtifactKind.PROVIDER_CONFIG, "covered", "redacted local fixture JSON"),
+        _surface("enterprise", "policy-packs", None, "covered", "JSON policy packs and severity customization"),
+        _surface("enterprise", "strict-no-network", None, "covered", "remote runtime artifact locations rejected when enabled"),
+        _surface("solver", "sandbox-declaration", None, "covered", "declarative solver timeout, memory, and network posture"),
     )
 
 

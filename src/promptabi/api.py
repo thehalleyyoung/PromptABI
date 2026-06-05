@@ -20,6 +20,12 @@ from .corpus_verification import (
     run_corpus_verification,
 )
 from .diagnostics import Diagnostic
+from .enterprise import (
+    EnterpriseSettings,
+    enterprise_readiness_diagnostics,
+    render_enterprise_readiness_json,
+    render_enterprise_readiness_text,
+)
 from .editor_protocol import (
     EditorDiagnosticReport,
     build_editor_diagnostic_report,
@@ -151,6 +157,21 @@ def collect_diagnostics(
         plugin_registry=plugin_registry,
     )
     return session.collect_diagnostics(checks=selected_checks)
+
+
+def enterprise_readiness(config: str | Path | VerificationConfig) -> tuple[Diagnostic, ...]:
+    """Run the declarative enterprise readiness check for a config."""
+
+    resolved_config = _resolve_config(config)
+    artifact_locations = tuple(
+        location
+        for artifact in resolved_config.artifact_bundle
+        if (location := artifact.location.ref_path) is not None
+    )
+    return enterprise_readiness_diagnostics(
+        resolved_config.enterprise,
+        artifact_locations=tuple(sorted(set(artifact_locations))),
+    )
 
 
 def run_verification(

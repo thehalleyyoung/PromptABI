@@ -215,7 +215,13 @@ reserves, generation-prompt tokens, and model-specific special-token overhead in
 bounded survival proofs, compact text/JSON/SARIF budget visualizations, and
 web-free static HTML reports with prompt, witness, chart, diff, and corpus
 sections against real framework truncation policies, including minimized
-counterexamples when required regions can be dropped, a dedicated RAG
+counterexamples when required regions can be dropped, an enterprise-readiness
+surface that checks strict no-network declarations, offline mirror paths and
+digests, private artifact indexes, internal provider fixtures through the shared
+secret scanner, policy packs merged into the existing severity/suppression
+pipeline, severity overrides that run before threshold gating, and declarative
+solver timeout/memory/network sandbox posture without pretending to enforce an
+OS sandbox from inside the process, a dedicated RAG
 chunking compatibility check that verifies tokenizer identity, chunk-boundary
 stability, citation survival, overlap accounting, metadata inflation,
 prompt-template overhead, and retrieval payload limits against the same packed
@@ -406,6 +412,14 @@ deterministic verification lockfiles that fail closed on artifact, config,
 provider-fixture, library-version, supported-fragment, or diagnostic-baseline
 drift, and adds an opt-in artifact-provenance check for hash, license,
 trusted-source, and reproducible-download supply-chain gates,
+adds enterprise-ready offline controls: local mirror manifests can be pinned by
+sha256, private indexes must be local and source-allowlisted, internal provider
+fixtures are parsed with the same redaction scanner used by first-party fixture
+packs, policy packs merge into the existing accepted-risk and severity-threshold
+pipeline, rule-level severity overrides are applied before CI gating, remote
+artifact locations are rejected under strict no-network mode, and solver sandbox
+settings are reported honestly as declarative timeout, memory, and network
+posture rather than as unproven runtime isolation,
 ships cross-version CI over supported Python releases, operating systems,
 optional tokenizer/grammar/Z3 dependency slices, and pinned backend versions,
 plus a repository-local GitHub Action that composes cache restoration,
