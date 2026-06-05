@@ -12,6 +12,7 @@ from enum import StrEnum
 from typing import Any
 
 from .diagnostics import ArtifactRef, Diagnostic, DiagnosticSeverity
+from .fix_suggestions import RankedFixSuggestion, rank_fix_suggestions
 
 
 class DiagnosticClusterStrategy(StrEnum):
@@ -62,6 +63,7 @@ class DiagnosticCluster:
     rules: tuple[str, ...] = ()
     artifacts: tuple[str, ...] = ()
     suggestions: tuple[str, ...] = ()
+    ranked_suggestions: tuple[RankedFixSuggestion, ...] = ()
     evidence: tuple[str, ...] = ()
     root_cause: str | None = None
     artifact_edge: str | None = None
@@ -83,6 +85,7 @@ class DiagnosticCluster:
             "rules": list(self.rules),
             "artifacts": list(self.artifacts),
             "suggestions": list(self.suggestions),
+            "ranked_suggestions": [suggestion.to_dict() for suggestion in self.ranked_suggestions],
             "evidence": list(self.evidence),
             "members": [member.to_dict() for member in self.members],
         }
@@ -206,8 +209,14 @@ def render_diagnostic_clusters_text(report: DiagnosticClusterReport) -> str:
             lines.append(f"  artifacts: {', '.join(cluster.artifacts)}")
         for item in cluster.evidence:
             lines.append(f"  evidence: {item}")
-        for suggestion in cluster.suggestions[:3]:
-            lines.append(f"  suggestion: {suggestion}")
+        for suggestion in cluster.ranked_suggestions[:3]:
+            lines.append(f"  suggestion[{suggestion.rank}]: {suggestion.text}")
+            lines.append(
+                "    rank: "
+                f"score={suggestion.score}, safety={suggestion.safety.value}, "
+                f"compatibility={suggestion.compatibility.value}, blast_radius={suggestion.blast_radius.value}, "
+                f"user_visible_prompt_change={str(suggestion.changes_user_visible_prompt_behavior).lower()}"
+            )
         for member in cluster.members:
             lines.append(f"    - {member.severity.value.upper()} {member.rule_id} {member.fingerprint}: {member.message}")
     return "\n".join(lines) + "\n"
@@ -223,9 +232,8 @@ def _build_cluster(
     worst_severity = min((diagnostic.severity for diagnostic in diagnostics), key=lambda severity: severity.rank)
     rules = tuple(sorted({diagnostic.rule_id for diagnostic in diagnostics}))
     artifacts = tuple(sorted(_artifact_label(diagnostic.artifact) for diagnostic in diagnostics if diagnostic.artifact is not None))
-    suggestions = tuple(
-        sorted({suggestion for diagnostic in diagnostics for suggestion in diagnostic.suggestions})
-    )
+    ranked_suggestions = rank_fix_suggestions(diagnostics)
+    suggestions = tuple(suggestion.text for suggestion in ranked_suggestions)
     cluster_id = _stable_digest(
         {
             "key": key,
@@ -251,6 +259,7 @@ def _build_cluster(
         rules=rules,
         artifacts=artifacts,
         suggestions=suggestions,
+        ranked_suggestions=ranked_suggestions,
         evidence=evidence,
         **kwargs,
     )

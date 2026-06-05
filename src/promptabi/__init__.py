@@ -205,6 +205,14 @@ from .counterexamples import (
     shrink_finite_contract_counterexample,
     shrink_transducer_counterexample,
 )
+from .fix_suggestions import (
+    FixBlastRadius,
+    FixCompatibility,
+    FixSafety,
+    RankedFixSuggestion,
+    ordered_suggestion_texts,
+    rank_fix_suggestions,
+)
 from .witness_privacy import WitnessPrivacyMode, apply_witness_privacy, private_witness
 from .compatibility_matrix import (
     CHECK_RULE_IDS,
@@ -875,6 +883,9 @@ __all__ = [
     "FailurePredicate",
     "FiniteContractProblem",
     "FiniteStateTransducer",
+    "FixBlastRadius",
+    "FixCompatibility",
+    "FixSafety",
     "FUZZING_MANIFEST_VERSION",
     "FIRST_PARTY_PLUGIN_NAME",
     "FIRST_PARTY_PLUGIN_SPECS",
@@ -999,6 +1010,7 @@ __all__ = [
     "ReleaseReadinessError",
     "ReleaseReadinessReport",
     "ReleaseReadinessStatus",
+    "RankedFixSuggestion",
     "RoleBoundaryModel",
     "RoleBoundaryForgeryFinding",
     "RoleBoundaryNonforgeabilityReport",
@@ -1172,6 +1184,7 @@ __all__ = [
     "ingest_json_schema_mapping",
     "normalize_candidate_versions",
     "normalize_json_schema_mapping",
+    "ordered_suggestion_texts",
     "analyze_prompt_pack_contracts",
     "analyze_role_boundary_nonforgeability",
     "analyze_grammar_differential_corpus",
@@ -1288,6 +1301,7 @@ __all__ = [
     "diagnostic_oracle",
     "compare_public_api_manifests",
     "deprecated_api",
+    "rank_fix_suggestions",
     "load_stop_trace_cases",
     "render_chat_template_supported_fragment",
     "run_tokenizer_differential",

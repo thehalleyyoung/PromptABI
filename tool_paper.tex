@@ -146,7 +146,9 @@ while downgrading to sketches or abstentions when no replayable object exists,
 deterministic diagnostic clustering that groups related findings by rule,
 declared root cause, artifact edge, provider behavior, or shared minimized
 witness digest while preserving unclustered-finding coverage counts for safe
-triage, rich diagnostic witness records that carry the human trace plus machine-readable
+triage, deterministic fix-suggestion ranking that orders candidate repairs by
+safety, downstream compatibility, blast radius, and whether they alter
+user-visible prompt behavior, rich diagnostic witness records that carry the human trace plus machine-readable
 rendered strings, exact token IDs, role-region offsets, parser states, solver
 assignments, truncation decisions, and ranked minimal fixes, so a CI failure can
 be replayed by tools, explored in a web-free static HTML report with role-region
@@ -839,7 +841,7 @@ contract:
 \item kind-specific fields capture stop strings, schema dialects, grammar types, tool names, prompt segment requirements, provider families, truncation strategies, and training dataset/mask/packing/template contracts;
 \item spans are one-based, validated at construction time, and source-mapped from PromptABI configs plus tokenizer, schema, tool, provider, and fixture JSON artifacts;
 \item witnesses are explicit traces, not prose hidden in the message string;
-\item diagnostics have rule IDs, severities, artifacts, spans, witnesses, suggestions, and explicit verification modes;
+\item diagnostics have rule IDs, severities, artifacts, spans, witnesses, suggestions, ranked fix metadata, and explicit verification modes;
 \item results serialize to deterministic dictionaries for JSON and snapshots.
 \end{itemize}
 
@@ -2306,8 +2308,8 @@ interface between application data structures, prompt rendering, tokenization,
 constrained output, provider protocols, truncation policies, and application
 parsing. The repository now combines a typed package, formal automata and SMT
 core, deterministic CLI and API surfaces, source-mapped diagnostics, minimized
-witnesses, real fixture corpora, precision/recall evaluation, CPU-only
-benchmarks, mutation-fuzzing experiments, a verified configuration gallery,
+witnesses, ranked fix triage, real fixture corpora, precision/recall evaluation,
+CPU-only benchmarks, mutation-fuzzing experiments, a verified configuration gallery,
 policy gates, GitHub integration, and
 a generated paper artifact with frozen hashes and regeneration commands.
 
