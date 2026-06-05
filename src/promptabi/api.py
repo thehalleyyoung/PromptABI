@@ -30,6 +30,7 @@ from .bug_reports import BugReport, generate_bug_report, render_bug_report
 from .explain import DiagnosticExplanation, explain_diagnostic, render_explanation_json, render_explanation_text
 from .loaders import ArtifactLoader, LoadedArtifact
 from .first_party_plugins import create_first_party_plugin_registry
+from .maintainer import MaintainerRefresh, refresh_maintainer_artifacts
 from .minimization import (
     FailurePredicate,
     MinimizationKind,
@@ -340,6 +341,23 @@ def create_reproducibility_package(
         output_dir,
         inputs=inputs,
         benchmark_iterations=benchmark_iterations,
+        force=force,
+    )
+
+
+def refresh_maintainer_tooling(
+    output_dir: str | Path,
+    *,
+    baseline_dir: str | Path | None = None,
+    repo_root: str | Path | None = None,
+    force: bool = False,
+) -> MaintainerRefresh:
+    """Regenerate maintainer manifests, expected diagnostics, diffs, and release notes."""
+
+    return refresh_maintainer_artifacts(
+        output_dir,
+        baseline_dir=baseline_dir,
+        repo_root=repo_root,
         force=force,
     )
 

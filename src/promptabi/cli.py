@@ -48,6 +48,7 @@ from .lockfiles import (
     lockfile_error_diagnostic,
     write_lockfile,
 )
+from .maintainer import MaintainerToolingError, refresh_maintainer_artifacts
 from .minimization import (
     MinimizationError,
     MinimizationOracle,
@@ -520,6 +521,34 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     usage_subparsers.add_parser("privacy", help="print local-summary privacy guarantees")
+
+    maintain = subparsers.add_parser("maintain", help="maintainer corpus, fixture, and release-note workflows")
+    maintain_subparsers = maintain.add_subparsers(dest="maintain_command", required=True)
+    maintain_refresh = maintain_subparsers.add_parser(
+        "refresh",
+        help=(
+            "regenerate model-artifact manifests, provider fixtures, expected diagnostics, "
+            "corpus diffs, and release notes"
+        ),
+    )
+    maintain_refresh.add_argument(
+        "--output-dir",
+        required=True,
+        help="directory to write maintainer refresh artifacts",
+    )
+    maintain_refresh.add_argument(
+        "--baseline",
+        help="previous maintainer refresh directory containing maintainer-snapshot.json",
+    )
+    maintain_refresh.add_argument(
+        "--repo-root",
+        help="repository root to refresh (default: installed PromptABI repository root)",
+    )
+    maintain_refresh.add_argument(
+        "--force",
+        action="store_true",
+        help="overwrite existing maintainer refresh files in the output directory",
+    )
 
     minimize = subparsers.add_parser(
         "minimize",
@@ -1083,6 +1112,35 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "usage" and args.usage_command == "privacy":
         print(render_usage_privacy_text(), end="")
         return 0
+
+    if args.command == "maintain" and args.maintain_command == "refresh":
+        try:
+            refresh = refresh_maintainer_artifacts(
+                args.output_dir,
+                baseline_dir=args.baseline,
+                repo_root=args.repo_root,
+                force=args.force,
+            )
+        except (
+            MaintainerToolingError,
+            CorpusVerificationError,
+            EvaluationError,
+            ProviderFixturePackError,
+            RealBugBenchmarkError,
+            SeedCorpusError,
+            StructuredSchemaCorpusError,
+            ConfigError,
+        ) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write maintainer refresh artifacts: {exc}", file=sys.stderr)
+            return 2
+        print(
+            "wrote maintainer refresh artifacts: "
+            f"{refresh.output_dir} ({len(refresh.written_files)} files, diff={refresh.diff['status']})"
+        )
+        return 0 if refresh.snapshot["corpus_verification"]["ok"] else 1  # type: ignore[index]
 
     if args.command == "minimize":
         try:

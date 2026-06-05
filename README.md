@@ -99,6 +99,7 @@ promptabi doctor --config examples/minimal/promptabi.json
 promptabi corpus verify --format text
 promptabi corpus evaluation --format text
 promptabi fuzz mutations --format text
+promptabi maintain refresh --output-dir maintainer_artifact --force
 promptabi paper reproducibility --output-dir paper_artifact --force
 
 # Local changed-artifact gate and local-only usage summaries; no telemetry.

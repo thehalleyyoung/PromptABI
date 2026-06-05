@@ -25,6 +25,7 @@ from .api import (
     render_evaluation_text,
     render_minimization,
     render_result,
+    refresh_maintainer_tooling,
     run_verification,
     verify_corpora,
 )
@@ -230,6 +231,16 @@ from .lockfiles import (
     load_lockfile,
     lockfile_to_json,
     write_lockfile,
+)
+from .maintainer import (
+    MAINTAINER_REFRESH_VERSION,
+    MAINTAINER_FILENAMES,
+    MaintainerRefresh,
+    MaintainerToolingError,
+    collect_expected_diagnostics,
+    diff_maintainer_snapshots,
+    refresh_maintainer_artifacts,
+    render_maintainer_release_notes,
 )
 from .minimization import (
     FailurePredicate,

@@ -100,6 +100,10 @@ sanitized markdown issue containing artifact versions and hashes, reproduction
 commands, expected and actual behavior, redacted length-limited witness traces,
 minimized input summaries when supplied, and privacy guarantees suitable for
 filing with tokenizer, template, framework, or provider maintainers,
+a maintainer refresh workflow that regenerates model-artifact manifests,
+structured-schema manifests, provider fixture pack manifests, real-bug benchmark
+manifests, portable expected-diagnostic baselines, corpus diffs, and release
+notes from real verification output,
 a \texttt{promptabi init} workflow that writes verifiable starter contracts and
 local fixture stubs for OpenAI tools, Hugging Face local models, vLLM
 OpenAI-compatible servers, llama.cpp, LangChain RAG, LlamaIndex agents, and
@@ -389,7 +393,9 @@ SMT, budget, corpus, and cache paths, mutates chat templates, tokenizers, stop
 policies, schemas, grammars, tools, truncation configs, and SMT encodings to
 discover newly introduced contract violations, and writes a paper reproducibility
 package with frozen fixture hashes, stable expected tables, solver-version pins,
-environment metadata, and one-command regeneration scripts.
+environment metadata, and one-command regeneration scripts, plus a maintainer
+artifact bundle with model/corpus/provider manifests, expected diagnostic
+baselines, corpus diffs, and generated release notes.
 
 The repository layout is designed to scale:
 
@@ -1065,14 +1071,19 @@ The corpus maintenance workflow now has the same integration discipline:
 \begin{verbatim}
 promptabi corpus manifest
 promptabi corpus manifest --output seed-corpus.manifest.json
+promptabi maintain refresh --output-dir maintainer_artifact --baseline previous_release
 \end{verbatim}
 
-This command validates the curated seed corpus without network calls, emits a
-stable manifest with per-entry metadata hashes, tokenizer-config hashes, fixture
+These commands validate the curated seed corpus without network calls, emit
+stable manifests with per-entry metadata hashes, tokenizer-config hashes, fixture
 hashes, expected behaviors, license notes, upstream references, pinned fixture
-revisions, and reproducibility notes, and fails deterministically if a required
-family or sentinel contract is missing. That turns the corpus from a collection
-of files into an auditable experimental input.
+revisions, and reproducibility notes, and fail deterministically if a required
+family or sentinel contract is missing. The maintainer refresh command extends
+that idea to the full release surface: it refreshes model-artifact manifests,
+structured-schema and provider-fixture manifests, the real-bug benchmark manifest,
+portable expected diagnostics with repository-relative spans, corpus diffs against
+a previous snapshot, and concise release notes. That turns the corpus from a
+collection of files into an auditable experimental input and release artifact.
 
 \clearpage
 \section{Role-Boundary Non-Forgeability}
@@ -1511,6 +1522,8 @@ Budget checks & Segment accounting, tokenizer-derived content counts, vLLM-style
 \hline
 Corpus verification & \texttt{promptabi corpus verify} release-gates the seed corpus, structured-schema corpus, provider fixture packs, real-bug benchmark, labeled evaluation, and optional runtime/Python-heap thresholds with explicit nonzero coverage checks. \\
 \hline
+Maintainer refresh & \texttt{promptabi maintain refresh} regenerates model/corpus/provider manifests, expected diagnostic baselines with portable fingerprints, corpus diffs, and release notes from real repository configs. \\
+\hline
 Cold/warm cache & Direct measurement of token-budget analysis before and after per-session cache reuse, including an explicit cache-reused metric. \\
 \hline
 Real-bug benchmark & \texttt{promptabi corpus real-bug-benchmark} validates and replays the labeled real-bug suite across popular templates, tokenizers, tool schemas, provider migrations, structured-output parsers, RAG truncation, and training manifests, emitting observed rule IDs and a stable manifest hash. \\
@@ -1834,6 +1847,8 @@ Tokenizer/config drift & Focused analyzer and CLI tests compare baseline/current
 Performance benchmarks & \texttt{benchmarks/benchmark\_smoke.py} emits JSON for tokenizer analysis, symbolic template execution, grammar emptiness, stop checks, SMT static contracts, budget checks, corpus-wide verification, and cold/warm cache behavior, with focused tests asserting real fixture-backed metrics and wrapper behavior. \\
 \hline
 Evaluation runner & \texttt{promptabi corpus evaluation} reports labeled precision/recall/F1, abstention rate, runtime, peak memory, witness quality, solver decisiveness, and differential agreement for fixture-backed configs plus the expanded real-bug benchmark suite; tests assert expansion, metric shape, CLI output, public API access, and validation failures without snapshotting nondeterministic timings. \\
+\hline
+Maintainer tooling & \texttt{promptabi maintain refresh} writes seed, structured-schema, provider-fixture, real-bug, corpus-verification, expected-diagnostic, diff, snapshot, and release-note artifacts; focused tests run the workflow against real corpora, assert repository-relative diagnostic paths, compare mutated snapshots, and exercise the CLI baseline mode. \\
 \hline
 Verified configuration gallery & \texttt{promptabi gallery} reruns five curated configurations covering pinned OpenAI-style tools, sanitized ChatML role boundaries, training-to-serving static contracts, RAG truncation budgets, and audited accepted-risk suppressions; focused tests assert deterministic JSON/text renderers, actual solver-backend summaries, lockfile/pin badges, and risk explanations. \\
 \hline
