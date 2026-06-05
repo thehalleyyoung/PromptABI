@@ -21,3 +21,12 @@ Each checker proposal should document:
 
 Checks should fail closed on malformed artifacts, keep diagnostic ordering
 deterministic, and avoid broad fallbacks that hide unsupported behavior.
+
+## Acceptance gate
+
+Checker acceptance is release governance, not only code review. A checker is not
+accepted until the reviewer can identify the supported fragment, the abstention
+boundary, replayable witness evidence, and the focused tests that would fail if
+the checker started reporting an unsound safe result. Missing abstentions,
+unreplayable witnesses, or silent passes on malformed artifacts are
+release-blocking regressions.

@@ -37,6 +37,12 @@ from .contributor_validation import (
     render_contributor_validation_text,
     validate_contributor_infrastructure,
 )
+from .governance import (
+    GovernanceReport,
+    render_governance_json,
+    render_governance_text,
+    validate_governance,
+)
 from .corpus_verification import (
     CorpusVerificationReport,
     CorpusVerificationThresholds,
@@ -1269,6 +1275,23 @@ def contribution_workflows(*, output_format: str | None = None) -> tuple[Contrib
         return render_contribution_workflows_json(workflows)
     if output_format == "text":
         return render_contribution_workflows_text(workflows)
+    raise ValueError("output_format must be one of: text, json")
+
+
+def governance_policy(
+    repo_root: str | Path | None = None,
+    *,
+    output_format: str | None = None,
+) -> GovernanceReport | str:
+    """Validate and render PromptABI checker, corpus, disclosure, and release governance."""
+
+    report = validate_governance(repo_root)
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_governance_json(report)
+    if output_format == "text":
+        return render_governance_text(report)
     raise ValueError("output_format must be one of: text, json")
 
 

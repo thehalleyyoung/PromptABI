@@ -191,6 +191,7 @@ from .framework_truncation_conformance import (
 )
 from .formal import SolverReplayFile, render_solver_replay_json, render_solver_replay_text
 from .github_action import GitHubActionError, run_github_action
+from .governance import GovernanceError, render_governance_json, render_governance_text, validate_governance
 from .gallery import GalleryError, build_gallery, render_gallery_json, render_gallery_text
 from .grammar_conformance import (
     GrammarConformanceError,
@@ -2158,6 +2159,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="print structured community contribution workflows",
     )
     contribute_workflows.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    governance = subparsers.add_parser(
+        "governance",
+        help="validate checker acceptance, proof, corpus, security, and release governance",
+    )
+    governance.add_argument(
+        "--repo-root",
+        help="repository root to validate (default: installed PromptABI repository root)",
+    )
+    governance.add_argument(
         "--format",
         choices=("text", "json"),
         default="text",
@@ -4244,6 +4259,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         print(output, end="")
         return 0
+
+    if args.command == "governance":
+        try:
+            report = validate_governance(args.repo_root)
+            output = render_governance_json(report) if args.format == "json" else render_governance_text(report)
+        except GovernanceError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        print(output, end="")
+        return 0 if report.ok else 1
 
     if args.command == "minimize":
         try:

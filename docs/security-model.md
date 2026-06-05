@@ -136,3 +136,7 @@ private security advisory channel when available, or by a private maintainer
 contact listed by the project. Public issues are appropriate for non-sensitive
 false positives, supported-fragment disagreements, documentation problems, or
 sanitized fixture improvements.
+
+Maintainers treat secret-bearing fixtures, raw private witness text, missing
+owners for sensitive reports, and regressions in the sanitized disclosure flow as
+release-blocking security issues.

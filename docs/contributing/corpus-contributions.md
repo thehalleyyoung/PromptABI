@@ -22,3 +22,6 @@ offline shapes and non-sensitive payloads only.
 Run the relevant corpus command plus `promptabi contribute validate` before
 opening a pull request. New real-bug or evaluation cases should include expected
 rule IDs and a reason that the finding is not just a model-semantics claim.
+Corpus entries with missing license provenance, unclear source revisions,
+credential-like payloads, private prompts, or non-replayable witnesses are
+release-blocking until fixed or removed.

@@ -37,6 +37,7 @@ REQUIRED_LABELS = (
 )
 REQUIRED_GUIDE_PATHS = (
     "CONTRIBUTING.md",
+    "docs/governance.md",
     "docs/contributing/community-workflows.md",
     "docs/contributing/plugin-author-guide.md",
     "docs/contributing/checker-design.md",
@@ -251,6 +252,13 @@ def _validate_issue_template(relative: str, text: str, issues: list[ContributorV
 def _validate_guide(relative: str, text: str, issues: list[ContributorValidationIssue]) -> None:
     required_terms = {
         "CONTRIBUTING.md": ("deterministic", "CPU-only", "promptabi contribute validate"),
+        "docs/governance.md": (
+            "checker-acceptance",
+            "proof-standards",
+            "corpus-licensing",
+            "security-disclosure",
+            "release-regressions",
+        ),
         "docs/contributing/community-workflows.md": (
             "sanitized bug fixtures",
             "minimized witnesses",

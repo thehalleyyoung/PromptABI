@@ -21,6 +21,9 @@ promptabi contribute validate
 - Do not require GPU inference or network access for tests.
 - Prefer precise diagnostics with provenance, source spans, witnesses, and
   actionable suggestions.
+- Treat unsound safe results, missing abstentions, witness replay failures,
+  secret-bearing fixtures, license-incompatible corpora, and labeled real-bug
+  regressions as release-blocking.
 
 ## Corpus contributions
 
@@ -40,3 +43,6 @@ See the focused contributor guides for larger changes:
   for `CheckMode`, witness, abstention, and differential-evidence standards.
 - [`docs/contributing/corpus-contributions.md`](docs/contributing/corpus-contributions.md)
   for provenance, license, no secrets, and expected-diagnostic requirements.
+- [`docs/governance.md`](docs/governance.md) for checker acceptance, proof
+  standards, corpus licensing, security disclosure, and release-blocking
+  regression policy.
