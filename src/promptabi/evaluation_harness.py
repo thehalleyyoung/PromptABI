@@ -19,6 +19,13 @@ from .artifacts import (
     artifact_from_config,
 )
 from .diagnostics import SourceSpan
+from .parser_compatibility import (
+    ParserCompatibilityDirection,
+    ParserCompatibilityObservation,
+    ParserCompatibilityReport,
+    ParserCompatibilityStatus,
+    analyze_parser_compatibility,
+)
 from .source import JsonSourceMap
 
 
@@ -97,6 +104,7 @@ def analyze_evaluation_harness_contracts(
     findings.extend(_template_findings(harness, templates, spans))
     findings.extend(_stop_findings(harness, stop_policies, spans))
     findings.extend(_parser_findings(harness, schemas, spans))
+    findings.extend(_grading_parser_compatibility_findings(harness, schemas, spans))
     findings.extend(_prompt_variable_findings(harness, spans))
     findings.extend(_leakage_findings(harness, spans))
     findings.extend(_few_shot_findings(harness, spans))
@@ -479,6 +487,154 @@ def _parser_findings(
                 ),
             )
     return ()
+
+
+def _grading_parser_compatibility_findings(
+    harness: EvaluationHarnessArtifact,
+    schemas: Sequence[SchemaArtifact],
+    spans: Mapping[str, SourceSpan],
+) -> tuple[EvaluationHarnessFinding, ...]:
+    if harness.answer_parser is None or harness.answer_schema is None:
+        return ()
+    schema = next((candidate for candidate in schemas if candidate.name == harness.answer_schema), None)
+    if schema is None:
+        return ()
+
+    grading_report = analyze_parser_compatibility(schema, parser_format_override=harness.answer_parser)
+    application_report = analyze_parser_compatibility(schema)
+    findings: list[EvaluationHarnessFinding] = []
+    if grading_report.status is ParserCompatibilityStatus.ABSTAINED:
+        findings.append(
+            EvaluationHarnessFinding(
+                rule_id="evaluation-harness-grading-parser-abstained",
+                severity="warning",
+                message="evaluation grading parser is outside bounded parser-compatibility replay",
+                suggestion=(
+                    "Declare the grader as json, json-schema, xml-tool-call, markdown-fence, or custom-delimited, "
+                    "and add parser_compatibility samples to the answer schema when the benchmark uses a custom grader."
+                ),
+                subject="answer_parser",
+                expected="bounded parser replay",
+                actual=grading_report.reason or grading_report.parser_format,
+                span=spans.get("answer_parser") or spans.get("answer_schema"),
+                witness=(
+                    ("select answer schema", harness.answer_schema, schema.name),
+                    ("select grading parser model", harness.answer_parser, grading_report.reason),
+                ),
+            )
+        )
+    else:
+        findings.extend(
+            _grading_schema_mismatch_finding(harness, grading_report, observation, spans)
+            for observation in grading_report.mismatches
+        )
+
+    if application_report.status is ParserCompatibilityStatus.ABSTAINED:
+        findings.append(
+            EvaluationHarnessFinding(
+                rule_id="evaluation-harness-grading-parser-abstained",
+                severity="warning",
+                message="application output parser is outside bounded grading-parser compatibility replay",
+                suggestion=(
+                    "Add metadata.application_parser or metadata.parser_format to the answer schema so evaluation grading "
+                    "can be compared against the same parser contract used by serving code."
+                ),
+                subject="answer_schema.application_parser",
+                expected="bounded application parser replay",
+                actual=application_report.reason or application_report.parser_format,
+                span=spans.get("answer_schema"),
+                witness=(
+                    ("select answer schema", harness.answer_schema, schema.name),
+                    ("select application parser model", application_report.parser_format, application_report.reason),
+                ),
+            )
+        )
+    else:
+        findings.extend(_grading_application_mismatch_findings(harness, grading_report, application_report, spans))
+    return tuple(findings)
+
+
+def _grading_schema_mismatch_finding(
+    harness: EvaluationHarnessArtifact,
+    report: ParserCompatibilityReport,
+    observation: ParserCompatibilityObservation,
+    spans: Mapping[str, SourceSpan],
+) -> EvaluationHarnessFinding:
+    direction = observation.direction or ParserCompatibilityDirection.PARSER_BROADER
+    if direction is ParserCompatibilityDirection.GRAMMAR_BROADER:
+        message = "constrained decoding schema admits an answer that the evaluation grading parser rejects"
+        suggestion = "Update the grading parser to accept every bounded schema witness, or tighten the constrained decoding schema."
+        actual = "schema-broader"
+    else:
+        message = "evaluation grading parser accepts an answer outside the constrained decoding schema"
+        suggestion = "Tighten the grading parser to the constrained decoding schema so benchmark scores do not credit invalid outputs."
+        actual = "grading-parser-broader"
+    return EvaluationHarnessFinding(
+        rule_id="evaluation-harness-grading-parser-mismatch",
+        severity="error",
+        message=message,
+        suggestion=suggestion,
+        subject="answer_parser",
+        expected="grading parser and constrained schema accept the same bounded answer samples",
+        actual=actual,
+        span=spans.get("answer_parser") or spans.get("answer_schema"),
+        witness=(
+            ("select benchmark harness", harness.benchmark_name, harness.name),
+            ("select answer schema", harness.answer_schema, report.artifact_name),
+            ("select grading parser model", harness.answer_parser, ", ".join(report.assumptions)),
+            ("select bounded answer sample", observation.sample.source, observation.sample.text),
+            ("evaluate constrained schema membership", report.grammar_kind, str(observation.grammar_accepts)),
+            ("evaluate grading parser acceptance", report.parser_format, str(observation.parser_accepts)),
+            ("classify grading/schema disagreement", None, actual),
+        ),
+    )
+
+
+def _grading_application_mismatch_findings(
+    harness: EvaluationHarnessArtifact,
+    grading_report: ParserCompatibilityReport,
+    application_report: ParserCompatibilityReport,
+    spans: Mapping[str, SourceSpan],
+) -> tuple[EvaluationHarnessFinding, ...]:
+    application_by_sample = {observation.sample.text: observation for observation in application_report.observations}
+    findings: list[EvaluationHarnessFinding] = []
+    for grading_observation in grading_report.observations:
+        application_observation = application_by_sample.get(grading_observation.sample.text)
+        if application_observation is None:
+            continue
+        if grading_observation.parser_accepts is None or application_observation.parser_accepts is None:
+            continue
+        if grading_observation.parser_accepts == application_observation.parser_accepts:
+            continue
+        if grading_observation.parser_accepts:
+            message = "evaluation grading parser accepts an answer that the application output parser rejects"
+            suggestion = "Grade with the same parser contract used by serving code, or document a benchmark-only parser with bounded samples."
+            actual = "grading-parser-broader"
+        else:
+            message = "application output parser accepts an answer that the evaluation grading parser rejects"
+            suggestion = "Update the benchmark grading parser so production-parseable answers are not marked unparseable during evaluation."
+            actual = "application-parser-broader"
+        findings.append(
+            EvaluationHarnessFinding(
+                rule_id="evaluation-harness-grading-parser-mismatch",
+                severity="error",
+                message=message,
+                suggestion=suggestion,
+                subject="answer_parser/application_parser",
+                expected="grading parser and application parser accept the same bounded answer samples",
+                actual=actual,
+                span=spans.get("answer_parser") or spans.get("answer_schema"),
+                witness=(
+                    ("select benchmark harness", harness.benchmark_name, harness.name),
+                    ("select answer schema", harness.answer_schema, grading_report.artifact_name),
+                    ("select bounded answer sample", grading_observation.sample.source, grading_observation.sample.text),
+                    ("evaluate grading parser acceptance", grading_report.parser_format, str(grading_observation.parser_accepts)),
+                    ("evaluate application parser acceptance", application_report.parser_format, str(application_observation.parser_accepts)),
+                    ("classify grading/application disagreement", None, actual),
+                ),
+            )
+        )
+    return tuple(findings)
 
 
 def _prompt_variable_findings(

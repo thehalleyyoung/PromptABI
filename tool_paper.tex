@@ -515,8 +515,9 @@ between fine-tuning preparation, training, evaluation, and serving pins, and let
 maintainers replay those obligations from fixture JSON while
 validating stored SAT witnesses directly against the
 deserialized formula,
-statically checks evaluation harnesses so prompts, few-shots, parsers, tokenizer
-snapshots, and stops use the provider/template/schema contract verified for serving,
+statically checks evaluation harnesses so prompts, few-shots, grading parsers,
+application parsers, tokenizer snapshots, and stops use the
+provider/template/schema contract verified for serving,
 returns stable policy-controlled process exit codes, writes and enforces
 deterministic verification lockfiles that fail closed on artifact, config,
 provider-fixture, library-version, supported-fragment, or diagnostic-baseline
@@ -1944,7 +1945,9 @@ truncation, role-layout, response-start, packing-boundary, and synthetic
 generator role/schema/tool/truncation bugs. The evaluation slice now also checks
 HELM/lm-eval/custom/provider-hosted tokenizer pins for drift or abstention,
 replays fixture-pack cases for stop strings, parsers, truncation, role-boundary
-forgery, and tokenizer mismatch, and proves that answer-key, private rubric, and chain-of-thought variables
+forgery, and tokenizer mismatch, proves that grading-parser assumptions agree
+with constrained decoding schemas and application output parsers over bounded
+witnesses, and proves that answer-key, private rubric, and chain-of-thought variables
 do not overlap model-visible prompt variables, with
 \texttt{examples/evaluation-harness/unsafe.promptabi.json} exercising all three
 leakage diagnostics against real source-mapped JSON. The same
@@ -2147,7 +2150,7 @@ Real-world bugs & Eight public llama.cpp/vLLM/Hugging Face bug patterns plus the
 \hline
 Stop/provider/structured-output tests & Recorded provider chunks replay through CPU-only simulators; parser compatibility, tool-schema ingestion, tool serialization, grammar emptiness, grammar ambiguity, and stop overreachability run through real CLI fixtures. \\
 \hline
-Evaluation-harness tests & \texttt{examples/evaluation-harness/*.promptabi.json} prove provider/model/tokenizer/template/parser/stop/few-shot compatibility, catch eval-tokenizer drift, and reject private eval fields rendered into prompts. \\
+Evaluation-harness tests & \texttt{examples/evaluation-harness/*.promptabi.json} prove provider/model/tokenizer/template/grading-parser/application-parser/stop/few-shot compatibility, catch eval-tokenizer drift, and reject private eval fields rendered into prompts. \\
 \hline
 Corpus commands & \texttt{promptabi corpus manifest}, \texttt{promptabi corpus structured-schema-manifest}, \texttt{promptabi corpus real-bug-benchmark}, \texttt{promptabi corpus evaluation-fixture-pack}, \texttt{promptabi corpus smt-benchmark}, \texttt{promptabi corpus verify}, \texttt{promptabi corpus evaluation}, and \texttt{promptabi corpus beta-report} validate fixture coverage, metrics, witness quality, hashes, and CLI/public-API renderers. \\
 \hline

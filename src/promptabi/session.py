@@ -186,6 +186,8 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "evaluation-harness-contract-missing": (CheckMode.ABSTAINING, CheckMode.COMPLETE),
     "evaluation-harness-few-shot-budget-overflow": (CheckMode.SOUND, CheckMode.BOUNDED),
     "evaluation-harness-few-shot-role-mismatch": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "evaluation-harness-grading-parser-abstained": (CheckMode.ABSTAINING, CheckMode.HEURISTIC),
+    "evaluation-harness-grading-parser-mismatch": (CheckMode.BOUNDED, CheckMode.HEURISTIC),
     "evaluation-harness-grading-rubric-leakage": (CheckMode.SOUND, CheckMode.COMPLETE),
     "evaluation-harness-history-truncation-mismatch": (CheckMode.SOUND, CheckMode.BOUNDED),
     "evaluation-harness-model-mismatch": (CheckMode.SOUND, CheckMode.COMPLETE),

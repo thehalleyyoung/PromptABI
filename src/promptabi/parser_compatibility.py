@@ -115,6 +115,7 @@ def analyze_parser_compatibility(
     artifact: SchemaArtifact | GrammarArtifact,
     *,
     max_samples: int = 64,
+    parser_format_override: str | None = None,
 ) -> ParserCompatibilityReport:
     """Compare bounded grammar evidence against an explicitly modeled parser.
 
@@ -129,7 +130,7 @@ def analyze_parser_compatibility(
     if artifact.location.path is None:
         return _abstain(artifact, "unknown", "parser compatibility requires a local structured-output artifact")
 
-    parser_format = _parser_format(artifact)
+    parser_format = _normalize_parser_format(parser_format_override) if parser_format_override is not None else _parser_format(artifact)
     if parser_format is None:
         return _abstain(
             artifact,
@@ -259,7 +260,7 @@ def _parser_format(artifact: SchemaArtifact | GrammarArtifact) -> str | None:
     for key in ("parser_format", "parser_kind", "application_parser"):
         value = metadata.get(key)
         if isinstance(value, str) and value.strip():
-            return value.strip().lower().replace("_", "-")
+            return _normalize_parser_format(value)
     if artifact.kind is ArtifactKind.SCHEMA and artifact.dialect.lower().replace("_", "-") in {
         "json-schema",
         "jsonschema",
@@ -267,6 +268,10 @@ def _parser_format(artifact: SchemaArtifact | GrammarArtifact) -> str | None:
     }:
         return "json-schema"
     return None
+
+
+def _normalize_parser_format(value: str) -> str:
+    return value.strip().lower().replace("_", "-")
 
 
 def _samples(

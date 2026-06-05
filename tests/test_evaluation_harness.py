@@ -107,7 +107,7 @@ def test_unsafe_evaluation_harness_reports_contract_breaks_with_spans() -> None:
         "evaluation-harness-tokenizer-mismatch",
         "evaluation-harness-prompt-template-mismatch",
         "evaluation-harness-stop-policy-mismatch",
-        "evaluation-harness-answer-parser-mismatch",
+        "evaluation-harness-grading-parser-mismatch",
         "evaluation-harness-answer-key-leakage",
         "evaluation-harness-chain-of-thought-leakage",
         "evaluation-harness-prompt-variable-missing",
@@ -121,7 +121,21 @@ def test_unsafe_evaluation_harness_reports_contract_breaks_with_spans() -> None:
     }
     assert result.ok is False
     assert expected.issubset(by_rule)
+    grading_parser_diagnostics = [
+        diagnostic
+        for diagnostic in result.diagnostics
+        if diagnostic.rule_id == "evaluation-harness-grading-parser-mismatch"
+    ]
     assert by_rule["evaluation-harness-stop-policy-mismatch"].span is not None
+    assert grading_parser_diagnostics
+    assert all(diagnostic.span is not None for diagnostic in grading_parser_diagnostics)
+    assert any(
+        step.action == "select bounded answer sample" and step.output == "{}"
+        for diagnostic in grading_parser_diagnostics
+        for step in diagnostic.witness.steps
+    )
+    assert any(("subject", "answer_parser/application_parser") in diagnostic.properties for diagnostic in grading_parser_diagnostics)
+    assert all(("actual", "grading-parser-broader") in diagnostic.properties for diagnostic in grading_parser_diagnostics)
     assert ("actual", "answer_key") in by_rule["evaluation-harness-answer-key-leakage"].properties
     assert by_rule["evaluation-harness-chain-of-thought-leakage"].span is not None
     assert by_rule["evaluation-harness-few-shot-role-mismatch"].witness is not None

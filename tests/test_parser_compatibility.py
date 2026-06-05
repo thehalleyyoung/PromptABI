@@ -70,6 +70,36 @@ def test_json_schema_parser_compatibility_agrees_with_schema_validator(tmp_path:
     assert report.parser_format == "json-schema"
 
 
+def test_parser_compatibility_can_replay_grading_parser_override(tmp_path: Path) -> None:
+    schema_path = tmp_path / "answer.schema.json"
+    schema_path.write_text(
+        json.dumps(
+            {
+                "type": "object",
+                "required": ["answer"],
+                "properties": {"answer": {"type": "string"}},
+                "additionalProperties": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+    artifact = SchemaArtifact(
+        kind=ArtifactKind.SCHEMA,
+        name="answer",
+        location=ArtifactLocation(path=str(schema_path)),
+    )
+
+    report = analyze_parser_compatibility(artifact, parser_format_override="json")
+
+    assert report.status is ParserCompatibilityStatus.MISMATCH
+    assert report.parser_format == "json"
+    assert any(
+        observation.direction is ParserCompatibilityDirection.PARSER_BROADER
+        and observation.sample.text == "{}"
+        for observation in report.mismatches
+    )
+
+
 def test_xml_tool_call_parser_compatibility_detects_parser_broader_fixture(tmp_path: Path) -> None:
     grammar_path = tmp_path / "tool.regex"
     grammar_path.write_text(r"<tool_call name=\"refund\">\{\"id\":1\}</tool_call>", encoding="utf-8")
