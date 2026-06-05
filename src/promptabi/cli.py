@@ -7,6 +7,7 @@ import json
 import os
 import shlex
 import sys
+import time
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -63,6 +64,14 @@ from .structured_schema_corpus import (
     StructuredSchemaCorpusError,
     build_structured_schema_corpus_manifest,
     write_structured_schema_corpus_manifest,
+)
+from .usage_analytics import (
+    UsageAnalyticsError,
+    append_local_command_summary,
+    render_usage_privacy_text,
+    render_usage_summary_json,
+    render_usage_summary_text,
+    summarize_local_command_usage,
 )
 from .provider_fixture_packs import (
     ProviderFixturePackError,
@@ -139,6 +148,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="fail verification if the current artifacts or diagnostic baseline drift from the lockfile",
     )
+    _add_local_summary_argument(verify)
 
     explain = subparsers.add_parser("explain", help="expand one diagnostic into a tutorial-style explanation")
     explain.add_argument(
@@ -223,6 +233,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="MODULE[:OBJECT]",
         help="import a PromptABI plugin module for renderer extensions; may be repeated",
     )
+    _add_local_summary_argument(diff)
 
     init = subparsers.add_parser("init", help="scaffold a PromptABI config for a common LLM stack")
     init.add_argument(
@@ -391,6 +402,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="overwrite existing reproducibility package files in the output directory",
     )
 
+    usage = subparsers.add_parser("usage", help="inspect telemetry-free local command summaries")
+    usage_subparsers = usage.add_subparsers(dest="usage_command", required=True)
+    usage_summary = usage_subparsers.add_parser(
+        "summary",
+        help="summarize local PromptABI command summary JSONL records",
+    )
+    usage_summary.add_argument(
+        "--path",
+        help="local usage summary JSONL path (default: PROMPTABI_USAGE_SUMMARY_PATH or local state)",
+    )
+    usage_summary.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    usage_subparsers.add_parser("privacy", help="print local-summary privacy guarantees")
+
     minimize = subparsers.add_parser(
         "minimize",
         help="shrink failing PromptABI artifacts into compact upstream repros",
@@ -522,6 +551,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="allow verification when selected staged PromptABI inputs also have unstaged edits",
     )
+    _add_local_summary_argument(pre_commit_run)
     return parser
 
 
@@ -530,6 +560,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "verify":
+        started_at = time.perf_counter()
         try:
             if args.quiet and args.verbose:
                 parser.error("--quiet and --verbose cannot be used together")
@@ -594,8 +625,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         except PluginError as exc:
             print(f"promptabi: {exc}", file=sys.stderr)
             return 2
+        exit_code = _exit_code(result, fail_on=args.fail_on)
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="verify",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata=_verification_summary_metadata(result, output_format=args.format, fail_on=args.fail_on),
+        ):
+            return 2
         print(output, end="")
-        return _exit_code(result, fail_on=args.fail_on)
+        return exit_code
 
     if args.command == "explain":
         try:
@@ -655,6 +695,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "diff":
+        started_at = time.perf_counter()
         try:
             if args.quiet and args.verbose:
                 parser.error("--quiet and --verbose cannot be used together")
@@ -685,8 +726,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         if args.format == "text" and args.verbose:
             output = output.replace(f"config: {current_path}\n", f"baseline: {baseline_path}\ncurrent: {current_path}\n")
+        exit_code = _exit_code(result, fail_on=args.fail_on)
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="diff",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata=_verification_summary_metadata(result, output_format=args.format, fail_on=args.fail_on),
+        ):
+            return 2
         print(output, end="")
-        return _exit_code(result, fail_on=args.fail_on)
+        return exit_code
 
     if args.command == "init":
         try:
@@ -847,6 +897,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 0
 
+    if args.command == "usage" and args.usage_command == "summary":
+        try:
+            report = summarize_local_command_usage(args.path)
+            output = render_usage_summary_json(report) if args.format == "json" else render_usage_summary_text(report)
+        except UsageAnalyticsError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        print(output, end="")
+        return 0
+
+    if args.command == "usage" and args.usage_command == "privacy":
+        print(render_usage_privacy_text(), end="")
+        return 0
+
     if args.command == "minimize":
         try:
             if args.max_steps is not None and args.max_steps <= 0:
@@ -918,6 +982,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "pre-commit" and args.pre_commit_command == "run":
+        started_at = time.perf_counter()
         try:
             run = run_local_workflow(
                 config_path=args.config,
@@ -935,6 +1000,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         except OSError as exc:
             print(f"promptabi: cannot run pre-commit workflow: {exc}", file=sys.stderr)
+            return 2
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="pre-commit run",
+            exit_code=run.exit_code,
+            started_at=started_at,
+            metadata={
+                "skipped": run.skipped,
+                "changed_count": len(run.changed_paths),
+                "candidate_count": len(run.candidate_paths),
+                "selected_count": len(run.selected_paths),
+                "diagnostics_total": len(run.diagnostics),
+            },
+        ):
             return 2
         print(render_local_workflow_text(run), end="")
         return run.exit_code
@@ -1021,6 +1100,19 @@ def _add_pre_commit_common_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_local_summary_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--local-summary",
+        nargs="?",
+        const="",
+        metavar="PATH",
+        help=(
+            "append a telemetry-free local command summary JSONL record; optionally choose PATH "
+            "(default: PROMPTABI_USAGE_SUMMARY_PATH or local state)"
+        ),
+    )
+
+
 def _sarif_options(args, argv: Sequence[str] | None) -> SarifRenderOptions:
     checkout_base = _resolve_checkout_uri_base(args.sarif_checkout_uri_base)
     command_line = None
@@ -1090,6 +1182,47 @@ def _render_verification_output(
         checkout_base = sarif_options.checkout_uri_base if sarif_options is not None else None
         return render_github_annotations(result, checkout_uri_base=checkout_base)
     return plugin_registry.render(output_format, result)
+
+
+def _verification_summary_metadata(result, *, output_format: str, fail_on: str) -> dict[str, object]:
+    severities = [diagnostic.severity.value for diagnostic in result.diagnostics]
+    return {
+        "ok": result.ok,
+        "diagnostics_total": len(result.diagnostics),
+        "errors": severities.count("error"),
+        "warnings": severities.count("warning"),
+        "info": severities.count("info"),
+        "artifact_count": len(result.config.artifact_bundle.artifacts),
+        "check_count": len(result.config.checks),
+        "format": output_format,
+        "fail_on": fail_on,
+    }
+
+
+def _write_local_summary_if_requested(
+    requested_path: str | None,
+    *,
+    command: str,
+    exit_code: int,
+    started_at: float,
+    metadata: dict[str, object],
+) -> bool:
+    if requested_path is None:
+        return True
+    path = requested_path or None
+    duration_ms = round((time.perf_counter() - started_at) * 1000)
+    try:
+        append_local_command_summary(
+            path=path,
+            command=command,
+            exit_code=exit_code,
+            duration_ms=duration_ms,
+            metadata=metadata,
+        )
+    except UsageAnalyticsError as exc:
+        print(f"promptabi: {exc}", file=sys.stderr)
+        return False
+    return True
 
 
 def _exit_code(result, *, fail_on: str) -> int:

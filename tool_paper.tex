@@ -58,6 +58,11 @@ annotations, and upload GitHub-code-scanning SARIF, plus
 \texttt{promptabi pre-commit} local workflows that install PATH-independent git
 hooks and fail closed on staged schemas, templates, tokenizer configs, tool
 definitions, training manifests, PromptABI configs, and lockfiles before merge,
+an opt-in \texttt{--local-summary} usage analytics path that appends only
+sanitized command names, exit codes, durations, diagnostic counts, and aggregate
+artifact/check counts to local JSONL while \texttt{promptabi usage privacy}
+explicitly states that prompts, schemas, configs, constraints, witnesses,
+artifact contents, paths, and network sends are excluded,
 policy and suppression files that match diagnostics by stable fingerprints,
 artifacts, or paths; require reviewed justifications, owners, accepted-risk
 statements, and expiration dates; enforce repository severity thresholds; and
@@ -318,6 +323,8 @@ annotations, and markdown summaries around the same verifier, and installs a
 local pre-commit workflow that gates staged PromptABI-relevant schemas,
 templates, tokenizers, tools, training manifests, configs, and lockfiles while
 failing closed when staged content differs from the working tree,
+records optional telemetry-free local command summaries with no artifact paths,
+prompt text, schema bodies, solver constraints, witnesses, or network transport,
 packages releases as checked PyPI distributions, standalone executables,
 Docker images, signed/attested GitHub assets, changelogged semantic-version tags,
 and GHCR container images,
@@ -1504,8 +1511,10 @@ and gives maintainers stable regression tests.
 
 The CLI should remain terse by default and expandable on demand. A CI run needs
 deterministic diagnostics and exit codes. A local debugging session needs
-witnesses, rendered excerpts, token tables, exact boundary locations, and fix suggestions. A future
-\texttt{promptabi explain} command can bridge those modes.
+witnesses, rendered excerpts, token tables, exact boundary locations, and fix
+suggestions. \texttt{promptabi explain} bridges those modes, and
+\texttt{--local-summary} gives maintainers privacy-preserving local adoption
+signals without ever serializing user artifacts or transmitting telemetry.
 
 \clearpage
 \section{Evaluation Design}

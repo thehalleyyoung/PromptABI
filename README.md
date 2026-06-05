@@ -33,6 +33,9 @@ promptabi fuzz mutations --format text
 promptabi paper reproducibility --output-dir paper_artifact --force
 # local commit gate for changed prompt artifacts:
 promptabi pre-commit install --config examples/minimal/promptabi.json
+# opt-in local-only usage summaries; no telemetry:
+promptabi verify --config examples/minimal/promptabi.json --local-summary .promptabi/usage.jsonl
+promptabi usage summary --path .promptabi/usage.jsonl
 ```
 
 ```text
@@ -91,6 +94,9 @@ while policy/suppression files keep CI strict with unexpired, justified
 accepted-risk records. `promptabi pre-commit` installs a PATH-independent local
 hook and fail-closed changed-artifact gate for schemas, templates, tokenizers,
 tools, budgets, training manifests, configs, and lockfiles before they reach CI.
+Opt-in `--local-summary` records only sanitized command counts, exits, durations,
+and aggregate diagnostic metadata to local JSONL, with `promptabi usage privacy`
+making the no-telemetry/no-artifact-content guarantee explicit.
 
 PromptABI now ships a bounded, sanitizer-aware role-boundary non-forgeability check:
 unsanitized user/tool/function content and dynamic role fields are checked against
