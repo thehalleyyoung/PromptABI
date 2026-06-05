@@ -1,0 +1,31 @@
+{
+  "name": "attested-gated-service",
+  "checks": ["repository-skeleton"],
+  "artifacts": {
+    "system-prompt": {
+      "kind": "prompt-segment",
+      "uri": "memory://runtime/system-prompt",
+      "segments": [{"name": "system", "role": "system", "required": true}]
+    },
+    "runtime-tokenizer": {
+      "kind": "tokenizer",
+      "uri": "memory://runtime/tokenizer",
+      "family": "byte-bpe"
+    },
+    "chat-template": {
+      "kind": "chat-template",
+      "uri": "memory://runtime/template",
+      "roles": ["system", "user", "assistant"]
+    },
+    "answer-schema": {
+      "kind": "schema",
+      "uri": "memory://runtime/schema",
+      "dialect": "json-schema"
+    },
+    "provider-config": {
+      "kind": "provider-config",
+      "uri": "memory://runtime/provider",
+      "provider": "openai-compatible"
+    }
+  }
+}

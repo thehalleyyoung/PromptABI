@@ -309,6 +309,12 @@ from .nested_tool_calls import (
     render_nested_tool_call_json,
     render_nested_tool_call_text,
 )
+from .attestation_gate_composition import (
+    AttestationGateError,
+    compose_attestation_gate_from_config,
+    render_attestation_gate_json,
+    render_attestation_gate_text,
+)
 from .lockfiles import (
     LockfileError,
     build_lockfile,
@@ -722,6 +728,41 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     _add_local_summary_argument(nested_tool_call)
+
+    attestation_gate = subparsers.add_parser(
+        "attestation-gate",
+        help="compose a live runtime attestation with a deployment gate into an admission decision",
+    )
+    attestation_gate.add_argument(
+        "--config",
+        required=True,
+        help="PromptABI config the running service attests",
+    )
+    attestation_gate.add_argument(
+        "--gate-config",
+        help="config the deployment gate approved (defaults to --config)",
+    )
+    attestation_gate.add_argument(
+        "--attestation-key",
+        required=True,
+        help="signing key the running bundle was attested with",
+    )
+    attestation_gate.add_argument(
+        "--gate-key",
+        help="signing key the deployment gate trusts (defaults to --attestation-key)",
+    )
+    attestation_gate.add_argument(
+        "--environment",
+        default="production",
+        help="environment to compose for (default: production)",
+    )
+    attestation_gate.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    _add_local_summary_argument(attestation_gate)
 
     explain = subparsers.add_parser("explain", help="expand one diagnostic into a tutorial-style explanation")
     explain.add_argument(
@@ -3413,6 +3454,41 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "node_count": report.node_count,
                 "style": report.encoding.style,
                 "violation_count": len(report.violations),
+            },
+        ):
+            return 2
+        print(output, end="")
+        return exit_code
+
+    if args.command == "attestation-gate":
+        started_at = time.perf_counter()
+        try:
+            report = compose_attestation_gate_from_config(
+                args.config,
+                args.gate_config,
+                attestation_key=args.attestation_key,
+                gate_key=args.gate_key,
+                environment=args.environment,
+            )
+        except (OSError, AttestationGateError, ValueError) as exc:
+            print(f"promptabi: cannot compose attestation with deployment gate: {exc}", file=sys.stderr)
+            return 2
+        output = (
+            render_attestation_gate_json(report)
+            if args.format == "json"
+            else render_attestation_gate_text(report)
+        )
+        exit_code = 0 if report.admitted else 1
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="attestation-gate",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={
+                "decision": report.decision.value,
+                "environment": report.environment,
+                "finding_count": len(report.findings),
+                "format": args.format,
             },
         ):
             return 2
