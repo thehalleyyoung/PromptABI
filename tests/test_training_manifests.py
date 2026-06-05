@@ -179,6 +179,38 @@ def _write_manifest(path: Path) -> None:
                         "add_generation_prompt": False,
                     },
                 ],
+                "metadata": {
+                    "bridge_contract": {
+                        "training": {
+                            "role_delimiters": {
+                                "assistant": "<|start_header_id|>assistant<|end_header_id|>",
+                                "tool": "<tool_call>",
+                            },
+                            "special_tokens": {
+                                "eos": "<|eot_id|>",
+                                "tool_end": "</tool_call>",
+                            },
+                            "tool_format": {
+                                "argument_encoding": "json-object",
+                                "envelope": "llama-json-tool-call",
+                            },
+                        },
+                        "serving": {
+                            "role_delimiters": {
+                                "assistant": "<|start_header_id|>assistant<|end_header_id|>",
+                                "tool": "<tool_call>",
+                            },
+                            "special_tokens": {
+                                "eos": "<|eot_id|>",
+                                "tool_end": "</tool_call>",
+                            },
+                            "tool_format": {
+                                "argument_encoding": "json-object",
+                                "envelope": "llama-json-tool-call",
+                            },
+                        },
+                    }
+                },
             },
             sort_keys=True,
         ),
@@ -715,6 +747,114 @@ def test_training_redaction_check_rejects_secret_like_and_raw_report_evidence(tm
     assert "sha256-prefix" in payload
 
 
+def test_training_bridge_check_proves_training_serving_interface_match(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "training-manifest.json"
+    _write_manifest(manifest_path)
+    config_path = tmp_path / "promptabi.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "name": "training-bridge-clean",
+                "checks": ["training-bridge"],
+                "artifacts": {"train": {"kind": "training-manifest", "path": manifest_path.name}},
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+    result = VerificationSession(load_config(config_path)).run()
+    diagnostics = [diagnostic for diagnostic in result.diagnostics if diagnostic.rule_id.startswith("training-bridge")]
+
+    assert result.ok
+    assert [diagnostic.rule_id for diagnostic in diagnostics] == ["training-bridge-verified"]
+    assert dict(diagnostics[0].properties)["kind"] == "verified"
+    assert "matches serving prompt-interface assumptions" in diagnostics[0].message
+
+
+def test_training_bridge_check_catches_serving_contract_drift(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "bad-training-bridge.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "dataset_format": "chat-jsonl",
+                "datasets": [{"name": "sft", "kind": "supervised", "format": "chat-jsonl"}],
+                "role_labels": [
+                    {"source_role": "assistant", "canonical_role": "assistant", "supervised_target": True},
+                    {"source_role": "human", "canonical_role": "user", "trainable": False},
+                ],
+                "pipeline_stages": [
+                    {
+                        "stage": "training",
+                        "tokenizer_name": "train-tokenizer",
+                        "tokenizer_sha256": "a" * 64,
+                        "chat_template_name": "train-template",
+                        "chat_template_sha256": "b" * 64,
+                        "add_generation_prompt": False,
+                    },
+                    {
+                        "stage": "serving",
+                        "tokenizer_name": "serving-tokenizer",
+                        "tokenizer_sha256": "c" * 64,
+                        "chat_template_name": "serving-template",
+                        "chat_template_sha256": "d" * 64,
+                        "add_generation_prompt": True,
+                    },
+                ],
+                "metadata": {
+                    "bridge_contract": {
+                        "training": {
+                            "role_delimiters": {"assistant": "<|im_start|>assistant"},
+                            "special_tokens": {"eos": "<|eot_id|>"},
+                            "tool_format": {"envelope": "json-tool-call"},
+                        },
+                        "serving": {
+                            "role_delimiters": {"assistant": "<|assistant|>"},
+                            "special_tokens": {"eos": "</s>"},
+                            "tool_format": {"envelope": "xml-tool-call"},
+                        },
+                    }
+                },
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "promptabi.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "name": "training-bridge-bad",
+                "checks": ["training-bridge"],
+                "artifacts": {"train": {"kind": "training-manifest", "path": manifest_path.name}},
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+    result = VerificationSession(load_config(config_path)).run()
+    diagnostics = [diagnostic for diagnostic in result.diagnostics if diagnostic.rule_id.startswith("training-bridge")]
+    rule_ids = {diagnostic.rule_id for diagnostic in diagnostics}
+    kinds = {dict(diagnostic.properties)["kind"] for diagnostic in diagnostics}
+
+    assert not result.ok
+    assert {
+        "training-bridge-tokenizer-mismatch",
+        "training-bridge-template-mismatch",
+        "training-bridge-role-delimiter-mismatch",
+        "training-bridge-special-token-mismatch",
+        "training-bridge-tool-format-mismatch",
+    }.issubset(rule_ids)
+    assert {
+        "tokenizer-mismatch",
+        "template-mismatch",
+        "role-delimiter-mismatch",
+        "special-token-mismatch",
+        "tool-format-mismatch",
+    }.issubset(kinds)
+
+
 def test_verify_training_manifest_workflow_runs_real_training_checks(tmp_path: Path, capsys) -> None:
     manifest_path = tmp_path / "training-manifest.json"
     _write_manifest(manifest_path)
@@ -733,11 +873,12 @@ def test_verify_training_manifest_workflow_runs_real_training_checks(tmp_path: P
     payload = json.loads(captured.out)
     rule_ids = {diagnostic["rule_id"] for diagnostic in payload["diagnostics"]}
     assert exit_code == 0
-    assert payload["config"]["checks"] == ["training-workflow", "training-packing", "training-redaction"]
+    assert payload["config"]["checks"] == ["training-workflow", "training-packing", "training-redaction", "training-bridge"]
     assert payload["ok"] is True
     assert "training-workflow-verified" in rule_ids
     assert "training-packing-verified" in rule_ids
     assert "training-redaction-verified" in rule_ids
+    assert "training-bridge-verified" in rule_ids
     assert captured.err == ""
 
 

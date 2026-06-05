@@ -101,6 +101,15 @@ CHECK_RULE_IDS: dict[str, tuple[str, ...]] = {
     ),
     "tool-schema-ingestion": ("tool-schema-ingestion",),
     "tool-serialization": ("tool-serialization",),
+    "training-bridge": (
+        "training-bridge-role-delimiter-mismatch",
+        "training-bridge-special-token-mismatch",
+        "training-bridge-stage-missing",
+        "training-bridge-template-mismatch",
+        "training-bridge-tokenizer-mismatch",
+        "training-bridge-tool-format-mismatch",
+        "training-bridge-verified",
+    ),
     "training-packing": ("training-packing-boundary", "training-packing-mask", "training-packing-verified"),
     "training-redaction": (
         "training-redaction-hash-missing",
@@ -340,6 +349,12 @@ def _surfaces_for_check(check_name: str, artifact_kinds: tuple[ArtifactKind, ...
             _surface("training", "source-leakage", ArtifactKind.TRAINING_MANIFEST, "bounded", "source contributions are checked for hash-only evidence and provider-key-like values"),
             _surface("training", "preference-pairs", ArtifactKind.TRAINING_MANIFEST, "bounded", "preference prompt/chosen/rejected evidence is required to be sha256-referenced"),
         ),
+        "training-bridge": (
+            _surface("training", "training-serving-stage-pins", ArtifactKind.TRAINING_MANIFEST, "covered", "training and serving tokenizer/template pins must agree"),
+            _surface("training", "trained-role-delimiters", ArtifactKind.TRAINING_MANIFEST, "bounded", "declared trained role delimiters are compared to serving prompt delimiters"),
+            _surface("training", "trained-special-tokens", ArtifactKind.TRAINING_MANIFEST, "bounded", "declared trained special tokens are compared to serving tokenizer assumptions"),
+            _surface("training", "trained-tool-format", ArtifactKind.TRAINING_MANIFEST, "bounded", "declared trained tool-call envelopes and argument encodings are compared to serving assumptions"),
+        ),
         "token-budget-model": (*_tokenizer_surfaces(), *_framework_surfaces()),
         "tool-schema-ingestion": (_surface("provider", "mcp", ArtifactKind.TOOL_DEFINITION),),
         "tool-serialization": (*_provider_surfaces(), *_template_surfaces()),
@@ -383,6 +398,7 @@ def _notes_for_check(check_name: str) -> str:
     return {
         "enterprise-readiness": "declarative enterprise posture check for offline mirrors, private indexes, internal fixtures, policy packs, severity overrides, solver limits, and strict no-network operation",
         "static-contracts": "includes finite SMT obligations for supervised target/message role alignment, observed rendered/tokenized/loss-masked span contracts, source leakage, stage consistency, and preference-pair prefix/layout/tokenizer/mask invariants",
+        "training-bridge": "compares training-time tokenizer, template, role delimiter, special-token, generation-prompt, and tool-format facts against serving-time assumptions",
         "training-redaction": "statically ensures training-manifest witnesses and reports use structural or hashed evidence instead of raw secrets, provider keys, restricted metadata, or dataset text",
         "tokenizer-config-drift": "alias retained for configs that select tokenizer drift under the older check name",
         "tokenizer-drift": "alias of tokenizer-config-drift for user-facing compatibility",

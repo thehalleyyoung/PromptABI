@@ -325,6 +325,12 @@ from .formal import (
     render_solver_replay_text,
 )
 from .static_contracts import StaticContractFinding, StaticContractReport, analyze_static_contracts
+from .training_bridge import (
+    TrainingBridgeFinding,
+    TrainingBridgeFindingKind,
+    TrainingBridgeReport,
+    analyze_training_inference_bridge,
+)
 from .training_packing import (
     TrainingPackingFinding,
     TrainingPackingFindingKind,
@@ -940,6 +946,9 @@ __all__ = [
     "ToolSchemaProvider",
     "TrainingDatasetKind",
     "TrainingDatasetSpec",
+    "TrainingBridgeFinding",
+    "TrainingBridgeFindingKind",
+    "TrainingBridgeReport",
     "TrainingManifestArtifact",
     "TrainingPackingFinding",
     "TrainingPackingFindingKind",
@@ -1095,6 +1104,7 @@ __all__ = [
     "ingest_tool_schema_mapping",
     "analyze_stop_policy_tokenizer",
     "analyze_tool_call_serialization",
+    "analyze_training_inference_bridge",
     "analyze_training_packing",
     "analyze_tokenizer_config_drift",
     "analyze_token_budget",

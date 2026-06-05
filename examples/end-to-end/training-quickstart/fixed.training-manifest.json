@@ -94,6 +94,40 @@
       "add_generation_prompt": false
     }
   ],
+  "metadata": {
+    "bridge_contract": {
+      "training": {
+        "role_delimiters": {
+          "assistant": "<|start_header_id|>assistant<|end_header_id|>",
+          "system": "<|start_header_id|>system<|end_header_id|>",
+          "user": "<|start_header_id|>user<|end_header_id|>"
+        },
+        "special_tokens": {
+          "eos": "<|eot_id|>",
+          "bos": "<|begin_of_text|>"
+        },
+        "tool_format": {
+          "argument_encoding": "json-object",
+          "envelope": "llama-json-tool-call"
+        }
+      },
+      "serving": {
+        "role_delimiters": {
+          "assistant": "<|start_header_id|>assistant<|end_header_id|>",
+          "system": "<|start_header_id|>system<|end_header_id|>",
+          "user": "<|start_header_id|>user<|end_header_id|>"
+        },
+        "special_tokens": {
+          "eos": "<|eot_id|>",
+          "bos": "<|begin_of_text|>"
+        },
+        "tool_format": {
+          "argument_encoding": "json-object",
+          "envelope": "llama-json-tool-call"
+        }
+      }
+    }
+  },
   "supervised_spans": [
     {
       "span_id": "train-0001.assistant-0",

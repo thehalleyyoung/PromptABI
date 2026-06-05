@@ -69,6 +69,7 @@ from .stop_overreachability import (
 from .tool_serialization import ToolSerializationFinding, analyze_tool_call_serialization
 from .tokenizer_drift import TokenizerDriftAbstention, TokenizerDriftFinding, analyze_tokenizer_config_drift
 from .tokenizers import TokenizerAdapter, TokenizerError, load_tokenizer
+from .training_bridge import TrainingBridgeFinding, analyze_training_inference_bridge
 from .training_packing import TrainingPackingFinding, analyze_training_packing
 from .training_redaction import TrainingRedactionFinding, analyze_training_redaction
 
@@ -139,6 +140,13 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "training-packing-boundary": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-packing-mask": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-packing-verified": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-bridge-role-delimiter-mismatch": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-bridge-special-token-mismatch": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-bridge-stage-missing": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-bridge-template-mismatch": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-bridge-tokenizer-mismatch": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-bridge-tool-format-mismatch": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-bridge-verified": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-redaction-hash-missing": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-redaction-policy-missing": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-redaction-raw-witness-field": (CheckMode.SOUND, CheckMode.BOUNDED),
@@ -346,6 +354,7 @@ CHECK_DEPENDENCIES: dict[str, CheckDependency] = {
             ArtifactKind.STOP_POLICY,
         ),
     ),
+    "training-bridge": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "training-packing": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "training-redaction": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "tokenizer-config-drift": CheckDependency(artifact_kinds=(ArtifactKind.TOKENIZER,)),
@@ -534,6 +543,7 @@ class VerificationSession:
             "token-budget-model": self._token_budget_model_check,
             "tool-schema-ingestion": self._tool_schema_ingestion_check,
             "tool-serialization": self._tool_serialization_check,
+            "training-bridge": self._training_bridge_check,
             "training-packing": self._training_packing_check,
             "training-redaction": self._training_redaction_check,
             "tokenizer-config-drift": self._tokenizer_config_drift_check,
@@ -1026,6 +1036,15 @@ class VerificationSession:
                 continue
             report = analyze_training_packing(loaded.artifact)
             diagnostics.extend(_training_packing_finding_diagnostic(loaded, finding) for finding in report.findings)
+        return tuple(diagnostics)
+
+    def _training_bridge_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        diagnostics: list[Diagnostic] = []
+        for loaded in context.loaded_artifacts:
+            if not isinstance(loaded.artifact, TrainingManifestArtifact):
+                continue
+            report = analyze_training_inference_bridge(loaded.artifact)
+            diagnostics.extend(_training_bridge_finding_diagnostic(loaded, finding) for finding in report.findings)
         return tuple(diagnostics)
 
     def _training_redaction_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
@@ -1807,6 +1826,60 @@ def _training_redaction_finding_diagnostic(
         suggestions=suggestions,
         witness=WitnessTrace(
             summary="PromptABI statically checked that training evidence can be reported without raw sensitive content.",
+            steps=steps,
+            artifacts=(loaded.artifact.to_ref(),),
+        ),
+    )
+
+
+def _training_bridge_finding_diagnostic(
+    loaded: LoadedArtifact,
+    finding: TrainingBridgeFinding,
+) -> Diagnostic:
+    rule_id = f"training-bridge-{finding.kind.value}"
+    severity = {
+        "error": DiagnosticSeverity.ERROR,
+        "warning": DiagnosticSeverity.WARNING,
+        "info": DiagnosticSeverity.INFO,
+    }[finding.severity]
+    steps = tuple(
+        WitnessStep(action=action, input=input_value, output=output_value)
+        for action, input_value, output_value in finding.witness
+    )
+    properties: list[tuple[str, object]] = [("kind", finding.kind.value)]
+    if finding.subject is not None:
+        properties.append(("subject", finding.subject))
+    suggestions = {
+        "training-bridge-stage-missing": (
+            "Record both training and serving pipeline_stages with tokenizer and chat-template pins.",
+        ),
+        "training-bridge-tokenizer-mismatch": (
+            "Serve with the tokenizer used to prepare and train the dataset, or explicitly retrain/verify the new tokenizer contract.",
+        ),
+        "training-bridge-template-mismatch": (
+            "Serve with the same chat-template revision and generation-prompt behavior used to render training data.",
+        ),
+        "training-bridge-role-delimiter-mismatch": (
+            "Align role delimiter strings between training data rendering and serving prompt assembly.",
+        ),
+        "training-bridge-special-token-mismatch": (
+            "Align special-token text/IDs between training artifacts and serving tokenizer assumptions.",
+        ),
+        "training-bridge-tool-format-mismatch": (
+            "Align tool-call envelope, argument encoding, and parallel-call assumptions before serving tool-trained models.",
+        ),
+    }.get(rule_id, ())
+    return Diagnostic(
+        rule_id=rule_id,
+        severity=severity,
+        message=finding.message,
+        artifact=loaded.artifact.to_ref(),
+        span=_artifact_span(loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG[rule_id],
+        properties=tuple(properties),
+        suggestions=suggestions,
+        witness=WitnessTrace(
+            summary="PromptABI compared training-time prompt-interface facts against serving-time assumptions.",
             steps=steps,
             artifacts=(loaded.artifact.to_ref(),),
         ),
