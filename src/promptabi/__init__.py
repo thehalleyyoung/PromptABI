@@ -322,6 +322,12 @@ from .formal import (
     render_solver_replay_text,
 )
 from .static_contracts import StaticContractFinding, StaticContractReport, analyze_static_contracts
+from .training_packing import (
+    TrainingPackingFinding,
+    TrainingPackingFindingKind,
+    TrainingPackingReport,
+    analyze_training_packing,
+)
 from .grammars import (
     GrammarDialect,
     GrammarIngestionError,
@@ -932,6 +938,9 @@ __all__ = [
     "TrainingDatasetKind",
     "TrainingDatasetSpec",
     "TrainingManifestArtifact",
+    "TrainingPackingFinding",
+    "TrainingPackingFindingKind",
+    "TrainingPackingReport",
     "TrainingPipelineStageVersion",
     "TrainingSourceContribution",
     "TrainingSpanContract",
@@ -1081,6 +1090,7 @@ __all__ = [
     "ingest_tool_schema_mapping",
     "analyze_stop_policy_tokenizer",
     "analyze_tool_call_serialization",
+    "analyze_training_packing",
     "analyze_tokenizer_config_drift",
     "analyze_token_budget",
     "analyze_stop_overreachability",

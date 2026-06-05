@@ -19,6 +19,8 @@ from promptabi import (
 )
 from promptabi.artifacts import artifact_from_config
 from promptabi.loaders import ArtifactLoadError, ArtifactLoader
+from promptabi.session import VerificationSession
+from promptabi.config import load_config
 
 
 def _write_manifest(path: Path) -> None:
@@ -321,3 +323,115 @@ def test_loader_rejects_malformed_training_manifests_with_guidance(tmp_path: Pat
 
     assert exc_info.value.rule_id == "artifact-load-failed"
     assert "supervised/preference datasets" in exc_info.value.suggestion
+
+
+def test_training_packing_check_proves_clean_manifest_boundaries(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "training-manifest.json"
+    _write_manifest(manifest_path)
+    config_path = tmp_path / "promptabi.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "name": "training-packing-clean",
+                "checks": ["training-packing"],
+                "artifacts": {
+                    "train": {
+                        "kind": "training-manifest",
+                        "path": manifest_path.name,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = VerificationSession(load_config(config_path)).run()
+    diagnostics = [diagnostic for diagnostic in result.diagnostics if diagnostic.rule_id.startswith("training-packing")]
+
+    assert result.ok
+    assert [diagnostic.rule_id for diagnostic in diagnostics] == ["training-packing-verified"]
+    assert "preserves 1 supervised span" in diagnostics[0].message
+    assert dict(diagnostics[0].properties)["kind"] == "verified"
+
+
+def test_training_packing_check_catches_boundary_truncation_and_mask_defects(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "bad-training-manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "dataset_format": "chat-jsonl",
+                "datasets": [{"name": "sft", "kind": "supervised", "format": "chat-jsonl"}],
+                "role_labels": [
+                    {"source_role": "assistant", "canonical_role": "assistant", "supervised_target": True},
+                    {"source_role": "human", "canonical_role": "user", "trainable": False},
+                ],
+                "loss_mask_policy": {
+                    "strategy": "assistant-only",
+                    "target_roles": ["assistant"],
+                    "ignored_roles": ["system", "user"],
+                },
+                "packing_window": {
+                    "strategy": "sample-packing",
+                    "max_tokens": 32,
+                    "preserve_example_boundaries": False,
+                    "reset_position_ids": True,
+                },
+                "supervised_spans": [
+                    {
+                        "span_id": "packed-0001.assistant",
+                        "target_role": "assistant",
+                        "rendered_region_role": "assistant",
+                        "start_token": 8,
+                        "end_token": 20,
+                        "region_start_token": 7,
+                        "region_end_token": 22,
+                        "packed_example_id": "packed-0001",
+                        "crosses_packing_boundary": True,
+                    },
+                    {
+                        "span_id": "packed-0002.assistant",
+                        "target_role": "assistant",
+                        "rendered_region_role": "user",
+                        "start_token": 30,
+                        "end_token": 40,
+                        "region_start_token": 30,
+                        "region_end_token": 45,
+                        "loss_masked": False,
+                        "packed_example_id": "packed-0002",
+                    },
+                ],
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "promptabi.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "name": "training-packing-bad",
+                "checks": ["training-packing"],
+                "artifacts": {
+                    "train": {
+                        "kind": "training-manifest",
+                        "path": manifest_path.name,
+                    }
+                },
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+    result = VerificationSession(load_config(config_path)).run()
+    diagnostics = [diagnostic for diagnostic in result.diagnostics if diagnostic.rule_id.startswith("training-packing")]
+    kinds = [dict(diagnostic.properties)["kind"] for diagnostic in diagnostics]
+
+    assert not result.ok
+    assert "boundary-unpreserved" in kinds
+    assert "span-crosses-boundary" in kinds
+    assert "span-truncated" in kinds
+    assert "mask-dropped" in kinds
+    assert "role-delimiter-drift" in kinds
+    assert "bos-eos-ambiguous" in kinds
+    assert {diagnostic.rule_id for diagnostic in diagnostics} == {"training-packing-boundary", "training-packing-mask"}

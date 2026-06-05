@@ -9,7 +9,7 @@ from pathlib import Path
 from threading import RLock
 from urllib.parse import parse_qs, urlparse
 
-from .artifacts import ArtifactKind, TokenizerArtifact
+from .artifacts import ArtifactKind, TokenizerArtifact, TrainingManifestArtifact
 from .budgets import TokenBudgetFinding, TokenBudgetReport, analyze_token_budget
 from .chat_templates import ChatTemplateParseError, parse_hf_tokenizer_config_chat_template
 from .config import VerificationConfig, load_config
@@ -69,6 +69,7 @@ from .stop_overreachability import (
 from .tool_serialization import ToolSerializationFinding, analyze_tool_call_serialization
 from .tokenizer_drift import TokenizerDriftAbstention, TokenizerDriftFinding, analyze_tokenizer_config_drift
 from .tokenizers import TokenizerAdapter, TokenizerError, load_tokenizer
+from .training_packing import TrainingPackingFinding, analyze_training_packing
 
 
 CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
@@ -134,6 +135,9 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "provider-migration": (CheckMode.BOUNDED, CheckMode.HEURISTIC),
     "tool-schema-ingestion": (CheckMode.SOUND, CheckMode.COMPLETE),
     "tool-serialization": (CheckMode.BOUNDED, CheckMode.HEURISTIC),
+    "training-packing-boundary": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-packing-mask": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-packing-verified": (CheckMode.SOUND, CheckMode.BOUNDED),
     "tokenizer-drift": (CheckMode.SOUND, CheckMode.COMPLETE),
     "tokenizer-drift-abstained": (CheckMode.ABSTAINING, CheckMode.COMPLETE),
     "tokenizer-drift-clean": (CheckMode.SOUND, CheckMode.COMPLETE),
@@ -336,6 +340,7 @@ CHECK_DEPENDENCIES: dict[str, CheckDependency] = {
             ArtifactKind.STOP_POLICY,
         ),
     ),
+    "training-packing": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "tokenizer-config-drift": CheckDependency(artifact_kinds=(ArtifactKind.TOKENIZER,)),
     "tokenizer-drift": CheckDependency(artifact_kinds=(ArtifactKind.TOKENIZER,)),
 }
@@ -522,6 +527,7 @@ class VerificationSession:
             "token-budget-model": self._token_budget_model_check,
             "tool-schema-ingestion": self._tool_schema_ingestion_check,
             "tool-serialization": self._tool_serialization_check,
+            "training-packing": self._training_packing_check,
             "tokenizer-config-drift": self._tokenizer_config_drift_check,
             "tokenizer-drift": self._tokenizer_config_drift_check,
         }
@@ -1004,6 +1010,15 @@ class VerificationSession:
     def _tool_serialization_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
         report = analyze_tool_call_serialization(context.loaded_artifacts)
         return tuple(_tool_serialization_diagnostic(finding) for finding in report.findings)
+
+    def _training_packing_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        diagnostics: list[Diagnostic] = []
+        for loaded in context.loaded_artifacts:
+            if not isinstance(loaded.artifact, TrainingManifestArtifact):
+                continue
+            report = analyze_training_packing(loaded.artifact)
+            diagnostics.extend(_training_packing_finding_diagnostic(loaded, finding) for finding in report.findings)
+        return tuple(diagnostics)
 
     def _tokenizer_config_drift_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
         report = analyze_tokenizer_config_drift(context.loaded_artifacts)
@@ -1678,6 +1693,56 @@ def _tool_schema_ingestion_diagnostic(loaded: LoadedArtifact) -> Diagnostic:
                 WitnessStep(action="identify closed parameter schemas", output=", ".join(closed) or "<none>"),
                 WitnessStep(action="record ingestion issues", output=str(issue_count)),
             ),
+            artifacts=(loaded.artifact.to_ref(),),
+        ),
+    )
+
+
+def _training_packing_finding_diagnostic(
+    loaded: LoadedArtifact,
+    finding: TrainingPackingFinding,
+) -> Diagnostic:
+    rule_id = (
+        "training-packing-verified"
+        if finding.severity == "info"
+        else "training-packing-mask"
+        if finding.kind.value.startswith("mask")
+        else "training-packing-boundary"
+    )
+    severity = {
+        "error": DiagnosticSeverity.ERROR,
+        "warning": DiagnosticSeverity.WARNING,
+        "info": DiagnosticSeverity.INFO,
+    }[finding.severity]
+    steps = tuple(
+        WitnessStep(action=action, input=input_value, output=output_value)
+        for action, input_value, output_value in finding.witness
+    )
+    properties: list[tuple[str, object]] = [("kind", finding.kind.value)]
+    if finding.span_id is not None:
+        properties.append(("span_id", finding.span_id))
+    if finding.packed_example_id is not None:
+        properties.append(("packed_example_id", finding.packed_example_id))
+    return Diagnostic(
+        rule_id=rule_id,
+        severity=severity,
+        message=finding.message,
+        artifact=loaded.artifact.to_ref(),
+        span=_artifact_span(loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG[rule_id],
+        properties=tuple(properties),
+        suggestions=(
+            "Preserve packed-example boundaries with an explicit BOS/EOS or boundary token and regenerate the manifest span facts.",
+        )
+        if rule_id == "training-packing-boundary"
+        else (
+            "Align loss_mask_policy.target_roles and rendered supervised spans before fine-tuning.",
+        )
+        if rule_id == "training-packing-mask"
+        else (),
+        witness=WitnessTrace(
+            summary="PromptABI replayed finite rendered/tokenized training span facts against the declared packing policy.",
+            steps=steps,
             artifacts=(loaded.artifact.to_ref(),),
         ),
     )

@@ -101,6 +101,7 @@ CHECK_RULE_IDS: dict[str, tuple[str, ...]] = {
     ),
     "tool-schema-ingestion": ("tool-schema-ingestion",),
     "tool-serialization": ("tool-serialization",),
+    "training-packing": ("training-packing-boundary", "training-packing-mask", "training-packing-verified"),
     "tokenizer-config-drift": ("tokenizer-drift", "tokenizer-drift-abstained", "tokenizer-drift-clean"),
     "tokenizer-drift": ("tokenizer-drift", "tokenizer-drift-abstained", "tokenizer-drift-clean"),
 }

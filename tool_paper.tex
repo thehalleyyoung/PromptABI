@@ -268,7 +268,7 @@ proving or refuting prompt-budget survival, stop/control-token exclusion,
 role-region non-forgeability, tool-schema required-parameter satisfiability,
 tool/provider compatibility, supervised target-role alignment, and observed
 supervised-span containment across rendered role regions, tokenized bounds,
-preserved packing boundaries, loss-mask selection, and exclusion of declared
+preserved dataset-packing boundaries, BOS/EOS delimiters, loss-mask selection, and exclusion of declared
 user, tool, retrieval, or preference source ranges from supervised targets, plus
 tokenizer and chat-template stage consistency across dataset preparation,
 training, evaluation, and serving, with concrete models,
@@ -472,7 +472,7 @@ added control tokens, controlled prompt regions containing role/control boundary
 markers, tool schemas requiring parameters absent from their declared properties,
 tool-provider family mismatches, and training target roles outside the serving
 chat-template role universe, plus supervised training spans that no longer align
-with the observed rendered role region, token bounds, packing boundary, or loss
+with the observed rendered role region, token bounds, packed example boundary, or loss
 mask, source-contribution leakage into target spans, and tokenizer/template drift
 between fine-tuning preparation, training, evaluation, and serving pins, and lets
 maintainers replay those obligations from fixture JSON while
