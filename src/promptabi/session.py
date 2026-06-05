@@ -40,7 +40,7 @@ from .parser_compatibility import (
 )
 from .first_party_plugins import create_first_party_plugin_registry
 from .plugins import PluginRegistry
-from .policies import apply_policy_diagnostics
+from .policies import apply_org_policy_diagnostics, apply_policy_diagnostics
 from .provider_fixture_replay import ProviderFixtureReplayCase, ProviderFixtureReplayFinding, analyze_provider_fixture_replay
 from .provider_migration import ProviderMigrationFinding, analyze_provider_migration
 from .loaders import ArtifactLoadError, ArtifactLoadWarning, ArtifactLoader, LoadedArtifact
@@ -161,6 +161,15 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "diagnostic-suppressed": (CheckMode.SOUND, CheckMode.COMPLETE),
     "policy-suppression-invalid": (CheckMode.SOUND, CheckMode.COMPLETE),
     "policy-threshold-violation": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "policy-pack-provider-fixture-unapproved": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "policy-pack-provider-fixture-unpinned": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "policy-pack-required-check-missing": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "policy-pack-solver-timeout-exceeded": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "policy-pack-solver-timeout-missing": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "policy-pack-strict-no-network-required": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "policy-pack-supported-fragment-unknown": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "policy-pack-supported-fragment-violation": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "policy-pack-verified": (CheckMode.SOUND, CheckMode.COMPLETE),
     "check-unknown": (CheckMode.SOUND, CheckMode.COMPLETE),
     "check-failed": (CheckMode.HEURISTIC,),
 }
@@ -570,7 +579,25 @@ class VerificationSession:
         return tuple(item.diagnostic for item in scheduled_diagnostics)
 
     def run(self, *, checks: Sequence[str | CheckCallable] | None = None) -> VerificationResult:
+        selected_checks = tuple(
+            check if isinstance(check, str) else getattr(check, "__name__", "embedded-check")
+            for check in (checks or self.config.checks)
+        )
         diagnostics = self.collect_diagnostics(checks=checks)
+        diagnostics = tuple(
+            sorted(
+                (
+                    *diagnostics,
+                    *apply_org_policy_diagnostics(
+                        self.config,
+                        self.config.policy,
+                        selected_checks=selected_checks,
+                        check_modes=self.check_modes,
+                    ),
+                ),
+                key=lambda item: item.sort_key,
+            )
+        )
         diagnostics = apply_policy_diagnostics(diagnostics, self.config.policy)
         return VerificationResult(config=self.config, diagnostics=tuple(diagnostics))
 

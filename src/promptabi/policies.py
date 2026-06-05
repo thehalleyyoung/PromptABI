@@ -79,6 +79,47 @@ class Suppression:
 
 
 @dataclass(frozen=True, slots=True)
+class OrgPolicyPack:
+    """Organization-wide constraints layered on top of repository policy."""
+
+    required_checks: tuple[str, ...] = ()
+    supported_fragments: tuple[tuple[str, tuple[CheckMode, ...]], ...] = ()
+    max_solver_timeout_ms: int | None = None
+    require_strict_no_network: bool = False
+    forbid_local_usage_summary: bool = False
+    approved_provider_fixture_sha256: tuple[str, ...] = ()
+
+    @property
+    def active(self) -> bool:
+        return bool(
+            self.required_checks
+            or self.supported_fragments
+            or self.max_solver_timeout_ms is not None
+            or self.require_strict_no_network
+            or self.forbid_local_usage_summary
+            or self.approved_provider_fixture_sha256
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {}
+        if self.required_checks:
+            data["required_checks"] = list(self.required_checks)
+        if self.supported_fragments:
+            data["supported_fragments"] = {
+                check: [mode.value for mode in modes] for check, modes in self.supported_fragments
+            }
+        if self.max_solver_timeout_ms is not None:
+            data["max_solver_timeout_ms"] = self.max_solver_timeout_ms
+        if self.require_strict_no_network:
+            data["require_strict_no_network"] = True
+        if self.forbid_local_usage_summary:
+            data["forbid_local_usage_summary"] = True
+        if self.approved_provider_fixture_sha256:
+            data["approved_provider_fixture_sha256"] = list(self.approved_provider_fixture_sha256)
+        return data
+
+
+@dataclass(frozen=True, slots=True)
 class VerificationPolicy:
     """Repository policy for accepted risks and CI severity thresholds."""
 
@@ -88,6 +129,7 @@ class VerificationPolicy:
     require_expiration: bool = True
     require_owner: bool = False
     severity_overrides: tuple[tuple[str, DiagnosticSeverity], ...] = ()
+    org_policy: OrgPolicyPack = field(default_factory=OrgPolicyPack)
     source_paths: tuple[str, ...] = ()
 
     @property
@@ -99,6 +141,7 @@ class VerificationPolicy:
             or not self.require_expiration
             or self.require_owner
             or self.severity_overrides
+            or self.org_policy.active
             or self.source_paths
         )
 
@@ -115,6 +158,8 @@ class VerificationPolicy:
             }
         if self.severity_threshold is not None:
             data["severity_threshold"] = self.severity_threshold.value
+        if self.org_policy.active:
+            data["org_policy"] = self.org_policy.to_dict()
         if self.source_paths:
             data["source_paths"] = list(self.source_paths)
         return data
@@ -209,12 +254,14 @@ def policy_from_mapping(
         require_expiration = _optional_bool(data.get("require_expiration"), default=True, field_name="require_expiration")
         require_owner = _optional_bool(data.get("require_owner"), default=False, field_name="require_owner")
         severity_overrides = _severity_overrides(data.get("severity_overrides", {}))
+        org_policy = _org_policy_pack_from_mapping(data)
     else:
         severity_threshold = None
         require_justification = True
         require_expiration = True
         require_owner = False
         severity_overrides = ()
+        org_policy = OrgPolicyPack()
 
     raw_suppressions = data.get("suppressions", [])
     if not isinstance(raw_suppressions, list):
@@ -234,12 +281,13 @@ def policy_from_mapping(
         require_expiration=require_expiration,
         require_owner=require_owner,
         severity_overrides=severity_overrides,
+        org_policy=org_policy,
         source_paths=(source_path,),
     )
 
 
 def merge_policies(*policies: VerificationPolicy) -> VerificationPolicy:
-    """Merge policies in config order; later scalar settings override earlier ones."""
+    """Merge policies in config order while preserving restrictive org-pack constraints."""
 
     if not policies:
         return empty_policy()
@@ -251,6 +299,7 @@ def merge_policies(*policies: VerificationPolicy) -> VerificationPolicy:
         require_expiration=policies[-1].require_expiration,
         require_owner=policies[-1].require_owner,
         severity_overrides=_merged_severity_overrides(policies),
+        org_policy=_merged_org_policy(policies),
         source_paths=tuple(path for policy in policies for path in policy.source_paths),
     )
 
@@ -285,6 +334,167 @@ def apply_policy_diagnostics(
     if policy.severity_threshold is not None:
         policy_diagnostics.extend(_threshold_diagnostics(tuple(remaining), policy.severity_threshold))
     return tuple(sorted((*remaining, *policy_diagnostics), key=lambda item: item.sort_key))
+
+
+def apply_org_policy_diagnostics(
+    config: Any,
+    policy: VerificationPolicy,
+    *,
+    selected_checks: tuple[str, ...],
+    check_modes: dict[str, tuple[CheckMode, ...]],
+) -> tuple[Diagnostic, ...]:
+    """Evaluate organization policy-pack constraints against a verification run."""
+
+    org = policy.org_policy
+    if not org.active:
+        return ()
+    diagnostics: list[Diagnostic] = []
+    configured_checks = set(selected_checks)
+    missing_checks = tuple(check for check in org.required_checks if check not in configured_checks)
+    if missing_checks:
+        diagnostics.append(
+            _org_policy_diagnostic(
+                "policy-pack-required-check-missing",
+                DiagnosticSeverity.ERROR,
+                f"organization policy pack requires {len(missing_checks)} check(s) not selected for this run",
+                "required_checks",
+                ", ".join(missing_checks),
+                "Add the required checks to the PromptABI config or do not apply this organization policy pack.",
+                extra=(("missing_checks", list(missing_checks)),),
+            )
+        )
+
+    supported = dict(org.supported_fragments)
+    for check_name in sorted(configured_checks & set(supported)):
+        allowed = set(supported[check_name])
+        actual = set(check_modes.get(check_name, ()))
+        if not actual:
+            diagnostics.append(
+                _org_policy_diagnostic(
+                    "policy-pack-supported-fragment-unknown",
+                    DiagnosticSeverity.ERROR,
+                    f"organization policy pack constrains check '{check_name}', but PromptABI has no mode metadata for it",
+                    check_name,
+                    "unknown",
+                    "Use a registered check with declared guarantee modes or update the policy pack.",
+                    extra=(("allowed_modes", sorted(mode.value for mode in allowed)),),
+                )
+            )
+        elif actual.isdisjoint(allowed):
+            diagnostics.append(
+                _org_policy_diagnostic(
+                    "policy-pack-supported-fragment-violation",
+                    DiagnosticSeverity.ERROR,
+                    f"check '{check_name}' runs outside the organization-supported guarantee fragment",
+                    check_name,
+                    ", ".join(sorted(mode.value for mode in actual)),
+                    "Select a check/configuration whose guarantee modes are allowed by the organization policy pack.",
+                    extra=(
+                        ("allowed_modes", sorted(mode.value for mode in allowed)),
+                        ("actual_modes", sorted(mode.value for mode in actual)),
+                    ),
+                )
+            )
+
+    enterprise = getattr(config, "enterprise", None)
+    if org.require_strict_no_network and not bool(getattr(enterprise, "strict_no_network", False)):
+        diagnostics.append(
+            _org_policy_diagnostic(
+                "policy-pack-strict-no-network-required",
+                DiagnosticSeverity.ERROR,
+                "organization policy pack requires enterprise.strict_no_network=true",
+                "strict_no_network",
+                "false",
+                "Enable enterprise.strict_no_network and use local mirrored artifacts.",
+            )
+        )
+
+    sandbox = getattr(enterprise, "solver_sandbox", None)
+    if org.max_solver_timeout_ms is not None:
+        timeout_ms = getattr(sandbox, "timeout_ms", None)
+        if timeout_ms is None:
+            diagnostics.append(
+                _org_policy_diagnostic(
+                    "policy-pack-solver-timeout-missing",
+                    DiagnosticSeverity.ERROR,
+                    "organization policy pack requires a finite solver sandbox timeout",
+                    "solver_sandbox.timeout_ms",
+                    "missing",
+                    "Set enterprise.solver_sandbox.timeout_ms at or below the organization cap.",
+                    extra=(("max_solver_timeout_ms", org.max_solver_timeout_ms),),
+                )
+            )
+        elif timeout_ms > org.max_solver_timeout_ms:
+            diagnostics.append(
+                _org_policy_diagnostic(
+                    "policy-pack-solver-timeout-exceeded",
+                    DiagnosticSeverity.ERROR,
+                    f"solver timeout {timeout_ms}ms exceeds organization cap {org.max_solver_timeout_ms}ms",
+                    "solver_sandbox.timeout_ms",
+                    str(timeout_ms),
+                    "Lower enterprise.solver_sandbox.timeout_ms or use a different approved policy pack.",
+                    extra=(("max_solver_timeout_ms", org.max_solver_timeout_ms),),
+                )
+            )
+
+    approved = set(org.approved_provider_fixture_sha256)
+    if approved:
+        for fixture in getattr(enterprise, "internal_provider_fixtures", ()):
+            sha256 = getattr(fixture, "sha256", None)
+            name = getattr(fixture, "name", "fixture")
+            if sha256 is None:
+                diagnostics.append(
+                    _org_policy_diagnostic(
+                        "policy-pack-provider-fixture-unpinned",
+                        DiagnosticSeverity.ERROR,
+                        f"internal provider fixture '{name}' cannot be approved without a sha256 pin",
+                        name,
+                        "missing-sha256",
+                        "Pin the fixture sha256 and list that digest in approved_provider_fixture_sha256.",
+                    )
+                )
+            elif sha256 not in approved:
+                diagnostics.append(
+                    _org_policy_diagnostic(
+                        "policy-pack-provider-fixture-unapproved",
+                        DiagnosticSeverity.ERROR,
+                        f"internal provider fixture '{name}' is not approved by the organization policy pack",
+                        name,
+                        sha256,
+                        "Use an approved fixture digest or update the organization policy pack after review.",
+                        extra=(("fixture_sha256", sha256),),
+                    )
+                )
+
+    if not diagnostics:
+        diagnostics.append(
+            Diagnostic(
+                rule_id="policy-pack-verified",
+                severity=DiagnosticSeverity.INFO,
+                message="organization policy pack constraints are satisfied for this verification run",
+                check_modes=(CheckMode.SOUND, CheckMode.COMPLETE),
+                properties=(
+                    ("required_checks", list(org.required_checks)),
+                    ("source_paths", list(policy.source_paths)),
+                ),
+                witness=WitnessTrace(
+                    summary="PromptABI evaluated organization policy-pack requirements before applying suppressions or severity gates.",
+                    steps=(
+                        WitnessStep(action="verify required checks", output=str(len(org.required_checks))),
+                        WitnessStep(action="verify supported fragments", output=str(len(org.supported_fragments))),
+                        WitnessStep(action="verify solver timeout", output=str(org.max_solver_timeout_ms or "not-required")),
+                        WitnessStep(action="verify provider fixture approvals", output=str(len(org.approved_provider_fixture_sha256))),
+                    ),
+                ),
+            )
+        )
+    return tuple(diagnostics)
+
+
+def policy_forbids_local_summary(policy: VerificationPolicy) -> bool:
+    """Return whether org privacy policy forbids local usage-summary writes."""
+
+    return policy.org_policy.forbid_local_usage_summary
 
 
 def _suppression_from_mapping(
@@ -450,6 +660,81 @@ def _merged_severity_overrides(policies: tuple[VerificationPolicy, ...]) -> tupl
     return tuple(sorted(merged.items()))
 
 
+def _merged_org_policy(policies: tuple[VerificationPolicy, ...]) -> OrgPolicyPack:
+    packs = tuple(policy.org_policy for policy in policies if policy.org_policy.active)
+    if not packs:
+        return OrgPolicyPack()
+    return OrgPolicyPack(
+        required_checks=tuple(sorted({check for pack in packs for check in pack.required_checks})),
+        supported_fragments=_merge_supported_fragments(packs),
+        max_solver_timeout_ms=_min_optional(pack.max_solver_timeout_ms for pack in packs),
+        require_strict_no_network=any(pack.require_strict_no_network for pack in packs),
+        forbid_local_usage_summary=any(pack.forbid_local_usage_summary for pack in packs),
+        approved_provider_fixture_sha256=tuple(
+            sorted({digest for pack in packs for digest in pack.approved_provider_fixture_sha256})
+        ),
+    )
+
+
+def _merge_supported_fragments(packs: tuple[OrgPolicyPack, ...]) -> tuple[tuple[str, tuple[CheckMode, ...]], ...]:
+    merged: dict[str, set[CheckMode]] = {}
+    for pack in packs:
+        for check_name, modes in pack.supported_fragments:
+            if check_name in merged:
+                merged[check_name] &= set(modes)
+            else:
+                merged[check_name] = set(modes)
+    return tuple((check, tuple(sorted(modes, key=lambda mode: mode.value))) for check, modes in sorted(merged.items()))
+
+
+def _min_optional(values: Any) -> int | None:
+    present = [value for value in values if value is not None]
+    return min(present) if present else None
+
+
+def _org_policy_pack_from_mapping(data: dict[str, Any]) -> OrgPolicyPack:
+    raw_fragments = data.get("supported_fragments", {})
+    if not isinstance(raw_fragments, dict):
+        raise PolicyError("policy field 'supported_fragments' must be an object")
+    supported_fragments = []
+    for check_name, raw_modes in sorted(raw_fragments.items()):
+        if not isinstance(check_name, str) or not check_name.strip():
+            raise PolicyError("policy supported_fragments keys must be non-empty check names")
+        supported_fragments.append((check_name.strip(), _check_mode_list(raw_modes, field_name=f"supported_fragments.{check_name}")))
+    return OrgPolicyPack(
+        required_checks=tuple(sorted(set(_policy_string_list(data.get("required_checks", []), field_name="required_checks")))),
+        supported_fragments=tuple(supported_fragments),
+        max_solver_timeout_ms=_optional_positive_int(data.get("max_solver_timeout_ms"), field_name="max_solver_timeout_ms"),
+        require_strict_no_network=_optional_bool(data.get("require_strict_no_network"), default=False, field_name="require_strict_no_network"),
+        forbid_local_usage_summary=_optional_bool(data.get("forbid_local_usage_summary"), default=False, field_name="forbid_local_usage_summary"),
+        approved_provider_fixture_sha256=_approved_fixture_sha256(data.get("approved_provider_fixtures", data.get("approved_provider_fixture_sha256", []))),
+    )
+
+
+def _org_policy_diagnostic(
+    rule_id: str,
+    severity: DiagnosticSeverity,
+    message: str,
+    subject: str,
+    observed: str,
+    suggestion: str,
+    *,
+    extra: tuple[tuple[str, object], ...] = (),
+) -> Diagnostic:
+    return Diagnostic(
+        rule_id=rule_id,
+        severity=severity,
+        message=message,
+        check_modes=(CheckMode.SOUND, CheckMode.COMPLETE),
+        suggestions=(suggestion,),
+        properties=(("policy_subject", subject), ("observed", observed), *extra),
+        witness=WitnessTrace(
+            summary="PromptABI evaluated an organization-wide policy-pack constraint.",
+            steps=(WitnessStep(action="check organization policy", input=subject, output=observed),),
+        ),
+    )
+
+
 def _severity_overrides(value: Any) -> tuple[tuple[str, DiagnosticSeverity], ...]:
     if not isinstance(value, dict):
         raise PolicyError("policy field 'severity_overrides' must be an object")
@@ -509,6 +794,60 @@ def _required_severity(value: Any, *, field_name: str) -> DiagnosticSeverity:
     if severity is None:
         raise PolicyError(f"policy field '{field_name}' must be a string")
     return severity
+
+
+def _check_mode_list(value: Any, *, field_name: str) -> tuple[CheckMode, ...]:
+    modes = _policy_string_list(value, field_name=field_name)
+    parsed = []
+    for mode in modes:
+        try:
+            parsed.append(CheckMode(mode))
+        except ValueError as exc:
+            choices = ", ".join(item.value for item in CheckMode)
+            raise PolicyError(f"policy field '{field_name}' must contain only check modes: {choices}") from exc
+    return tuple(sorted(set(parsed), key=lambda mode: mode.value))
+
+
+def _optional_positive_int(value: Any, *, field_name: str) -> int | None:
+    if value is None:
+        return None
+    if not isinstance(value, int) or value <= 0:
+        raise PolicyError(f"policy field '{field_name}' must be a positive integer")
+    return value
+
+
+def _approved_fixture_sha256(value: Any) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise PolicyError("policy field 'approved_provider_fixtures' must be a list")
+    digests = []
+    for index, item in enumerate(value):
+        if isinstance(item, str):
+            digest = item.strip()
+        elif isinstance(item, dict):
+            digest = _required_policy_string(item, "sha256", prefix=f"approved_provider_fixtures.{index}")
+        else:
+            raise PolicyError("policy approved_provider_fixtures entries must be sha256 strings or objects")
+        if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+            raise PolicyError("policy approved provider fixture sha256 values must be lowercase 64-character hex digests")
+        digests.append(digest)
+    return tuple(sorted(set(digests)))
+
+
+def _policy_string_list(value: Any, *, field_name: str) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, list) or not all(isinstance(item, str) and item.strip() for item in value):
+        raise PolicyError(f"policy field '{field_name}' must be a list of non-empty strings")
+    return tuple(item.strip() for item in value)
+
+
+def _required_policy_string(data: dict[str, Any], field_name: str, *, prefix: str) -> str:
+    value = data.get(field_name)
+    if not isinstance(value, str) or not value.strip():
+        raise PolicyError(f"policy field '{prefix}.{field_name}' must be a non-empty string")
+    return value.strip()
 
 
 def _optional_date(value: Any) -> date | None:

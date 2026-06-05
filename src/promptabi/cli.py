@@ -107,6 +107,7 @@ from .mutation_fuzzing import (
     run_mutation_fuzzing,
 )
 from .plugins import PluginError, PluginRegistry, load_plugin_modules
+from .policies import policy_forbids_local_summary
 from .proof_sketches import (
     build_supported_proof_catalog,
     render_proof_sketch_report_json,
@@ -967,6 +968,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             plugin_registry = _load_cli_plugins(args.plugin)
             overrides = _parse_artifact_overrides(args.artifact, parser)
             config = load_config(config_path).with_artifact_overrides(overrides, base_dir=Path.cwd())
+            if args.local_summary is not None and policy_forbids_local_summary(config.policy):
+                print("promptabi: organization policy pack forbids --local-summary writes", file=sys.stderr)
+                return 2
             session = VerificationSession(config, plugin_registry=plugin_registry)
             result = session.run()
             lockfile_path = _resolve_lockfile_path(args.lockfile, config_path)
