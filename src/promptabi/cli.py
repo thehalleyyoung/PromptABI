@@ -33,6 +33,12 @@ from .beta import (
     run_beta_program,
 )
 from .config import ConfigError, discover_config, load_config
+from .contract_language import (
+    ContractLanguageError,
+    format_static_contract,
+    parse_static_contract_file,
+    render_static_contract_json,
+)
 from .compatibility_matrix import (
     build_compatibility_matrix,
     render_compatibility_matrix_json,
@@ -774,6 +780,26 @@ def build_parser() -> argparse.ArgumentParser:
     prompt_pack_provenance_verify.add_argument("--output", help="write verification output to this path instead of stdout")
     prompt_pack_provenance_verify.add_argument("-q", "--quiet", action="count", default=0, help="suppress stdout when --output is set")
     _add_local_summary_argument(prompt_pack_provenance_verify)
+
+    contract = subparsers.add_parser("contract", help="parse and format PromptABI static-contract DSL files")
+    contract_subparsers = contract.add_subparsers(dest="contract_command", required=True)
+    contract_format = contract_subparsers.add_parser(
+        "format",
+        help="canonicalize a .pabi static contract or emit its lowered JSON artifact",
+    )
+    contract_format.add_argument("path", help="PromptABI .pabi contract file")
+    contract_format.add_argument(
+        "--format",
+        choices=("pabi", "json"),
+        default="pabi",
+        help="output format (default: pabi)",
+    )
+    contract_format.add_argument("--output", help="write formatted output to this path instead of stdout")
+    contract_format.add_argument(
+        "--check",
+        action="store_true",
+        help="exit non-zero if the .pabi file is not already in canonical format",
+    )
 
     corpus = subparsers.add_parser("corpus", help="seed corpus maintenance commands")
     corpus_subparsers = corpus.add_subparsers(dest="corpus_command", required=True)
@@ -1607,6 +1633,35 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         print(output, end="")
         return exit_code
+
+    if args.command == "contract" and args.contract_command == "format":
+        path = Path(args.path)
+        try:
+            contract = parse_static_contract_file(path)
+            rendered = render_static_contract_json(contract) if args.format == "json" else format_static_contract(contract)
+        except (OSError, ContractLanguageError, ValueError) as exc:
+            print(f"promptabi: cannot parse static contract: {exc}", file=sys.stderr)
+            return 2
+        if args.check:
+            if args.format != "pabi":
+                parser.error("--check is only supported with --format pabi")
+            try:
+                current = path.read_text(encoding="utf-8")
+            except OSError as exc:
+                print(f"promptabi: cannot read static contract: {exc}", file=sys.stderr)
+                return 2
+            if current != rendered:
+                print(f"promptabi: {path} is not canonically formatted", file=sys.stderr)
+                return 1
+        if args.output:
+            output = Path(args.output)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(rendered, encoding="utf-8")
+        elif args.check:
+            pass
+        else:
+            print(rendered, end="")
+        return 0
 
     if args.command == "prompt-pack" and args.prompt_pack_command == "registry":
         started_at = time.perf_counter()

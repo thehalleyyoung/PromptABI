@@ -1,0 +1,21 @@
+{
+  "name": "static-contract-language-examples",
+  "artifacts": {
+    "app-contract": {
+      "kind": "static-contract",
+      "path": "app.pabi"
+    },
+    "training-contract": {
+      "kind": "static-contract",
+      "path": "training.pabi"
+    },
+    "rag-contract": {
+      "kind": "static-contract",
+      "path": "rag.pabi"
+    },
+    "eval-contract": {
+      "kind": "static-contract",
+      "path": "eval.pabi"
+    }
+  }
+}

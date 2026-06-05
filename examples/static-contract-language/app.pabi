@@ -1,0 +1,10 @@
+contract promptabi.contract/v1
+
+rule app-boundaries type llm-app severity error applies_to chat-template,stop-policy,tool-definition:
+  description "Production chat app boundary contract"
+  allowed_roles assistant,system,tool,user
+  required_regions assistant,system
+  forbid_delimiters "</tool_call>","<tool_call>","<|im_start|>"
+  schema tool_call requires arguments,name
+  stop json-response stops "</json>","```" forbid_inside json-string
+  invariant budget-survival: required_prompt_tokens <= input_budget_tokens

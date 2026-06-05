@@ -85,3 +85,37 @@ assert problem.solve(prefer_z3=False).status is SolverStatus.SAT
 The production checks use richer artifact-derived variables, but the proof
 shape is the same: define an unsafe finite condition, solve it, and report either
 a counterexample, an unsat proof, or an abstention.
+
+## Human-authored contract language
+
+Static contracts can be stored as JSON or as the line-oriented `.pabi` DSL. The
+DSL is deliberately small: it is easy to diff, canonicalize, and lower into the
+same `StaticContractArtifact` model used by verification.
+
+```text
+contract promptabi.contract/v1
+
+rule app-boundaries type llm-app severity error applies_to chat-template,tool-definition:
+  description "Production chat app boundary contract"
+  allowed_roles assistant,system,tool,user
+  required_regions assistant,system
+  forbid_delimiters "<|im_start|>","<tool_call>","</tool_call>"
+  schema tool_call requires arguments,name
+  stop json-response stops "</json>","```" forbid_inside json-string
+  invariant budget-survival: required_prompt_tokens <= input_budget_tokens
+```
+
+Use the formatter to validate reviewable contracts or emit the exact JSON
+artifact shape consumed by loaders:
+
+```bash
+promptabi contract format examples/static-contract-language/app.pabi --check
+promptabi contract format examples/static-contract-language/app.pabi --format json
+promptabi verify --config examples/static-contract-language/promptabi.json --fail-on never
+```
+
+The examples directory includes contracts for an LLM app, a fine-tuning
+manifest, a RAG pipeline, and an evaluation harness. Their rule names, source
+lines, severity, schema obligations, stop obligations, forbidden delimiters, and
+invariants are preserved when loading `.pabi` files, so diagnostics can still
+point back to human-readable rules.

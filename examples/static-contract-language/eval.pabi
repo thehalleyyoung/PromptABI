@@ -1,0 +1,9 @@
+contract promptabi.contract/v1
+
+rule eval-harness type evaluation severity error applies_to evaluation-harness,provider-config:
+  description "Benchmark prompts must not expose answers or drift across providers"
+  allowed_roles assistant,system,user
+  required_regions answer-parser,system
+  schema answer requires confidence,final
+  stop answer stops "<eos>","\\n\\n" forbid_inside json-string
+  invariant few-shot-budget: few_shot_tokens <= max_prompt_tokens

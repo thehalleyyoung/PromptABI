@@ -1,0 +1,9 @@
+contract promptabi.contract/v1
+
+rule sft-targets type fine-tuning severity error applies_to chat-template,training-manifest:
+  description "Fine-tuning targets must stay in assistant regions with stable packing"
+  allowed_roles assistant,system,user
+  required_regions assistant
+  forbid_delimiters "<|system|>","<|user|>"
+  invariant packing-window: example_tokens <= packing_window_tokens
+  invariant target-region: target_span_end <= assistant_region_end

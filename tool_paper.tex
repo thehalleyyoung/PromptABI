@@ -38,8 +38,10 @@ validated against real Hugging Face \texttt{tokenizers},
 \texttt{tiktoken}, and SentencePiece libraries, deterministic finite automata,
 finite-state transducers with composition and projection, executable
 specifications that replay witnesses, bounded product-language laws, and SMT
-proof objects, a declarative static contract language lowered to a
-finite-contract solver with compressed lazy product witnesses,
+proof objects, a declarative static contract language with a canonical
+\texttt{.pabi} parser, formatter, JSON lowering path, CLI check mode, and
+reviewable examples for LLM apps, fine-tuning datasets, RAG systems, and
+evaluation harnesses, lowered to a finite-contract solver with compressed lazy product witnesses,
 incremental DFA minimization, indexed transducer composition/projection, solver
 timeouts, constraint-sliced finite enumeration, and a deterministic solver-query
 cache keyed by normalized Z3 formulas, artifact hashes, supported-fragment
@@ -369,6 +371,11 @@ zero-based editor ranges, preserves fingerprints, suggestions, witnesses, and
 proof modes in diagnostic data, and publishes empty diagnostic arrays for watched
 local schemas, templates, stop policies, training manifests, and artifact bundles
 so editor shims can clear stale inline findings deterministically.
+A new \texttt{promptabi contract format} command parses and canonicalizes
+human-authored \texttt{.pabi} contracts, emits the exact lowered JSON artifact
+shape, and lets reviews enforce stable rule names, severities, allowed roles,
+required regions, forbidden delimiters, schema obligations, stop obligations,
+and finite invariants before those rules enter the same verification pipeline.
 A concrete VS Code extension now consumes that payload directly: it registers
 quick-check, explanation, and witness-preview commands, maps PromptABI spans to
 native diagnostics, attaches code actions to findings, and previews the exact

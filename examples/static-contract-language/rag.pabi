@@ -1,0 +1,8 @@
+contract promptabi.contract/v1
+
+rule rag-survival type rag severity warning applies_to framework-truncation-config,prompt-segment:
+  description "RAG citations and system policy must survive framework truncation"
+  allowed_roles assistant,system,user
+  required_regions citation,system
+  forbid_delimiters "<|assistant|>","[/INST]"
+  invariant citation-survival: citation_tokens <= input_budget_tokens

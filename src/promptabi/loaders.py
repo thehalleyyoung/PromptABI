@@ -28,6 +28,7 @@ from .artifacts import (
     artifact_from_config,
 )
 from .chat_templates import ChatTemplateParseError, parse_hf_tokenizer_config_chat_template, symbolically_execute_chat_template
+from .contract_language import ContractLanguageError, format_static_contract, parse_static_contract_file
 from .diagnostics import SourceSpan
 from .evaluation_harness import EvaluationHarnessError, parse_evaluation_harness_mapping
 from .grammar_differential import analyze_grammar_differential_corpus
@@ -838,6 +839,55 @@ class ArtifactLoader:
         )
 
     def _load_static_contract(self, artifact: Artifact, path: Path) -> LoadedArtifact:
+        if path.suffix.lower() == ".pabi":
+            try:
+                parsed = parse_static_contract_file(path, name=artifact.name)
+            except (ContractLanguageError, ValueError) as exc:
+                span = exc.to_source_span(str(path)) if isinstance(exc, ContractLanguageError) else None
+                raise ArtifactLoadError(
+                    rule_id="artifact-load-failed",
+                    message=f"static-contract artifact '{artifact.name}' could not be parsed as PromptABI DSL",
+                    suggestion="Run `promptabi contract format <file>` to validate line-oriented contract syntax.",
+                    steps=(("parse static contract DSL", str(path), str(exc)),),
+                    span=span,
+                ) from exc
+            loaded = self._load_file(artifact, path, source_type="static-contract-dsl")
+            parsed_artifact = artifact
+            if isinstance(artifact, StaticContractArtifact):
+                parsed_artifact = replace(
+                    parsed,
+                    location=artifact.location,
+                    provenance=artifact.provenance,
+                    metadata=_merge_metadata(artifact.metadata, parsed.metadata),
+                    source_span=artifact.source_span,
+                )
+            rule_count = len(parsed_artifact.rules) if isinstance(parsed_artifact, StaticContractArtifact) else 0
+            invariant_count = (
+                sum(len(rule.invariants) for rule in parsed_artifact.rules)
+                if isinstance(parsed_artifact, StaticContractArtifact)
+                else 0
+            )
+            formatted_sha256 = (
+                hashlib.sha256(format_static_contract(parsed_artifact).encode("utf-8")).hexdigest()
+                if isinstance(parsed_artifact, StaticContractArtifact)
+                else ""
+            )
+            return LoadedArtifact(
+                artifact=parsed_artifact,
+                source_type="static-contract-dsl",
+                pinned=loaded.pinned,
+                resolved=loaded.resolved,
+                actual_sha256=loaded.actual_sha256,
+                size_bytes=loaded.size_bytes,
+                metadata=(
+                    ("formatted_sha256", formatted_sha256),
+                    ("invariant_count", invariant_count),
+                    ("language", "pabi"),
+                    ("rule_count", rule_count),
+                ),
+                source_spans=_pabi_rule_source_spans(path, parsed_artifact) or loaded.source_spans,
+                warnings=loaded.warnings,
+            )
         if path.suffix.lower() != ".json":
             return self._load_file(artifact, path, source_type="static-contract-file")
         try:
@@ -1262,6 +1312,25 @@ def _prompt_pack_source_spans(source_map, artifact: Artifact) -> tuple[tuple[str
         if span is not None:
             spans.append((f"stop_policies.{stop_policy.name}", span))
     return tuple(spans)
+
+
+def _pabi_rule_source_spans(path: Path, artifact: Artifact) -> tuple[tuple[str, SourceSpan], ...]:
+    if not isinstance(artifact, StaticContractArtifact):
+        return ()
+    line_by_rule: dict[str, int] = {}
+    for key, value in artifact.metadata:
+        if key != "rule_source_lines" or not isinstance(value, tuple):
+            continue
+        for item in value:
+            if not isinstance(item, str) or ":" not in item:
+                continue
+            rule_name, _, line = item.partition(":")
+            if line.isdigit():
+                line_by_rule[rule_name] = int(line)
+    return tuple(
+        (f"rules.{rule.name}", SourceSpan(path=str(path), start_line=line_by_rule.get(rule.name, 1), start_column=1))
+        for rule in artifact.rules
+    )
 
 
 def _nonnegative_optional(raw: dict[str, object], key: str, *, positive: bool) -> int | None:

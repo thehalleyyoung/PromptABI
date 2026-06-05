@@ -32,8 +32,9 @@ from promptabi.artifacts import (
 )
 from promptabi.cli import main
 from promptabi.config import VerificationConfig
+from promptabi.contract_language import format_static_contract, parse_static_contract_text, render_static_contract_json
 from promptabi.formal import BoolDomain, FiniteContractProblem, NamedConstraint, SolverBudgetOutcome, SolverStatus
-from promptabi.loaders import LoadedArtifact
+from promptabi.loaders import ArtifactLoader, LoadedArtifact
 from promptabi.static_contracts import analyze_static_contracts
 
 
@@ -70,6 +71,66 @@ def test_finite_contract_solver_abstains_on_unsupported_z3_fragment() -> None:
     assert "unsupported solver fragment" in result.reason
     assert result.to_dict()["reason"] == result.reason
     assert result.to_dict()["solver_budget_outcome"] == "abstained"
+
+
+def test_static_contract_language_parses_and_formats_reviewable_rules() -> None:
+    source = """\
+contract promptabi.contract/v1
+
+rule app-boundaries type llm-app severity error applies_to chat-template,tool-definition:
+  description "Production chat app boundary contract"
+  allowed_roles assistant,system,tool,user
+  required_regions assistant,system
+  forbid_delimiters "<|im_start|>","<tool_call>","</tool_call>"
+  schema tool_call requires arguments,name
+  stop json-response stops "</json>","```" forbid_inside json-string
+  invariant required_prompt_tokens <= input_budget_tokens
+"""
+
+    artifact = parse_static_contract_text(source, name="app-contract", path="app.pabi")
+
+    assert artifact.contract_version == "promptabi.contract/v1"
+    assert artifact.rules[0].name == "app-boundaries"
+    assert artifact.rules[0].allowed_roles == ("assistant", "system", "tool", "user")
+    assert artifact.rules[0].schema_obligations[0].requires == ("arguments", "name")
+    assert artifact.rules[0].stop_policies[0].forbid_inside == "json-string"
+    assert artifact.rules[0].invariants[0].op == "<="
+    assert parse_static_contract_text(format_static_contract(artifact), name="app-contract").rules == artifact.rules
+    assert '"contract_version": "promptabi.contract/v1"' in render_static_contract_json(artifact)
+
+
+def test_static_contract_language_examples_load_through_real_loader() -> None:
+    loader = ArtifactLoader()
+    artifact = StaticContractArtifact(
+        kind=ArtifactKind.STATIC_CONTRACT,
+        name="app-contract",
+        location=ArtifactLocation(path="examples/static-contract-language/app.pabi"),
+    )
+
+    loaded = loader.load(artifact)
+
+    assert loaded.source_type == "static-contract-dsl"
+    assert dict(loaded.metadata)["language"] == "pabi"
+    assert loaded.source_spans[0][0] == "rules.app-boundaries"
+    assert isinstance(loaded.artifact, StaticContractArtifact)
+    assert loaded.artifact.rules[0].forbidden_delimiters == ("</tool_call>", "<tool_call>", "<|im_start|>")
+
+
+def test_static_contract_cli_formats_pabi_and_json(capsys) -> None:
+    exit_code = main(["contract", "format", "examples/static-contract-language/app.pabi", "--check"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out == ""
+    assert captured.err == ""
+
+    exit_code = main(["contract", "format", "examples/static-contract-language/app.pabi", "--format", "json"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["contract_version"] == "promptabi.contract/v1"
+    assert payload["rules"][0]["name"] == "app-boundaries"
 
 
 def test_static_contracts_prove_budget_and_stop_exclusion_with_enumeration() -> None:
