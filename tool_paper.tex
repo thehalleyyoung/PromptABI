@@ -730,6 +730,65 @@ send telemetry. Teams that need strict privacy can emit hash-only witnesses and
 still keep stable diagnostic fingerprints for trend reports and suppressions.
 
 \newpage
+\section{Prompt-Pack Supply-Chain Trust}
+
+Reusable prompt packs are dependencies, and dependencies need a supply chain that
+is as auditable as the artifacts themselves. PromptABI distills each pack into a
+canonical \emph{capability signature}---order-independent sets of the templates,
+roles, tools, stop policies, and model families it promises---and builds a
+trust layer on top of that signature, where every badge is backed by a
+machine-checkable proof rather than a claim.
+
+A registry resolves the full transitive dependency closure of a root pack,
+pins every reachable version to a content digest, and refuses to emit a lockfile
+when a dependency is missing, when two paths demand conflicting versions, or
+when the graph contains a cycle. The resulting lockfile is summarised by a single
+Merkle-style root digest, so re-verification catches a tampered pin, a drifted
+registry, or an understated closure. Publication events flow into an append-only,
+hash-chained \emph{transparency log}; because the chain is deterministic, an
+auditor can be handed a minimal inclusion proof for one entry and reconstruct the
+committed head without seeing the rest of the private log.
+
+Policy is inherited monotonically. Each layer---an organisation base pack, a
+team extension, a project---declares mandatory tools, banned roles, permitted
+model families, and per-rule diagnostic-severity floors; the verifier proves that
+a descendant only ever \emph{tightens} an inherited constraint, naming any tool
+dropped, role re-permitted, family widened, or floor lowered. Exported roles are
+proven non-forgeable: given a pack's role markers and its consumer input
+channels, PromptABI checks that every privileged marker is neutralised in every
+untrusted channel---by exact-string escaping or structural isolation---and emits a
+concrete forging witness for any gap. Shipped examples are certified against the
+pack's real artifact, so an example cannot target an unsupported family or call an
+undeclared tool. Finally, lifecycle metadata (release, LTS, deprecation,
+end-of-life, successor) is validated for coherence and resolved against a
+reference date, and offline consumers install from HMAC-signed mirrors whose
+manifest and per-artifact digests are verifiable with no network.
+
+These guarantees compose into four cumulative \emph{trust tiers}
+(Table~\ref{tab:trust-tiers}); a higher badge strictly implies every proof the
+lower badge required, and the assessor reports exactly which evidence is still
+missing for the next tier, so a label can never outrun its proofs.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{0.16\linewidth}p{0.74\linewidth}}
+\toprule
+Tier & Evidence required (cumulative) \\
+\midrule
+Community & capability signature; verified transitive lockfile \\
+Verified & transparency-log inclusion; sound policy inheritance; one
+independent review \\
+Certified & certified examples; signed offline mirror; two independent
+reviews \\
+\bottomrule
+\end{tabular}
+\caption{Evidence-backed marketplace trust tiers; each tier subsumes the proofs
+of those below it.}
+\label{tab:trust-tiers}
+\end{table}
+
+\newpage
 \section{SDKs and Stable Public API}
 
 PromptABI exposes two layers for downstream code. The Python package exports
