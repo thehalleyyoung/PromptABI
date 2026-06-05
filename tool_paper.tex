@@ -180,7 +180,9 @@ an opt-in \texttt{--local-summary} usage analytics path that appends only
 sanitized command names, exit codes, durations, diagnostic counts, and aggregate
 artifact/check counts to local JSONL while \texttt{promptabi usage privacy}
 explicitly states that prompts, schemas, configs, constraints, witnesses,
-artifact contents, paths, and network sends are excluded, a \texttt{promptabi dashboard} team-risk view that rolls up live diagnostics,
+artifact contents, paths, and network sends are excluded, a \texttt{promptabi usage metrics}
+export that aggregates rule IDs, solver outcomes, artifact categories, and measured
+check runtimes without raw prompt content, a \texttt{promptabi dashboard} team-risk view that rolls up live diagnostics,
 accepted suppressions, solver abstentions, drift warnings, corpus regressions,
 and local JSONL trend deltas across configs without exposing prompt contents, a checked security
 model that documents structural prompt-interface risks, non-goals,
@@ -629,8 +631,9 @@ upload, workflow annotations, and markdown summaries around the same verifier, a
 local pre-commit workflow that gates staged PromptABI-relevant schemas,
 templates, tokenizers, tools, training manifests, configs, and lockfiles while
 failing closed when staged content differs from the working tree,
-records optional telemetry-free local command summaries with no artifact paths,
-prompt text, schema bodies, solver constraints, witnesses, or network transport,
+records optional telemetry-free local command summaries and local metrics exports
+with no artifact paths, prompt text, schema bodies, solver constraints, witnesses,
+or network transport,
 documents the local trust boundary, structural security claims, non-goals, solver
 privacy, provider-fixture secret rejection, sanitized upstream reporting, and
 responsible disclosure path in a MkDocs-linked security model,

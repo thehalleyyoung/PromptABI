@@ -152,6 +152,12 @@ from .localization import (
     render_diagnostic_catalog_json,
     render_diagnostic_catalog_text,
 )
+from .local_metrics import (
+    LocalMetricsReport,
+    build_local_metrics_report,
+    render_local_metrics_json,
+    render_local_metrics_text,
+)
 from .lockfiles import (
     LockfileError,
     build_lockfile,
@@ -1480,6 +1486,43 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("text", "json"),
         default="text",
         help="output format (default: text)",
+    )
+    usage_metrics = usage_subparsers.add_parser(
+        "metrics",
+        help="export local-only verification metrics without prompt or artifact contents",
+    )
+    usage_metrics.add_argument(
+        "--config",
+        action="append",
+        default=[],
+        help="path to a PromptABI JSON config; may be repeated; defaults to discovering promptabi.json",
+    )
+    usage_metrics.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        metavar="NAME=PATH_OR_URI",
+        help="override or add an artifact location for each config; may be repeated",
+    )
+    usage_metrics.add_argument(
+        "--plugin",
+        action="append",
+        default=[],
+        metavar="MODULE[:OBJECT]",
+        help="import a PromptABI plugin module before running metrics; may be repeated",
+    )
+    usage_metrics.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="json",
+        help="output format (default: json)",
+    )
+    usage_metrics.add_argument("--output", help="write metrics to this path instead of stdout")
+    usage_metrics.add_argument(
+        "--fail-on",
+        choices=("error", "warning", "any", "never"),
+        default="never",
+        help="exit with code 1 at this diagnostic threshold after writing metrics (default: never)",
     )
     usage_subparsers.add_parser("privacy", help="print local-summary privacy guarantees")
 
@@ -3262,6 +3305,35 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         print(output, end="")
         return 0
+
+    if args.command == "usage" and args.usage_command == "metrics":
+        try:
+            plugin_registry = _load_cli_plugins(args.plugin)
+            overrides = _parse_artifact_overrides(args.artifact, parser)
+            config_paths = [Path(path).resolve() for path in args.config] if args.config else [discover_config()]
+            results: list[VerificationResult] = []
+            for config_path in config_paths:
+                config = load_config(config_path).with_artifact_overrides(overrides, base_dir=Path.cwd())
+                result = VerificationSession(config, plugin_registry=plugin_registry).run()
+                results.append(result)
+            report: LocalMetricsReport = build_local_metrics_report(tuple(results))
+            output = render_local_metrics_json(report) if args.format == "json" else render_local_metrics_text(report)
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                print(f"wrote local metrics: {args.output} ({report.total_diagnostics} diagnostics)")
+            else:
+                print(output, end="")
+            combined = VerificationResult(
+                config=results[0].config if results else load_config(discover_config()),
+                diagnostics=tuple(diagnostic for result in results for diagnostic in result.diagnostics),
+            )
+            return _exit_code(combined, fail_on=args.fail_on)
+        except (ConfigError, PluginError, ValueError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write local metrics: {exc}", file=sys.stderr)
+            return 2
 
     if args.command == "usage" and args.usage_command == "privacy":
         print(render_usage_privacy_text(), end="")

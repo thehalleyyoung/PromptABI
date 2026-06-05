@@ -28,6 +28,7 @@ from .api import (
     fuzz_mutations,
     guarded_autofix_preview,
     load_artifacts,
+    local_metrics,
     low_risk_autofix,
     minimize_failure_repro,
     proof_sketches,
@@ -327,6 +328,12 @@ from .localization import (
     render_diagnostic_catalog_json,
     render_diagnostic_catalog_text,
     render_localized_message,
+)
+from .local_metrics import (
+    LocalMetricsReport,
+    build_local_metrics_report,
+    render_local_metrics_json,
+    render_local_metrics_text,
 )
 from .corpus_verification import (
     CorpusVerificationCheck,
@@ -1171,6 +1178,7 @@ __all__ = [
     "TruncationStrategy",
     "UsageAnalyticsError",
     "UsageSummaryReport",
+    "LocalMetricsReport",
     "Value",
     "VerificationConfig",
     "VerificationResult",
@@ -1198,6 +1206,7 @@ __all__ = [
     "fuzz_mutations",
     "proof_sketches",
     "release_readiness",
+    "local_metrics",
     "team_dashboard",
     "discover_config",
     "diff_config_files",
@@ -1210,6 +1219,7 @@ __all__ = [
     "build_provider_fixture_pack_manifest",
     "build_public_api_manifest",
     "build_dependency_graph",
+    "build_local_metrics_report",
     "build_reproducibility_package",
     "build_release_readiness_report",
     "build_team_dashboard",
@@ -1299,6 +1309,8 @@ __all__ = [
     "render_release_readiness_text",
     "render_team_dashboard_json",
     "render_team_dashboard_text",
+    "render_local_metrics_json",
+    "render_local_metrics_text",
     "render_solver_replay_json",
     "render_solver_replay_text",
     "render_usage_privacy_text",

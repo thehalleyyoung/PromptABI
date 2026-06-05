@@ -13,7 +13,13 @@ from typing import Any
 from .artifacts import ArtifactKind
 from .diagnostics import CheckMode, Diagnostic, DiagnosticSeverity, WitnessStep, WitnessTrace, diagnostic_sort_key
 from .loaders import LoadedArtifact
-from .session import CheckContext, ScheduledDiagnostic, VerificationResult, VerificationSession
+from .session import (
+    CheckContext,
+    ScheduledDiagnostic,
+    VerificationResult,
+    VerificationSession,
+    _check_runtimes_from_scheduled,
+)
 from .policies import apply_org_policy_diagnostics, apply_policy_diagnostics
 
 
@@ -97,12 +103,13 @@ def run_incremental_verification(
                     check_ordinals.get(check_name, len(config_checks)),
                     0,
                     _incremental_cache_miss_diagnostic(check_name, plan),
+                    check_name=check_name,
                 )
             )
             continue
         ordinal = check_ordinals.get(check_name, len(config_checks))
         cached_scheduled.extend(
-            ScheduledDiagnostic(ordinal, index, diagnostic)
+            ScheduledDiagnostic(ordinal, index, diagnostic, check_name=check_name)
             for index, diagnostic in enumerate(cached)
         )
         cache_notes.append(
@@ -110,6 +117,7 @@ def run_incremental_verification(
                 ordinal,
                 len(cached),
                 _incremental_reused_diagnostic(check_name, len(cached), plan),
+                check_name=check_name,
             )
         )
 
@@ -244,6 +252,8 @@ def _remap_scheduled_ordinals(
             else item.check_ordinal,
             item.emission_index,
             item.diagnostic,
+            check_name=item.check_name,
+            duration_ms=item.duration_ms,
         )
         for item in scheduled
     )
@@ -271,7 +281,11 @@ def _result_from_scheduled(
         )
     )
     diagnostics = apply_policy_diagnostics(diagnostics, session.config.policy)
-    return VerificationResult(config=session.config, diagnostics=tuple(diagnostics))
+    return VerificationResult(
+        config=session.config,
+        diagnostics=tuple(diagnostics),
+        check_runtimes=_check_runtimes_from_scheduled(scheduled),
+    )
 
 
 def _check_cache_key(

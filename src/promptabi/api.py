@@ -109,6 +109,12 @@ from .localization import (
     render_diagnostic_catalog_json,
     render_diagnostic_catalog_text,
 )
+from .local_metrics import (
+    LocalMetricsReport,
+    build_local_metrics_report,
+    render_local_metrics_json,
+    render_local_metrics_text,
+)
 from .maintainer import MaintainerRefresh, refresh_maintainer_artifacts
 from .minimization import (
     FailurePredicate,
@@ -248,6 +254,38 @@ def collect_diagnostics(
         plugin_registry=plugin_registry,
     )
     return session.collect_diagnostics(checks=selected_checks)
+
+
+def local_metrics(
+    configs: str | Path | VerificationConfig | Sequence[str | Path | VerificationConfig],
+    *,
+    artifact_overrides: Mapping[str, str] | None = None,
+    override_base_dir: str | Path | None = None,
+    output_format: str = "json",
+    plugin_registry: PluginRegistry | None = None,
+) -> str:
+    """Render privacy-preserving local metrics for one or more verification configs."""
+
+    config_items: Sequence[str | Path | VerificationConfig]
+    if isinstance(configs, (str, Path, VerificationConfig)):
+        config_items = (configs,)
+    else:
+        config_items = configs
+    results = tuple(
+        run_verification(
+            config,
+            artifact_overrides=artifact_overrides,
+            override_base_dir=override_base_dir,
+            plugin_registry=plugin_registry,
+        )
+        for config in config_items
+    )
+    report = build_local_metrics_report(results)
+    if output_format == "json":
+        return render_local_metrics_json(report)
+    if output_format == "text":
+        return render_local_metrics_text(report)
+    raise ValueError("output_format must be 'json' or 'text'")
 
 
 def enterprise_readiness(config: str | Path | VerificationConfig) -> tuple[Diagnostic, ...]:

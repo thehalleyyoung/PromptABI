@@ -155,6 +155,7 @@ promptabi release readiness --format text
 # Local changed-artifact gate and local-only usage summaries; no telemetry.
 promptabi pre-commit install --config examples/minimal/promptabi.json
 promptabi verify --config examples/minimal/promptabi.json --local-summary .promptabi/usage.jsonl
+promptabi usage metrics --config examples/minimal/promptabi.json --format json
 promptabi usage privacy
 
 # Incremental monorepo mode reuses cached unchanged-check diagnostics and recomputes dependencies.

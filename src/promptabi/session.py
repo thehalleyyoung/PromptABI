@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
@@ -367,6 +369,24 @@ class ScheduledDiagnostic:
     check_ordinal: int
     emission_index: int
     diagnostic: Diagnostic
+    check_name: str = ""
+    duration_ms: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class CheckRuntime:
+    """Sanitized runtime aggregate for one scheduled check."""
+
+    check: str
+    duration_ms: int
+    diagnostics: int
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "check": self.check,
+            "duration_ms": self.duration_ms,
+            "diagnostics": self.diagnostics,
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -580,10 +600,12 @@ def _run_batch(context: CheckContext, batch: Sequence[ScheduledCheck]) -> tuple[
 
 
 def _run_scheduled_check(context: CheckContext, check: ScheduledCheck) -> tuple[ScheduledDiagnostic, ...]:
+    started_at = time.perf_counter()
     try:
         diagnostics = tuple(check.callable(context))
     except Exception as exc:
         diagnostics = (_failed_check_diagnostic(check.name, exc),)
+    duration_ms = max(0, round((time.perf_counter() - started_at) * 1000))
     if check.modes:
         diagnostics = tuple(
             diagnostic if diagnostic.check_modes else replace(diagnostic, check_modes=check.modes)
@@ -594,8 +616,24 @@ def _run_scheduled_check(context: CheckContext, check: ScheduledCheck) -> tuple[
             check_ordinal=check.ordinal,
             emission_index=index,
             diagnostic=diagnostic,
+            check_name=check.name,
+            duration_ms=duration_ms,
         )
         for index, diagnostic in enumerate(diagnostics)
+    )
+
+
+def _check_runtimes_from_scheduled(scheduled: Sequence[ScheduledDiagnostic]) -> tuple[CheckRuntime, ...]:
+    durations: Counter[str] = Counter()
+    diagnostics: Counter[str] = Counter()
+    for item in scheduled:
+        if item.check_ordinal < 0 or not item.check_name:
+            continue
+        durations[item.check_name] = max(durations[item.check_name], int(item.duration_ms))
+        diagnostics[item.check_name] += 1
+    return tuple(
+        CheckRuntime(check=check, duration_ms=durations[check], diagnostics=diagnostics[check])
+        for check in sorted(durations)
     )
 
 
@@ -613,17 +651,21 @@ class VerificationResult:
 
     config: VerificationConfig
     diagnostics: tuple[Diagnostic, ...]
+    check_runtimes: tuple[CheckRuntime, ...] = field(default_factory=tuple)
 
     @property
     def ok(self) -> bool:
         return not any(diagnostic.severity is DiagnosticSeverity.ERROR for diagnostic in self.diagnostics)
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        data: dict[str, object] = {
             "config": self.config.to_dict(),
             "ok": self.ok,
             "diagnostics": [diagnostic.to_dict() for diagnostic in self.diagnostics],
         }
+        if self.check_runtimes:
+            data["check_runtimes"] = [runtime.to_dict() for runtime in self.check_runtimes]
+        return data
 
 
 class VerificationSession:
@@ -750,7 +792,8 @@ class VerificationSession:
             check if isinstance(check, str) else getattr(check, "__name__", "embedded-check")
             for check in (checks or self.config.checks)
         )
-        diagnostics = self.collect_diagnostics(checks=checks)
+        scheduled = self.collect_scheduled_diagnostics(checks=checks)
+        diagnostics = tuple(item.diagnostic for item in scheduled)
         diagnostics = tuple(
             sorted(
                 (
@@ -766,7 +809,11 @@ class VerificationSession:
             )
         )
         diagnostics = apply_policy_diagnostics(diagnostics, self.config.policy)
-        return VerificationResult(config=self.config, diagnostics=tuple(diagnostics))
+        return VerificationResult(
+            config=self.config,
+            diagnostics=tuple(diagnostics),
+            check_runtimes=_check_runtimes_from_scheduled(scheduled),
+        )
 
     def _repository_skeleton_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
         return (
