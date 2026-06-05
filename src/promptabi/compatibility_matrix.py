@@ -159,6 +159,19 @@ CHECK_RULE_IDS: dict[str, tuple[str, ...]] = {
         "training-streaming-shard-proof-verified",
         "training-streaming-verified",
     ),
+    "evaluation-harness-contracts": (
+        "evaluation-harness-answer-parser-mismatch",
+        "evaluation-harness-contract-missing",
+        "evaluation-harness-few-shot-budget-overflow",
+        "evaluation-harness-few-shot-role-mismatch",
+        "evaluation-harness-model-mismatch",
+        "evaluation-harness-prompt-template-mismatch",
+        "evaluation-harness-prompt-variable-missing",
+        "evaluation-harness-provider-mismatch",
+        "evaluation-harness-stop-policy-mismatch",
+        "evaluation-harness-tokenizer-mismatch",
+        "evaluation-harness-verified",
+    ),
     "tokenizer-config-drift": ("tokenizer-drift", "tokenizer-drift-abstained", "tokenizer-drift-clean"),
     "tokenizer-drift": ("tokenizer-drift", "tokenizer-drift-abstained", "tokenizer-drift-clean"),
 }
@@ -343,6 +356,7 @@ def _surface_catalog() -> tuple[CompatibilitySurface, ...]:
             *_framework_surfaces(),
             *_training_surfaces(),
             *_enterprise_surfaces(),
+            *_evaluation_surfaces(),
         )
     }
     for spec in FIRST_PARTY_PLUGIN_SPECS:
@@ -408,6 +422,14 @@ def _surfaces_for_check(check_name: str, artifact_kinds: tuple[ArtifactKind, ...
             _surface("training", "invalid-json-outputs", ArtifactKind.TRAINING_MANIFEST, "bounded", "finite JSON target examples must parse and satisfy the declared structured-output contract"),
             _surface("training", "unreachable-stop-sequences", ArtifactKind.TRAINING_MANIFEST, "bounded", "declared stop examples must be reachable under the tokenizer/template/stop interface used for training"),
         ),
+        "evaluation-harness-contracts": (
+            _surface("evaluation", "benchmark-prompts", ArtifactKind.EVALUATION_HARNESS, "covered", "required prompt variables and prompt-template pins are compared against configured contracts"),
+            _surface("evaluation", "few-shot-examples", ArtifactKind.EVALUATION_HARNESS, "bounded", "finite few-shot role labels and declared token counts are checked against provider/model prompt contracts"),
+            _surface("evaluation", "answer-parsers", ArtifactKind.EVALUATION_HARNESS, "bounded", "JSON-style answer parsers are compared with configured schema artifacts"),
+            _surface("evaluation", "stop-policies", ArtifactKind.EVALUATION_HARNESS, "covered", "benchmark stop sequences must exactly match configured stop-policy artifacts"),
+            *_provider_surfaces(),
+            *_tokenizer_surfaces(),
+        ),
         "token-budget-model": (*_tokenizer_surfaces(), *_framework_surfaces()),
         "tool-schema-ingestion": (_surface("provider", "mcp", ArtifactKind.TOOL_DEFINITION),),
         "tool-serialization": (*_provider_surfaces(), *_template_surfaces()),
@@ -454,6 +476,7 @@ def _notes_for_check(check_name: str) -> str:
         "training-bridge": "compares training-time tokenizer, template, role delimiter, special-token, generation-prompt, and tool-format facts against serving-time assumptions",
         "training-drift": "compares training-corpus metadata against model-card, tokenizer, chat-template, and serving lockfile pins without materializing private datasets",
         "training-invalid-interface": "checks finite training-interface summaries for impossible canonical roles, malformed tool calls, invalid JSON targets, and unreachable stop examples",
+        "evaluation-harness-contracts": "checks finite benchmark prompt variables, few-shot role/token budgets, answer-parser schema assumptions, tokenizer/template pins, provider/model metadata, and stop policies before evaluation scores are trusted",
         "synthetic-generator-contracts": "preflights synthetic-data generators against finite role, structured-output, tool-call, and truncation contracts before examples are materialized",
         "training-redaction": "statically ensures training-manifest witnesses and reports use structural or hashed evidence instead of raw secrets, provider keys, restricted metadata, or dataset text",
         "tokenizer-config-drift": "alias retained for configs that select tokenizer drift under the older check name",
@@ -539,6 +562,15 @@ def _training_surfaces() -> tuple[CompatibilitySurface, ...]:
         _surface("training", "redaction-policy", ArtifactKind.TRAINING_MANIFEST, "covered", "stored witnesses and reports are constrained to structural or hashed training evidence"),
         _surface("training", "tokenizer-template-stage-consistency", ArtifactKind.TRAINING_MANIFEST, "covered", "dataset preparation, training, evaluation, and serving tokenizer/template pins are compared by static-contracts"),
         _surface("training", "preference-pairs", ArtifactKind.TRAINING_MANIFEST, "bounded", "preference-pair prefix equivalence and hash-only report evidence are checked"),
+    )
+
+
+def _evaluation_surfaces() -> tuple[CompatibilitySurface, ...]:
+    return (
+        _surface("evaluation", "benchmark-prompts", ArtifactKind.EVALUATION_HARNESS, "covered", "prompt template pins and required variables"),
+        _surface("evaluation", "few-shot-examples", ArtifactKind.EVALUATION_HARNESS, "bounded", "finite role labels and declared token counts"),
+        _surface("evaluation", "answer-parsers", ArtifactKind.EVALUATION_HARNESS, "bounded", "grader parser declarations and JSON Schema artifacts"),
+        _surface("evaluation", "stop-policies", ArtifactKind.EVALUATION_HARNESS, "covered", "benchmark stop sequences compared to provider stop artifacts"),
     )
 
 

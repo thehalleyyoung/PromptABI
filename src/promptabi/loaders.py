@@ -22,10 +22,12 @@ from .artifacts import (
     StopPolicyArtifact,
     ToolDefinitionArtifact,
     TrainingManifestArtifact,
+    EvaluationHarnessArtifact,
     artifact_from_config,
 )
 from .chat_templates import ChatTemplateParseError, parse_hf_tokenizer_config_chat_template, symbolically_execute_chat_template
 from .diagnostics import SourceSpan
+from .evaluation_harness import EvaluationHarnessError, parse_evaluation_harness_mapping
 from .grammar_differential import analyze_grammar_differential_corpus
 from .grammars import GrammarIngestionError, ingest_grammar_file, ingest_json_schema_mapping
 from .json_schema import compile_json_schema_mapping, normalize_json_schema_mapping
@@ -203,6 +205,8 @@ class ArtifactLoader:
             return self._load_prompt_segments(artifact, path)
         if artifact.kind is ArtifactKind.TRAINING_MANIFEST:
             return self._load_training_manifest(artifact, path)
+        if artifact.kind is ArtifactKind.EVALUATION_HARNESS:
+            return self._load_evaluation_harness(artifact, path)
         if artifact.kind is ArtifactKind.PROVIDER_CONFIG:
             return self._load_provider_snapshot(artifact, path)
         return self._load_file(artifact, path, source_type="local-file")
@@ -702,6 +706,63 @@ class ArtifactLoader:
             actual_sha256=loaded.actual_sha256,
             size_bytes=loaded.size_bytes,
             metadata=metadata,
+            source_spans=source_map.prefixed(()) or loaded.source_spans,
+            warnings=loaded.warnings,
+        )
+
+    def _load_evaluation_harness(self, artifact: Artifact, path: Path) -> LoadedArtifact:
+        if path.suffix.lower() != ".json":
+            return self._load_file(artifact, path, source_type="evaluation-harness-file")
+        try:
+            text = path.read_text(encoding="utf-8")
+            raw = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"evaluation-harness artifact '{artifact.name}' is not valid JSON",
+                suggestion="Store evaluation harness contracts as deterministic JSON objects.",
+                steps=(("parse evaluation harness JSON", str(path), exc.msg),),
+                span=SourceSpan(path=str(path), start_line=exc.lineno, start_column=exc.colno),
+            ) from exc
+        if not isinstance(raw, dict):
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"evaluation-harness artifact '{artifact.name}' must be a JSON object",
+                suggestion="Use an object with benchmark_name, provider, tokenizer, prompt_template, answer_parser, stops, and few-shot examples.",
+                steps=(("parse evaluation harness root", str(path), type(raw).__name__),),
+            )
+        try:
+            source_map = build_json_source_map(text, path)
+            parsed = parse_evaluation_harness_mapping(artifact.name, raw, path=path, source_map=source_map)
+        except EvaluationHarnessError as exc:
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"evaluation-harness artifact '{artifact.name}' could not be parsed",
+                suggestion="Declare benchmark prompt, few-shot, answer-parser, stop, provider, model, and tokenizer fields with supported PromptABI shapes.",
+                steps=(("parse evaluation harness fields", str(path), str(exc)),),
+            ) from exc
+        loaded = self._load_file(artifact, path, source_type="evaluation-harness")
+        parsed_artifact = artifact
+        if isinstance(artifact, EvaluationHarnessArtifact) and isinstance(parsed, EvaluationHarnessArtifact):
+            parsed_artifact = replace(
+                parsed,
+                location=artifact.location,
+                provenance=artifact.provenance,
+                metadata=_merge_metadata(artifact.metadata, parsed.metadata),
+                source_span=artifact.source_span,
+            )
+        return LoadedArtifact(
+            artifact=parsed_artifact,
+            source_type="evaluation-harness",
+            pinned=loaded.pinned,
+            resolved=loaded.resolved,
+            actual_sha256=loaded.actual_sha256,
+            size_bytes=loaded.size_bytes,
+            metadata=(
+                ("benchmark_name", parsed_artifact.benchmark_name if isinstance(parsed_artifact, EvaluationHarnessArtifact) else artifact.name),
+                ("few_shot_count", len(parsed_artifact.few_shot_examples) if isinstance(parsed_artifact, EvaluationHarnessArtifact) else 0),
+                ("stop_sequence_count", len(parsed_artifact.stop_sequences) if isinstance(parsed_artifact, EvaluationHarnessArtifact) else 0),
+            ),
             source_spans=source_map.prefixed(()) or loaded.source_spans,
             warnings=loaded.warnings,
         )

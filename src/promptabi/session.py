@@ -9,12 +9,13 @@ from pathlib import Path
 from threading import RLock
 from urllib.parse import parse_qs, urlparse
 
-from .artifacts import ArtifactKind, TokenizerArtifact, TrainingManifestArtifact
+from .artifacts import ArtifactKind, EvaluationHarnessArtifact, TokenizerArtifact, TrainingManifestArtifact
 from .budgets import TokenBudgetFinding, TokenBudgetReport, analyze_token_budget
 from .chat_templates import ChatTemplateParseError, parse_hf_tokenizer_config_chat_template
 from .config import VerificationConfig, load_config
 from .diagnostics import CheckMode, Diagnostic, DiagnosticSeverity, SourceSpan, WitnessStep, WitnessTrace, diagnostic_sort_key
 from .enterprise import enterprise_readiness_diagnostics
+from .evaluation_harness import EvaluationHarnessFinding, analyze_evaluation_harness_contracts
 from .formal import SolverStatus
 from .grammar_emptiness import (
     GrammarTokenizerEmptinessReport,
@@ -179,6 +180,17 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "training-streaming-shard-proof-unsafe-fingerprint": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-streaming-shard-proof-verified": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-streaming-verified": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "evaluation-harness-answer-parser-mismatch": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "evaluation-harness-contract-missing": (CheckMode.ABSTAINING, CheckMode.COMPLETE),
+    "evaluation-harness-few-shot-budget-overflow": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "evaluation-harness-few-shot-role-mismatch": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "evaluation-harness-model-mismatch": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "evaluation-harness-prompt-template-mismatch": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "evaluation-harness-prompt-variable-missing": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "evaluation-harness-provider-mismatch": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "evaluation-harness-stop-policy-mismatch": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "evaluation-harness-tokenizer-mismatch": (CheckMode.SOUND, CheckMode.COMPLETE),
+    "evaluation-harness-verified": (CheckMode.SOUND, CheckMode.BOUNDED),
     "synthetic-generator-contracts-role-contract-violation": (CheckMode.SOUND, CheckMode.BOUNDED),
     "synthetic-generator-contracts-schema-contract-violation": (CheckMode.SOUND, CheckMode.BOUNDED),
     "synthetic-generator-contracts-tool-call-contract-violation": (CheckMode.SOUND, CheckMode.BOUNDED),
@@ -395,6 +407,16 @@ CHECK_DEPENDENCIES: dict[str, CheckDependency] = {
     "training-drift": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "training-invalid-interface": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "training-streaming": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
+    "evaluation-harness-contracts": CheckDependency(
+        artifact_kinds=(
+            ArtifactKind.EVALUATION_HARNESS,
+            ArtifactKind.PROVIDER_CONFIG,
+            ArtifactKind.TOKENIZER,
+            ArtifactKind.CHAT_TEMPLATE,
+            ArtifactKind.STOP_POLICY,
+            ArtifactKind.SCHEMA,
+        ),
+    ),
     "synthetic-generator-contracts": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "training-packing": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "training-redaction": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
@@ -588,6 +610,7 @@ class VerificationSession:
             "training-drift": self._training_drift_check,
             "training-invalid-interface": self._training_invalid_interface_check,
             "training-streaming": self._training_streaming_check,
+            "evaluation-harness-contracts": self._evaluation_harness_contracts_check,
             "synthetic-generator-contracts": self._synthetic_generator_contracts_check,
             "training-packing": self._training_packing_check,
             "training-redaction": self._training_redaction_check,
@@ -1127,6 +1150,21 @@ class VerificationSession:
             base_dir = Path(loaded.artifact.location.path).parent if loaded.artifact.location.path is not None else Path.cwd()
             report = analyze_training_streaming(loaded.artifact, base_dir=base_dir)
             diagnostics.extend(_training_streaming_finding_diagnostic(loaded, finding) for finding in report.findings)
+        return tuple(diagnostics)
+
+    def _evaluation_harness_contracts_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        diagnostics: list[Diagnostic] = []
+        loaded_by_name = {loaded.artifact.name: loaded for loaded in context.loaded_artifacts}
+        artifacts = tuple(loaded.artifact for loaded in context.loaded_artifacts)
+        for loaded in context.loaded_artifacts:
+            if not isinstance(loaded.artifact, EvaluationHarnessArtifact):
+                continue
+            spans = {name: span for name, span in loaded.source_spans}
+            report = analyze_evaluation_harness_contracts(loaded.artifact, artifacts, source_spans=spans)
+            diagnostics.extend(
+                _evaluation_harness_finding_diagnostic(loaded_by_name, loaded, finding)
+                for finding in report.findings
+            )
         return tuple(diagnostics)
 
     def _synthetic_generator_contracts_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
@@ -2197,6 +2235,52 @@ def _synthetic_generator_finding_diagnostic(
         witness=WitnessTrace(
             summary="PromptABI checked finite synthetic-data generator contracts before generated examples are materialized.",
             steps=steps,
+            artifacts=(loaded.artifact.to_ref(),),
+        ),
+    )
+
+
+def _evaluation_harness_finding_diagnostic(
+    loaded_by_name: Mapping[str, LoadedArtifact],
+    loaded: LoadedArtifact,
+    finding: EvaluationHarnessFinding,
+) -> Diagnostic:
+    del loaded_by_name
+    severity = {
+        "error": DiagnosticSeverity.ERROR,
+        "warning": DiagnosticSeverity.WARNING,
+        "info": DiagnosticSeverity.INFO,
+    }[finding.severity]
+    steps = tuple(
+        WitnessStep(action=action, input=input_value, output=output_value)
+        for action, input_value, output_value in finding.witness
+    )
+    properties: list[tuple[str, object]] = []
+    if finding.subject is not None:
+        properties.append(("subject", finding.subject))
+    if finding.expected is not None:
+        properties.append(("expected", finding.expected))
+    if finding.actual is not None:
+        properties.append(("actual", finding.actual))
+    return Diagnostic(
+        rule_id=finding.rule_id,
+        severity=severity,
+        message=finding.message,
+        artifact=loaded.artifact.to_ref(),
+        span=finding.span or _artifact_span(loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG[finding.rule_id],
+        properties=tuple(properties),
+        suggestions=(finding.suggestion,),
+        witness=WitnessTrace(
+            summary="PromptABI statically compared benchmark harness assumptions against configured model/provider contracts.",
+            steps=steps
+            or (
+                WitnessStep(
+                    action="inspect evaluation harness",
+                    input=loaded.artifact.name,
+                    output=finding.rule_id,
+                ),
+            ),
             artifacts=(loaded.artifact.to_ref(),),
         ),
     )

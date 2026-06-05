@@ -1,0 +1,38 @@
+{
+  "name": "evaluation-harness-unsafe",
+  "checks": ["evaluation-harness-contracts"],
+  "artifacts": {
+    "eval": {
+      "kind": "evaluation-harness",
+      "path": "harness.unsafe.json"
+    },
+    "provider": {
+      "kind": "provider-config",
+      "path": "provider.json",
+      "provider": "openai-compatible",
+      "metadata": {
+        "shape": "chat-completions",
+        "model": "llama-3.1-eval"
+      }
+    },
+    "tokenizer": {
+      "kind": "tokenizer",
+      "path": "tokenizer.json",
+      "family": "byte-bpe"
+    },
+    "template": {
+      "kind": "chat-template",
+      "path": "tokenizer_config.json",
+      "roles": ["system", "user", "assistant"]
+    },
+    "stops": {
+      "kind": "stop-policy",
+      "path": "stop-policy.json"
+    },
+    "answer_schema": {
+      "kind": "schema",
+      "path": "answer.schema.json",
+      "dialect": "json-schema"
+    }
+  }
+}

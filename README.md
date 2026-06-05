@@ -60,7 +60,7 @@ The same local verifier covers:
 | **Budgets + RAG** | must-survive prompt segments, dropped citations, metadata inflation, tokenizer mismatch, framework truncation, and context-window overflow |
 | **Provenance** | artifact hashes, licenses, trusted sources, reproducible HF revisions, lockfile drift, and offline fixture integrity |
 | **Enterprise posture** | org policy packs for required checks, severity, supported fragments, solver caps, privacy rules, approved fixtures, and no-network mirrors |
-| **Training/eval contracts** | target-role alignment, proof-carrying streaming shards, data-loader adapters, synthetic-generator preflight, invalid roles/tools/JSON/stops, packing, loss masks, leakage, drift, RLHF/DPO defects, and real-bug benchmarks |
+| **Training/eval contracts** | target-role alignment, eval-harness prompt/few-shot/parser/stop compatibility, proof-carrying streaming shards, data-loader adapters, synthetic-generator preflight, invalid roles/tools/JSON/stops, packing, loss masks, leakage, drift, RLHF/DPO defects, and real-bug benchmarks |
 
 Under the hood, PromptABI combines deterministic automata, finite-state
 transducers, executable specs for witnesses/products/SMT outcomes, differential
@@ -119,6 +119,7 @@ promptabi diagnostics lsp --config examples/minimal/promptabi.json --format json
 promptabi corpus verify --format text
 promptabi corpus beta-report --format text
 promptabi corpus evaluation --format text
+promptabi verify --config examples/evaluation-harness/safe.promptabi.json
 promptabi corpus smt-benchmark --format text
 promptabi solver replay fixtures/solver_replays/role-region-forgery.solver-replay.json
 promptabi launch-assets --output-dir launch_assets --force

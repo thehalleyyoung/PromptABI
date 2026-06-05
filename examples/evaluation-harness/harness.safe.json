@@ -1,0 +1,28 @@
+{
+  "benchmark_name": "promptabi-contract-eval",
+  "model": "llama-3.1-eval",
+  "provider": "openai-compatible",
+  "tokenizer": "byte-bpe",
+  "prompt_template": "template",
+  "answer_parser": "json-schema",
+  "answer_schema": "answer_schema",
+  "stop_sequences": ["</answer>"],
+  "allowed_roles": ["system", "user", "assistant"],
+  "required_prompt_variables": ["question", "rubric"],
+  "prompt_variables": ["question", "rubric"],
+  "max_prompt_tokens": 64,
+  "few_shot_examples": [
+    {
+      "id": "warmup-question",
+      "role": "user",
+      "content": "Question: 2+2? Rubric: return JSON with answer.",
+      "token_count": 12
+    },
+    {
+      "id": "warmup-answer",
+      "role": "assistant",
+      "content": "{\"answer\":\"4\"}</answer>",
+      "token_count": 8
+    }
+  ]
+}

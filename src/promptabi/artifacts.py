@@ -24,6 +24,7 @@ class ArtifactKind(StrEnum):
     PROVIDER_CONFIG = "provider-config"
     FRAMEWORK_TRUNCATION_CONFIG = "framework-truncation-config"
     TRAINING_MANIFEST = "training-manifest"
+    EVALUATION_HARNESS = "evaluation-harness"
 
 
 class TruncationStrategy(StrEnum):
@@ -83,6 +84,29 @@ class TrainingTextSourceKind(StrEnum):
     SYSTEM = "system"
     DEVELOPER = "developer"
     UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True, slots=True)
+class EvaluationFewShotExample:
+    """A finite benchmark example rendered by an evaluation harness."""
+
+    example_id: str
+    role: str
+    content: str = ""
+    token_count: int | None = None
+
+    def __post_init__(self) -> None:
+        _require_non_empty("few-shot example id", self.example_id)
+        _require_non_empty("few-shot example role", self.role)
+        _optional_non_negative("few-shot example token_count", self.token_count)
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {"id": self.example_id, "role": self.role}
+        if self.content:
+            data["content"] = self.content
+        if self.token_count is not None:
+            data["token_count"] = self.token_count
+        return data
 
 
 @dataclass(frozen=True, slots=True)
@@ -1328,6 +1352,66 @@ class TrainingManifestArtifact(BaseArtifact):
         return data
 
 
+@dataclass(frozen=True, slots=True)
+class EvaluationHarnessArtifact(BaseArtifact):
+    """A finite summary of benchmark prompt/parser/provider assumptions."""
+
+    benchmark_name: str = "evaluation"
+    model: str | None = None
+    provider: str | None = None
+    tokenizer: str | None = None
+    prompt_template: str | None = None
+    answer_parser: str | None = None
+    answer_schema: str | None = None
+    stop_sequences: tuple[str, ...] = ()
+    allowed_roles: tuple[str, ...] = ()
+    required_prompt_variables: tuple[str, ...] = ()
+    prompt_variables: tuple[str, ...] = ()
+    few_shot_examples: tuple[EvaluationFewShotExample, ...] = ()
+    max_prompt_tokens: int | None = None
+
+    def __post_init__(self) -> None:
+        BaseArtifact.__post_init__(self)
+        _require_kind(self.kind, ArtifactKind.EVALUATION_HARNESS)
+        _require_non_empty("evaluation harness benchmark_name", self.benchmark_name)
+        for field_name in ("model", "provider", "tokenizer", "prompt_template", "answer_parser", "answer_schema"):
+            _optional_non_empty(f"evaluation harness {field_name}", getattr(self, field_name))
+        _optional_non_negative("evaluation harness max_prompt_tokens", self.max_prompt_tokens)
+        object.__setattr__(self, "stop_sequences", _unique_strings(self.stop_sequences, field_name="evaluation harness stop_sequences"))
+        object.__setattr__(self, "allowed_roles", _unique_strings(self.allowed_roles, field_name="evaluation harness allowed_roles"))
+        object.__setattr__(
+            self,
+            "required_prompt_variables",
+            _unique_strings(self.required_prompt_variables, field_name="evaluation harness required_prompt_variables"),
+        )
+        object.__setattr__(self, "prompt_variables", _unique_strings(self.prompt_variables, field_name="evaluation harness prompt_variables"))
+        examples = tuple(sorted(self.few_shot_examples, key=lambda example: example.example_id))
+        if len({example.example_id for example in examples}) != len(examples):
+            raise ValueError("evaluation harness few-shot example IDs must be unique")
+        object.__setattr__(self, "few_shot_examples", examples)
+
+    def to_dict(self) -> dict[str, object]:
+        data = BaseArtifact.to_dict(self)
+        data["benchmark_name"] = self.benchmark_name
+        for key in ("model", "provider", "tokenizer", "prompt_template", "answer_parser", "answer_schema"):
+            value = getattr(self, key)
+            if value is not None:
+                data[key] = value
+        if self.stop_sequences:
+            data["stop_sequences"] = list(self.stop_sequences)
+        if self.allowed_roles:
+            data["allowed_roles"] = list(self.allowed_roles)
+        if self.required_prompt_variables:
+            data["required_prompt_variables"] = list(self.required_prompt_variables)
+        if self.prompt_variables:
+            data["prompt_variables"] = list(self.prompt_variables)
+        if self.few_shot_examples:
+            data["few_shot_examples"] = [example.to_dict() for example in self.few_shot_examples]
+        if self.max_prompt_tokens is not None:
+            data["max_prompt_tokens"] = self.max_prompt_tokens
+        return data
+
+
 Artifact = (
     TokenizerArtifact
     | ChatTemplateArtifact
@@ -1340,6 +1424,7 @@ Artifact = (
     | ProviderConfigArtifact
     | FrameworkTruncationConfigArtifact
     | TrainingManifestArtifact
+    | EvaluationHarnessArtifact
 )
 
 
@@ -1503,6 +1588,23 @@ def artifact_from_config(
             pipeline_stages=_training_pipeline_stages(spec),
             redaction_policy=_training_redaction_policy(spec),
             synthetic_generators=_synthetic_generators(spec),
+        )
+    if kind is ArtifactKind.EVALUATION_HARNESS:
+        return EvaluationHarnessArtifact(
+            **common,
+            benchmark_name=_str(spec, "benchmark_name", default="evaluation"),
+            model=_optional_str(spec, "model"),
+            provider=_optional_str(spec, "provider"),
+            tokenizer=_optional_str(spec, "tokenizer"),
+            prompt_template=_optional_str(spec, "prompt_template"),
+            answer_parser=_optional_str(spec, "answer_parser"),
+            answer_schema=_optional_str(spec, "answer_schema"),
+            stop_sequences=_tuple_of_str(spec, "stop_sequences"),
+            allowed_roles=_tuple_of_str(spec, "allowed_roles"),
+            required_prompt_variables=_tuple_of_str(spec, "required_prompt_variables"),
+            prompt_variables=_tuple_of_str(spec, "prompt_variables"),
+            few_shot_examples=_evaluation_few_shot_examples(spec),
+            max_prompt_tokens=_optional_int(spec, "max_prompt_tokens"),
         )
     raise AssertionError(f"unhandled artifact kind: {kind}")
 
@@ -1870,6 +1972,25 @@ def _synthetic_generators(spec: dict[str, Any]) -> tuple[SyntheticGeneratorSpec,
             )
         )
     return tuple(generators)
+
+
+def _evaluation_few_shot_examples(spec: dict[str, Any]) -> tuple[EvaluationFewShotExample, ...]:
+    raw_examples = spec.get("few_shot_examples", spec.get("few_shots", []))
+    if not isinstance(raw_examples, list):
+        raise ValueError("artifact field 'few_shot_examples' must be a list")
+    examples: list[EvaluationFewShotExample] = []
+    for index, item in enumerate(raw_examples):
+        if not isinstance(item, dict):
+            raise ValueError("evaluation few-shot entries must be objects")
+        examples.append(
+            EvaluationFewShotExample(
+                example_id=_case_id(item, index),
+                role=_str(item, "role"),
+                content=_optional_text(item, "content") or "",
+                token_count=_optional_int(item, "token_count"),
+            )
+        )
+    return tuple(examples)
 
 
 def _synthetic_schema_outputs(spec: dict[str, Any]) -> tuple[SyntheticSchemaOutputContract, ...]:

@@ -88,6 +88,8 @@ from .artifacts import (
     ArtifactLocation,
     ArtifactProvenance,
     ChatTemplateArtifact,
+    EvaluationFewShotExample,
+    EvaluationHarnessArtifact,
     FrameworkTruncationConfigArtifact,
     GrammarArtifact,
     PromptSegment,

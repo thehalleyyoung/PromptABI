@@ -89,7 +89,12 @@ JSONL, Parquet metadata, Axolotl, LLaMA-Factory, TRL, OpenRLHF, and internal
 formats, training-to-serving bridge facts, and corpus-metadata drift checks that compare
 training baselines against model-card facts, tokenizer/template pins, and serving
 lockfile summaries while keeping witnesses structural or hash-only rather than
-raw private dataset material,
+raw private dataset material, a first-class evaluation-harness verifier that
+loads benchmark prompt manifests and proves, over finite declared facts, that
+provider/model metadata, tokenizer pins, prompt-template names, required prompt
+variables, few-shot role vocabularies and token budgets, JSON-style answer
+parsers, schema artifacts, and stop sequences agree with the model/provider
+contract before a benchmark score is trusted,
 a curated \texttt{promptabi gallery} that reruns real pinned configurations,
 emits compatibility badges, summarizes actual solver backends rather than merely
 advertised solver capability, and explains abstentions plus accepted risks,
@@ -508,6 +513,10 @@ between fine-tuning preparation, training, evaluation, and serving pins, and let
 maintainers replay those obligations from fixture JSON while
 validating stored SAT witnesses directly against the
 deserialized formula,
+statically checks evaluation harnesses so benchmark prompts, few-shot examples,
+answer parsers, and stop policies are not silently evaluated under a different
+provider, tokenizer, prompt template, schema, or stop contract than the one
+verified for serving,
 returns stable policy-controlled process exit codes, writes and enforces
 deterministic verification lockfiles that fail closed on artifact, config,
 provider-fixture, library-version, supported-fragment, or diagnostic-baseline

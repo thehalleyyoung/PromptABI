@@ -8,6 +8,8 @@ from promptabi.artifacts import (
     ArtifactLocation,
     ArtifactProvenance,
     ChatTemplateArtifact,
+    EvaluationFewShotExample,
+    EvaluationHarnessArtifact,
     FrameworkTruncationConfigArtifact,
     GrammarArtifact,
     PromptSegment,
@@ -112,6 +114,23 @@ def test_core_artifact_model_serializes_every_kind_deterministically() -> None:
             target_roles=("assistant",),
             example_count=12,
         ),
+        EvaluationHarnessArtifact(
+            kind=ArtifactKind.EVALUATION_HARNESS,
+            name="eval",
+            location=location,
+            benchmark_name="contract-bench",
+            provider="openai-compatible",
+            tokenizer="byte-bpe",
+            prompt_template="template",
+            answer_parser="json-schema",
+            answer_schema="schema",
+            stop_sequences=("</answer>",),
+            allowed_roles=("user", "assistant"),
+            required_prompt_variables=("question",),
+            prompt_variables=("question",),
+            few_shot_examples=(EvaluationFewShotExample("ex1", "user", "What?", 2),),
+            max_prompt_tokens=16,
+        ),
     )
 
     bundle = ArtifactBundle(artifacts)
@@ -161,6 +180,20 @@ def test_config_artifact_parser_accepts_the_same_kinds_as_the_model(tmp_path: Pa
             "message_roles": ["system", "user", "assistant"],
             "target_roles": ["assistant"],
             "example_count": 12,
+        },
+        ArtifactKind.EVALUATION_HARNESS: {
+            "benchmark_name": "contract-bench",
+            "provider": "openai-compatible",
+            "tokenizer": "byte-bpe",
+            "prompt_template": "template",
+            "answer_parser": "json-schema",
+            "answer_schema": "schema",
+            "stop_sequences": ["</answer>"],
+            "allowed_roles": ["user", "assistant"],
+            "required_prompt_variables": ["question"],
+            "prompt_variables": ["question"],
+            "few_shot_examples": [{"id": "ex1", "role": "user", "content": "What?", "token_count": 2}],
+            "max_prompt_tokens": 16,
         },
     }
 

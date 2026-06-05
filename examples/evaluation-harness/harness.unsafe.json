@@ -1,0 +1,28 @@
+{
+  "benchmark_name": "promptabi-contract-eval",
+  "model": "other-eval-model",
+  "provider": "anthropic",
+  "tokenizer": "sentencepiece",
+  "prompt_template": "legacy-template",
+  "answer_parser": "json-schema",
+  "answer_schema": "missing_schema",
+  "stop_sequences": ["###"],
+  "allowed_roles": ["system", "user", "assistant"],
+  "required_prompt_variables": ["question", "rubric"],
+  "prompt_variables": ["question"],
+  "max_prompt_tokens": 10,
+  "few_shot_examples": [
+    {
+      "id": "bad-role",
+      "role": "grader",
+      "content": "Hidden grader note",
+      "token_count": 7
+    },
+    {
+      "id": "long-answer",
+      "role": "assistant",
+      "content": "{\"answer\":\"too long\"}",
+      "token_count": 9
+    }
+  ]
+}

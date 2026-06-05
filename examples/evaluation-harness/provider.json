@@ -1,0 +1,6 @@
+{
+  "provider": "openai-compatible",
+  "api_family": "chat-completions",
+  "request_shape": {"messages": "array"},
+  "response_shape": {"choices": "array"}
+}

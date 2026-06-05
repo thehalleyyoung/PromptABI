@@ -1,0 +1,4 @@
+{
+  "provider": "openai-compatible",
+  "stop": ["</answer>"]
+}
