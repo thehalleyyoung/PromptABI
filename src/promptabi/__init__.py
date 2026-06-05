@@ -1204,6 +1204,15 @@ from .migration_interpolant import (
     render_migration_interpolant_json,
     render_migration_interpolant_text,
 )
+from .proof_carrying_cache import (
+    PROOF_CARRYING_CACHE_VERSION,
+    ProofCarryingCache,
+    ProofCarryingEntry,
+    ProofKind,
+    build_proof,
+    render_proof_carrying_cache_json,
+    validate_proof,
+)
 from .provider_fixture_replay import (
     ProviderFixtureReplayCase,
     ProviderFixtureReplayFinding,
@@ -2170,6 +2179,13 @@ __all__ = [
     "derive_migration_interpolant",
     "render_migration_interpolant_json",
     "render_migration_interpolant_text",
+    "PROOF_CARRYING_CACHE_VERSION",
+    "ProofCarryingCache",
+    "ProofCarryingEntry",
+    "ProofKind",
+    "build_proof",
+    "render_proof_carrying_cache_json",
+    "validate_proof",
     "analyze_parser_compatibility",
     "analyze_tokenizer_grammar_ambiguity",
     "analyze_tokenizer_grammar_emptiness",
