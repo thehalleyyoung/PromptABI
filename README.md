@@ -162,6 +162,7 @@ promptabi corpus leaderboard --format text
 promptabi corpus adversarial --format text
 promptabi solver replay fixtures/solver_replays/role-region-forgery.solver-replay.json
 promptabi launch-assets --output-dir launch_assets --force
+promptabi adoption-playbooks --format markdown
 promptabi fuzz mutations --format text
 promptabi maintain refresh --output-dir maintainer_artifact --force
 promptabi paper reproducibility --output-dir paper_artifact --force  # includes evaluator guide

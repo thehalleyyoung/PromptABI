@@ -21,6 +21,15 @@ from .adversarial_corpus import (
     replay_adversarial_corpus,
     write_adversarial_corpus_manifest,
 )
+from .adoption_playbooks import (
+    AdoptionPlaybookError,
+    render_adoption_playbook_summary,
+    render_adoption_playbooks_json,
+    render_adoption_playbooks_markdown,
+    render_adoption_playbooks_text,
+    build_adoption_playbook_report,
+    write_adoption_playbooks,
+)
 from .api_stability import (
     build_public_api_manifest,
     render_public_api_manifest_json,
@@ -1634,6 +1643,30 @@ def build_parser() -> argparse.ArgumentParser:
         "--force",
         action="store_true",
         help="overwrite existing generated launch asset files",
+    )
+
+    adoption_playbooks = subparsers.add_parser(
+        "adoption-playbooks",
+        help="generate evidence-backed adoption playbooks for common PromptABI user segments",
+    )
+    adoption_playbooks.add_argument(
+        "--repo-root",
+        help="repository root containing examples/ and fixtures/ (default: installed PromptABI repository root)",
+    )
+    adoption_playbooks.add_argument(
+        "--format",
+        choices=("text", "markdown", "json"),
+        default="text",
+        help="output format when not writing files (default: text)",
+    )
+    adoption_playbooks.add_argument(
+        "--output-dir",
+        help="write Markdown playbooks and a JSON manifest to this directory instead of stdout",
+    )
+    adoption_playbooks.add_argument(
+        "--force",
+        action="store_true",
+        help="overwrite existing generated adoption-playbook files",
     )
 
     fuzz = subparsers.add_parser("fuzz", help="mutation-based fuzzing workflows")
@@ -3765,6 +3798,38 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"promptabi: cannot write launch assets: {exc}", file=sys.stderr)
             return 2
         print(render_launch_asset_summary(bundle), end="")
+        return 0
+
+    if args.command == "adoption-playbooks":
+        try:
+            if args.output_dir:
+                bundle = write_adoption_playbooks(
+                    args.output_dir,
+                    repo_root=args.repo_root,
+                    force=args.force,
+                )
+                print(render_adoption_playbook_summary(bundle), end="")
+            else:
+                report = build_adoption_playbook_report(repo_root=args.repo_root)
+                if args.format == "json":
+                    output = render_adoption_playbooks_json(report)
+                elif args.format == "markdown":
+                    output = render_adoption_playbooks_markdown(report)
+                else:
+                    output = render_adoption_playbooks_text(report)
+                print(output, end="")
+        except (
+            AdoptionPlaybookError,
+            EvaluationError,
+            RealBugBenchmarkError,
+            BetaProgramError,
+            ValueError,
+        ) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write adoption playbooks: {exc}", file=sys.stderr)
+            return 2
         return 0
 
     if args.command == "fuzz" and args.fuzz_command == "mutations":
