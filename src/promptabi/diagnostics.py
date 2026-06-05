@@ -350,6 +350,14 @@ class Diagnostic:
         return hashlib.sha256(encoded).hexdigest()[:16]
 
     @property
+    def witness_digest(self) -> str:
+        """Return a stable digest of the replayable witness payload."""
+
+        stable_payload = self.witness.to_dict() if self.witness is not None else None
+        encoded = json.dumps(stable_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()[:16]
+
+    @property
     def sort_key(self) -> tuple[int, str, str, str, str]:
         span_path = self.span.path if self.span is not None else ""
         artifact_name = self.artifact.name if self.artifact is not None else ""
@@ -361,6 +369,7 @@ class Diagnostic:
             "severity": self.severity.value,
             "message": self.message,
             "fingerprint": self.fingerprint,
+            "witness_digest": self.witness_digest,
             "suggestions": list(self.suggestions),
             "check_modes": [mode.value for mode in self.check_modes],
         }

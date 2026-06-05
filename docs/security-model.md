@@ -107,11 +107,11 @@ constraints, witnesses, artifact contents, file paths, and network sends.
 
 ## Suppressions and accepted risk
 
-Suppressions are policy records, not erasers. PromptABI policy files can require
-owners, justifications, accepted-risk statements, expiration dates, severity
-thresholds, and stable fingerprints so CI can stay strict while preserving an
-audit trail. Expired, unjustified, or drifted suppressions should be treated as
-security debt.
+Suppressions are policy records, not erasers. PromptABI policy files require
+owners, justifications, accepted-risk statements, expiration dates, stable
+fingerprints, and `witness_digest` proofs that the accepted counterexample is
+unchanged, while severity thresholds keep CI strict. Expired, unjustified, or
+drifted suppressions are reported as security debt.
 
 ## Responsible disclosure workflow
 

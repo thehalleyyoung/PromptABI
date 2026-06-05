@@ -23,6 +23,7 @@ class Suppression:
     rule_id: str
     justification: str
     fingerprint: str | None = None
+    witness_digest: str | None = None
     artifact: str | None = None
     artifact_kind: str | None = None
     path: str | None = None
@@ -34,7 +35,7 @@ class Suppression:
     def __post_init__(self) -> None:
         if not self.rule_id:
             raise ValueError("suppression rule_id must be non-empty")
-        for field_name in ("fingerprint", "artifact", "artifact_kind", "path", "owner", "accepted_risk"):
+        for field_name in ("fingerprint", "witness_digest", "artifact", "artifact_kind", "path", "owner", "accepted_risk"):
             value = getattr(self, field_name)
             if value is not None and not value:
                 raise ValueError(f"suppression {field_name} must be non-empty")
@@ -46,7 +47,7 @@ class Suppression:
             "rule_id": self.rule_id,
             "justification": self.justification,
         }
-        for key in ("fingerprint", "artifact", "artifact_kind", "path", "owner", "accepted_risk"):
+        for key in ("fingerprint", "witness_digest", "artifact", "artifact_kind", "path", "owner", "accepted_risk"):
             value = getattr(self, key)
             if value is not None:
                 data[key] = value
@@ -57,6 +58,13 @@ class Suppression:
         return data
 
     def matches(self, diagnostic: Diagnostic) -> bool:
+        if not self.matches_shape(diagnostic):
+            return False
+        if self.witness_digest is not None and self.witness_digest != diagnostic.witness_digest:
+            return False
+        return True
+
+    def matches_shape(self, diagnostic: Diagnostic) -> bool:
         if self.rule_id != diagnostic.rule_id:
             return False
         if self.fingerprint is not None and self.fingerprint != diagnostic.fingerprint:
@@ -127,7 +135,9 @@ class VerificationPolicy:
     severity_threshold: DiagnosticSeverity | None = None
     require_justification: bool = True
     require_expiration: bool = True
-    require_owner: bool = False
+    require_owner: bool = True
+    require_accepted_risk: bool = True
+    require_witness_digest: bool = True
     severity_overrides: tuple[tuple[str, DiagnosticSeverity], ...] = ()
     org_policy: OrgPolicyPack = field(default_factory=OrgPolicyPack)
     source_paths: tuple[str, ...] = ()
@@ -139,7 +149,9 @@ class VerificationPolicy:
             or self.severity_threshold is not None
             or not self.require_justification
             or not self.require_expiration
-            or self.require_owner
+            or not self.require_owner
+            or not self.require_accepted_risk
+            or not self.require_witness_digest
             or self.severity_overrides
             or self.org_policy.active
             or self.source_paths
@@ -150,6 +162,8 @@ class VerificationPolicy:
             "require_justification": self.require_justification,
             "require_expiration": self.require_expiration,
             "require_owner": self.require_owner,
+            "require_accepted_risk": self.require_accepted_risk,
+            "require_witness_digest": self.require_witness_digest,
             "suppressions": [suppression.to_dict() for suppression in self.suppressions],
         }
         if self.severity_overrides:
@@ -252,14 +266,18 @@ def policy_from_mapping(
         severity_threshold = _optional_severity(data.get("severity_threshold"))
         require_justification = _optional_bool(data.get("require_justification"), default=True, field_name="require_justification")
         require_expiration = _optional_bool(data.get("require_expiration"), default=True, field_name="require_expiration")
-        require_owner = _optional_bool(data.get("require_owner"), default=False, field_name="require_owner")
+        require_owner = _optional_bool(data.get("require_owner"), default=True, field_name="require_owner")
+        require_accepted_risk = _optional_bool(data.get("require_accepted_risk"), default=True, field_name="require_accepted_risk")
+        require_witness_digest = _optional_bool(data.get("require_witness_digest"), default=True, field_name="require_witness_digest")
         severity_overrides = _severity_overrides(data.get("severity_overrides", {}))
         org_policy = _org_policy_pack_from_mapping(data)
     else:
         severity_threshold = None
         require_justification = True
         require_expiration = True
-        require_owner = False
+        require_owner = True
+        require_accepted_risk = True
+        require_witness_digest = True
         severity_overrides = ()
         org_policy = OrgPolicyPack()
 
@@ -280,6 +298,8 @@ def policy_from_mapping(
         require_justification=require_justification,
         require_expiration=require_expiration,
         require_owner=require_owner,
+        require_accepted_risk=require_accepted_risk,
+        require_witness_digest=require_witness_digest,
         severity_overrides=severity_overrides,
         org_policy=org_policy,
         source_paths=(source_path,),
@@ -298,6 +318,8 @@ def merge_policies(*policies: VerificationPolicy) -> VerificationPolicy:
         require_justification=policies[-1].require_justification,
         require_expiration=policies[-1].require_expiration,
         require_owner=policies[-1].require_owner,
+        require_accepted_risk=policies[-1].require_accepted_risk,
+        require_witness_digest=policies[-1].require_witness_digest,
         severity_overrides=_merged_severity_overrides(policies),
         org_policy=_merged_org_policy(policies),
         source_paths=tuple(path for policy in policies for path in policy.source_paths),
@@ -327,6 +349,14 @@ def apply_policy_diagnostics(
     for diagnostic in diagnostics:
         suppression = next((item for item in valid_suppressions if item.matches(diagnostic)), None)
         if suppression is None:
+            stale = tuple(
+                item
+                for item in valid_suppressions
+                if item.witness_digest is not None
+                and item.matches_shape(diagnostic)
+                and item.witness_digest != diagnostic.witness_digest
+            )
+            policy_diagnostics.extend(_stale_witness_suppression_diagnostics(diagnostic, stale))
             remaining.append(diagnostic)
         else:
             policy_diagnostics.append(_suppressed_diagnostic(diagnostic, suppression))
@@ -516,6 +546,7 @@ def _suppression_from_mapping(
             artifact_kind=_optional_string(data.get("artifact_kind"), field_name="artifact_kind"),
             path=_optional_string(data.get("path"), field_name="path"),
             justification=justification,
+            witness_digest=_optional_hex_digest(data.get("witness_digest"), field_name="witness_digest"),
             owner=_optional_string(data.get("owner"), field_name="owner"),
             accepted_risk=_optional_string(data.get("accepted_risk"), field_name="accepted_risk"),
             expires_on=expires_on,
@@ -559,9 +590,53 @@ def _suppression_errors(suppression: Suppression, policy: VerificationPolicy, *,
         errors.append("expires_on is required")
     if policy.require_owner and not (suppression.owner or "").strip():
         errors.append("owner is required")
+    if policy.require_accepted_risk and not (suppression.accepted_risk or "").strip():
+        errors.append("accepted_risk is required")
+    if policy.require_witness_digest and suppression.witness_digest is None:
+        errors.append("witness_digest is required")
     if suppression.expires_on is not None and suppression.expires_on < today:
         errors.append(f"expires_on {suppression.expires_on.isoformat()} is in the past")
     return tuple(errors)
+
+
+def _stale_witness_suppression_diagnostics(
+    diagnostic: Diagnostic,
+    suppressions: tuple[Suppression, ...],
+) -> tuple[Diagnostic, ...]:
+    diagnostics = []
+    for suppression in suppressions:
+        diagnostics.append(
+            Diagnostic(
+                rule_id="policy-suppression-invalid",
+                severity=DiagnosticSeverity.ERROR,
+                message=(
+                    f"suppression for rule '{suppression.rule_id}' is invalid: "
+                    f"witness_digest {suppression.witness_digest} does not match current witness {diagnostic.witness_digest}"
+                ),
+                artifact=diagnostic.artifact,
+                span=suppression.span or diagnostic.span,
+                check_modes=(CheckMode.SOUND, CheckMode.COMPLETE),
+                suggestions=("Review the changed witness, then update or remove the accepted-risk suppression.",),
+                properties=(
+                    ("current_witness_digest", diagnostic.witness_digest),
+                    ("original_fingerprint", diagnostic.fingerprint),
+                    ("suppressed_rule_id", suppression.rule_id),
+                    ("suppression", suppression.to_dict()),
+                ),
+                witness=WitnessTrace(
+                    summary="PromptABI rejected a suppression because the suppressed witness changed.",
+                    steps=(
+                        WitnessStep(action="match diagnostic shape", input=suppression.rule_id, output=diagnostic.fingerprint),
+                        WitnessStep(
+                            action="compare witness digest",
+                            input=suppression.witness_digest or "",
+                            output=diagnostic.witness_digest,
+                        ),
+                    ),
+                ),
+            )
+        )
+    return tuple(diagnostics)
 
 
 def _suppressed_diagnostic(diagnostic: Diagnostic, suppression: Suppression) -> Diagnostic:
@@ -570,6 +645,7 @@ def _suppressed_diagnostic(diagnostic: Diagnostic, suppression: Suppression) -> 
         ("original_fingerprint", diagnostic.fingerprint),
         ("original_rule_id", diagnostic.rule_id),
         ("original_severity", diagnostic.severity.value),
+        ("original_witness_digest", diagnostic.witness_digest),
         ("sarif_suppression", "external"),
         ("sarif_suppression_justification", suppression.justification),
         ("suppression", suppression.to_dict()),
@@ -585,6 +661,7 @@ def _suppressed_diagnostic(diagnostic: Diagnostic, suppression: Suppression) -> 
             steps=(
                 WitnessStep(action="match rule", input=suppression.rule_id, output=diagnostic.rule_id),
                 WitnessStep(action="match fingerprint", input=suppression.fingerprint or "*", output=diagnostic.fingerprint),
+                WitnessStep(action="match witness digest", input=suppression.witness_digest or "*", output=diagnostic.witness_digest),
                 WitnessStep(action="record accepted risk", output=suppression.justification),
             ),
         ),
@@ -759,6 +836,15 @@ def _optional_string(value: Any, *, field_name: str) -> str | None:
     if not isinstance(value, str) or not value.strip():
         raise PolicyError(f"suppression field '{field_name}' must be a non-empty string")
     return value.strip()
+
+
+def _optional_hex_digest(value: Any, *, field_name: str) -> str | None:
+    digest = _optional_string(value, field_name=field_name)
+    if digest is None:
+        return None
+    if len(digest) not in {16, 64} or any(c not in "0123456789abcdef" for c in digest):
+        raise PolicyError(f"suppression field '{field_name}' must be a lowercase 16- or 64-character hex digest")
+    return digest
 
 
 def _string_or_empty(value: Any) -> str:

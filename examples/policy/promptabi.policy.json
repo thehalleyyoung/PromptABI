@@ -7,6 +7,7 @@
     {
       "rule_id": "artifact-missing",
       "artifact": "schema",
+      "witness_digest": "b7c63f6a44a16a36",
       "owner": "platform-verification",
       "justification": "Example-only fixture intentionally omits the schema to demonstrate audited accepted-risk handling.",
       "accepted_risk": "The missing file belongs to documentation/demo scaffolding and is not a deployable contract.",

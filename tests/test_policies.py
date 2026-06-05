@@ -33,6 +33,7 @@ def test_policy_file_suppresses_accepted_risk_without_weakening_other_output(tmp
                     {
                         "rule_id": "artifact-missing",
                         "fingerprint": missing.fingerprint,
+                        "witness_digest": missing.witness_digest,
                         "justification": "Fixture intentionally models a known absent upstream schema.",
                         "accepted_risk": "CI may proceed because this repo-only fixture is not deployed.",
                         "owner": "platform",
@@ -67,8 +68,69 @@ def test_policy_file_suppresses_accepted_risk_without_weakening_other_output(tmp
     suppressed = payload["diagnostics"][0]
     assert suppressed["properties"]["original_rule_id"] == "artifact-missing"
     assert suppressed["properties"]["original_fingerprint"] == missing.fingerprint
+    assert suppressed["properties"]["original_witness_digest"] == missing.witness_digest
     assert suppressed["properties"]["accepted_risk"].startswith("CI may proceed")
     assert payload["ok"] is True
+
+
+def test_policy_rejects_stale_suppression_when_witness_digest_changes(tmp_path: Path, capsys) -> None:
+    config = tmp_path / "promptabi.json"
+    policy = tmp_path / "promptabi.policy.json"
+    config.write_text(
+        json.dumps(
+            {
+                "name": "stale-witness-suppression",
+                "artifacts": {"schema": "missing.schema.json"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    missing = next(
+        diagnostic
+        for diagnostic in VerificationSession(load_config(config)).collect_diagnostics()
+        if diagnostic.rule_id == "artifact-missing"
+    )
+    policy.write_text(
+        json.dumps(
+            {
+                "suppressions": [
+                    {
+                        "rule_id": "artifact-missing",
+                        "fingerprint": missing.fingerprint,
+                        "witness_digest": "0" * 16,
+                        "justification": "Reviewed missing fixture remains acceptable only while its witness is unchanged.",
+                        "accepted_risk": "The missing schema is not used by deployment paths.",
+                        "owner": "platform",
+                        "expires_on": "2999-01-01",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    config.write_text(
+        json.dumps(
+            {
+                "name": "stale-witness-suppression",
+                "artifacts": {"schema": "missing.schema.json"},
+                "policy_files": [policy.name],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["verify", "--config", str(config), "--format", "json"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 1
+    rule_ids = [diagnostic["rule_id"] for diagnostic in payload["diagnostics"]]
+    assert "artifact-missing" in rule_ids
+    invalid = next(
+        diagnostic for diagnostic in payload["diagnostics"] if diagnostic["rule_id"] == "policy-suppression-invalid"
+    )
+    assert "does not match current witness" in invalid["message"]
+    assert invalid["properties"]["current_witness_digest"] == missing.witness_digest
 
 
 def test_policy_rejects_expired_or_unjustified_suppressions_and_keeps_ci_strict(
@@ -104,6 +166,9 @@ def test_policy_rejects_expired_or_unjustified_suppressions_and_keeps_ci_strict(
     assert "policy-suppression-invalid" in rule_ids
     invalid = next(diagnostic for diagnostic in payload["diagnostics"] if diagnostic["rule_id"] == "policy-suppression-invalid")
     assert "justification is required" in invalid["message"]
+    assert "owner is required" in invalid["message"]
+    assert "accepted_risk is required" in invalid["message"]
+    assert "witness_digest is required" in invalid["message"]
     assert "in the past" in invalid["message"]
 
 

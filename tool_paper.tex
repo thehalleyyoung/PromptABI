@@ -196,9 +196,10 @@ agent frameworks, and training/fine-tuning data pipelines, with guide tests that
 verify referenced repository artifacts and run representative CLI commands,
 policy and suppression files that match diagnostics by stable fingerprints,
 artifacts, or paths; require reviewed justifications, owners, accepted-risk
-statements, and expiration dates; enforce repository severity thresholds; and
-render audited suppression diagnostics without letting stale or unjustified
-exceptions weaken CI,
+statements, expiration dates, and \texttt{witness\_digest} proofs that the
+suppressed counterexample is unchanged; enforce repository severity thresholds;
+reject stale witness drift; and render audited suppression diagnostics without
+letting stale or unjustified exceptions weaken CI,
 a \texttt{promptabi minimize} workflow and public API that shrink failing
 templates, JSON Schemas, stop-string sets, message sets, finite solver-constraint
 lists, provider fixtures, and formal DFA/FST/SMT counterexamples under
@@ -661,8 +662,8 @@ sound/complete/bounded/Z3/heuristic/abstaining modes across tokenizer families,
 template dialects, grammar backends, providers, frameworks, and the currently
 modeled training-manifest surface,
 applies repository policy files after real diagnostics are produced so accepted
-risks are auditable, expiring, and fingerprint-stable rather than blanket
-ignores,
+risks are owned, expiring, fingerprint-stable, and bound to unchanged witness
+digests rather than blanket ignores,
 runs CPU-only performance benchmarks over tokenizer, template, grammar, stop,
 SMT, budget, corpus, and cache paths, mutates chat templates, tokenizers, stop
 policies, schemas, grammars, tools, truncation configs, and SMT encodings to

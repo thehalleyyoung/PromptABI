@@ -165,6 +165,7 @@ def test_json_diagnostic_output_matches_structured_snapshot() -> None:
                 },
                 "check_modes": ["complete", "sound"],
                 "fingerprint": "5bb6ab676b2e7756",
+                "witness_digest": "f11b3940a6ae2006",
                 "message": "artifact 'answer-schema' does not exist",
                 "rule_id": "artifact-missing",
                 "severity": "error",
@@ -204,6 +205,7 @@ def test_json_diagnostic_output_matches_structured_snapshot() -> None:
                 },
                 "check_modes": ["complete", "sound"],
                 "fingerprint": "55d4ad24d45eb4b1",
+                "witness_digest": "cc93ac5b09bd9ebf",
                 "message": "artifact 'answer-schema' is not pinned by sha256",
                 "rule_id": "artifact-unpinned",
                 "severity": "warning",
@@ -229,6 +231,7 @@ def test_json_diagnostic_output_matches_structured_snapshot() -> None:
             {
                 "check_modes": ["heuristic"],
                 "fingerprint": "966044f6134aa008",
+                "witness_digest": "0ce44ccc16040e67",
                 "message": "PromptABI package, CLI, docs, examples, fixtures, and benchmarks are wired.",
                 "rule_id": "repository-skeleton",
                 "severity": "info",
