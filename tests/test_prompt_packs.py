@@ -4,7 +4,13 @@ from pathlib import Path
 from promptabi.artifacts import ArtifactKind, artifact_from_config
 from promptabi.cli import main
 from promptabi.loaders import ArtifactLoader
-from promptabi.prompt_packs import build_prompt_pack_lockfile, compare_prompt_pack_lockfile, compare_prompt_pack_upgrade
+from promptabi.prompt_packs import (
+    build_prompt_pack_lockfile,
+    build_prompt_pack_registry,
+    compare_prompt_pack_lockfile,
+    compare_prompt_pack_upgrade,
+    prompt_pack_registry_to_json,
+)
 from promptabi.session import VerificationSession
 
 
@@ -455,3 +461,56 @@ def test_cli_prompt_pack_upgrade_gates_real_candidate(tmp_path: Path, capsys) ->
     assert exit_code == 1
     assert any(diagnostic["rule_id"] == "prompt-pack-upgrade-stop-regression" for diagnostic in regressed["diagnostics"])
     assert any(diagnostic["rule_id"] == "prompt-pack-upgrade-tool-schema-regression" for diagnostic in regressed["diagnostics"])
+
+
+def test_prompt_pack_registry_publishes_hashes_without_private_contract_contents(tmp_path: Path) -> None:
+    pack = tmp_path / "support.prompt-pack.json"
+    config = tmp_path / "promptabi.json"
+    _write_prompt_pack(pack, schema_digest="sha256:refund-v1")
+    _write_safe_config(config, pack)
+    session = VerificationSession.from_config_file(config)
+    result = session.run()
+    loaded, _load_diagnostics = session.load_artifacts_with_diagnostics()
+
+    registry = build_prompt_pack_registry(loaded, result.diagnostics, base_dir=tmp_path)
+    payload = registry.to_dict()
+    encoded = prompt_pack_registry_to_json(registry)
+
+    assert payload["registry_version"] == 1
+    entry = payload["prompt_packs"][0]
+    assert entry["package_name"] == "support-pack"
+    assert entry["supported_fragments"] == {
+        "diagnostic_count": 1,
+        "model_family_count": 1,
+        "role_count": 3,
+        "stop_policy_count": 1,
+        "template_count": 1,
+        "tool_schema_count": 1,
+    }
+    assert len(entry["contract_hash"]) == 64
+    assert len(entry["proof_hash"]) == 64
+    assert entry["diagnostics"][0]["rule_id"] == "prompt-pack-verified"
+    assert "template_hash" in entry["proofs"]["template_proofs"][0]
+    assert "tool_name_hash" in entry["proofs"]["tool_schema_proofs"][0]
+    assert "stop_sequence_set_hash" in entry["proofs"]["stop_policy_proofs"][0]
+    assert "refund_user" not in encoded
+    assert "</tool_call>" not in encoded
+    assert "{% for message in messages %}" not in encoded
+
+
+def test_cli_prompt_pack_registry_writes_public_manifest(tmp_path: Path, capsys) -> None:
+    pack = tmp_path / "support.prompt-pack.json"
+    config = tmp_path / "promptabi.json"
+    output = tmp_path / "registry.json"
+    _write_prompt_pack(pack, schema_digest="sha256:refund-v1")
+    _write_safe_config(config, pack)
+
+    assert main(["prompt-pack", "registry", "--config", str(config), "--output", str(output), "--format", "text"]) == 0
+    stdout = capsys.readouterr().out
+    payload = json.loads(output.read_text(encoding="utf-8"))
+
+    assert "PromptABI prompt-pack registry" in stdout
+    assert payload["registry_version"] == 1
+    assert payload["prompt_packs"][0]["package_name"] == "support-pack"
+    assert "refund_user" not in output.read_text(encoding="utf-8")
+    assert "</tool_call>" not in output.read_text(encoding="utf-8")

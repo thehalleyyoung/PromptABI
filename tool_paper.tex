@@ -102,7 +102,10 @@ adapters for request/response fields, tool argument encoding, parallel tool
 support, stop policies, and structured-output modes,
 a prompt-pack artifact model, \texttt{prompt-pack-contracts} check,
 package-manager-style \texttt{promptabi prompt-pack lock} workflow, and
-\texttt{promptabi prompt-pack upgrade} gate for reusable prompt libraries,
+\texttt{promptabi prompt-pack upgrade} gate for reusable prompt libraries, plus
+a public \texttt{promptabi prompt-pack registry} manifest that publishes
+non-sensitive proof hashes, diagnostic fingerprints, supported-fragment counts,
+and reproducible artifact metadata without raw template, tool, or stop contents,
 validating, pinning, and proving upgrade preservation for exported templates,
 role-boundary and budget hashes, tool schemas, stop policies, supported
 model/provider families, package hashes, and diagnostic baselines against
@@ -535,7 +538,11 @@ provider/template/schema contract verified for serving,
 loads reusable prompt packs as first-class artifacts, locks them with
 package-manager-style contract hashes, and checks that their
 exported templates, expected roles, required tools, stop sequences, and supported
-model/provider families remain compatible with the app that imports them,
+model/provider families remain compatible with the app that imports them, while
+the public registry format converts the same verified state into contract hashes,
+hash-only template/tool/stop proofs, diagnostic fingerprints, supported-fragment
+counts, and reproducible source metadata suitable for publishing outside a
+private prompt library,
 returns stable policy-controlled process exit codes, writes and enforces
 deterministic verification lockfiles that fail closed on artifact, config,
 provider-fixture, library-version, supported-fragment, or diagnostic-baseline
@@ -624,7 +631,7 @@ The repository layout is designed to scale:
 \hline
 \texttt{src/promptabi/plugins.py} & Typed extension registry for artifact loaders, dependency-aware checks, diagnostic renderers, and capability metadata covering provider adapters, grammar backends, template dialects, truncation policies, and solver encodings. \\
 \hline
-\texttt{src/promptabi/prompt\_packs.py} & Prompt-pack compatibility checker for reusable prompt libraries, including exported-template role contracts, tool-schema requirements, stop-policy requirements, and supported model/provider family matching. \\
+\texttt{src/promptabi/prompt\_packs.py} & Prompt-pack compatibility checker for reusable prompt libraries, package lock/upgrade gates, and public registry manifests with non-sensitive proof hashes, diagnostic fingerprints, supported-fragment counts, and reproducible artifact metadata. \\
 \hline
 \texttt{src/promptabi/api\_stability.py} & Generated public-API manifest, stable/provisional/deprecated symbol taxonomy, deprecation decorator, Markdown/JSON API reference renderers, and baseline compatibility comparison for downstream plugin authors. \\
 \hline

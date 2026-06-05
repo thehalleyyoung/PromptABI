@@ -36,6 +36,7 @@ from .loaders import LoadedArtifact
 
 PROMPT_PACK_LOCKFILE_VERSION = 1
 PROMPT_PACK_LOCK_CHECK_MODES = (CheckMode.SOUND, CheckMode.COMPLETE)
+PROMPT_PACK_REGISTRY_VERSION = 1
 
 
 class PromptPackLockError(ValueError):
@@ -181,6 +182,58 @@ class PromptPackLockfile:
         return {
             "lockfile_version": self.lockfile_version,
             "prompt_packs": [entry.to_dict() for entry in self.entries],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PromptPackRegistryEntry:
+    """Public, privacy-preserving registry entry for a verified prompt pack."""
+
+    name: str
+    package_name: str
+    version: str | None
+    location: str
+    sha256: str | None
+    contract_hash: str
+    proof_hash: str
+    supported_fragments: tuple[tuple[str, object], ...]
+    reproducible_metadata: tuple[tuple[str, object], ...]
+    proofs: tuple[tuple[str, object], ...]
+    diagnostics: tuple[tuple[str, str, str], ...]
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {
+            "contract_hash": self.contract_hash,
+            "diagnostics": [
+                {"fingerprint": fingerprint, "rule_id": rule_id, "severity": severity}
+                for rule_id, severity, fingerprint in self.diagnostics
+            ],
+            "location": self.location,
+            "name": self.name,
+            "package_name": self.package_name,
+            "proof_hash": self.proof_hash,
+            "proofs": _pairs_to_dict(self.proofs),
+            "reproducible_metadata": _pairs_to_dict(self.reproducible_metadata),
+            "supported_fragments": _pairs_to_dict(self.supported_fragments),
+        }
+        if self.sha256 is not None:
+            data["sha256"] = self.sha256
+        if self.version is not None:
+            data["version"] = self.version
+        return data
+
+
+@dataclass(frozen=True, slots=True)
+class PromptPackRegistry:
+    """Public registry manifest for verified prompt-pack packages."""
+
+    entries: tuple[PromptPackRegistryEntry, ...]
+    registry_version: int = PROMPT_PACK_REGISTRY_VERSION
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "prompt_packs": [entry.to_dict() for entry in self.entries],
+            "registry_version": self.registry_version,
         }
 
 
@@ -362,6 +415,54 @@ def write_prompt_pack_lockfile(path: str | Path, lockfile: PromptPackLockfile) -
     lockfile_path = Path(path)
     lockfile_path.parent.mkdir(parents=True, exist_ok=True)
     lockfile_path.write_text(prompt_pack_lockfile_to_json(lockfile), encoding="utf-8")
+
+
+def build_prompt_pack_registry(
+    loaded_artifacts: tuple[LoadedArtifact, ...],
+    diagnostics: tuple[Diagnostic, ...] = (),
+    *,
+    base_dir: str | Path | None = None,
+) -> PromptPackRegistry:
+    """Build a public registry manifest with hashes, proofs, and no prompt contents."""
+
+    lockfile = build_prompt_pack_lockfile(loaded_artifacts, diagnostics, base_dir=base_dir)
+    entries = tuple(_registry_entry_from_lock_entry(entry) for entry in lockfile.entries)
+    return PromptPackRegistry(entries=entries)
+
+
+def prompt_pack_registry_to_json(registry: PromptPackRegistry) -> str:
+    return json.dumps(registry.to_dict(), indent=2, sort_keys=True) + "\n"
+
+
+def render_prompt_pack_registry_text(registry: PromptPackRegistry) -> str:
+    lines = ["PromptABI prompt-pack registry", f"registry version: {registry.registry_version}"]
+    for entry in registry.entries:
+        fragments = dict(entry.supported_fragments)
+        diagnostics = ", ".join(rule_id for rule_id, _severity, _fingerprint in entry.diagnostics) or "none"
+        version = f"@{entry.version}" if entry.version is not None else ""
+        lines.extend(
+            [
+                "",
+                f"- {entry.package_name}{version}",
+                f"  contract: {entry.contract_hash[:16]} proof: {entry.proof_hash[:16]}",
+                f"  source: {entry.location}",
+                (
+                    "  fragments: "
+                    f"templates={fragments.get('template_count', 0)} "
+                    f"tools={fragments.get('tool_schema_count', 0)} "
+                    f"stops={fragments.get('stop_policy_count', 0)} "
+                    f"roles={fragments.get('role_count', 0)}"
+                ),
+                f"  diagnostics: {diagnostics}",
+            ]
+        )
+    return "\n".join(lines) + "\n"
+
+
+def write_prompt_pack_registry(path: str | Path, registry: PromptPackRegistry) -> None:
+    registry_path = Path(path)
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    registry_path.write_text(prompt_pack_registry_to_json(registry), encoding="utf-8")
 
 
 def compare_prompt_pack_lockfile(
@@ -838,6 +939,83 @@ def _prompt_pack_lock_entry(
     )
 
 
+def _registry_entry_from_lock_entry(entry: PromptPackLockEntry) -> PromptPackRegistryEntry:
+    template_proofs = tuple(
+        {
+            "roles_hash": roles_hash,
+            "template_hash": template_hash,
+            "template_name_hash": _sha256_text(name),
+        }
+        for name, template_hash, roles_hash in entry.exported_templates
+    )
+    tool_proofs = tuple(
+        {
+            "provider": provider,
+            "required": required,
+            "schema_digest_hash": _sha256_text(schema_digest) if schema_digest is not None else None,
+            "tool_name_hash": _sha256_text(name),
+        }
+        for name, provider, schema_digest, required in entry.tool_schemas
+    )
+    stop_proofs = tuple(
+        {
+            "include_eos": include_eos,
+            "stop_policy_name_hash": _sha256_text(name),
+            "stop_sequence_set_hash": _hash_jsonable(stop_sequences),
+            "stop_token_id_set_hash": _hash_jsonable(stop_token_ids),
+        }
+        for name, stop_sequences, stop_token_ids, include_eos in entry.stop_policies
+    )
+    proof_payload = {
+        "diagnostics": [
+            {"fingerprint": fingerprint, "rule_id": rule_id, "severity": severity}
+            for rule_id, severity, fingerprint in entry.diagnostic_baseline
+        ],
+        "model_family_hashes": [_sha256_text(family) for family in entry.supported_model_families],
+        "role_hashes": [_sha256_text(role) for role in entry.expected_roles],
+        "stop_policies": stop_proofs,
+        "templates": template_proofs,
+        "tools": tool_proofs,
+    }
+    proof_hash = _hash_jsonable(proof_payload)
+    supported_fragments: tuple[tuple[str, object], ...] = (
+        ("diagnostic_count", len(entry.diagnostic_baseline)),
+        ("model_family_count", len(entry.supported_model_families)),
+        ("role_count", len(entry.expected_roles)),
+        ("stop_policy_count", len(entry.stop_policies)),
+        ("template_count", len(entry.exported_templates)),
+        ("tool_schema_count", len(entry.tool_schemas)),
+    )
+    reproducible_metadata: tuple[tuple[str, object], ...] = (
+        ("contract_hash", entry.contract_hash),
+        ("location", entry.location),
+        ("package_name", entry.package_name),
+        ("sha256", entry.sha256),
+        ("version", entry.version),
+    )
+    proofs: tuple[tuple[str, object], ...] = (
+        ("diagnostic_fingerprints", proof_payload["diagnostics"]),
+        ("model_family_hashes", proof_payload["model_family_hashes"]),
+        ("role_hashes", proof_payload["role_hashes"]),
+        ("stop_policy_proofs", stop_proofs),
+        ("template_proofs", template_proofs),
+        ("tool_schema_proofs", tool_proofs),
+    )
+    return PromptPackRegistryEntry(
+        name=entry.name,
+        package_name=entry.package_name,
+        version=entry.version,
+        location=entry.location,
+        sha256=entry.sha256,
+        contract_hash=entry.contract_hash,
+        proof_hash=proof_hash,
+        supported_fragments=supported_fragments,
+        reproducible_metadata=reproducible_metadata,
+        proofs=proofs,
+        diagnostics=entry.diagnostic_baseline,
+    )
+
+
 def _prompt_pack_diagnostic_baseline(
     artifact_name: str,
     diagnostics: tuple[Diagnostic, ...],
@@ -929,6 +1107,14 @@ def _prompt_pack_upgrade_diagnostic(
 
 def _sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _hash_jsonable(value: object) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def _pairs_to_dict(pairs: tuple[tuple[str, object], ...]) -> dict[str, object]:
+    return {key: value for key, value in pairs if value is not None}
 
 
 def _portable_path_string(value: str, *, base_dir: Path | None) -> str:

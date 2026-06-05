@@ -91,6 +91,7 @@ promptabi init --stack openai-tools --output-dir .promptabi-demo
 promptabi verify --config examples/end-to-end/tool-calling/buggy.promptabi.json --fail-on never
 promptabi verify --config examples/prompt-packs/promptabi.json
 promptabi prompt-pack lock --config examples/prompt-packs/promptabi.json --write --lockfile /tmp/prompt-pack.lock.json
+promptabi prompt-pack registry --config examples/prompt-packs/promptabi.json --output /tmp/prompt-pack.registry.json
 promptabi prompt-pack upgrade --config examples/prompt-packs/promptabi.json --baseline-lockfile /tmp/prompt-pack.lock.json
 promptabi verify --config examples/end-to-end/training-quickstart/fixed.promptabi.json
 promptabi verify-training --manifest examples/end-to-end/training-quickstart/fixed.training-manifest.json

@@ -142,11 +142,15 @@ from .plugins import PluginError, PluginRegistry, load_plugin_modules
 from .policies import policy_forbids_local_summary
 from .prompt_packs import (
     PromptPackLockError,
+    build_prompt_pack_registry,
     build_prompt_pack_lockfile,
     compare_prompt_pack_lockfile,
     compare_prompt_pack_upgrade,
     load_prompt_pack_lockfile,
     prompt_pack_lock_error_diagnostic,
+    prompt_pack_registry_to_json,
+    render_prompt_pack_registry_text,
+    write_prompt_pack_registry,
     write_prompt_pack_lockfile,
 )
 from .proof_sketches import (
@@ -610,6 +614,41 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_github_output_arguments(prompt_pack_upgrade)
     _add_local_summary_argument(prompt_pack_upgrade)
+    prompt_pack_registry = prompt_pack_subparsers.add_parser(
+        "registry",
+        help="emit a public verified prompt-pack registry manifest without prompt contents",
+    )
+    prompt_pack_registry.add_argument(
+        "--config",
+        help="path to a PromptABI JSON config containing prompt-pack artifacts; defaults to discovering promptabi.json",
+    )
+    prompt_pack_registry.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        metavar="NAME=PATH_OR_URI",
+        help="override or add an artifact location for this run; may be repeated",
+    )
+    prompt_pack_registry.add_argument(
+        "--output",
+        help="write the registry manifest JSON to this path instead of stdout",
+    )
+    prompt_pack_registry.add_argument(
+        "--format",
+        choices=("json", "text"),
+        default="json",
+        help="output format for stdout (default: json); --output always writes JSON",
+    )
+    prompt_pack_registry.add_argument("-q", "--quiet", action="count", default=0, help="suppress stdout when --output is set")
+    prompt_pack_registry.add_argument("-v", "--verbose", action="count", default=0, help="include config and output paths in text output")
+    prompt_pack_registry.add_argument(
+        "--plugin",
+        action="append",
+        default=[],
+        metavar="MODULE[:OBJECT]",
+        help="import a PromptABI plugin module for artifact loading compatibility; renderers are not used",
+    )
+    _add_local_summary_argument(prompt_pack_registry)
 
     corpus = subparsers.add_parser("corpus", help="seed corpus maintenance commands")
     corpus_subparsers = corpus.add_subparsers(dest="corpus_command", required=True)
@@ -1442,6 +1481,56 @@ def main(argv: Sequence[str] | None = None) -> int:
         ):
             return 2
         print(output, end="")
+        return exit_code
+
+    if args.command == "prompt-pack" and args.prompt_pack_command == "registry":
+        started_at = time.perf_counter()
+        try:
+            if args.quiet and args.verbose:
+                parser.error("--quiet and --verbose cannot be used together")
+            config_path = Path(args.config).resolve() if args.config else discover_config()
+            plugin_registry = _load_cli_plugins(args.plugin)
+            overrides = _parse_artifact_overrides(args.artifact, parser)
+            config = load_config(config_path).with_artifact_overrides(overrides, base_dir=Path.cwd())
+            if args.local_summary is not None and policy_forbids_local_summary(config.policy):
+                print("promptabi: organization policy pack forbids --local-summary writes", file=sys.stderr)
+                return 2
+            session = VerificationSession(config, plugin_registry=plugin_registry)
+            result = session.run()
+            loaded_artifacts, load_diagnostics = session.load_artifacts_with_diagnostics()
+            if any(diagnostic.severity.value == "error" for diagnostic in load_diagnostics):
+                print("promptabi: cannot build prompt-pack registry while artifact loading has errors", file=sys.stderr)
+                return 2
+            output_path = Path(args.output).expanduser().resolve() if args.output else None
+            base_dir = output_path.parent if output_path is not None else config_path.parent
+            registry = build_prompt_pack_registry(loaded_artifacts, result.diagnostics, base_dir=base_dir)
+            if output_path is not None:
+                write_prompt_pack_registry(output_path, registry)
+            if args.format == "json":
+                output = prompt_pack_registry_to_json(registry)
+            else:
+                output = render_prompt_pack_registry_text(registry)
+                if args.verbose:
+                    output += f"config: {config_path}\n"
+                    if output_path is not None:
+                        output += f"prompt-pack registry: {output_path}\n"
+            exit_code = 0
+        except (ConfigError, PromptPackLockError, PluginError, ValueError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write prompt-pack registry: {exc}", file=sys.stderr)
+            return 2
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="prompt-pack registry",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={"output_format": args.format, "prompt_pack_count": len(registry.entries)},
+        ):
+            return 2
+        if output_path is None or not args.quiet:
+            print(output, end="")
         return exit_code
 
     if args.command == "verify-training":
