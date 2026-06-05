@@ -731,6 +731,7 @@ still keep stable diagnostic fingerprints for trend reports and suppressions.
 
 \newpage
 \section{Prompt-Pack Supply-Chain Trust}
+\label{sec:supplychain-anchor}
 
 Reusable prompt packs are dependencies, and dependencies need a supply chain that
 is as auditable as the artifacts themselves. PromptABI distills each pack into a
@@ -847,6 +848,138 @@ internal registry record, an MLflow-style registered model, or a generic
 artifact repository. The example target manifest is executable through
 \texttt{promptabi model-registry}; tests assert that all four publication
 families are present and that the evidence is signed and reproducible.
+
+\newpage
+\section{Composable Prompt-Pack Extensions}
+
+The supply-chain trust layer (\S\ref{sec:supplychain-anchor}) establishes that a
+pack is what it claims to be; a second layer establishes that a pack \emph{keeps
+behaving} as it is extended, certified, and depended upon. PromptABI treats a
+prompt pack as a versioned interface and equips it with the same machinery a
+software package ecosystem provides, every guarantee backed by a checkable
+witness.
+
+\paragraph{Differential fixtures and semantic versioning.} Each pack carries
+golden \emph{differential fixtures}: input/output pairs that pin observable
+behaviour. When a new revision is proposed, PromptABI replays the fixtures and
+classifies the diff as a patch, minor, or breaking change, then checks that the
+declared semantic-version bump is no smaller than the observed change. A pack
+that silently breaks a fixture while advertising a patch release is rejected with
+the offending fixture named. Override-safety analysis proves that a downstream
+override only narrows the base behaviour---it may restrict a tool or tighten a
+stop policy, never reintroduce a control marker into a data channel.
+
+\paragraph{Schema certification and advisories.} Structured-output contracts
+shipped by a pack are certified against the supported JSON-schema fragment, so a
+pack cannot promise a constraint the runtime grammar layer cannot enforce; any
+unsupported construct is surfaced as an abstention with its JSON path. A
+machine-readable \emph{advisory} format lets a pack publisher announce a defect
+(``revisions $<$ 1.4.0 leak the system role through the \texttt{context}
+channel''), and consumers resolve advisories against their pinned version using
+the same version algebra that governs the semver gate.
+
+\paragraph{Retrieval, curriculum, and packing extension points.} Packs that feed
+retrieval-augmented and training pipelines expose declared extension points.
+PromptABI verifies that retrieved context is injected only into data regions---a
+placeholder that lands inside a role header is flagged as an in-control-region
+hazard---and that multi-epoch packing and curriculum schedules preserve the
+invariants (no example crosses a document boundary, no private field survives a
+packing transform, curriculum drift between epochs stays within a declared
+tolerance).
+
+\paragraph{Certification, provenance, and interoperability.} A third party can
+issue an HMAC-signed certification over a demo pack's canonical bytes; the
+signature binds the pack identity, the model-registry provenance record, and the
+certifier, so a forged or post-dated certificate fails verification offline. An
+\emph{interoperability leaderboard} aggregates, per pack, which providers satisfy
+its declared interface, turning ``works on my model'' into a reproducible matrix.
+Together these checks let a marketplace publish packs whose every label---version,
+schema, advisory status, certification---is an evidence-backed claim rather than
+documentation.
+
+\newpage
+\section{Training-Data Interface Contracts}
+
+Fine-tuning and preference optimisation pipelines are prompt-interface programs
+too, and their failures are silent: a mislabelled loss mask, a leaked judge
+prompt, or a tokenizer misalignment degrades a model without raising an error.
+PromptABI extends its static-verification discipline across the dataset boundary
+with a contract for every stage of the data pipeline.
+
+\paragraph{Masks, targets, and tokenizer alignment.} A training example declares
+which spans are supervised; PromptABI certifies that the loss mask covers exactly
+the intended target spans, that no prompt token is accidentally supervised, and
+that target spans survive tokenization---the character spans and token spans must
+align under the declared tokenizer, or the example is rejected with the
+misaligned region highlighted. Streaming shard replay proves that a sharded,
+shuffled corpus reconstructs the same multiset of examples regardless of shard
+order, so a training run is reproducible from its manifest.
+
+\paragraph{Privacy, leakage, and redaction.} Judge prompts used in RLHF must not
+embed evaluation answers; preference pairs must be \emph{symmetric} (swapping the
+chosen and rejected responses must flip, not corrupt, the label). PromptABI
+checks both, and proves that benchmark contamination is absent by testing the
+training corpus against held-out evaluation fingerprints. Redaction invariance is
+proven through the full transform stack: a field marked private must remain
+redacted after every packing, templating, and multimodal-placeholder
+substitution, with a concrete witness for any leak.
+
+\paragraph{Cards, gates, and suites.} Each dataset carries machine-validated card
+metadata; a conformance badge attests that a loader honours the declared contract;
+training-drift alarms fire when a refreshed corpus diverges from its baseline
+beyond tolerance; and a fine-tune manifest is gated against the model registry so
+an artifact cannot be promoted on data that failed its contract. A published
+training-contract benchmark suite exercises ten end-to-end scenarios against the
+real analyzers, so the guarantees are demonstrated, not merely asserted.
+
+\newpage
+\section{Provider-Contract Conformance}
+\label{sec:provider-conformance}
+
+The discrete interface a developer programs against is ultimately implemented by
+a provider, and ``OpenAI-compatible'' is a claim, not a proof. PromptABI's final
+layer makes provider behaviour accountable through a shared, replayable contract
+and a conformance regime built on top of it.
+
+\paragraph{An open test-vector format.} A \emph{provider test vector} is a
+declarative artifact---messages, the provider-agnostic obligations the response
+must satisfy (role boundaries non-forgeable, declared stop policy terminates,
+structured output validates, tool calls well-formed, error envelope conformant),
+and the salient features of an acceptable response. Vectors have a canonical
+serialization and a stable content digest, so a suite authored once can be
+replayed against any adapter and any revision, and a result can be cited by hash.
+
+\paragraph{What conformance checks.} Against this substrate PromptABI verifies the
+behaviours that break portable clients in practice: streaming chunk order
+(role first, content deltas in index order, \texttt{finish\_reason} only last)
+with deterministic reassembly under benign reordering; context-window semantics
+per provider revision, proving whether a planned request fits a shared or split
+token budget and diffing two revisions for silent shrinkage; error-envelope
+compatibility, including HTTP-status/error-type agreement; native grammar-backend
+feature compatibility with an alternative-backend suggestion; multi-turn and
+parallel tool-call accounting, including cancellation semantics (every emitted
+call is answered or explicitly cancelled, never silently dropped); structured-
+output refusal envelopes, so a refusal is never mis-parsed as data; and stop-
+policy equivalence across providers, proving two policies truncate the same
+candidate at the same index.
+
+\paragraph{From evidence to release decisions.} Conformance is continuous, not a
+one-time pass. Signed fixture-provenance attestations bind each captured response
+to a signer and a provider revision and detect tampering or staleness. A
+benchmark-drift dashboard turns a series of runs into a pass-rate trend with
+regression and recovery findings and an alarm when the rate falls below the best-
+ever baseline. Failures render into standardized, de-duplicated issue templates
+with stable fingerprints. Capability negotiation resolves required features
+against a provider's support and declared fallbacks before a request is sent, and
+provider-migration dry-runs compute the exact rename/clamp/drop patch---flagging
+every lossy step---needed to move a request between providers. A deployment gate
+binds this evidence to policy (minimum pass-rate, required obligations, severity
+ceiling, revision allow/deny) and emits a promote/block decision with precise
+reasons, the bridge from conformance evidence to release automation. A
+language-neutral contract IR lets SDK readers in any language consume the same
+contract, and an annual provider-semantics report and a shared standards proposal
+(a normative, clause-identified checklist scored per provider) turn the whole
+layer into a citable, governance-ready artifact.
 
 \newpage
 \section{Benchlines and Experiments}
