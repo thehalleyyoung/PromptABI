@@ -1557,6 +1557,32 @@ produced by executing real analyzers and is verified by the test battery.}
 \end{table}
 
 
+\section{Standardization and Community}
+The final layer treats prompt-interface verification as a community standard
+rather than a single tool. It generates a vendor-neutral RFC that states five
+normative requirements---role non-forgeability, tool-argument schema conformance,
+provable token budgets, total stop policies, and version-gate rejection---with
+SARIF as the interchange format and ``zero error-severity diagnostics under the
+all-checks profile'' as the conformance criterion. Around the specification it
+produces a working-group charter spanning providers, frameworks, applications,
+security researchers, and academia; a standards-proposal record; a camera-ready
+and rebuttal kit that maps each claim to its evidence; talk, poster, and demo
+outlines; governance, code-of-conduct, and contribution-ladder documents; and a
+versioned documentation-site configuration.
+
+Two of these surfaces are executable rather than merely documentary. The
+conformance-challenge program is backed by the real escalating CTF benchmark,
+which the analyzers solve soundly with no false negatives, giving the bug-bounty
+campaign a concrete, machine-checked scope. The adopter case studies are produced
+by running the actual verifier on shipped configurations (retrieval-augmented
+chat, a token-budget planner, and a stop-policy service); they report real
+diagnostic counts, including error-severity findings, so every ``adopter'' is a
+reproducible verification rather than a testimonial. A coordinated launch plan
+closes the roadmap. As with every other layer, the entire suite is deterministic
+and validated by an automated test battery, so the project's standardization
+story is itself a verified artifact.
+
+
 A PromptABI diagnostic is designed to answer five questions in one artifact:
 what invariant failed, where the source of the invariant lives, which semantic
 mode was used, what witness demonstrates the issue, and what low-blast-radius

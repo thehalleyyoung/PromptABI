@@ -156,6 +156,9 @@ promptabi red-team --format text
 # Self-certifying artifact suite: golden-digest replay, property-based soundness,
 # mutation testing, badges, CITATION.cff/Zenodo, flakiness + CI matrix.
 promptabi reproduce --format text
+# Standardization + community: vendor-neutral RFC, governance, conformance
+# challenge (real CTF), and adopter case studies from real verifier runs.
+promptabi outreach --format text
 promptabi maintain health --format text
 promptabi graph --config examples/rag-chunking/promptabi.json --all-checks --format mermaid
 promptabi contract format examples/static-contract-language/app.pabi --check

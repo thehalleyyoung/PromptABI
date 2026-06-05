@@ -308,6 +308,12 @@ from .artifact_reproducibility import (
     render_artifact_reproducibility_text,
     run_artifact_reproducibility_suite,
 )
+from .community_outreach import (
+    CommunityOutreachReport,
+    render_community_outreach_json,
+    render_community_outreach_text,
+    run_community_outreach,
+)
 from .soundness_audits import (
     SoundnessAuditReport,
     build_soundness_audit_report,
@@ -713,6 +719,27 @@ def artifact_reproducibility(
         return render_artifact_reproducibility_json(report)
     if output_format == "text":
         return render_artifact_reproducibility_text(report)
+    raise ValueError("output_format must be 'json' or 'text'")
+
+
+def community_outreach(
+    *, output_format: str | None = None
+) -> CommunityOutreachReport | str:
+    """Run the community, standardization, and outreach surfaces (roadmap steps
+    391-400): a vendor-neutral prompt-interface RFC, a working-group charter, a
+    standards-proposal record, a camera-ready and rebuttal kit, talk/poster/demo
+    outlines, governance and code-of-conduct documents with a contribution ladder,
+    a versioned documentation-site config, a conformance-challenge program backed
+    by the real CTF benchmark, adopter case studies produced by running the real
+    verifier on shipped configurations, and a 1000-star coordinated launch plan."""
+
+    report = run_community_outreach()
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_community_outreach_json(report)
+    if output_format == "text":
+        return render_community_outreach_text(report)
     raise ValueError("output_format must be 'json' or 'text'")
 
 

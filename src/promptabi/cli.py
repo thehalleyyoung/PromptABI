@@ -2185,6 +2185,21 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="also write CITATION.cff and .zenodo.json to the repository root",
     )
+    outreach = subparsers.add_parser(
+        "outreach",
+        help="run the community + standardization + outreach surfaces (RFC, governance, case studies; steps 391-400)",
+    )
+    outreach.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    outreach.add_argument(
+        "--write-artifacts",
+        action="store_true",
+        help="also write the RFC and governance documents to the repository root",
+    )
     soundness_audit = subparsers.add_parser(
         "soundness-audit",
         help="review each built-in check family's soundness boundary, evidence, and blind spots",
@@ -5307,6 +5322,27 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(output, end="" if output.endswith("\n") else "\n")
         if getattr(args, "write_artifacts", False):
             written = write_reproducibility_artifacts()
+            for name in sorted(written):
+                print(f"wrote {name}", file=sys.stderr)
+        return 0 if report.passed else 1
+
+    if args.command == "outreach":
+        from .community_outreach import (
+            render_community_outreach_json,
+            render_community_outreach_text,
+            run_community_outreach,
+            write_outreach_artifacts,
+        )
+
+        report = run_community_outreach()
+        output = (
+            render_community_outreach_json(report)
+            if args.format == "json"
+            else render_community_outreach_text(report)
+        )
+        print(output, end="" if output.endswith("\n") else "\n")
+        if getattr(args, "write_artifacts", False):
+            written = write_outreach_artifacts()
             for name in sorted(written):
                 print(f"wrote {name}", file=sys.stderr)
         return 0 if report.passed else 1
