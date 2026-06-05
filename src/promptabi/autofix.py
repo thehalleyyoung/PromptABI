@@ -1,4 +1,4 @@
-"""Low-risk, deterministic auto-fixes for PromptABI projects."""
+"""Deterministic auto-fix planning for PromptABI projects."""
 
 from __future__ import annotations
 
@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from .config import ConfigError, load_config
-from .diagnostics import Diagnostic, DiagnosticSeverity
+from .diagnostics import Diagnostic, DiagnosticSeverity, WitnessStep, WitnessTrace
+from .fix_suggestions import RankedFixSuggestion, rank_fix_suggestions
 from .lockfiles import build_lockfile, write_lockfile
 from .plugins import PluginRegistry
 from .session import VerificationSession
@@ -37,6 +38,12 @@ class AutoFixError(ValueError):
     """Raised when a low-risk auto-fix cannot be planned or applied safely."""
 
 
+class GuardedPreviewRisk(StrEnum):
+    """Risk bands supported by guarded preview planning."""
+
+    HIGH = "high"
+
+
 @dataclass(frozen=True, slots=True)
 class AutoFixChange:
     """One file-level change produced by auto-fix planning or application."""
@@ -56,6 +63,33 @@ class AutoFixChange:
             "status": self.status.value,
             "message": self.message,
             "diagnostics": list(self.diagnostics),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class GuardedAutoFixPreview:
+    """A non-mutating preview for a high-risk interface change."""
+
+    risk: GuardedPreviewRisk
+    suggestion: RankedFixSuggestion
+    diagnostics: tuple[Diagnostic, ...]
+    before_witnesses: tuple[WitnessTrace, ...]
+    after_witnesses: tuple[WitnessTrace, ...]
+    guardrails: tuple[str, ...]
+
+    @property
+    def changes_user_visible_prompt_behavior(self) -> bool:
+        return self.suggestion.changes_user_visible_prompt_behavior
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "risk": self.risk.value,
+            "suggestion": self.suggestion.to_dict(),
+            "diagnostics": [diagnostic.to_dict() for diagnostic in self.diagnostics],
+            "before_witnesses": [witness.to_dict() for witness in self.before_witnesses],
+            "after_witnesses": [witness.to_dict() for witness in self.after_witnesses],
+            "guardrails": list(self.guardrails),
+            "changes_user_visible_prompt_behavior": self.changes_user_visible_prompt_behavior,
         }
 
 
@@ -94,6 +128,31 @@ class AutoFixReport:
         if self.diagnostics_after:
             data["diagnostics_after"] = [diagnostic.to_dict() for diagnostic in self.diagnostics_after]
         return data
+
+
+@dataclass(frozen=True, slots=True)
+class GuardedAutoFixPreviewReport:
+    """A deterministic summary of guarded high-risk fix previews."""
+
+    config_path: str
+    risk: GuardedPreviewRisk
+    previews: tuple[GuardedAutoFixPreview, ...]
+    diagnostics_before: tuple[Diagnostic, ...]
+
+    @property
+    def ok(self) -> bool:
+        return True
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "applied": False,
+            "config_path": self.config_path,
+            "diagnostics_before": [diagnostic.to_dict() for diagnostic in self.diagnostics_before],
+            "ok": self.ok,
+            "preview_count": len(self.previews),
+            "previews": [preview.to_dict() for preview in self.previews],
+            "risk": self.risk.value,
+        }
 
 
 def run_low_risk_autofix(
@@ -198,6 +257,34 @@ def run_low_risk_autofix(
     )
 
 
+def run_guarded_autofix_preview(
+    config_path: str | Path,
+    *,
+    risk: str | GuardedPreviewRisk = GuardedPreviewRisk.HIGH,
+    artifact_overrides: Mapping[str, str] | None = None,
+    override_base_dir: str | Path | None = None,
+    plugin_registry: PluginRegistry | None = None,
+) -> GuardedAutoFixPreviewReport:
+    """Preview high-risk template/schema/stop/truncation fixes without mutating files."""
+
+    selected_risk = GuardedPreviewRisk(str(risk))
+    resolved_config_path = Path(config_path).expanduser().resolve()
+    config = load_config(resolved_config_path)
+    if artifact_overrides:
+        base_dir = Path(override_base_dir) if override_base_dir is not None else Path.cwd()
+        config = config.with_artifact_overrides(dict(artifact_overrides), base_dir=base_dir)
+    session = VerificationSession(config, plugin_registry=plugin_registry)
+    result = session.run()
+    diagnostics_before = result.diagnostics
+    previews = _guarded_previews_for_diagnostics(diagnostics_before, selected_risk)
+    return GuardedAutoFixPreviewReport(
+        config_path=str(resolved_config_path),
+        risk=selected_risk,
+        previews=previews,
+        diagnostics_before=diagnostics_before,
+    )
+
+
 def render_autofix_text(report: AutoFixReport) -> str:
     """Render an auto-fix report for terminal workflows."""
 
@@ -218,8 +305,48 @@ def render_autofix_text(report: AutoFixReport) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_guarded_autofix_preview_text(report: GuardedAutoFixPreviewReport) -> str:
+    """Render a guarded auto-fix preview report for terminal workflows."""
+
+    lines = [
+        f"PromptABI guarded auto-fix preview ({report.risk.value} risk): {report.config_path}",
+        f"previews: {len(report.previews)}",
+    ]
+    if not report.previews:
+        lines.append("status: no high-risk fix previews found")
+    else:
+        lines.append("status: REVIEW REQUIRED")
+    for preview in report.previews:
+        suggestion = preview.suggestion
+        lines.append(
+            f"PREVIEW {preview.risk.value}: rank={suggestion.rank} score={suggestion.score} "
+            f"rules={', '.join(suggestion.rules) or '(none)'}"
+        )
+        lines.append(f"  suggestion: {suggestion.text}")
+        lines.append(
+            "  risk: "
+            f"safety={suggestion.safety.value}, compatibility={suggestion.compatibility.value}, "
+            f"blast_radius={suggestion.blast_radius.value}, "
+            f"user_visible_prompt_change={str(suggestion.changes_user_visible_prompt_behavior).lower()}"
+        )
+        lines.append(f"  diagnostics: {', '.join(diagnostic.fingerprint for diagnostic in preview.diagnostics)}")
+        for witness in preview.before_witnesses:
+            lines.append(f"  before witness: {witness.summary}")
+        for witness in preview.after_witnesses:
+            lines.append(f"  after witness: {witness.summary}")
+        for guardrail in preview.guardrails:
+            lines.append(f"  guardrail: {guardrail}")
+    return "\n".join(lines) + "\n"
+
+
 def render_autofix_json(report: AutoFixReport) -> str:
     """Render an auto-fix report as stable JSON."""
+
+    return json.dumps(report.to_dict(), indent=2, sort_keys=True) + "\n"
+
+
+def render_guarded_autofix_preview_json(report: GuardedAutoFixPreviewReport) -> str:
+    """Render a guarded auto-fix preview report as stable JSON."""
 
     return json.dumps(report.to_dict(), indent=2, sort_keys=True) + "\n"
 
@@ -236,6 +363,23 @@ _LOCKFILE_TRIGGER_RULES = frozenset(
         "lockfile-library-version-drift",
         "lockfile-provider-fixture-drift",
         "lockfile-load-failed",
+    }
+)
+
+_HIGH_RISK_TERMS = frozenset(
+    {
+        "template",
+        "schema",
+        "stop",
+        "truncation",
+        "context",
+        "prompt",
+        "parser",
+        "grammar",
+        "tool",
+        "provider",
+        "role",
+        "delimiter",
     }
 )
 
@@ -424,3 +568,104 @@ def _tuple_value(value: object) -> tuple[object, ...]:
 def _metadata_int(metadata: tuple[tuple[str, object], ...], key: str) -> int | None:
     value = dict(metadata).get(key)
     return value if isinstance(value, int) and value >= 0 else None
+
+
+def _guarded_previews_for_diagnostics(
+    diagnostics: Sequence[Diagnostic],
+    risk: GuardedPreviewRisk,
+) -> tuple[GuardedAutoFixPreview, ...]:
+    if risk is not GuardedPreviewRisk.HIGH:
+        raise AutoFixError(f"unsupported guarded preview risk: {risk.value}")
+    ranked = rank_fix_suggestions(diagnostics)
+    previews: list[GuardedAutoFixPreview] = []
+    for suggestion in ranked:
+        related = tuple(
+            diagnostic
+            for diagnostic in diagnostics
+            if suggestion.text in diagnostic.suggestions and _is_high_risk_fix_candidate(diagnostic, suggestion)
+        )
+        if not related:
+            continue
+        before_witnesses = tuple(
+            diagnostic.witness if diagnostic.witness is not None else _diagnostic_summary_witness(diagnostic)
+            for diagnostic in related
+        )
+        previews.append(
+            GuardedAutoFixPreview(
+                risk=risk,
+                suggestion=suggestion,
+                diagnostics=related,
+                before_witnesses=before_witnesses,
+                after_witnesses=tuple(_after_preview_witness(diagnostic, suggestion) for diagnostic in related),
+                guardrails=_guardrails_for_suggestion(suggestion),
+            )
+        )
+    return tuple(previews)
+
+
+def _is_high_risk_fix_candidate(diagnostic: Diagnostic, suggestion: RankedFixSuggestion) -> bool:
+    properties = dict(diagnostic.properties)
+    explicit_safety = str(properties.get("fix_safety", "")).lower()
+    if explicit_safety == "low":
+        return False
+    explicit_change = str(
+        properties.get(
+            "fix_changes_user_visible_prompt_behavior",
+            properties.get("fix_user_visible_prompt_behavior", ""),
+        )
+    ).lower()
+    if explicit_change in {"true", "1", "yes"}:
+        return True
+    if suggestion.changes_user_visible_prompt_behavior:
+        return True
+    haystack = " ".join(
+        (
+            diagnostic.rule_id,
+            diagnostic.message,
+            " ".join(diagnostic.suggestions),
+            diagnostic.artifact.kind if diagnostic.artifact is not None else "",
+        )
+    ).lower()
+    return any(term in haystack for term in _HIGH_RISK_TERMS)
+
+
+def _diagnostic_summary_witness(diagnostic: Diagnostic) -> WitnessTrace:
+    artifacts = (diagnostic.artifact,) if diagnostic.artifact is not None else ()
+    return WitnessTrace(
+        summary=f"Current diagnostic {diagnostic.fingerprint}: {diagnostic.message}",
+        steps=(
+            WitnessStep(action="run PromptABI verification", output=diagnostic.rule_id),
+            WitnessStep(action="observe current failing interface condition", output=diagnostic.message),
+        ),
+        artifacts=artifacts,
+    )
+
+
+def _after_preview_witness(diagnostic: Diagnostic, suggestion: RankedFixSuggestion) -> WitnessTrace:
+    artifacts = (diagnostic.artifact,) if diagnostic.artifact is not None else ()
+    return WitnessTrace(
+        summary=(
+            "Preview only: applying this high-risk fix must remove or intentionally replace "
+            f"diagnostic {diagnostic.fingerprint} before merge"
+        ),
+        steps=(
+            WitnessStep(action="review proposed high-risk change", output=suggestion.text),
+            WitnessStep(action="apply change in a separate review branch"),
+            WitnessStep(action="rerun PromptABI verification and compare witness", output=diagnostic.rule_id),
+        ),
+        artifacts=artifacts,
+        minimal_fixes=(suggestion.text,),
+    )
+
+
+def _guardrails_for_suggestion(suggestion: RankedFixSuggestion) -> tuple[str, ...]:
+    guardrails = [
+        "does not write files; reviewer must apply the change explicitly",
+        "requires before/after verification on the same PromptABI config",
+        "requires reviewer approval because prompt-interface behavior may change",
+    ]
+    if suggestion.changes_user_visible_prompt_behavior:
+        guardrails.append("requires product/owner signoff for user-visible prompt behavior changes")
+    if suggestion.blast_radius.value == "high":
+        guardrails.append("requires compatibility review for affected templates, providers, or truncation policy")
+    return tuple(guardrails)

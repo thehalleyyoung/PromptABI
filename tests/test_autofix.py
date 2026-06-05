@@ -2,7 +2,7 @@ import json
 from hashlib import sha256
 from pathlib import Path
 
-from promptabi import AutoFixKind, low_risk_autofix
+from promptabi import AutoFixKind, guarded_autofix_preview, low_risk_autofix
 from promptabi.cli import main
 
 
@@ -117,3 +117,56 @@ def test_autofix_writes_unsupported_annotations_and_docs_stub(tmp_path: Path, ca
     notes = tmp_path / "promptabi-fix-notes.md"
     assert notes.is_file()
     assert "artifact-unpinned" in notes.read_text(encoding="utf-8")
+
+
+def test_guarded_autofix_preview_reports_before_after_witnesses_for_high_risk_template_fix(capsys) -> None:
+    config = Path("examples/role-boundary/unsafe.promptabi.json")
+
+    exit_code = main(["fix", "--config", str(config), "--preview-risk", "high", "--format", "json"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert captured.err == ""
+    assert payload["applied"] is False
+    assert payload["risk"] == "high"
+    assert payload["preview_count"] >= 1
+    preview = payload["previews"][0]
+    assert preview["changes_user_visible_prompt_behavior"] is True
+    assert preview["diagnostics"][0]["rule_id"] == "role-boundary-nonforgeability"
+    assert preview["before_witnesses"][0]["rendered_strings"]
+    assert preview["after_witnesses"][0]["minimal_fixes"]
+    assert any("does not write files" in guardrail for guardrail in preview["guardrails"])
+
+
+def test_guarded_autofix_preview_rejects_write_mode(capsys) -> None:
+    config = Path("examples/role-boundary/unsafe.promptabi.json")
+
+    exit_code = main(["fix", "--config", str(config), "--preview-risk", "high", "--write"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert captured.out == ""
+    assert "cannot be combined with --write" in captured.err
+
+
+def test_guarded_autofix_preview_has_successful_empty_preview_for_safe_config(capsys) -> None:
+    config = Path("examples/role-boundary/safe.promptabi.json")
+
+    exit_code = main(["fix", "--config", str(config), "--preview-risk", "high"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "status: no high-risk fix previews found" in captured.out
+    assert captured.err == ""
+
+
+def test_guarded_autofix_preview_api_can_render_text() -> None:
+    rendered = guarded_autofix_preview(
+        Path("examples/role-boundary/unsafe.promptabi.json"),
+        output_format="text",
+    )
+
+    assert "PromptABI guarded auto-fix preview (high risk)" in rendered
+    assert "before witness:" in rendered
+    assert "after witness:" in rendered

@@ -95,6 +95,10 @@ from .api_stability import (
 )
 from .autofix import (
     AutoFixReport,
+    GuardedAutoFixPreviewReport,
+    render_guarded_autofix_preview_json,
+    render_guarded_autofix_preview_text,
+    run_guarded_autofix_preview,
     render_autofix_json,
     render_autofix_text,
     run_low_risk_autofix,
@@ -302,6 +306,31 @@ def low_risk_autofix(
         return render_autofix_text(report)
     if output_format == "json":
         return render_autofix_json(report)
+    raise ValueError("output_format must be one of: text, json")
+
+
+def guarded_autofix_preview(
+    config_path: str | Path,
+    *,
+    risk: str = "high",
+    artifact_overrides: Mapping[str, str] | None = None,
+    output_format: str | None = None,
+    plugin_registry: PluginRegistry | None = None,
+) -> GuardedAutoFixPreviewReport | str:
+    """Preview higher-risk prompt-interface fixes with before/after witness guardrails."""
+
+    report = run_guarded_autofix_preview(
+        config_path,
+        risk=risk,
+        artifact_overrides=artifact_overrides,
+        plugin_registry=plugin_registry,
+    )
+    if output_format is None:
+        return report
+    if output_format == "text":
+        return render_guarded_autofix_preview_text(report)
+    if output_format == "json":
+        return render_guarded_autofix_preview_json(report)
     raise ValueError("output_format must be one of: text, json")
 
 

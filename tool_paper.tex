@@ -148,10 +148,13 @@ declared root cause, artifact edge, provider behavior, or shared minimized
 witness digest while preserving unclustered-finding coverage counts for safe
 triage, deterministic fix-suggestion ranking that orders candidate repairs by
 safety, downstream compatibility, blast radius, and whether they alter
-user-visible prompt behavior, a low-risk \texttt{promptabi fix} engine that can
-preview or apply lockfile refreshes, explicit special-token-map declarations,
+user-visible prompt behavior, a \texttt{promptabi fix} engine that can preview or
+apply low-risk lockfile refreshes, explicit special-token-map declarations,
 unsupported-fragment annotation files, and reviewer documentation stubs while
-re-running verification after writes, rich diagnostic witness records that carry the human trace plus machine-readable
+re-running verification after writes, and can separately produce guarded,
+non-mutating high-risk previews for template, schema, stop-policy, parser, or
+truncation changes with before/after witness obligations, review guardrails, and
+explicit prompt-behavior risk labels, rich diagnostic witness records that carry the human trace plus machine-readable
 rendered strings, exact token IDs, role-region offsets, parser states, solver
 assignments, truncation decisions, and ranked minimal fixes, so a CI failure can
 be replayed by tools, explored in a web-free static HTML report with role-region

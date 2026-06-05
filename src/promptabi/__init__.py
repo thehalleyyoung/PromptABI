@@ -26,6 +26,7 @@ from .api import (
     evaluation_reproducibility,
     explain_result,
     fuzz_mutations,
+    guarded_autofix_preview,
     load_artifacts,
     low_risk_autofix,
     minimize_failure_repro,
@@ -61,8 +62,14 @@ from .autofix import (
     AutoFixKind,
     AutoFixReport,
     AutoFixStatus,
+    GuardedAutoFixPreview,
+    GuardedAutoFixPreviewReport,
+    GuardedPreviewRisk,
     render_autofix_json,
     render_autofix_text,
+    render_guarded_autofix_preview_json,
+    render_guarded_autofix_preview_text,
+    run_guarded_autofix_preview,
     run_low_risk_autofix,
 )
 from .api_stability import (

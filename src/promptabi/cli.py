@@ -20,8 +20,12 @@ from .api_stability import (
 from .autofix import (
     AutoFixError,
     AutoFixKind,
+    GuardedPreviewRisk,
     render_autofix_json,
     render_autofix_text,
+    render_guarded_autofix_preview_json,
+    render_guarded_autofix_preview_text,
+    run_guarded_autofix_preview,
     run_low_risk_autofix,
 )
 from .bug_reports import BugReportError, generate_bug_report, render_bug_report
@@ -339,7 +343,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     fix = subparsers.add_parser(
         "fix",
-        help="preview or apply low-risk PromptABI fixes such as lockfiles and metadata stubs",
+        help="preview or apply low-risk fixes, or preview guarded high-risk prompt-interface fixes",
     )
     fix.add_argument(
         "--config",
@@ -363,6 +367,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="path to a PromptABI lockfile when applying lockfile fixes (default: promptabi.lock.json beside the config)",
     )
     fix.add_argument("--write", action="store_true", help="apply fixes; without --write, print a dry-run preview")
+    fix.add_argument(
+        "--preview-risk",
+        choices=tuple(risk.value for risk in GuardedPreviewRisk),
+        help="preview guarded higher-risk template, schema, stop-policy, or truncation fixes without writing files",
+    )
     fix.add_argument(
         "--format",
         choices=("text", "json"),
@@ -1836,35 +1845,67 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args.local_summary is not None and policy_forbids_local_summary(config.policy):
                 print("promptabi: organization policy pack forbids --local-summary writes", file=sys.stderr)
                 return 2
-            report = run_low_risk_autofix(
-                config_path,
-                kinds=args.kind,
-                write=args.write,
-                lockfile_path=args.lockfile,
-                artifact_overrides=overrides,
-                override_base_dir=Path.cwd(),
-                plugin_registry=plugin_registry,
-            )
+            if args.preview_risk:
+                if args.write:
+                    raise AutoFixError("guarded high-risk previews cannot be combined with --write")
+                if args.kind:
+                    raise AutoFixError("guarded high-risk previews cannot be combined with --kind")
+                if args.lockfile:
+                    raise AutoFixError("guarded high-risk previews cannot be combined with --lockfile")
+                report = run_guarded_autofix_preview(
+                    config_path,
+                    risk=args.preview_risk,
+                    artifact_overrides=overrides,
+                    override_base_dir=Path.cwd(),
+                    plugin_registry=plugin_registry,
+                )
+            else:
+                report = run_low_risk_autofix(
+                    config_path,
+                    kinds=args.kind,
+                    write=args.write,
+                    lockfile_path=args.lockfile,
+                    artifact_overrides=overrides,
+                    override_base_dir=Path.cwd(),
+                    plugin_registry=plugin_registry,
+                )
         except (AutoFixError, ConfigError, PluginError, ValueError) as exc:
             print(f"promptabi: {exc}", file=sys.stderr)
             return 2
         except OSError as exc:
             print(f"promptabi: cannot apply low-risk fixes: {exc}", file=sys.stderr)
             return 2
-        output = render_autofix_json(report) if args.format == "json" else render_autofix_text(report)
+        if args.preview_risk:
+            output = (
+                render_guarded_autofix_preview_json(report)
+                if args.format == "json"
+                else render_guarded_autofix_preview_text(report)
+            )
+        else:
+            output = render_autofix_json(report) if args.format == "json" else render_autofix_text(report)
         exit_code = 0 if report.ok else 1
-        if not _write_local_summary_if_requested(
-            args.local_summary,
-            command="fix",
-            exit_code=exit_code,
-            started_at=started_at,
-            metadata={
+        metadata = (
+            {
+                "applied": False,
+                "preview_risk": args.preview_risk,
+                "preview_count": len(report.previews),
+                "format": args.format,
+            }
+            if args.preview_risk
+            else {
                 "applied": report.applied,
                 "changes_total": len(report.changes),
                 "applied_count": report.applied_count,
                 "planned_count": report.planned_count,
                 "format": args.format,
-            },
+            }
+        )
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="fix",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata=metadata,
         ):
             return 2
         print(output, end="")
