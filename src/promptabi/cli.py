@@ -144,6 +144,7 @@ from .prompt_packs import (
     PromptPackLockError,
     build_prompt_pack_lockfile,
     compare_prompt_pack_lockfile,
+    compare_prompt_pack_upgrade,
     load_prompt_pack_lockfile,
     prompt_pack_lock_error_diagnostic,
     write_prompt_pack_lockfile,
@@ -567,6 +568,48 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_github_output_arguments(prompt_pack_lock)
     _add_local_summary_argument(prompt_pack_lock)
+    prompt_pack_upgrade = prompt_pack_subparsers.add_parser(
+        "upgrade",
+        help="prove a prompt-pack upgrade preserves baseline package guarantees",
+    )
+    prompt_pack_upgrade.add_argument(
+        "--config",
+        help="path to the upgrade candidate PromptABI config; defaults to discovering promptabi.json",
+    )
+    prompt_pack_upgrade.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        metavar="NAME=PATH_OR_URI",
+        help="override or add an artifact location for the upgrade candidate; may be repeated",
+    )
+    prompt_pack_upgrade.add_argument(
+        "--baseline-lockfile",
+        required=True,
+        help="prompt-pack lockfile from the baseline version to preserve",
+    )
+    prompt_pack_upgrade.add_argument(
+        "--fail-on",
+        choices=("error", "warning", "any", "never"),
+        default="error",
+        help="exit with code 1 at this diagnostic threshold (default: error)",
+    )
+    prompt_pack_upgrade.add_argument(
+        "--format",
+        default="text",
+        help="output format: text, html, json, sarif, github-annotations, or a plugin renderer (default: text)",
+    )
+    prompt_pack_upgrade.add_argument("-q", "--quiet", action="count", default=0, help="suppress informational text output")
+    prompt_pack_upgrade.add_argument("-v", "--verbose", action="count", default=0, help="include config and baseline paths")
+    prompt_pack_upgrade.add_argument(
+        "--plugin",
+        action="append",
+        default=[],
+        metavar="MODULE[:OBJECT]",
+        help="import a PromptABI plugin module for renderer extensions; may be repeated",
+    )
+    _add_github_output_arguments(prompt_pack_upgrade)
+    _add_local_summary_argument(prompt_pack_upgrade)
 
     corpus = subparsers.add_parser("corpus", help="seed corpus maintenance commands")
     corpus_subparsers = corpus.add_subparsers(dest="corpus_command", required=True)
@@ -1773,6 +1816,67 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not _write_local_summary_if_requested(
             args.local_summary,
             command="prompt-pack lock",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata=_verification_summary_metadata(result, output_format=args.format, fail_on=args.fail_on),
+        ):
+            return 2
+        print(output, end="")
+        return exit_code
+
+    if args.command == "prompt-pack" and args.prompt_pack_command == "upgrade":
+        started_at = time.perf_counter()
+        try:
+            if args.quiet and args.verbose:
+                parser.error("--quiet and --verbose cannot be used together")
+            config_path = Path(args.config).resolve() if args.config else discover_config()
+            baseline_path = Path(args.baseline_lockfile).expanduser().resolve()
+            plugin_registry = _load_cli_plugins(args.plugin)
+            overrides = _parse_artifact_overrides(args.artifact, parser)
+            config = load_config(config_path).with_artifact_overrides(overrides, base_dir=Path.cwd())
+            if args.local_summary is not None and policy_forbids_local_summary(config.policy):
+                print("promptabi: organization policy pack forbids --local-summary writes", file=sys.stderr)
+                return 2
+            session = VerificationSession(config, plugin_registry=plugin_registry)
+            result = session.run()
+            loaded_artifacts, _load_diagnostics = session.load_artifacts_with_diagnostics()
+            upgrade_diagnostics = compare_prompt_pack_upgrade(
+                load_prompt_pack_lockfile(baseline_path),
+                loaded_artifacts,
+                result.diagnostics,
+                baseline_path=baseline_path,
+            )
+            result = VerificationResult(
+                config=result.config,
+                diagnostics=tuple(sorted((*result.diagnostics, *upgrade_diagnostics), key=lambda item: item.sort_key)),
+            )
+        except (ConfigError, PromptPackLockError, PluginError, ValueError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot compare prompt-pack upgrade: {exc}", file=sys.stderr)
+            return 2
+        try:
+            output = _render_verification_output(
+                result,
+                args.format,
+                plugin_registry=plugin_registry,
+                text_kwargs={
+                    "verbosity": args.verbose - args.quiet,
+                    "config_path": config_path if args.verbose else None,
+                    "heading": "PromptABI prompt-pack upgrade",
+                },
+                sarif_options=_sarif_options(args, argv),
+            )
+        except PluginError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        if args.format == "text" and args.verbose:
+            output += f"baseline prompt-pack lockfile: {baseline_path}\n"
+        exit_code = _exit_code(result, fail_on=args.fail_on)
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="prompt-pack upgrade",
             exit_code=exit_code,
             started_at=started_at,
             metadata=_verification_summary_metadata(result, output_format=args.format, fail_on=args.fail_on),

@@ -445,6 +445,99 @@ def compare_prompt_pack_lockfile(
     return tuple(drift)
 
 
+def compare_prompt_pack_upgrade(
+    baseline: PromptPackLockfile,
+    loaded_artifacts: tuple[LoadedArtifact, ...],
+    diagnostics: tuple[Diagnostic, ...] = (),
+    *,
+    baseline_path: str | Path | None = None,
+) -> tuple[Diagnostic, ...]:
+    """Prove whether current prompt packs preserve baseline verified guarantees."""
+
+    base_dir = Path(baseline_path).expanduser().resolve().parent if baseline_path is not None else None
+    findings: list[Diagnostic] = []
+    baseline_by_name = {entry.name: entry for entry in baseline.entries}
+    if baseline_by_name and not any(isinstance(loaded.artifact, PromptPackArtifact) for loaded in loaded_artifacts):
+        return tuple(
+            _prompt_pack_upgrade_diagnostic(
+                "prompt-pack-upgrade-missing-pack",
+                f"prompt pack '{name}' is missing from the upgrade candidate",
+                "prompt_pack",
+                "present",
+                "missing",
+                entry=entry,
+                baseline_path=baseline_path,
+            )
+            for name, entry in sorted(baseline_by_name.items())
+        )
+    current = build_prompt_pack_lockfile(loaded_artifacts, diagnostics, base_dir=base_dir)
+    current_by_name = {entry.name: entry for entry in current.entries}
+    for name in sorted(baseline_by_name.keys() - current_by_name.keys()):
+        findings.append(
+            _prompt_pack_upgrade_diagnostic(
+                "prompt-pack-upgrade-missing-pack",
+                f"prompt pack '{name}' is missing from the upgrade candidate",
+                "prompt_pack",
+                "present",
+                "missing",
+                entry=baseline_by_name[name],
+                baseline_path=baseline_path,
+            )
+        )
+    for name in sorted(baseline_by_name.keys() & current_by_name.keys()):
+        expected = baseline_by_name[name]
+        actual = current_by_name[name]
+        if expected.package_name != actual.package_name:
+            findings.append(
+                _prompt_pack_upgrade_diagnostic(
+                    "prompt-pack-upgrade-package-regression",
+                    f"prompt pack '{name}' resolves to a different package name",
+                    "package_name",
+                    expected.package_name,
+                    actual.package_name,
+                    entry=actual,
+                    baseline_path=baseline_path,
+                )
+            )
+        _append_subset_regression(
+            findings,
+            entry=actual,
+            baseline_path=baseline_path,
+            rule_id="prompt-pack-upgrade-role-regression",
+            field="expected_roles",
+            expected=expected.expected_roles,
+            actual=actual.expected_roles,
+            message=f"prompt pack '{name}' no longer preserves every baseline role-boundary guarantee",
+        )
+        _append_subset_regression(
+            findings,
+            entry=actual,
+            baseline_path=baseline_path,
+            rule_id="prompt-pack-upgrade-model-family-regression",
+            field="supported_model_families",
+            expected=expected.supported_model_families,
+            actual=actual.supported_model_families,
+            message=f"prompt pack '{name}' dropped baseline model-family support",
+        )
+        findings.extend(_template_upgrade_regressions(expected, actual, baseline_path=baseline_path))
+        findings.extend(_tool_upgrade_regressions(expected, actual, baseline_path=baseline_path))
+        findings.extend(_stop_upgrade_regressions(expected, actual, baseline_path=baseline_path))
+        findings.extend(_diagnostic_upgrade_regressions(expected, actual, baseline_path=baseline_path))
+    if findings:
+        return tuple(findings)
+    return (
+        _prompt_pack_upgrade_diagnostic(
+            "prompt-pack-upgrade-compatible",
+            "prompt-pack upgrade preserves baseline role-boundary, stop, schema, budget, and diagnostic guarantees",
+            "prompt_pack_upgrade",
+            "baseline",
+            "compatible",
+            severity=DiagnosticSeverity.INFO,
+            baseline_path=baseline_path,
+        ),
+    )
+
+
 def prompt_pack_lock_error_diagnostic(
     exc: PromptPackLockError,
     *,
@@ -461,6 +554,192 @@ def prompt_pack_lock_error_diagnostic(
         witness=WitnessTrace(
             summary="PromptABI could not load the prompt-pack lockfile for enforcement.",
             steps=(WitnessStep(action="load prompt-pack lockfile", input=path, output=str(exc)),),
+        ),
+    )
+
+
+def _append_subset_regression(
+    findings: list[Diagnostic],
+    *,
+    entry: PromptPackLockEntry,
+    baseline_path: str | Path | None,
+    rule_id: str,
+    field: str,
+    expected: tuple[str, ...],
+    actual: tuple[str, ...],
+    message: str,
+) -> None:
+    missing = tuple(sorted(set(expected) - set(actual)))
+    if missing:
+        findings.append(
+            _prompt_pack_upgrade_diagnostic(
+                rule_id,
+                message,
+                field,
+                ", ".join(expected),
+                ", ".join(actual) if actual else "(none)",
+                entry=entry,
+                baseline_path=baseline_path,
+                extra_properties=(("missing", ", ".join(missing)),),
+            )
+        )
+
+
+def _template_upgrade_regressions(
+    expected: PromptPackLockEntry,
+    actual: PromptPackLockEntry,
+    *,
+    baseline_path: str | Path | None,
+) -> tuple[Diagnostic, ...]:
+    diagnostics: list[Diagnostic] = []
+    actual_by_name = {name: (template_hash, roles_hash) for name, template_hash, roles_hash in actual.exported_templates}
+    for name, template_hash, roles_hash in expected.exported_templates:
+        observed = actual_by_name.get(name)
+        if observed is None:
+            diagnostics.append(
+                _prompt_pack_upgrade_diagnostic(
+                    "prompt-pack-upgrade-template-regression",
+                    f"prompt pack '{actual.name}' removed baseline template '{name}'",
+                    "exported_templates",
+                    name,
+                    "missing",
+                    entry=actual,
+                    baseline_path=baseline_path,
+                )
+            )
+        elif observed != (template_hash, roles_hash):
+            diagnostics.append(
+                _prompt_pack_upgrade_diagnostic(
+                    "prompt-pack-upgrade-template-regression",
+                    f"prompt pack '{actual.name}' changed template '{name}' role or budget contract",
+                    f"exported_templates.{name}",
+                    f"template={template_hash}, roles={roles_hash}",
+                    f"template={observed[0]}, roles={observed[1]}",
+                    entry=actual,
+                    baseline_path=baseline_path,
+                )
+            )
+    return tuple(diagnostics)
+
+
+def _tool_upgrade_regressions(
+    expected: PromptPackLockEntry,
+    actual: PromptPackLockEntry,
+    *,
+    baseline_path: str | Path | None,
+) -> tuple[Diagnostic, ...]:
+    diagnostics: list[Diagnostic] = []
+    actual_by_name = {name: (provider, schema_digest, required) for name, provider, schema_digest, required in actual.tool_schemas}
+    for name, provider, schema_digest, required in expected.tool_schemas:
+        observed = actual_by_name.get(name)
+        if observed is None:
+            diagnostics.append(
+                _prompt_pack_upgrade_diagnostic(
+                    "prompt-pack-upgrade-tool-schema-regression",
+                    f"prompt pack '{actual.name}' removed baseline tool schema '{name}'",
+                    "tool_schemas",
+                    name,
+                    "missing",
+                    entry=actual,
+                    baseline_path=baseline_path,
+                )
+            )
+        elif observed[0] != provider or observed[1] != schema_digest or (required and not observed[2]):
+            diagnostics.append(
+                _prompt_pack_upgrade_diagnostic(
+                    "prompt-pack-upgrade-tool-schema-regression",
+                    f"prompt pack '{actual.name}' changed baseline tool schema guarantee for '{name}'",
+                    f"tool_schemas.{name}",
+                    str((provider, schema_digest, required)),
+                    str(observed),
+                    entry=actual,
+                    baseline_path=baseline_path,
+                )
+            )
+    return tuple(diagnostics)
+
+
+def _stop_upgrade_regressions(
+    expected: PromptPackLockEntry,
+    actual: PromptPackLockEntry,
+    *,
+    baseline_path: str | Path | None,
+) -> tuple[Diagnostic, ...]:
+    diagnostics: list[Diagnostic] = []
+    actual_by_name = {
+        name: (set(stop_sequences), set(stop_token_ids), include_eos)
+        for name, stop_sequences, stop_token_ids, include_eos in actual.stop_policies
+    }
+    for name, stop_sequences, stop_token_ids, include_eos in expected.stop_policies:
+        observed = actual_by_name.get(name)
+        if observed is None:
+            diagnostics.append(
+                _prompt_pack_upgrade_diagnostic(
+                    "prompt-pack-upgrade-stop-regression",
+                    f"prompt pack '{actual.name}' removed baseline stop policy '{name}'",
+                    "stop_policies",
+                    name,
+                    "missing",
+                    entry=actual,
+                    baseline_path=baseline_path,
+                )
+            )
+            continue
+        missing_sequences = set(stop_sequences) - observed[0]
+        missing_token_ids = set(stop_token_ids) - observed[1]
+        eos_regressed = include_eos and not observed[2]
+        if missing_sequences or missing_token_ids or eos_regressed:
+            diagnostics.append(
+                _prompt_pack_upgrade_diagnostic(
+                    "prompt-pack-upgrade-stop-regression",
+                    f"prompt pack '{actual.name}' no longer preserves stop-policy guarantee '{name}'",
+                    f"stop_policies.{name}",
+                    str((stop_sequences, stop_token_ids, include_eos)),
+                    str((tuple(sorted(observed[0])), tuple(sorted(observed[1])), observed[2])),
+                    entry=actual,
+                    baseline_path=baseline_path,
+                    extra_properties=(
+                        ("missing_stop_sequences", ", ".join(sorted(missing_sequences))),
+                        ("missing_stop_token_ids", ", ".join(str(item) for item in sorted(missing_token_ids))),
+                        ("include_eos_regressed", eos_regressed),
+                    ),
+                )
+            )
+    return tuple(diagnostics)
+
+
+def _diagnostic_upgrade_regressions(
+    expected: PromptPackLockEntry,
+    actual: PromptPackLockEntry,
+    *,
+    baseline_path: str | Path | None,
+) -> tuple[Diagnostic, ...]:
+    expected_non_info = {(rule_id, severity) for rule_id, severity, _fingerprint in expected.diagnostic_baseline if severity != DiagnosticSeverity.INFO.value}
+    actual_non_info = {(rule_id, severity) for rule_id, severity, _fingerprint in actual.diagnostic_baseline if severity != DiagnosticSeverity.INFO.value}
+    new_non_info = tuple(sorted(actual_non_info - expected_non_info))
+    expected_verified = any(rule_id == "prompt-pack-verified" for rule_id, _severity, _fingerprint in expected.diagnostic_baseline)
+    actual_verified = any(rule_id == "prompt-pack-verified" for rule_id, _severity, _fingerprint in actual.diagnostic_baseline)
+    if not new_non_info and (not expected_verified or actual_verified):
+        return ()
+    if expected_verified and not actual_verified:
+        message = f"prompt pack '{actual.name}' lost its verified prompt-pack contract diagnostic"
+        field = "diagnostic_baseline.prompt-pack-verified"
+        expected_text = "present"
+        actual_text = "missing"
+    else:
+        message = f"prompt pack '{actual.name}' introduced prompt-pack diagnostic regressions"
+        field = "diagnostic_baseline"
+        expected_text = str(tuple(sorted(expected_non_info)))
+        actual_text = str(tuple(sorted(actual_non_info)))
+    return (
+        _prompt_pack_upgrade_diagnostic(
+            "prompt-pack-upgrade-diagnostic-regression",
+            message,
+            field,
+            expected_text,
+            actual_text,
+            entry=actual,
+            baseline_path=baseline_path,
         ),
     )
 
@@ -609,6 +888,42 @@ def _prompt_pack_lock_diagnostic(
             artifacts=(artifact,),
         ),
         properties=(("actual", actual), ("expected", expected), ("field", field)),
+    )
+
+
+def _prompt_pack_upgrade_diagnostic(
+    rule_id: str,
+    message: str,
+    field: str,
+    expected: str,
+    actual: str,
+    *,
+    entry: PromptPackLockEntry | None = None,
+    severity: DiagnosticSeverity = DiagnosticSeverity.ERROR,
+    baseline_path: str | Path | None,
+    extra_properties: tuple[tuple[str, object], ...] = (),
+) -> Diagnostic:
+    artifact = (
+        ArtifactRef(kind="prompt-pack", name=entry.name, path=entry.location if "://" not in entry.location else None, uri=entry.location if "://" in entry.location else None)
+        if entry is not None
+        else ArtifactRef(kind="prompt-pack-lockfile", name="prompt-pack-upgrade-baseline", path=str(baseline_path) if baseline_path is not None else None)
+    )
+    return Diagnostic(
+        rule_id=rule_id,
+        severity=severity,
+        message=message,
+        artifact=artifact,
+        check_modes=PROMPT_PACK_LOCK_CHECK_MODES,
+        suggestions=("Keep old pack guarantees, or intentionally regenerate a new baseline after downstream apps are updated.",),
+        witness=WitnessTrace(
+            summary="PromptABI compared the baseline prompt-pack lock against the upgrade candidate.",
+            steps=(
+                WitnessStep(action="read baseline prompt-pack lockfile", input=str(baseline_path) if baseline_path is not None else None),
+                WitnessStep(action=f"compare {field}", input=expected, output=actual),
+            ),
+            artifacts=(artifact,),
+        ),
+        properties=(("actual", actual), ("expected", expected), ("field", field), *extra_properties),
     )
 
 

@@ -100,11 +100,13 @@ bounded cross-provider compatibility reports that compare OpenAI-compatible,
 Anthropic-style, Gemini-style, Bedrock, local vLLM, llama.cpp, and Ollama eval
 adapters for request/response fields, tool argument encoding, parallel tool
 support, stop policies, and structured-output modes,
-a prompt-pack artifact model, \texttt{prompt-pack-contracts} check, and
-package-manager-style \texttt{promptabi prompt-pack lock} workflow for reusable
-prompt libraries, validating and pinning exported templates, expected roles, tool
-schemas, stop policies, supported model/provider families, package hashes, and
-diagnostic baselines against downstream application artifacts,
+a prompt-pack artifact model, \texttt{prompt-pack-contracts} check,
+package-manager-style \texttt{promptabi prompt-pack lock} workflow, and
+\texttt{promptabi prompt-pack upgrade} gate for reusable prompt libraries,
+validating, pinning, and proving upgrade preservation for exported templates,
+role-boundary and budget hashes, tool schemas, stop policies, supported
+model/provider families, package hashes, and diagnostic baselines against
+downstream application artifacts,
 a curated \texttt{promptabi gallery} that reruns real pinned configurations,
 emits compatibility badges, summarizes actual solver backends rather than merely
 advertised solver capability, and explains abstentions plus accepted risks,
