@@ -137,7 +137,7 @@ promptabi diagnostics lsp --config examples/minimal/promptabi.json --format json
 promptabi fix --config examples/minimal/promptabi.json --kind lockfile --write
 promptabi fix --config examples/role-boundary/unsafe.promptabi.json --preview-risk high
 
-# Run labeled benchmarks, mutation fuzzing, and paper artifact regeneration.
+# Run labeled benchmarks, release leaderboards, mutation fuzzing, and paper artifacts.
 promptabi corpus verify --format text
 promptabi corpus bug-gallery --format markdown > bug-gallery.md
 promptabi corpus beta-report --format text
@@ -145,6 +145,7 @@ promptabi corpus evaluation --format text
 promptabi corpus evaluation-reproducibility --config examples/evaluation-harness/safe.promptabi.json --format json
 promptabi verify --config examples/evaluation-harness/safe.promptabi.json
 promptabi corpus smt-benchmark --format text
+promptabi corpus leaderboard --format text
 promptabi solver replay fixtures/solver_replays/role-region-forgery.solver-replay.json
 promptabi launch-assets --output-dir launch_assets --force
 promptabi fuzz mutations --format text

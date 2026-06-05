@@ -10,6 +10,7 @@ from ._version import __version__
 from .api import (
     artifact_drift_bisection,
     beta_program,
+    benchmark_leaderboard,
     create_bug_report,
     create_reproducibility_package,
     create_verification_bundle,
@@ -58,6 +59,14 @@ from .api import (
     visualize_truncation,
     verify_corpora,
     verify_verification_bundle,
+)
+from .benchmark_leaderboards import (
+    BENCHMARK_LEADERBOARD_VERSION,
+    BenchmarkLeaderboardEntry,
+    BenchmarkLeaderboardReport,
+    build_benchmark_leaderboard,
+    render_benchmark_leaderboard_json,
+    render_benchmark_leaderboard_text,
 )
 from .autofix import (
     AutoFixChange,
@@ -852,6 +861,9 @@ __all__ = [
     "BetaIssue",
     "BetaProgramError",
     "BetaProgramReport",
+    "BENCHMARK_LEADERBOARD_VERSION",
+    "BenchmarkLeaderboardEntry",
+    "BenchmarkLeaderboardReport",
     "ALL_FUZZ_SURFACES",
     "BoolDomain",
     "BoundedStringDomain",
@@ -1274,6 +1286,8 @@ __all__ = [
     "build_role_boundary_model",
     "build_diagnostic_clusters",
     "beta_program",
+    "benchmark_leaderboard",
+    "build_benchmark_leaderboard",
     "build_seed_corpus_manifest",
     "build_evaluation_fixture_pack_manifest",
     "build_structured_schema_corpus_manifest",
@@ -1322,6 +1336,8 @@ __all__ = [
     "render_verification_bundle_json",
     "render_beta_program_json",
     "render_beta_program_text",
+    "render_benchmark_leaderboard_json",
+    "render_benchmark_leaderboard_text",
     "render_explanation",
     "render_evaluation_json",
     "render_evaluation_text",

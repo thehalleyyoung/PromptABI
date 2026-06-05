@@ -59,6 +59,11 @@ from .beta import (
     render_beta_program_text,
     run_beta_program,
 )
+from .benchmark_leaderboards import (
+    build_benchmark_leaderboard,
+    render_benchmark_leaderboard_json,
+    render_benchmark_leaderboard_text,
+)
 from .config import ConfigError, discover_config, load_config
 from .diagnostic_clustering import (
     DiagnosticClusterStrategy,
@@ -1103,6 +1108,45 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         help="write evaluation report to this path instead of stdout",
     )
+    leaderboard = corpus_subparsers.add_parser(
+        "leaderboard",
+        help=(
+            "rank released versions by checker precision, recall, abstention, runtime, memory, "
+            "witness size, and solver reliability"
+        ),
+    )
+    leaderboard.add_argument(
+        "--release",
+        help="release label for this checkout (default: promptabi package version)",
+    )
+    leaderboard.add_argument(
+        "--evaluation-corpus",
+        help="labeled evaluation corpus JSON path (default: repository fixtures/evaluation/labeled_corpus.json)",
+    )
+    leaderboard.add_argument(
+        "--smt-benchmark",
+        help="SMT benchmark JSON path (default: repository fixtures/smt_benchmarks/benchmark.json)",
+    )
+    leaderboard.add_argument(
+        "--benchmark-case",
+        action="append",
+        default=[],
+        help="performance benchmark case to include; may be repeated (default: leaderboard core set)",
+    )
+    leaderboard.add_argument(
+        "--benchmark-iterations",
+        type=int,
+        default=1,
+        help="iterations per performance benchmark case (default: 1)",
+    )
+    leaderboard.add_argument("--repo-root", help="repository root for performance fixture paths")
+    leaderboard.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    leaderboard.add_argument("--output", help="write leaderboard report to this path instead of stdout")
     evaluation_reproducibility = corpus_subparsers.add_parser(
         "evaluation-reproducibility",
         help="pin evaluation-harness prompt, tokenizer, provider, stop, and parser contracts",
@@ -2996,6 +3040,41 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"promptabi: cannot write evaluation report: {exc}", file=sys.stderr)
             return 2
         return 0 if all(result.passed for result in report.results) else 1
+
+    if args.command == "corpus" and args.corpus_command == "leaderboard":
+        try:
+            report = build_benchmark_leaderboard(
+                release=args.release or f"promptabi-{__version__}",
+                evaluation_corpus_path=args.evaluation_corpus,
+                smt_benchmark_path=args.smt_benchmark,
+                performance_cases=tuple(args.benchmark_case) if args.benchmark_case else (
+                    "tokenizer-analysis",
+                    "grammar-emptiness",
+                    "stop-checks",
+                    "z3-static-contracts",
+                    "budget-checks",
+                    "corpus-wide-verification",
+                ),
+                benchmark_iterations=args.benchmark_iterations,
+                repo_root=args.repo_root,
+            )
+            output = (
+                render_benchmark_leaderboard_json(report)
+                if args.format == "json"
+                else render_benchmark_leaderboard_text(report)
+            )
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+                print(f"wrote benchmark leaderboard: {args.output} ({len(report.entries)} entries)")
+            else:
+                print(output, end="")
+        except (EvaluationError, SmtBenchmarkError, ValueError) as exc:
+            print(f"promptabi: cannot build benchmark leaderboard: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write benchmark leaderboard: {exc}", file=sys.stderr)
+            return 2
+        return 0 if report.ok else 1
 
     if args.command == "corpus" and args.corpus_command == "evaluation-reproducibility":
         try:

@@ -106,6 +106,7 @@ class EvaluationCaseResult:
     diagnostic_count: int
     abstaining_diagnostic_count: int
     witness_quality_score: float
+    witness_size_bytes: int
     z3_backed_rule_ids: tuple[str, ...] = ()
     differential_agreements: int = 0
     differential_mismatches: int = 0
@@ -131,6 +132,7 @@ class EvaluationCaseResult:
             "runtime_seconds": round(self.runtime_seconds, 6),
             "peak_memory_bytes": self.peak_memory_bytes,
             "witness_quality_score": _round_metric(self.witness_quality_score),
+            "witness_size_bytes": self.witness_size_bytes,
             "z3_backed_rule_ids": list(self.z3_backed_rule_ids),
             "differential_agreements": self.differential_agreements,
             "differential_mismatches": self.differential_mismatches,
@@ -201,6 +203,7 @@ class EvaluationReport:
             "score": self.score.to_dict(),
             "abstention_rate": _round_metric(self.abstention_rate),
             "witness_quality_score": _round_metric(self.witness_quality_score),
+            "witness_size_bytes": sum(result.witness_size_bytes for result in self.results),
             "solver_result_quality": self.solver_result_quality,
             "differential_agreement_rate": _round_metric(self.differential_agreement_rate),
             "runtime_seconds": round(total_runtime, 6),
@@ -396,6 +399,7 @@ def _run_case(case: EvaluationCase) -> EvaluationCaseResult:
         diagnostic_count=len(diagnostics) if diagnostics else len(observed_rule_ids),
         abstaining_diagnostic_count=abstaining,
         witness_quality_score=_witness_quality(diagnostics),
+        witness_size_bytes=_witness_size_bytes(diagnostics),
         z3_backed_rule_ids=z3_rules,
         differential_agreements=len(observed.intersection(DIFFERENTIAL_AGREEMENT_RULES)),
         differential_mismatches=len(observed.intersection(DIFFERENTIAL_MISMATCH_RULES)),
@@ -445,6 +449,14 @@ def _witness_quality(diagnostics: tuple[Diagnostic, ...]) -> float:
             score += 0.1
         scores.append(score)
     return sum(scores) / len(scores)
+
+
+def _witness_size_bytes(diagnostics: tuple[Diagnostic, ...]) -> int:
+    return sum(
+        len(json.dumps(diagnostic.witness.to_dict(), sort_keys=True, separators=(",", ":")).encode("utf-8"))
+        for diagnostic in diagnostics
+        if diagnostic.witness is not None
+    )
 
 
 def _diagnostic_has_mode(diagnostic: Diagnostic, mode: CheckMode) -> bool:

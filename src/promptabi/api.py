@@ -37,6 +37,12 @@ from .beta import (
     render_beta_program_text,
     run_beta_program,
 )
+from .benchmark_leaderboards import (
+    BenchmarkLeaderboardReport,
+    build_benchmark_leaderboard,
+    render_benchmark_leaderboard_json,
+    render_benchmark_leaderboard_text,
+)
 from .diagnostics import Diagnostic
 from .diagnostic_clustering import (
     DiagnosticClusterReport,
@@ -783,6 +789,27 @@ def evaluate_corpus(
         return render_evaluation_json(report)
     if output_format == "text":
         return render_evaluation_text(report)
+    raise ValueError("output_format must be one of: text, json")
+
+
+def benchmark_leaderboard(
+    *,
+    release: str | None = None,
+    benchmark_iterations: int = 1,
+    output_format: str | None = None,
+) -> BenchmarkLeaderboardReport | str:
+    """Run or render the release benchmark leaderboard against local fixtures."""
+
+    kwargs: dict[str, object] = {"benchmark_iterations": benchmark_iterations}
+    if release is not None:
+        kwargs["release"] = release
+    report = build_benchmark_leaderboard(**kwargs)
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_benchmark_leaderboard_json(report)
+    if output_format == "text":
+        return render_benchmark_leaderboard_text(report)
     raise ValueError("output_format must be one of: text, json")
 
 
