@@ -10,6 +10,7 @@ on:
       - "fixtures/**"
       - "docs/contributing/**"
       - "docs/governance.md"
+      - "docs/maintainer-health.md"
       - ".github/ISSUE_TEMPLATE/**"
       - ".github/labels.yml"
       - ".github/workflows/ci.yml"
@@ -23,6 +24,7 @@ on:
       - "fixtures/**"
       - "docs/contributing/**"
       - "docs/governance.md"
+      - "docs/maintainer-health.md"
       - ".github/ISSUE_TEMPLATE/**"
       - ".github/labels.yml"
       - ".github/workflows/ci.yml"
@@ -43,7 +45,7 @@ jobs:
             python-version: "3.11"
             optional-set: core
             install-command: python -m pip install -e ".[dev]"
-            test-command: python -m pytest tests/test_cli.py tests/test_config.py tests/test_public_api.py tests/test_contributor_infrastructure.py tests/test_governance.py && promptabi contribute validate --format text && promptabi governance --format text
+            test-command: python -m pytest tests/test_cli.py tests/test_config.py tests/test_public_api.py tests/test_contributor_infrastructure.py tests/test_governance.py tests/test_maintainer_health.py && promptabi contribute validate --format text && promptabi governance --format text && promptabi maintain health --format text
 
           - os: ubuntu-latest
             python-version: "3.12"

@@ -171,7 +171,14 @@ from .local_metrics import (
     render_local_metrics_json,
     render_local_metrics_text,
 )
-from .maintainer import MaintainerRefresh, refresh_maintainer_artifacts
+from .maintainer import (
+    MaintainerHealthReport,
+    MaintainerRefresh,
+    refresh_maintainer_artifacts,
+    render_maintainer_health_json,
+    render_maintainer_health_text,
+    validate_maintainer_health,
+)
 from .minimization import (
     FailurePredicate,
     MinimizationKind,
@@ -1246,6 +1253,23 @@ def refresh_maintainer_tooling(
         repo_root=repo_root,
         force=force,
     )
+
+
+def maintainer_health(
+    repo_root: str | Path | None = None,
+    *,
+    output_format: str | None = None,
+) -> MaintainerHealthReport | str:
+    """Validate and render PromptABI maintainer rotation, triage, release, and corpus-review health."""
+
+    report = validate_maintainer_health(repo_root)
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_maintainer_health_json(report)
+    if output_format == "text":
+        return render_maintainer_health_text(report)
+    raise ValueError("output_format must be one of: text, json")
 
 
 def contributor_infrastructure(

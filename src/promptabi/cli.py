@@ -252,7 +252,13 @@ from .lockfiles import (
     lockfile_error_diagnostic,
     write_lockfile,
 )
-from .maintainer import MaintainerToolingError, refresh_maintainer_artifacts
+from .maintainer import (
+    MaintainerToolingError,
+    refresh_maintainer_artifacts,
+    render_maintainer_health_json,
+    render_maintainer_health_text,
+    validate_maintainer_health,
+)
 from .minimization import (
     MinimizationError,
     MinimizationOracle,
@@ -2136,6 +2142,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--force",
         action="store_true",
         help="overwrite existing maintainer refresh files in the output directory",
+    )
+    maintain_health = maintain_subparsers.add_parser(
+        "health",
+        help="validate maintainer rotation, triage labels, release checklists, corpus review, and health metrics",
+    )
+    maintain_health.add_argument(
+        "--repo-root",
+        help="repository root to validate (default: installed PromptABI repository root)",
+    )
+    maintain_health.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
     )
 
     contribute = subparsers.add_parser("contribute", help="contributor infrastructure and onboarding workflows")
@@ -4235,6 +4255,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"{refresh.output_dir} ({len(refresh.written_files)} files, diff={refresh.diff['status']})"
         )
         return 0 if refresh.snapshot["corpus_verification"]["ok"] else 1  # type: ignore[index]
+
+    if args.command == "maintain" and args.maintain_command == "health":
+        try:
+            report = validate_maintainer_health(args.repo_root)
+            output = (
+                render_maintainer_health_json(report)
+                if args.format == "json"
+                else render_maintainer_health_text(report)
+            )
+        except MaintainerToolingError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        print(output, end="")
+        return 0 if report.ok else 1
 
     if args.command == "contribute" and args.contribute_command == "validate":
         try:

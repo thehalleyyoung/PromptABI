@@ -7,6 +7,7 @@ nav:
   - Air-gapped installation: air-gapped.md
   - Public API: public-api.md
   - Governance: governance.md
+  - Maintainer health: maintainer-health.md
   - Contributing:
       - Community workflows: contributing/community-workflows.md
       - Plugin author guide: contributing/plugin-author-guide.md

@@ -1,4 +1,4 @@
-"""Maintainer refresh tooling for PromptABI corpora, baselines, and release notes."""
+"""Maintainer refresh and project-health tooling for PromptABI."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from .provider_fixture_packs import build_provider_fixture_pack_manifest
 
 
 MAINTAINER_REFRESH_VERSION = 1
+MAINTAINER_HEALTH_VERSION = 1
 MAINTAINER_FILENAMES = (
     "seed-corpus.manifest.json",
     "structured-schemas.manifest.json",
@@ -28,6 +29,19 @@ MAINTAINER_FILENAMES = (
     "maintainer-snapshot.json",
     "corpus-diff.json",
     "release-notes.md",
+)
+REQUIRED_MAINTAINER_HEALTH_DOCS = (
+    "docs/maintainer-health.md",
+    "docs/governance.md",
+    "docs/contributing/corpus-contributions.md",
+)
+REQUIRED_TRIAGE_LABELS = (
+    "status: needs-triage",
+    "status: release-blocking",
+    "priority: high",
+    "area: corpus",
+    "area: checker",
+    "type: bug",
 )
 
 
@@ -44,6 +58,55 @@ class MaintainerRefresh:
     diff: dict[str, object]
     release_notes: str
     written_files: tuple[Path, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerHealthItem:
+    """One maintainer-health expectation with concrete review evidence."""
+
+    id: str
+    title: str
+    detail: str
+    evidence: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "title": self.title,
+            "detail": self.detail,
+            "evidence": list(self.evidence),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerHealthReport:
+    """Validation report for maintainer rotation, triage, releases, corpus review, and health metrics."""
+
+    repo_root: Path
+    checked_paths: tuple[str, ...]
+    rotation_roles: tuple[MaintainerHealthItem, ...]
+    triage_labels: tuple[MaintainerHealthItem, ...]
+    release_checklist: tuple[MaintainerHealthItem, ...]
+    corpus_review: tuple[MaintainerHealthItem, ...]
+    metrics: dict[str, object]
+    issues: tuple[str, ...]
+
+    @property
+    def ok(self) -> bool:
+        return not self.issues
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "manifest_version": MAINTAINER_HEALTH_VERSION,
+            "ok": self.ok,
+            "checked_paths": list(self.checked_paths),
+            "rotation_roles": [item.to_dict() for item in self.rotation_roles],
+            "triage_labels": [item.to_dict() for item in self.triage_labels],
+            "release_checklist": [item.to_dict() for item in self.release_checklist],
+            "corpus_review": [item.to_dict() for item in self.corpus_review],
+            "metrics": dict(sorted(self.metrics.items())),
+            "issues": list(self.issues),
+        }
 
 
 def refresh_maintainer_artifacts(
@@ -107,6 +170,209 @@ def refresh_maintainer_artifacts(
         release_notes=release_notes,
         written_files=tuple(written),
     )
+
+
+def build_maintainer_health_items() -> dict[str, tuple[MaintainerHealthItem, ...]]:
+    """Return the maintainer-health contract that docs and CI must expose."""
+
+    return {
+        "rotation_roles": (
+            MaintainerHealthItem(
+                id="rotation-release-captain",
+                title="Release captain",
+                detail="Owns the release checklist, version gates, and final release-blocker decision for one train.",
+                evidence=("release readiness report", "governance report", "maintainer health report"),
+            ),
+            MaintainerHealthItem(
+                id="rotation-corpus-steward",
+                title="Corpus steward",
+                detail="Reviews fixture provenance, labels expected diagnostics, and coordinates annual corpus refreshes.",
+                evidence=("corpus review checklist", "fixture manifests", "sanitization notes"),
+            ),
+            MaintainerHealthItem(
+                id="rotation-triage-lead",
+                title="Triage lead",
+                detail="Keeps issues labeled, escalates release blockers, and routes contributor-ready work.",
+                evidence=("triage labels", "issue template labels", "weekly triage notes"),
+            ),
+        ),
+        "triage_labels": (
+            MaintainerHealthItem(
+                id="label-status-needs-triage",
+                title="status: needs-triage",
+                detail="New reports that need a maintainer to classify affected surface, severity, and reproducibility.",
+                evidence=("status: needs-triage",),
+            ),
+            MaintainerHealthItem(
+                id="label-status-release-blocking",
+                title="status: release-blocking",
+                detail="Bugs that match governance release blockers or invalidate paper/release claims.",
+                evidence=("status: release-blocking",),
+            ),
+            MaintainerHealthItem(
+                id="label-priority-high",
+                title="priority: high",
+                detail="Urgent correctness, privacy, or compatibility work that should preempt normal roadmap items.",
+                evidence=("priority: high",),
+            ),
+            MaintainerHealthItem(
+                id="label-area-corpus",
+                title="area: corpus",
+                detail="Fixture, benchmark, provenance, corpus refresh, and expected-diagnostic work.",
+                evidence=("area: corpus",),
+            ),
+        ),
+        "release_checklist": (
+            MaintainerHealthItem(
+                id="release-governance-gate",
+                title="Governance gate",
+                detail="Run governance and maintainer-health validators before tagging a release.",
+                evidence=("promptabi governance --format text", "promptabi maintain health --format text"),
+            ),
+            MaintainerHealthItem(
+                id="release-corpus-gate",
+                title="Corpus gate",
+                detail="Run affected corpus/conformance suites and refresh maintainer artifacts when expected diagnostics change.",
+                evidence=("promptabi corpus verify --format text", "promptabi maintain refresh --output-dir"),
+            ),
+            MaintainerHealthItem(
+                id="release-privacy-gate",
+                title="Privacy gate",
+                detail="Confirm release artifacts, witnesses, bug reports, and fixture packs contain no secrets or private prompts.",
+                evidence=("secret-bearing-fixture", "witness privacy modes", "sanitized bug reports"),
+            ),
+        ),
+        "corpus_review": (
+            MaintainerHealthItem(
+                id="corpus-provenance-review",
+                title="Provenance review",
+                detail="Every fixture addition records source, license, revision/hash, expected diagnostics, and sanitization status.",
+                evidence=("license", "provenance", "expected diagnostics", "no secrets"),
+            ),
+            MaintainerHealthItem(
+                id="corpus-regression-review",
+                title="Regression review",
+                detail="Changed fixtures must preserve or intentionally update labeled real-bug coverage and witness replay.",
+                evidence=("regression-on-labeled-real-bug", "witness-replay-failure"),
+            ),
+            MaintainerHealthItem(
+                id="corpus-refresh-cadence",
+                title="Refresh cadence",
+                detail="At least annual corpus refreshes add new model/provider/framework semantics while preserving old benchmarks.",
+                evidence=("annual corpus refresh", "longitudinal benchmark"),
+            ),
+        ),
+    }
+
+
+def validate_maintainer_health(repo_root: str | Path | None = None) -> MaintainerHealthReport:
+    """Validate maintainer rotation, triage, release, corpus-review, and health-metric coverage."""
+
+    root = Path(repo_root).resolve() if repo_root is not None else _repo_root()
+    if not root.exists():
+        raise MaintainerToolingError(f"repository root does not exist: {root}")
+    if not root.is_dir():
+        raise MaintainerToolingError(f"repository root is not a directory: {root}")
+
+    items = build_maintainer_health_items()
+    issues: list[str] = []
+    checked_paths: list[str] = []
+    texts: dict[str, str] = {}
+    for relative in REQUIRED_MAINTAINER_HEALTH_DOCS:
+        checked_paths.append(relative)
+        path = root / relative
+        if not path.is_file():
+            issues.append(f"{relative}: missing maintainer-health document")
+            continue
+        texts[relative] = path.read_text(encoding="utf-8")
+
+    health_text = texts.get("docs/maintainer-health.md", "")
+    for category_items in items.values():
+        for item in category_items:
+            if item.id not in health_text:
+                issues.append(f"docs/maintainer-health.md: missing item id {item.id}")
+            if item.title.lower() not in health_text.lower():
+                issues.append(f"docs/maintainer-health.md: missing item title {item.title}")
+            for evidence in item.evidence:
+                if evidence.lower() not in health_text.lower():
+                    issues.append(f"docs/maintainer-health.md: missing evidence term {evidence}")
+
+    labels_path = root / ".github" / "labels.yml"
+    checked_paths.append(".github/labels.yml")
+    if not labels_path.is_file():
+        issues.append(".github/labels.yml: missing triage labels")
+        label_text = ""
+    else:
+        label_text = labels_path.read_text(encoding="utf-8")
+        for label in REQUIRED_TRIAGE_LABELS:
+            if f'name: "{label}"' not in label_text and f"name: '{label}'" not in label_text and f"name: {label}" not in label_text:
+                issues.append(f".github/labels.yml: missing label {label}")
+
+    mkdocs = root / "mkdocs.yml"
+    checked_paths.append("mkdocs.yml")
+    if not mkdocs.is_file():
+        issues.append("mkdocs.yml: missing docs navigation")
+    elif "maintainer-health.md" not in mkdocs.read_text(encoding="utf-8"):
+        issues.append("mkdocs.yml: missing maintainer health docs nav entry")
+
+    ci = root / ".github" / "workflows" / "ci.yml"
+    checked_paths.append(".github/workflows/ci.yml")
+    if not ci.is_file():
+        issues.append(".github/workflows/ci.yml: missing CI workflow")
+    else:
+        ci_text = ci.read_text(encoding="utf-8")
+        for required in ("tests/test_maintainer_health.py", "docs/maintainer-health.md", "promptabi maintain health --format text"):
+            if required not in ci_text:
+                issues.append(f".github/workflows/ci.yml: missing {required}")
+
+    metrics = _maintainer_health_metrics(root, label_text)
+    return MaintainerHealthReport(
+        repo_root=root,
+        checked_paths=tuple(sorted(checked_paths)),
+        rotation_roles=items["rotation_roles"],
+        triage_labels=items["triage_labels"],
+        release_checklist=items["release_checklist"],
+        corpus_review=items["corpus_review"],
+        metrics=metrics,
+        issues=tuple(issues),
+    )
+
+
+def render_maintainer_health_json(report: MaintainerHealthReport) -> str:
+    """Render maintainer health as deterministic JSON."""
+
+    return json.dumps(report.to_dict(), indent=2, sort_keys=True) + "\n"
+
+
+def render_maintainer_health_text(report: MaintainerHealthReport) -> str:
+    """Render maintainer health for release logs and CI summaries."""
+
+    status = "PASS" if report.ok else "FAIL"
+    lines = [
+        f"PromptABI maintainer health: {status}",
+        f"rotation roles: {len(report.rotation_roles)}",
+        f"triage labels: {len(REQUIRED_TRIAGE_LABELS)} required",
+        f"release checklist items: {len(report.release_checklist)}",
+        f"corpus review gates: {len(report.corpus_review)}",
+        "metrics:",
+    ]
+    for key, value in sorted(report.metrics.items()):
+        lines.append(f"  {key}: {value}")
+    sections = (
+        ("Rotation roles", report.rotation_roles),
+        ("Triage labels", report.triage_labels),
+        ("Release checklist", report.release_checklist),
+        ("Corpus review", report.corpus_review),
+    )
+    for title, category_items in sections:
+        lines.extend(("", title))
+        for item in category_items:
+            lines.append(f"  {item.id}: {item.title}")
+            lines.append(f"    {item.detail}")
+    if report.issues:
+        lines.extend(("", "Issues:"))
+        lines.extend(f"- {issue}" for issue in report.issues)
+    return "\n".join(lines) + "\n"
 
 
 def collect_expected_diagnostics(repo_root: str | Path | None = None) -> dict[str, object]:
@@ -549,6 +815,23 @@ def _check_summary(check: dict[str, Any] | None) -> str:
     if check is None:
         return "missing"
     return f"{check['coverage_count']}/{check['expected_count']} coverage; passed={check['passed']}"
+
+
+def _maintainer_health_metrics(root: Path, label_text: str) -> dict[str, object]:
+    fixture_root = root / "fixtures"
+    docs_root = root / "docs"
+    test_root = root / "tests"
+    labels = [line for line in label_text.splitlines() if line.strip().startswith("- name:")]
+    fixture_json_count = 0
+    if fixture_root.is_dir():
+        fixture_json_count = sum(1 for path in fixture_root.rglob("*.json") if path.is_file())
+    return {
+        "docs_markdown_files": sum(1 for path in docs_root.rglob("*.md") if path.is_file()) if docs_root.is_dir() else 0,
+        "fixture_json_files": fixture_json_count,
+        "python_test_files": sum(1 for path in test_root.glob("test_*.py") if path.is_file()) if test_root.is_dir() else 0,
+        "triage_label_count": len(labels),
+        "verification_config_count": len(_discover_verification_configs(root)),
+    }
 
 
 def _relative_path(path: Path, root: Path) -> str:

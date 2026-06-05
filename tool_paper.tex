@@ -1617,6 +1617,7 @@ The corpus maintenance workflow now has the same integration discipline:
 promptabi corpus manifest
 promptabi corpus manifest --output seed-corpus.manifest.json
 promptabi maintain refresh --output-dir maintainer_artifact --baseline previous_release
+promptabi maintain health --format text
 \end{verbatim}
 
 These commands validate the curated seed corpus without network calls, emit
@@ -1630,6 +1631,10 @@ framework-truncation-conformance manifests, the real-bug benchmark manifest,
 portable expected diagnostics with repository-relative spans, corpus diffs against
 a previous snapshot, and concise release notes. That turns the corpus from a
 collection of files into an auditable experimental input and release artifact.
+The maintainer health gate separately validates rotation roles, triage labels,
+release checklist items, corpus-review procedures, and lightweight project-health
+metrics, so release evidence is tied to accountable maintenance practice instead
+of an ad hoc checklist.
 
 \clearpage
 \section{Role-Boundary Non-Forgeability}
@@ -2096,7 +2101,7 @@ Provider conformance & \texttt{promptabi corpus provider-conformance} proves the
 \hline
 Framework truncation conformance & \texttt{promptabi corpus framework-truncation-conformance} replays LangChain, LlamaIndex, vLLM, Transformers, llama.cpp, LiteLLM, OpenAI-compatible, and custom-RAG budget fixtures through the real token-budget analyzer, checking selected strategies, kept/dropped segment sets, must-survive status, and emitted rule IDs. \\
 \hline
-Maintainer refresh & \texttt{promptabi maintain refresh} regenerates model/corpus/provider manifests, expected diagnostic baselines with portable fingerprints, corpus diffs, and release notes from real repository configs. \\
+Maintainer workflows & \texttt{promptabi maintain refresh} regenerates model/corpus/provider manifests, expected diagnostic baselines with portable fingerprints, corpus diffs, and release notes from real repository configs; \texttt{promptabi maintain health} validates rotation, triage, release, corpus-review, and project-health gates. \\
 \hline
 Cold/warm cache & Direct measurement of token-budget analysis before and after per-session cache reuse, including an explicit cache-reused metric. \\
 \hline
@@ -2440,7 +2445,7 @@ Corpus commands & \texttt{promptabi corpus manifest}, \texttt{promptabi corpus s
 \hline
 Budget/RAG/drift tests & \texttt{examples/token-budget/promptabi.json} and \texttt{examples/rag-chunking/promptabi.json} cover must-survive segments, framework reservations, truncation decisions, citation loss, overlap errors, metadata inflation, tokenizer mismatch, and config/tokenizer drift. \\
 \hline
-Benchmark and maintainer lines & \texttt{benchmarks/benchmark\_smoke.py} emits JSON for cold/warm cache and checker families; \texttt{promptabi maintain refresh} writes seed, structured-schema, provider-fixture, real-bug, corpus-verification, expected-diagnostic, diff, snapshot, and release-note artifacts. \\
+Benchmark and maintainer lines & \texttt{benchmarks/benchmark\_smoke.py} emits JSON for cold/warm cache and checker families; \texttt{promptabi maintain refresh} writes seed, structured-schema, provider-fixture, real-bug, corpus-verification, expected-diagnostic, diff, snapshot, and release-note artifacts; \texttt{promptabi maintain health} validates rotation, triage labels, release checklists, corpus review, and deterministic health metrics. \\
 \hline
 Verified configuration gallery & \texttt{promptabi gallery} reruns five curated configurations covering pinned OpenAI-style tools, sanitized ChatML role boundaries, training-to-serving static contracts, RAG truncation budgets, and audited accepted-risk suppressions; focused tests assert deterministic JSON/text renderers, actual solver-backend summaries, stage-pin evidence, lockfile/pin badges, and risk explanations. \\
 \hline

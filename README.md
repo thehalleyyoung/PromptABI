@@ -119,6 +119,7 @@ promptabi matrix --format text
 promptabi soundness-audit --rule role-boundary-nonforgeability --format markdown
 promptabi proofs --traceability --format text
 promptabi proofs --experiments --format text
+promptabi maintain health --format text
 promptabi graph --config examples/rag-chunking/promptabi.json --all-checks --format mermaid
 promptabi contract format examples/static-contract-language/app.pabi --check
 promptabi contract migrate examples/static-contract-language/app.pabi --check
