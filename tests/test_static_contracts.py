@@ -17,6 +17,7 @@ from promptabi.artifacts import (
     StopPolicyArtifact,
     ToolDefinitionArtifact,
     TrainingManifestArtifact,
+    TrainingPipelineStageVersion,
     TrainingSourceContribution,
     TrainingSpanContract,
     TrainingTextSourceKind,
@@ -383,6 +384,102 @@ def test_static_contracts_find_user_tool_retrieval_or_preference_leaking_into_ta
     assert evidence["text_sha256"] == "sha256:redacted-rejected"
     assert "preference-text-overlaps-supervised-target" in evidence["reasons"]
     assert "rejected-field-overlaps-supervised-target" in evidence["reasons"]
+
+
+def test_static_contracts_prove_training_stage_tokenizer_template_consistency() -> None:
+    location = ArtifactLocation(uri="memory://static-contract")
+    shared_stage_kwargs = {
+        "tokenizer_name": "llama-tokenizer",
+        "tokenizer_revision": "tok-rev-1",
+        "chat_template_name": "llama-chat",
+        "chat_template_sha256": "sha256:template",
+        "add_generation_prompt": False,
+    }
+    loaded = (
+        _loaded(
+            TrainingManifestArtifact(
+                kind=ArtifactKind.TRAINING_MANIFEST,
+                name="train",
+                location=location,
+                pipeline_stages=(
+                    TrainingPipelineStageVersion(stage="dataset-preparation", **shared_stage_kwargs),
+                    TrainingPipelineStageVersion(stage="training", **shared_stage_kwargs),
+                    TrainingPipelineStageVersion(stage="evaluation", **shared_stage_kwargs),
+                    TrainingPipelineStageVersion(stage="serving", **shared_stage_kwargs),
+                ),
+            )
+        ),
+    )
+
+    report = analyze_static_contracts(VerificationConfig(name="static"), loaded, prefer_z3=False)
+
+    finding = next(item for item in report.findings if item.name == "training-tokenizer-template-stage-consistency")
+    assert finding.severity == "info"
+    assert finding.message.startswith("tokenizer and chat-template pins match")
+    assert dict(finding.evidence)["stage_count"] == "4"
+    assert not report.violations
+
+
+def test_static_contracts_find_training_stage_tokenizer_or_template_drift() -> None:
+    location = ArtifactLocation(uri="memory://static-contract")
+    loaded = (
+        _loaded(
+            TrainingManifestArtifact(
+                kind=ArtifactKind.TRAINING_MANIFEST,
+                name="train",
+                location=location,
+                pipeline_stages=(
+                    TrainingPipelineStageVersion(
+                        stage="dataset-preparation",
+                        tokenizer_name="llama-tokenizer",
+                        tokenizer_sha256="sha256:tok-old",
+                        chat_template_name="llama-chat",
+                        chat_template_sha256="sha256:tmpl-old",
+                        add_generation_prompt=False,
+                    ),
+                    TrainingPipelineStageVersion(
+                        stage="training",
+                        tokenizer_name="llama-tokenizer",
+                        tokenizer_sha256="sha256:tok-old",
+                        chat_template_name="llama-chat",
+                        chat_template_sha256="sha256:tmpl-old",
+                        add_generation_prompt=False,
+                    ),
+                    TrainingPipelineStageVersion(
+                        stage="evaluation",
+                        tokenizer_name="llama-tokenizer",
+                        tokenizer_sha256="sha256:tok-new",
+                        chat_template_name="llama-chat",
+                        chat_template_sha256="sha256:tmpl-old",
+                        add_generation_prompt=False,
+                    ),
+                    TrainingPipelineStageVersion(
+                        stage="serving",
+                        tokenizer_name="llama-tokenizer",
+                        tokenizer_sha256="sha256:tok-new",
+                        chat_template_name="llama-chat",
+                        chat_template_sha256="sha256:tmpl-new",
+                        add_generation_prompt=True,
+                    ),
+                ),
+            )
+        ),
+    )
+
+    report = analyze_static_contracts(VerificationConfig(name="static"), loaded, prefer_z3=False)
+
+    violation = {finding.name: finding for finding in report.violations}["training-tokenizer-template-stage-consistency"]
+    assert violation.result is not None
+    assert violation.result.assignment["stage_component"] in {
+        "train:tokenizer",
+        "train:chat-template",
+    }
+    evidence = dict(violation.evidence)
+    assert evidence["manifest"] == "train"
+    assert evidence["component"] in {"tokenizer", "chat-template"}
+    assert "dataset-preparation=" in evidence["stage_fingerprints"]
+    assert "serving=" in evidence["stage_fingerprints"]
+    assert "differs-across-dataset-preparation-training-evaluation-serving" in evidence["reasons"]
 
 
 def test_static_contracts_encode_role_region_nonforgeability() -> None:

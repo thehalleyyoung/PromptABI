@@ -559,6 +559,80 @@ class ChatTemplateVersion:
 
 
 @dataclass(frozen=True, slots=True)
+class TrainingPipelineStageVersion:
+    """Tokenizer and template pins observed at one fine-tuning pipeline stage."""
+
+    stage: str
+    tokenizer_name: str | None = None
+    tokenizer_version: str | None = None
+    tokenizer_revision: str | None = None
+    tokenizer_sha256: str | None = None
+    chat_template_name: str | None = None
+    chat_template_version: str | None = None
+    chat_template_revision: str | None = None
+    chat_template_sha256: str | None = None
+    add_generation_prompt: bool | None = None
+
+    def __post_init__(self) -> None:
+        _require_non_empty("training pipeline stage", self.stage)
+        for field_name in (
+            "tokenizer_name",
+            "tokenizer_version",
+            "tokenizer_revision",
+            "tokenizer_sha256",
+            "chat_template_name",
+            "chat_template_version",
+            "chat_template_revision",
+            "chat_template_sha256",
+        ):
+            _optional_non_empty(f"training pipeline stage {field_name}", getattr(self, field_name))
+
+    @property
+    def tokenizer_pinned(self) -> bool:
+        return any(
+            value is not None
+            for value in (
+                self.tokenizer_name,
+                self.tokenizer_version,
+                self.tokenizer_revision,
+                self.tokenizer_sha256,
+            )
+        )
+
+    @property
+    def chat_template_pinned(self) -> bool:
+        return any(
+            value is not None
+            for value in (
+                self.chat_template_name,
+                self.chat_template_version,
+                self.chat_template_revision,
+                self.chat_template_sha256,
+                self.add_generation_prompt,
+            )
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {"stage": self.stage}
+        for key in (
+            "tokenizer_name",
+            "tokenizer_version",
+            "tokenizer_revision",
+            "tokenizer_sha256",
+            "chat_template_name",
+            "chat_template_version",
+            "chat_template_revision",
+            "chat_template_sha256",
+        ):
+            value = getattr(self, key)
+            if value is not None:
+                data[key] = value
+        if self.add_generation_prompt is not None:
+            data["add_generation_prompt"] = self.add_generation_prompt
+        return data
+
+
+@dataclass(frozen=True, slots=True)
 class BaseArtifact:
     """Common artifact identity, location, provenance, and payload."""
 
@@ -867,6 +941,7 @@ class TrainingManifestArtifact(BaseArtifact):
     loss_mask_policy: LossMaskPolicy | None = None
     packing_window: PackingWindow | None = None
     chat_template_version: ChatTemplateVersion | None = None
+    pipeline_stages: tuple[TrainingPipelineStageVersion, ...] = ()
 
     def __post_init__(self) -> None:
         BaseArtifact.__post_init__(self)
@@ -883,6 +958,10 @@ class TrainingManifestArtifact(BaseArtifact):
         if len({span.span_id for span in supervised_spans}) != len(supervised_spans):
             raise ValueError("training manifest supervised span IDs must be unique")
         object.__setattr__(self, "supervised_spans", supervised_spans)
+        pipeline_stages = tuple(sorted(self.pipeline_stages, key=lambda stage: stage.stage))
+        if len({stage.stage for stage in pipeline_stages}) != len(pipeline_stages):
+            raise ValueError("training manifest pipeline stage names must be unique")
+        object.__setattr__(self, "pipeline_stages", pipeline_stages)
         if not self.target_roles and self.loss_mask_policy is not None and self.loss_mask_policy.target_roles:
             object.__setattr__(self, "target_roles", self.loss_mask_policy.target_roles)
         if not self.message_roles and self.role_labels:
@@ -920,6 +999,8 @@ class TrainingManifestArtifact(BaseArtifact):
             data["packing_window"] = self.packing_window.to_dict()
         if self.chat_template_version is not None:
             data["chat_template_version"] = self.chat_template_version.to_dict()
+        if self.pipeline_stages:
+            data["pipeline_stages"] = [stage.to_dict() for stage in self.pipeline_stages]
         return data
 
 
@@ -1094,6 +1175,7 @@ def artifact_from_config(
             loss_mask_policy=_loss_mask_policy(spec),
             packing_window=_packing_window(spec),
             chat_template_version=_chat_template_version(spec),
+            pipeline_stages=_training_pipeline_stages(spec),
         )
     raise AssertionError(f"unhandled artifact kind: {kind}")
 
@@ -1475,6 +1557,31 @@ def _chat_template_version(spec: dict[str, Any]) -> ChatTemplateVersion | None:
         tokenizer_name=_optional_str(raw_version, "tokenizer_name"),
         add_generation_prompt=_optional_bool(raw_version, "add_generation_prompt"),
     )
+
+
+def _training_pipeline_stages(spec: dict[str, Any]) -> tuple[TrainingPipelineStageVersion, ...]:
+    raw_stages = spec.get("pipeline_stages", spec.get("stage_versions", []))
+    if not isinstance(raw_stages, list):
+        raise ValueError("artifact field 'pipeline_stages' must be a list")
+    stages: list[TrainingPipelineStageVersion] = []
+    for item in raw_stages:
+        if not isinstance(item, dict):
+            raise ValueError("training pipeline stage entries must be objects")
+        stages.append(
+            TrainingPipelineStageVersion(
+                stage=_str(item, "stage"),
+                tokenizer_name=_optional_str(item, "tokenizer_name"),
+                tokenizer_version=_optional_str(item, "tokenizer_version"),
+                tokenizer_revision=_optional_str(item, "tokenizer_revision"),
+                tokenizer_sha256=_optional_str(item, "tokenizer_sha256"),
+                chat_template_name=_optional_str(item, "chat_template_name"),
+                chat_template_version=_optional_str(item, "chat_template_version"),
+                chat_template_revision=_optional_str(item, "chat_template_revision"),
+                chat_template_sha256=_optional_str(item, "chat_template_sha256"),
+                add_generation_prompt=_optional_bool(item, "add_generation_prompt"),
+            )
+        )
+    return tuple(stages)
 
 
 def _optional_text(spec: dict[str, Any], key: str) -> str | None:

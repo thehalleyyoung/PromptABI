@@ -13,6 +13,7 @@ from promptabi import (
     PackingStrategy,
     TrainingDatasetKind,
     TrainingManifestArtifact,
+    TrainingPipelineStageVersion,
     TrainingSourceContribution,
     TrainingTextSourceKind,
 )
@@ -117,6 +118,40 @@ def _write_manifest(path: Path) -> None:
                     "tokenizer_name": "llama-tokenizer",
                     "add_generation_prompt": False,
                 },
+                "pipeline_stages": [
+                    {
+                        "stage": "dataset-preparation",
+                        "tokenizer_name": "llama-tokenizer",
+                        "tokenizer_sha256": "sha256:tok",
+                        "chat_template_name": "llama-3.1-instruct",
+                        "chat_template_sha256": "sha256:tmpl",
+                        "add_generation_prompt": False,
+                    },
+                    {
+                        "stage": "training",
+                        "tokenizer_name": "llama-tokenizer",
+                        "tokenizer_sha256": "sha256:tok",
+                        "chat_template_name": "llama-3.1-instruct",
+                        "chat_template_sha256": "sha256:tmpl",
+                        "add_generation_prompt": False,
+                    },
+                    {
+                        "stage": "evaluation",
+                        "tokenizer_name": "llama-tokenizer",
+                        "tokenizer_sha256": "sha256:tok",
+                        "chat_template_name": "llama-3.1-instruct",
+                        "chat_template_sha256": "sha256:tmpl",
+                        "add_generation_prompt": False,
+                    },
+                    {
+                        "stage": "serving",
+                        "tokenizer_name": "llama-tokenizer",
+                        "tokenizer_sha256": "sha256:tok",
+                        "chat_template_name": "llama-3.1-instruct",
+                        "chat_template_sha256": "sha256:tmpl",
+                        "add_generation_prompt": False,
+                    },
+                ],
             },
             sort_keys=True,
         ),
@@ -160,6 +195,22 @@ def test_training_manifest_config_model_covers_training_pipeline_contracts(tmp_p
             ],
             "packing_window": {"strategy": "sample-packing", "max_tokens": 2048},
             "chat_template_version": {"name": "chatml", "sha256": "a" * 64},
+            "pipeline_stages": [
+                {
+                    "stage": "dataset-preparation",
+                    "tokenizer_name": "chatml-tokenizer",
+                    "tokenizer_revision": "rev1",
+                    "chat_template_name": "chatml",
+                    "chat_template_revision": "tmpl1",
+                },
+                {
+                    "stage": "training",
+                    "tokenizer_name": "chatml-tokenizer",
+                    "tokenizer_revision": "rev1",
+                    "chat_template_name": "chatml",
+                    "chat_template_revision": "tmpl1",
+                },
+            ],
         },
         base_dir=tmp_path,
     )
@@ -176,7 +227,24 @@ def test_training_manifest_config_model_covers_training_pipeline_contracts(tmp_p
     assert artifact.packing_window is not None
     assert artifact.packing_window.strategy is PackingStrategy.SAMPLE_PACKING
     assert artifact.chat_template_version == ChatTemplateVersion(name="chatml", sha256="a" * 64)
+    assert artifact.pipeline_stages == (
+        TrainingPipelineStageVersion(
+            stage="dataset-preparation",
+            tokenizer_name="chatml-tokenizer",
+            tokenizer_revision="rev1",
+            chat_template_name="chatml",
+            chat_template_revision="tmpl1",
+        ),
+        TrainingPipelineStageVersion(
+            stage="training",
+            tokenizer_name="chatml-tokenizer",
+            tokenizer_revision="rev1",
+            chat_template_name="chatml",
+            chat_template_revision="tmpl1",
+        ),
+    )
     assert artifact.to_dict()["datasets"][0]["preference_fields"] == ["chosen", "rejected"]
+    assert artifact.to_dict()["pipeline_stages"][0]["tokenizer_revision"] == "rev1"
 
 
 def test_loader_parses_training_manifest_json_and_reports_metadata(tmp_path: Path) -> None:
@@ -211,6 +279,8 @@ def test_loader_parses_training_manifest_json_and_reports_metadata(tmp_path: Pat
     assert loaded.artifact.datasets[1].kind is TrainingDatasetKind.PREFERENCE
     assert loaded.artifact.packing_window is not None
     assert loaded.artifact.packing_window.max_tokens == 4096
+    serving_stage = next(stage for stage in loaded.artifact.pipeline_stages if stage.stage == "serving")
+    assert serving_stage.chat_template_sha256 == "sha256:tmpl"
     metadata = dict(loaded.metadata)
     assert metadata["dataset_count"] == 2
     assert metadata["supervised_dataset_count"] == 1
@@ -221,6 +291,10 @@ def test_loader_parses_training_manifest_json_and_reports_metadata(tmp_path: Pat
     assert metadata["loss_mask_strategy"] == "assistant-only"
     assert metadata["packing_max_tokens"] == 4096
     assert metadata["chat_template_pinned"] is True
+    assert metadata["pipeline_stage_count"] == 4
+    assert metadata["pipeline_stages"] == ("dataset-preparation", "evaluation", "serving", "training")
+    assert metadata["pipeline_tokenizer_pinned_count"] == 4
+    assert metadata["pipeline_chat_template_pinned_count"] == 4
     assert any(name == "datasets.1.preference_fields.0" for name, _span in loaded.source_spans)
     assert loaded.warnings == ()
 

@@ -324,6 +324,7 @@ def _surfaces_for_check(check_name: str, artifact_kinds: tuple[ArtifactKind, ...
             _surface("training", "loss-masks", ArtifactKind.TRAINING_MANIFEST, "covered", "observed supervised spans must be selected by the declared loss-mask contract"),
             _surface("training", "packed-datasets", ArtifactKind.TRAINING_MANIFEST, "bounded", "observed supervised spans are checked against declared preserved packing boundaries"),
             _surface("training", "source-leakage", ArtifactKind.TRAINING_MANIFEST, "bounded", "declared transform source ranges cannot place user, tool, retrieval, or preference text into supervised targets"),
+            _surface("training", "tokenizer-template-stage-consistency", ArtifactKind.TRAINING_MANIFEST, "covered", "fine-tuning preparation, training, evaluation, and serving tokenizer/template pins are compared by static-contracts"),
         ),
         "token-budget-model": (*_tokenizer_surfaces(), *_framework_surfaces()),
         "tool-schema-ingestion": (_surface("provider", "mcp", ArtifactKind.TOOL_DEFINITION),),
@@ -448,6 +449,7 @@ def _training_surfaces() -> tuple[CompatibilitySurface, ...]:
         _surface("training", "supervised-jsonl", ArtifactKind.TRAINING_MANIFEST, "covered", "finite target-role and supervised-span alignment are checked by static-contracts"),
         _surface("training", "loss-masks", ArtifactKind.TRAINING_MANIFEST, "covered", "observed supervised spans must be selected by the declared loss-mask contract"),
         _surface("training", "packed-datasets", ArtifactKind.TRAINING_MANIFEST, "bounded", "observed supervised spans are checked against declared preserved packing boundaries"),
+        _surface("training", "tokenizer-template-stage-consistency", ArtifactKind.TRAINING_MANIFEST, "covered", "dataset preparation, training, evaluation, and serving tokenizer/template pins are compared by static-contracts"),
         _surface("training", "preference-pairs", ArtifactKind.TRAINING_MANIFEST, "planned-abstaining", "preference-pair prefix equivalence is not implemented yet"),
     )
 

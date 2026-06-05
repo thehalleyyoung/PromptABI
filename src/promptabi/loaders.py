@@ -1130,6 +1130,15 @@ def _training_manifest_metadata(artifact: Artifact) -> tuple[tuple[str, object],
             metadata.append(("chat_template_version", artifact.chat_template_version.version))
         if artifact.chat_template_version.revision is not None:
             metadata.append(("chat_template_revision", artifact.chat_template_version.revision))
+    if artifact.pipeline_stages:
+        metadata.extend(
+            (
+                ("pipeline_stage_count", len(artifact.pipeline_stages)),
+                ("pipeline_stages", tuple(stage.stage for stage in artifact.pipeline_stages)),
+                ("pipeline_tokenizer_pinned_count", sum(1 for stage in artifact.pipeline_stages if stage.tokenizer_pinned)),
+                ("pipeline_chat_template_pinned_count", sum(1 for stage in artifact.pipeline_stages if stage.chat_template_pinned)),
+            )
+        )
     return tuple(metadata)
 
 

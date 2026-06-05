@@ -269,7 +269,9 @@ role-region non-forgeability, tool-schema required-parameter satisfiability,
 tool/provider compatibility, supervised target-role alignment, and observed
 supervised-span containment across rendered role regions, tokenized bounds,
 preserved packing boundaries, loss-mask selection, and exclusion of declared
-user, tool, retrieval, or preference source ranges from supervised targets with concrete models,
+user, tool, retrieval, or preference source ranges from supervised targets, plus
+tokenizer and chat-template stage consistency across dataset preparation,
+training, evaluation, and serving, with concrete models,
 explicit proof classifications, or minimized unsat cores,
 a \texttt{promptabi solver replay} maintainer path that verifies such reduced
 solver obligations from portable JSON and treats solver backends, query hashes,
@@ -471,7 +473,9 @@ markers, tool schemas requiring parameters absent from their declared properties
 tool-provider family mismatches, and training target roles outside the serving
 chat-template role universe, plus supervised training spans that no longer align
 with the observed rendered role region, token bounds, packing boundary, or loss
-mask, and lets maintainers replay those obligations from fixture JSON while
+mask, source-contribution leakage into target spans, and tokenizer/template drift
+between fine-tuning preparation, training, evaluation, and serving pins, and lets
+maintainers replay those obligations from fixture JSON while
 validating stored SAT witnesses directly against the
 deserialized formula,
 returns stable policy-controlled process exit codes, writes and enforces
@@ -1765,7 +1769,8 @@ role-boundary non-forgeability, stop-overreachability, tokenizer differential
 comparison, provider migration diagnostics, structured-schema parser
 compatibility, RAG chunking verification, and finite static contracts with the
 solver-independent enumeration backend for training target-role and supervised
-span-region alignment. The suite therefore measures whether PromptABI still
+span-region alignment, source leakage, and tokenizer/template stage drift. The
+suite therefore measures whether PromptABI still
 detects a diverse labeled bug set, not merely whether a fixture parses.
 
 The corpus should avoid secrets and network requirements. Provider fixtures
@@ -1809,7 +1814,7 @@ Maintainer refresh & \texttt{promptabi maintain refresh} regenerates model/corpu
 \hline
 Cold/warm cache & Direct measurement of token-budget analysis before and after per-session cache reuse, including an explicit cache-reused metric. \\
 \hline
-Real-bug benchmark & \texttt{promptabi corpus real-bug-benchmark} validates and replays the labeled real-bug suite across popular templates, tokenizers, tool schemas, provider migrations, structured-output parsers, RAG truncation, and training manifests, emitting observed rule IDs and a stable manifest hash. \\
+Real-bug benchmark & \texttt{promptabi corpus real-bug-benchmark} validates and replays the labeled real-bug suite across popular templates, tokenizers, tool schemas, provider migrations, structured-output parsers, RAG truncation, and training manifests, including target-role, source-leakage, and stage-drift contracts, emitting observed rule IDs and a stable manifest hash. \\
 \hline
 Beta report & \texttt{promptabi corpus beta-report} replays open-source-style beta case studies, upstream issue records, tuned-absent false-positive expectations, and a synthetic abstention-message regression, requiring actionable abstention witnesses rather than success-shaped unknowns. \\
 \hline
@@ -2094,7 +2099,7 @@ Budget/RAG/drift tests & \texttt{examples/token-budget/promptabi.json} and \text
 \hline
 Benchmark and maintainer lines & \texttt{benchmarks/benchmark\_smoke.py} emits JSON for cold/warm cache and checker families; \texttt{promptabi maintain refresh} writes seed, structured-schema, provider-fixture, real-bug, corpus-verification, expected-diagnostic, diff, snapshot, and release-note artifacts. \\
 \hline
-Verified configuration gallery & \texttt{promptabi gallery} reruns five curated configurations covering pinned OpenAI-style tools, sanitized ChatML role boundaries, training-to-serving static contracts, RAG truncation budgets, and audited accepted-risk suppressions; focused tests assert deterministic JSON/text renderers, actual solver-backend summaries, lockfile/pin badges, and risk explanations. \\
+Verified configuration gallery & \texttt{promptabi gallery} reruns five curated configurations covering pinned OpenAI-style tools, sanitized ChatML role boundaries, training-to-serving static contracts, RAG truncation budgets, and audited accepted-risk suppressions; focused tests assert deterministic JSON/text renderers, actual solver-backend summaries, stage-pin evidence, lockfile/pin badges, and risk explanations. \\
 \hline
 Supply chain, editor, API, docs & \texttt{artifact-provenance}, \texttt{promptabi diagnostics lsp}, \texttt{promptabi api-docs}, MkDocs navigation, and security-model tests cover provenance, LSP ranges, public API compatibility, privacy, bug-report, minimization, and provider-fixture safety behavior. \\
 \hline
