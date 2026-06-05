@@ -1,0 +1,15 @@
+{
+  "name": "token-budget-segments",
+  "element_domain": {"kind": "int", "minimum": 0, "maximum": 6},
+  "max_length": 3,
+  "min_length": 1,
+  "assumptions": [
+    {"name": "each-segment-within-window", "kind": "all-compare", "op": "<=", "value": 6},
+    {"name": "segments-sorted", "kind": "sorted-ascending"}
+  ],
+  "guarantees": [
+    {"name": "no-negative-segment", "kind": "all-compare", "op": ">=", "value": 0},
+    {"name": "at-least-one-segment", "kind": "non-empty"},
+    {"name": "largest-segment-within-window", "kind": "all-compare", "op": "<=", "value": 6}
+  ]
+}

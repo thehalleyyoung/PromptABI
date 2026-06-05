@@ -1,0 +1,12 @@
+{
+  "name": "unsound-budget",
+  "element_domain": {"kind": "int", "minimum": 0, "maximum": 6},
+  "max_length": 3,
+  "min_length": 1,
+  "assumptions": [
+    {"name": "each-segment-within-window", "kind": "all-compare", "op": "<=", "value": 6}
+  ],
+  "guarantees": [
+    {"name": "every-segment-at-most-four", "kind": "all-compare", "op": "<=", "value": 4}
+  ]
+}

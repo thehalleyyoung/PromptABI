@@ -342,6 +342,12 @@ from .diagnostic_stability import (
     render_diagnostic_stability_json,
     render_diagnostic_stability_text,
 )
+from .bounded_array_contracts import (
+    load_bounded_array_contract,
+    render_bounded_array_report_json,
+    render_bounded_array_report_text,
+    verify_bounded_array_contract,
+)
 from .loaders import ArtifactLoader
 from .lockfiles import (
     LockfileError,
@@ -877,6 +883,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     _add_local_summary_argument(diagnostic_stability)
+
+    bounded_array = subparsers.add_parser(
+        "bounded-array",
+        help="prove quantified guarantees over bounded arrays in a static contract via the finite-domain solver",
+    )
+    bounded_array.add_argument(
+        "--contract",
+        required=True,
+        help="path to a bounded-array contract JSON document",
+    )
+    bounded_array.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    _add_local_summary_argument(bounded_array)
 
     explain = subparsers.add_parser("explain", help="expand one diagnostic into a tutorial-style explanation")
     explain.add_argument(
@@ -3771,6 +3794,37 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "format": args.format,
                 "baseline_count": report.baseline_count,
                 "variants": len(report.variants),
+            },
+        ):
+            return 2
+        print(output, end="")
+        return exit_code
+
+    if args.command == "bounded-array":
+        started_at = time.perf_counter()
+        try:
+            contract_path = Path(args.contract).resolve()
+            contract = load_bounded_array_contract(contract_path)
+            report = verify_bounded_array_contract(contract)
+        except (OSError, ValueError, KeyError) as exc:
+            print(f"promptabi: cannot verify bounded-array contract: {exc}", file=sys.stderr)
+            return 2
+        output = (
+            render_bounded_array_report_json(report)
+            if args.format == "json"
+            else render_bounded_array_report_text(report)
+        )
+        exit_code = 0 if report.ok else 1
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="bounded-array",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={
+                "format": args.format,
+                "contract": report.contract,
+                "guarantees": len(report.results),
+                "ok": report.ok,
             },
         ):
             return 2

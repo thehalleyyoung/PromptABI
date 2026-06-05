@@ -1,0 +1,13 @@
+{
+  "name": "chat-role-sequence",
+  "element_domain": {"kind": "enum", "members": ["system", "user", "assistant", "tool"]},
+  "max_length": 4,
+  "min_length": 1,
+  "assumptions": [
+    {"name": "roles-are-distinct", "kind": "distinct"}
+  ],
+  "guarantees": [
+    {"name": "still-distinct", "kind": "distinct"},
+    {"name": "every-role-supported", "kind": "all-in", "members": ["system", "user", "assistant", "tool"]}
+  ]
+}
