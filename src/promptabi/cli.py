@@ -148,6 +148,11 @@ from .structured_schema_corpus import (
     build_structured_schema_corpus_manifest,
     write_structured_schema_corpus_manifest,
 )
+from .training_workflow import (
+    TRAINING_WORKFLOW_CHECKS,
+    build_training_config,
+    run_training_verification,
+)
 from .usage_analytics import (
     UsageAnalyticsError,
     append_local_command_summary,
@@ -255,6 +260,70 @@ def build_parser() -> argparse.ArgumentParser:
         help="run incrementally from paths changed since this git ref, including untracked files",
     )
     _add_local_summary_argument(verify)
+
+    verify_training = subparsers.add_parser(
+        "verify-training",
+        help="verify training manifests, dataset contracts, tokenizers, templates, packing, and loss masks",
+    )
+    verify_training.add_argument(
+        "--config",
+        help="path to a PromptABI JSON config; defaults to discovering promptabi.json when --manifest is omitted",
+    )
+    verify_training.add_argument(
+        "--manifest",
+        help="training manifest JSON path; builds a focused temporary PromptABI config",
+    )
+    verify_training.add_argument(
+        "--name",
+        help="run name used with --manifest (default: training-<manifest-stem>)",
+    )
+    verify_training.add_argument(
+        "--tokenizer",
+        action="append",
+        default=[],
+        metavar="NAME=PATH",
+        help="tokenizer artifact to align with manifest tokenizer pins; may be repeated",
+    )
+    verify_training.add_argument(
+        "--chat-template",
+        action="append",
+        default=[],
+        metavar="NAME=PATH",
+        help="chat-template artifact to align with manifest template pins; may be repeated",
+    )
+    verify_training.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        metavar="NAME=PATH_OR_URI",
+        help="override or add an artifact when using --config; may be repeated",
+    )
+    verify_training.add_argument(
+        "--cache-dir",
+        help="directory for reusable PromptABI analysis caches (default: PROMPTABI_CACHE_DIR or user cache)",
+    )
+    verify_training.add_argument(
+        "--fail-on",
+        choices=("error", "warning", "any", "never"),
+        default="error",
+        help="exit with code 1 at this diagnostic threshold (default: error)",
+    )
+    verify_training.add_argument("-q", "--quiet", action="count", default=0, help="suppress informational text output")
+    verify_training.add_argument("-v", "--verbose", action="count", default=0, help="include additional workflow metadata")
+    verify_training.add_argument(
+        "--format",
+        default="text",
+        help="output format: text, html, json, sarif, github-annotations, or a plugin renderer (default: text)",
+    )
+    _add_github_output_arguments(verify_training)
+    verify_training.add_argument(
+        "--plugin",
+        action="append",
+        default=[],
+        metavar="MODULE[:OBJECT]",
+        help="import a PromptABI plugin module for this run; may be repeated",
+    )
+    _add_local_summary_argument(verify_training)
 
     explain = subparsers.add_parser("explain", help="expand one diagnostic into a tutorial-style explanation")
     explain.add_argument(
@@ -1205,6 +1274,76 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(output, end="")
         return exit_code
 
+    if args.command == "verify-training":
+        started_at = time.perf_counter()
+        try:
+            if args.quiet and args.verbose:
+                parser.error("--quiet and --verbose cannot be used together")
+            cache_dir = _resolve_cache_dir(args.cache_dir)
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            plugin_registry = _load_cli_plugins(args.plugin)
+            if args.manifest:
+                if args.config:
+                    parser.error("--config cannot be combined with --manifest")
+                if args.artifact:
+                    parser.error("--artifact is only supported with --config")
+                config_path = Path(args.manifest).expanduser().resolve()
+                config = build_training_config(
+                    config_path,
+                    name=args.name,
+                    tokenizers=_parse_named_path_values(args.tokenizer, "--tokenizer", parser),
+                    chat_templates=_parse_named_path_values(args.chat_template, "--chat-template", parser),
+                    checks=TRAINING_WORKFLOW_CHECKS,
+                )
+            else:
+                if args.name:
+                    parser.error("--name is only supported with --manifest")
+                if args.tokenizer or args.chat_template:
+                    parser.error("--tokenizer/--chat-template are only supported with --manifest")
+                config_path = Path(args.config).resolve() if args.config else discover_config()
+                overrides = _parse_artifact_overrides(args.artifact, parser)
+                config = load_config(config_path).with_artifact_overrides(overrides, base_dir=Path.cwd())
+            if args.local_summary is not None and policy_forbids_local_summary(config.policy):
+                print("promptabi: organization policy pack forbids --local-summary writes", file=sys.stderr)
+                return 2
+            result = run_training_verification(config, plugin_registry=plugin_registry)
+        except ConfigError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except PluginError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot prepare training verification: {exc}", file=sys.stderr)
+            return 2
+        try:
+            output = _render_verification_output(
+                result,
+                args.format,
+                plugin_registry=plugin_registry,
+                text_kwargs={
+                    "verbosity": args.verbose - args.quiet,
+                    "config_path": config_path,
+                    "cache_dir": cache_dir,
+                    "heading": "PromptABI training verification",
+                },
+                sarif_options=_sarif_options(args, argv),
+            )
+        except PluginError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        exit_code = _exit_code(result, fail_on=args.fail_on)
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="verify-training",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata=_verification_summary_metadata(result, output_format=args.format, fail_on=args.fail_on),
+        ):
+            return 2
+        print(output, end="")
+        return exit_code
+
     if args.command == "explain":
         try:
             config_path = Path(args.config).resolve() if args.config else discover_config()
@@ -2011,6 +2150,20 @@ def _parse_artifact_overrides(values: Sequence[str], parser: argparse.ArgumentPa
             parser.error("--artifact values must use NAME=PATH_OR_URI")
         overrides[name] = location
     return overrides
+
+
+def _parse_named_path_values(
+    values: Sequence[str],
+    option_name: str,
+    parser: argparse.ArgumentParser,
+) -> tuple[tuple[str, str], ...]:
+    parsed: list[tuple[str, str]] = []
+    for value in values:
+        name, separator, path = value.partition("=")
+        if not separator or not name or not path:
+            parser.error(f"{option_name} values must use NAME=PATH")
+        parsed.append((name, path))
+    return tuple(parsed)
 
 
 def _parse_candidate_versions(values: Sequence[str], parser: argparse.ArgumentParser) -> dict[str, str]:

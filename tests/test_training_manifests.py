@@ -20,6 +20,7 @@ from promptabi import (
     TrainingTextSourceKind,
 )
 from promptabi.artifacts import artifact_from_config
+from promptabi.cli import main
 from promptabi.loaders import ArtifactLoadError, ArtifactLoader
 from promptabi.session import VerificationSession
 from promptabi.config import load_config
@@ -712,3 +713,94 @@ def test_training_redaction_check_rejects_secret_like_and_raw_report_evidence(tm
     }.issubset(rule_ids)
     assert secret not in payload
     assert "sha256-prefix" in payload
+
+
+def test_verify_training_manifest_workflow_runs_real_training_checks(tmp_path: Path, capsys) -> None:
+    manifest_path = tmp_path / "training-manifest.json"
+    _write_manifest(manifest_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["redaction_policy"] = {"mode": "hash-only", "require_text_hashes": True}
+    manifest["supervised_spans"][0]["source_contributions"][0]["text_sha256"] = "sha256:" + "a" * 64
+    manifest["supervised_spans"][0]["source_contributions"][0]["source_field"] = "messages.content_sha256"
+    manifest["preference_pairs"][0]["prompt_sha256"] = "sha256:" + "b" * 64
+    manifest["preference_pairs"][0]["chosen_sha256"] = "sha256:" + "c" * 64
+    manifest["preference_pairs"][0]["rejected_sha256"] = "sha256:" + "d" * 64
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True), encoding="utf-8")
+
+    exit_code = main(["verify-training", "--manifest", str(manifest_path), "--format", "json"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    rule_ids = {diagnostic["rule_id"] for diagnostic in payload["diagnostics"]}
+    assert exit_code == 0
+    assert payload["config"]["checks"] == ["training-workflow", "training-packing", "training-redaction"]
+    assert payload["ok"] is True
+    assert "training-workflow-verified" in rule_ids
+    assert "training-packing-verified" in rule_ids
+    assert "training-redaction-verified" in rule_ids
+    assert captured.err == ""
+
+
+def test_verify_training_fails_closed_when_supervised_manifest_has_no_loss_mask(tmp_path: Path, capsys) -> None:
+    manifest_path = tmp_path / "unmasked-training.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "dataset_format": "chat-jsonl",
+                "datasets": [{"name": "sft", "kind": "supervised", "format": "chat-jsonl"}],
+                "supervised_spans": [
+                    {
+                        "span_id": "train-1.assistant",
+                        "target_role": "assistant",
+                        "rendered_region_role": "assistant",
+                        "start_token": 4,
+                        "end_token": 8,
+                        "region_start_token": 3,
+                        "region_end_token": 9,
+                    }
+                ],
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["verify-training", "--manifest", str(manifest_path), "--format", "json"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    rule_ids = {diagnostic["rule_id"] for diagnostic in payload["diagnostics"]}
+    assert exit_code == 1
+    assert payload["ok"] is False
+    assert "training-workflow-loss-mask-missing" in rule_ids
+    assert "training-workflow-packing-missing" in rule_ids
+    assert captured.err == ""
+
+
+def test_verify_training_reports_configured_tokenizer_mismatch(tmp_path: Path, capsys) -> None:
+    manifest_path = tmp_path / "training-manifest.json"
+    tokenizer_path = tmp_path / "tokenizer.json"
+    _write_manifest(manifest_path)
+    tokenizer_path.write_text('{"model": {"type": "BPE"}}', encoding="utf-8")
+
+    exit_code = main(
+        [
+            "verify-training",
+            "--manifest",
+            str(manifest_path),
+            "--tokenizer",
+            f"wrong-tokenizer-name={tokenizer_path}",
+            "--format",
+            "json",
+            "--fail-on",
+            "never",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    diagnostics = {diagnostic["rule_id"]: diagnostic for diagnostic in payload["diagnostics"]}
+    assert exit_code == 0
+    assert "training-workflow-tokenizer-mismatch" in diagnostics
+    assert diagnostics["training-workflow-tokenizer-mismatch"]["properties"]["artifact_name"] == "wrong-tokenizer-name"
+    assert captured.err == ""
