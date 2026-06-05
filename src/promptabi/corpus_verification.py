@@ -12,6 +12,7 @@ from typing import Any
 from .adversarial_corpus import build_adversarial_corpus_manifest
 from .evaluation import EvaluationError, EvaluationReport, run_evaluation
 from .evaluation_fixture_packs import build_evaluation_fixture_pack_manifest
+from .grammar_conformance import build_grammar_conformance_report
 from .loaders import ArtifactLoader
 from .provider_fixture_packs import ProviderFixturePackError, load_provider_fixture_pack_corpus
 from .provider_fixture_replay import analyze_provider_fixture_replay
@@ -116,6 +117,7 @@ def run_corpus_verification(
     seed_root: str | Path | None = None,
     structured_schema_root: str | Path | None = None,
     provider_fixture_root: str | Path | None = None,
+    grammar_conformance_suite_path: str | Path | None = None,
     real_bug_benchmark_path: str | Path | None = None,
     evaluation_corpus_path: str | Path | None = None,
     evaluation_fixture_pack_path: str | Path | None = None,
@@ -132,6 +134,7 @@ def run_corpus_verification(
             _verify_seed_corpus(seed_root),
             _verify_structured_schema_corpus(structured_schema_root),
             _verify_provider_fixture_corpus(provider_fixture_root),
+            _verify_grammar_conformance(grammar_conformance_suite_path),
             _verify_real_bug_benchmark(real_bug_benchmark_path),
             _verify_evaluation_fixture_pack(evaluation_fixture_pack_path),
             _verify_labeled_evaluation(evaluation_corpus_path, resolved_thresholds),
@@ -268,6 +271,47 @@ def _verify_provider_fixture_corpus(root: str | Path | None) -> CorpusVerificati
         metrics={
             "provider_families": list(replay.provider_families),
             "replay_hash": replay.replay_hash,
+        },
+    )
+
+
+def _verify_grammar_conformance(path: str | Path | None) -> CorpusVerificationCheck:
+    try:
+        report = build_grammar_conformance_report(path)
+    except ValueError as exc:
+        return CorpusVerificationCheck(
+            name="grammar-conformance",
+            passed=False,
+            summary=f"grammar backend conformance suite could not be replayed: {exc}",
+            coverage_count=0,
+            expected_count=1,
+            failures=(str(exc),),
+        )
+    failures = []
+    if not report.all_cases_passed:
+        failures.extend(f"missing required backend: {backend}" for backend in report.missing_backends)
+        failures.extend(f"{case.case_id}: {case.reason}" for case in report.differential_report.mismatches)
+        failures.extend(f"{case.case_id}: {case.reason}" for case in report.differential_report.abstentions)
+        failures.extend(
+            f"{coverage.backend_family}: missing accepted/rejected samples or clean replay"
+            for coverage in report.backend_coverage
+            if not coverage.passed
+        )
+    return CorpusVerificationCheck(
+        name="grammar-conformance",
+        passed=not failures,
+        summary=(
+            f"{report.case_count} backend conformance cases, {report.sample_count} recorded samples, "
+            f"{len(report.backend_coverage)} backend families"
+        ),
+        coverage_count=report.case_count,
+        expected_count=max(report.case_count, len(report.required_backends)),
+        failures=tuple(failures),
+        metrics={
+            "manifest_sha256": report.manifest_sha256,
+            "sample_count": report.sample_count,
+            "required_backends": list(report.required_backends),
+            "backend_families": [coverage.backend_family for coverage in report.backend_coverage if coverage.case_ids],
         },
     )
 

@@ -301,9 +301,11 @@ fields, numeric and string constraints, type and composition unions, bounded
 local references, recursion-limit abstentions, and additional-property semantics,
 then compiles the supported subset into grammar IR, parser states, DFA witnesses,
 source maps, and real \texttt{jsonschema} validator round-trips, replays a
-CPU-only grammar differential corpus with hand-labeled Outlines, xgrammar,
-llguidance, lm-format-enforcer, Guidance, Instructor, and Pydantic-derived
-semantics through the CLI as agreement, mismatch, or abstention diagnostics,
+CPU-only grammar differential corpus and a release-gated
+\texttt{promptabi corpus grammar-conformance} suite with hand-labeled Outlines,
+xgrammar, llguidance, lm-format-enforcer, Guidance, Instructor, and
+provider-native structured-output semantics through the CLI as agreement,
+mismatch, or abstention diagnostics,
 a structured-output parser compatibility checker that replays bounded
 grammar/schema witnesses and declared runtime samples against JSON, JSON Schema,
 XML-ish tool-call, markdown-fence, and custom-delimiter parser models while
@@ -547,10 +549,11 @@ JSON Schema objects, arrays, unions, references, constraints, and
 additional-property policies into a typed tree, compiles that tree into bounded
 grammar IR with parser states and DFA witnesses, and round-trips generated
 witnesses through the real \texttt{jsonschema} validator,
-checks grammar-backend differential fixtures against hand-authored accepted and
-rejected strings for Outlines, xgrammar, llguidance, lm-format-enforcer,
-Guidance, Instructor-style, and Pydantic-derived schemas, abstaining rather than
-overclaiming for fragments outside local replay semantics,
+checks grammar-backend differential and conformance fixtures against hand-authored
+accepted and rejected strings for Outlines, xgrammar, llguidance,
+lm-format-enforcer, Guidance, Instructor-style, Pydantic-derived schemas, and
+provider-native JSON response/tool schemas, abstaining rather than overclaiming
+for fragments outside local replay semantics,
 compares structured-output grammar/schema artifacts with declared application
 parser models for JSON, JSON Schema, XML-ish tool calls, markdown fences, and
 custom delimiters using bounded witnesses and runtime samples, distinguishing
@@ -739,7 +742,7 @@ The repository layout is designed to scale:
 \hline
 \texttt{examples/gallery} & Curated real-world-style configurations that rerun pinned OpenAI-tool, ChatML role-boundary, training/static-contract, RAG-budget, and accepted-risk policy examples with deterministic proof, badge, and risk summaries. \\
 \hline
-\texttt{fixtures} and \texttt{paper\_artifact} & Curated seed corpus, real-world bug reductions, grammar differential cases, labeled structured-schema/tool-calling fixtures, secret-free provider packs, and a generated paper artifact containing fixture hashes, expected tables, solver pins, and regeneration commands. \\
+\texttt{fixtures} and \texttt{paper\_artifact} & Curated seed corpus, real-world bug reductions, grammar differential and backend-conformance suites, labeled structured-schema/tool-calling fixtures, secret-free provider packs, and a generated paper artifact containing fixture hashes, expected tables, solver pins, and regeneration commands. \\
 \hline
 \texttt{benchmarks} and \texttt{promptabi fuzz} & CPU-only benchmark entrypoints plus deterministic mutation fuzzing for tokenizer analysis, symbolic template execution, grammar products, stop checks, SMT contracts, budget modeling, corpus verification, cache reuse, and cross-artifact violation discovery. \\
 \hline

@@ -1,0 +1,142 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "outlines-choices-routing-labels",
+      "backend_family": "outlines",
+      "declared_type": "outlines",
+      "artifact": {
+        "choices": ["approve", "reject", "escalate"]
+      },
+      "accepts": ["approve", "reject", "escalate"],
+      "rejects": ["APPROVE", "approve ", " escalate"]
+    },
+    {
+      "id": "outlines-json-schema-strict-object",
+      "backend_family": "outlines",
+      "declared_type": "outlines",
+      "artifact": {
+        "json_schema": {
+          "type": "object",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": {"enum": ["ok", "error"]}
+          }
+        }
+      },
+      "accepts": ["{\"status\":\"ok\"}", "{\"status\":\"error\"}"],
+      "rejects": ["{\"status\":\"pending\"}", "{\"status\":\"ok\",\"extra\":true}", "status: ok"]
+    },
+    {
+      "id": "xgrammar-finite-tool-call-command",
+      "backend_family": "xgrammar",
+      "declared_type": "xgrammar",
+      "artifact": {
+        "root_rule": "root",
+        "grammar": "root ::= \"call\" space tool ;\nspace ::= \" \" ;\ntool ::= \"refund\" | \"search\" | \"lookup\" ;"
+      },
+      "accepts": ["call refund", "call search", "call lookup"],
+      "rejects": ["call delete", "call  refund", "refund call"]
+    },
+    {
+      "id": "llguidance-regex-ticket-id",
+      "backend_family": "llguidance",
+      "declared_type": "llguidance",
+      "artifact": {
+        "regex": "TICKET-[0-9]{3}"
+      },
+      "accepts": ["TICKET-123", "TICKET-000"],
+      "rejects": ["ticket-123", "TICKET-1234", "TICKET-12"]
+    },
+    {
+      "id": "llguidance-finite-lark-colors",
+      "backend_family": "llguidance",
+      "declared_type": "llguidance",
+      "artifact": {
+        "lark_grammar": "root ::= \"color:\" color ;\ncolor ::= \"red\" | \"blue\" ;"
+      },
+      "accepts": ["color:red", "color:blue"],
+      "rejects": ["color:green", " color:red", "color: red"]
+    },
+    {
+      "id": "lm-format-enforcer-required-action",
+      "backend_family": "lm-format-enforcer",
+      "declared_type": "json-schema",
+      "artifact": {
+        "type": "object",
+        "required": ["action", "urgent"],
+        "additionalProperties": false,
+        "properties": {
+          "action": {"enum": ["route", "close"]},
+          "urgent": {"type": "boolean"}
+        }
+      },
+      "accepts": ["{\"action\":\"route\",\"urgent\":true}", "{\"action\":\"close\",\"urgent\":false}"],
+      "rejects": ["{\"action\":\"delete\",\"urgent\":true}", "{\"action\":\"route\"}", "{\"action\":\"route\",\"urgent\":\"true\"}"]
+    },
+    {
+      "id": "guidance-finite-ebnf-answer",
+      "backend_family": "guidance",
+      "declared_type": "ebnf",
+      "artifact": "root ::= prefix value ;\nprefix ::= \"answer:\" ;\nvalue ::= \"yes\" | \"no\" ;",
+      "accepts": ["answer:yes", "answer:no"],
+      "rejects": ["answer:maybe", " answer:yes", "answer: yes"]
+    },
+    {
+      "id": "instructor-pydantic-required-score",
+      "backend_family": "instructor",
+      "declared_type": "json-schema",
+      "artifact": {
+        "type": "object",
+        "required": ["label", "score"],
+        "additionalProperties": false,
+        "properties": {
+          "label": {"type": "string", "minLength": 1},
+          "score": {"type": "integer", "minimum": 0}
+        }
+      },
+      "accepts": ["{\"label\":\"safe\",\"score\":0}", "{\"label\":\"needs_review\",\"score\":2}"],
+      "rejects": ["{\"label\":\"\",\"score\":0}", "{\"label\":\"safe\",\"score\":-1}", "{\"label\":\"safe\",\"score\":1.5}"]
+    },
+    {
+      "id": "provider-native-openai-json-schema-response-format",
+      "backend_family": "provider-native",
+      "declared_type": "json-schema",
+      "artifact": {
+        "type": "object",
+        "required": ["answer", "confidence"],
+        "additionalProperties": false,
+        "properties": {
+          "answer": {"type": "string", "minLength": 1},
+          "confidence": {"enum": ["low", "medium", "high"]}
+        }
+      },
+      "accepts": ["{\"answer\":\"refund approved\",\"confidence\":\"high\"}", "{\"answer\":\"needs review\",\"confidence\":\"medium\"}"],
+      "rejects": ["{\"answer\":\"\",\"confidence\":\"high\"}", "{\"answer\":\"ok\",\"confidence\":\"certain\"}", "{\"answer\":\"ok\",\"confidence\":\"low\",\"extra\":1}"]
+    },
+    {
+      "id": "provider-native-tool-arguments-schema",
+      "backend_family": "provider-native",
+      "declared_type": "json-schema",
+      "artifact": {
+        "type": "object",
+        "required": ["tool", "arguments"],
+        "additionalProperties": false,
+        "properties": {
+          "tool": {"const": "lookup_order"},
+          "arguments": {
+            "type": "object",
+            "required": ["order_id"],
+            "additionalProperties": false,
+            "properties": {
+              "order_id": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      },
+      "accepts": ["{\"tool\":\"lookup_order\",\"arguments\":{\"order_id\":\"A123\"}}"],
+      "rejects": ["{\"tool\":\"refund_order\",\"arguments\":{\"order_id\":\"A123\"}}", "{\"tool\":\"lookup_order\",\"arguments\":{}}", "{\"tool\":\"lookup_order\",\"arguments\":{\"order_id\":\"\"}}"]
+    }
+  ]
+}

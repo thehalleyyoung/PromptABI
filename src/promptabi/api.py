@@ -88,6 +88,12 @@ from .evaluation_reproducibility import (
     render_evaluation_reproducibility_json,
     render_evaluation_reproducibility_text,
 )
+from .grammar_conformance import (
+    GrammarConformanceReport,
+    build_grammar_conformance_report,
+    render_grammar_conformance_json,
+    render_grammar_conformance_text,
+)
 from .bug_reports import BugReport, generate_bug_report, render_bug_report
 from .bundles import (
     VerificationBundle,
@@ -319,6 +325,23 @@ def generate_adversarial_cases(*, output_format: str | None = None) -> Adversari
         return render_adversarial_corpus_json(report)
     if output_format == "text":
         return render_adversarial_corpus_text(report)
+    raise ValueError("output_format must be 'json' or 'text'")
+
+
+def grammar_conformance_suite(
+    path: str | Path | None = None,
+    *,
+    output_format: str | None = None,
+) -> GrammarConformanceReport | str:
+    """Replay the maintained grammar-backend conformance suite."""
+
+    report = build_grammar_conformance_report(path)
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_grammar_conformance_json(report)
+    if output_format == "text":
+        return render_grammar_conformance_text(report)
     raise ValueError("output_format must be 'json' or 'text'")
 
 
@@ -854,11 +877,29 @@ def evaluation_reproducibility(
 def verify_corpora(
     *,
     thresholds: CorpusVerificationThresholds | None = None,
+    seed_root: str | Path | None = None,
+    structured_schema_root: str | Path | None = None,
+    provider_fixture_root: str | Path | None = None,
+    grammar_conformance_suite_path: str | Path | None = None,
+    real_bug_benchmark_path: str | Path | None = None,
+    evaluation_corpus_path: str | Path | None = None,
+    evaluation_fixture_pack_path: str | Path | None = None,
+    smt_benchmark_path: str | Path | None = None,
     output_format: str | None = None,
 ) -> CorpusVerificationReport | str:
     """Run the maintainer release gate across all maintained corpora."""
 
-    report = run_corpus_verification(thresholds=thresholds)
+    report = run_corpus_verification(
+        seed_root=seed_root,
+        structured_schema_root=structured_schema_root,
+        provider_fixture_root=provider_fixture_root,
+        grammar_conformance_suite_path=grammar_conformance_suite_path,
+        real_bug_benchmark_path=real_bug_benchmark_path,
+        evaluation_corpus_path=evaluation_corpus_path,
+        evaluation_fixture_pack_path=evaluation_fixture_pack_path,
+        smt_benchmark_path=smt_benchmark_path,
+        thresholds=thresholds,
+    )
     if output_format is None:
         return report
     if output_format == "json":

@@ -158,6 +158,13 @@ from .first_party_plugins import create_first_party_plugin_registry, render_plug
 from .formal import SolverReplayFile, render_solver_replay_json, render_solver_replay_text
 from .github_action import GitHubActionError, run_github_action
 from .gallery import GalleryError, build_gallery, render_gallery_json, render_gallery_text
+from .grammar_conformance import (
+    GrammarConformanceError,
+    build_grammar_conformance_report,
+    render_grammar_conformance_json,
+    render_grammar_conformance_text,
+    write_grammar_conformance_manifest,
+)
 from .incremental import (
     IncrementalVerificationError,
     explicit_changed_paths,
@@ -1110,6 +1117,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: json)",
     )
     adversarial_corpus.add_argument("--output", help="write adversarial corpus manifest to this path instead of stdout")
+    grammar_conformance = corpus_subparsers.add_parser(
+        "grammar-conformance",
+        help="replay maintained grammar-backend conformance suites",
+    )
+    grammar_conformance.add_argument(
+        "--suite",
+        help="grammar conformance suite JSON path (default: repository fixtures/grammar_conformance/suite.json)",
+    )
+    grammar_conformance.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="json",
+        help="output format (default: json)",
+    )
+    grammar_conformance.add_argument("--output", help="write grammar conformance manifest to this path instead of stdout")
     evaluation = corpus_subparsers.add_parser(
         "evaluation",
         help="run labeled-corpus evaluation metrics over real PromptABI analyzers",
@@ -1199,6 +1221,10 @@ def build_parser() -> argparse.ArgumentParser:
     corpus_verify.add_argument(
         "--provider-fixture-root",
         help="provider fixture pack root (default: repository fixtures/provider_fixture_packs)",
+    )
+    corpus_verify.add_argument(
+        "--grammar-conformance-suite",
+        help="grammar conformance suite JSON path (default: repository fixtures/grammar_conformance/suite.json)",
     )
     corpus_verify.add_argument(
         "--real-bug-benchmark",
@@ -3164,6 +3190,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         return 0 if report.all_cases_passed else 1
 
+    if args.command == "corpus" and args.corpus_command == "grammar-conformance":
+        try:
+            report = build_grammar_conformance_report(args.suite)
+            output = (
+                render_grammar_conformance_json(report)
+                if args.format == "json"
+                else render_grammar_conformance_text(report)
+            )
+            if args.output:
+                if args.format == "json":
+                    write_grammar_conformance_manifest(args.output, suite_path=args.suite)
+                else:
+                    Path(args.output).write_text(output, encoding="utf-8")
+                print(f"wrote grammar conformance manifest: {args.output} ({report.case_count} cases)")
+            else:
+                print(output, end="")
+        except (GrammarConformanceError, OSError, ValueError) as exc:
+            print(f"promptabi: cannot build grammar conformance suite: {exc}", file=sys.stderr)
+            return 2
+        return 0 if report.all_cases_passed else 1
+
     if args.command == "corpus" and args.corpus_command == "verify":
         try:
             thresholds = CorpusVerificationThresholds(
@@ -3180,6 +3227,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 seed_root=args.seed_root,
                 structured_schema_root=args.structured_schema_root,
                 provider_fixture_root=args.provider_fixture_root,
+                grammar_conformance_suite_path=args.grammar_conformance_suite,
                 real_bug_benchmark_path=args.real_bug_benchmark,
                 evaluation_corpus_path=args.evaluation_corpus,
                 evaluation_fixture_pack_path=args.evaluation_fixture_pack,

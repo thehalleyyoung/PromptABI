@@ -290,7 +290,7 @@ def _llguidance_accepts(artifact: Any, sample: str) -> tuple[bool | None, str | 
         return re.fullmatch(artifact["regex"], sample) is not None, None
     if isinstance(artifact.get("lark_grammar"), str) or isinstance(artifact.get("grammar"), str):
         ingestion = _ingest_artifact(artifact, declared_type="llguidance")
-        language, reason = _finite_rule_language(ingestion)
+        language, reason = _finite_rule_language(_rules_with_start_alias(ingestion))
         if language is None:
             return None, reason
         return sample in language, None
@@ -299,18 +299,102 @@ def _llguidance_accepts(artifact: Any, sample: str) -> tuple[bool | None, str | 
 
 def _json_schema_accepts(schema: dict[str, Any], sample: str) -> tuple[bool | None, str | None]:
     try:
-        import jsonschema  # type: ignore[import-not-found]
-    except ImportError:
-        return None, "jsonschema is not installed, so JSON Schema semantic replay abstained"
-    try:
         instance = json.loads(sample)
     except json.JSONDecodeError:
         return False, None
+    try:
+        import jsonschema  # type: ignore[import-not-found]
+    except ImportError:
+        return _json_schema_accepts_supported_subset(schema, instance), None
     try:
         jsonschema.Draft202012Validator(schema).validate(instance)
     except jsonschema.ValidationError:
         return False, None
     return True, None
+
+
+def _json_schema_accepts_supported_subset(schema: dict[str, Any], instance: Any) -> bool:
+    """Evaluate the small JSON Schema fragment used by offline conformance fixtures."""
+
+    if "oneOf" in schema:
+        options = schema["oneOf"]
+        if not isinstance(options, list):
+            return False
+        return sum(
+            1
+            for option in options
+            if isinstance(option, dict) and _json_schema_accepts_supported_subset(option, instance)
+        ) == 1
+    if "enum" in schema:
+        enum_values = schema["enum"]
+        return isinstance(enum_values, list) and instance in enum_values
+    if "const" in schema and instance != schema["const"]:
+        return False
+
+    schema_type = schema.get("type")
+    if isinstance(schema_type, list):
+        return any(
+            _json_schema_accepts_supported_subset({**schema, "type": item}, instance)
+            for item in schema_type
+            if isinstance(item, str)
+        )
+    if isinstance(schema_type, str) and not _matches_json_type(instance, schema_type):
+        return False
+
+    if schema_type == "object" or isinstance(schema.get("properties"), dict):
+        if not isinstance(instance, dict):
+            return False
+        required = schema.get("required", [])
+        if not isinstance(required, list) or not all(isinstance(item, str) for item in required):
+            return False
+        if any(key not in instance for key in required):
+            return False
+        properties = schema.get("properties", {})
+        if not isinstance(properties, dict):
+            return False
+        if schema.get("additionalProperties") is False and any(key not in properties for key in instance):
+            return False
+        for key, subschema in properties.items():
+            if key in instance and isinstance(subschema, dict):
+                if not _json_schema_accepts_supported_subset(subschema, instance[key]):
+                    return False
+        return True
+
+    if schema_type == "array":
+        if not isinstance(instance, list):
+            return False
+        items = schema.get("items")
+        if isinstance(items, dict):
+            return all(_json_schema_accepts_supported_subset(items, item) for item in instance)
+        return True
+
+    if schema_type == "string":
+        min_length = schema.get("minLength")
+        if isinstance(min_length, int) and len(instance) < min_length:
+            return False
+    if schema_type in {"integer", "number"}:
+        minimum = schema.get("minimum")
+        if isinstance(minimum, (int, float)) and instance < minimum:
+            return False
+    return True
+
+
+def _matches_json_type(instance: Any, schema_type: str) -> bool:
+    if schema_type == "object":
+        return isinstance(instance, dict)
+    if schema_type == "array":
+        return isinstance(instance, list)
+    if schema_type == "string":
+        return isinstance(instance, str)
+    if schema_type == "integer":
+        return isinstance(instance, int) and not isinstance(instance, bool)
+    if schema_type == "number":
+        return isinstance(instance, (int, float)) and not isinstance(instance, bool)
+    if schema_type == "boolean":
+        return isinstance(instance, bool)
+    if schema_type == "null":
+        return instance is None
+    return False
 
 
 _LITERAL_OR_REF_RE = re.compile(r'"([^"\\]*(?:\\.[^"\\]*)*)"|\'([^\'\\]*(?:\\.[^\'\\]*)*)\'|([A-Za-z_][A-Za-z0-9_-]*)')
@@ -356,6 +440,28 @@ def _finite_rule_language(
     if language is None:
         return None, "grammar fixture uses recursion, regex terminals, undefined references, or unsupported operators"
     return language, None
+
+
+def _rules_with_start_alias(ingestion: GrammarIngestionResult) -> GrammarIngestionResult:
+    if not ingestion.rules:
+        return ingestion
+    rule_names = {rule.name for rule in ingestion.rules}
+    if ingestion.start_symbol is not None and ingestion.start_symbol in rule_names:
+        return ingestion
+    first_rule = ingestion.rules[0]
+    if first_rule.name in {"start", "root"}:
+        return GrammarIngestionResult(
+            dialect=ingestion.dialect,
+            declared_type=ingestion.declared_type,
+            start_symbol=first_rule.name,
+            rules=ingestion.rules,
+            terminals=ingestion.terminals,
+            references=ingestion.references,
+            features=ingestion.features,
+            issues=ingestion.issues,
+            source_spans=ingestion.source_spans,
+        )
+    return ingestion
 
 
 def _split_top_level_alternatives(expression: str) -> tuple[str, ...]:
