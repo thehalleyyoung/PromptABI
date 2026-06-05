@@ -63,7 +63,8 @@ The same local verifier covers:
 | **Enterprise posture** | org policy packs for required checks, severity, supported fragments, solver caps, privacy rules, approved fixtures, and no-network mirrors |
 | **Training/eval contracts** | target-role alignment, benchmark-tokenizer drift, eval-harness prompt/few-shot/multi-turn/grading-parser/stop/private-field/cross-provider compatibility, proof-carrying streaming shards, data-loader adapters, synthetic-generator preflight, invalid roles/tools/JSON/stops, packing, loss masks, leakage, drift, RLHF/DPO defects, and real-bug benchmarks |
 
-Under the hood, PromptABI combines deterministic automata, finite-state
+Under the hood, PromptABI combines a declarative static contract language,
+deterministic automata, finite-state
 transducers, executable specs for witnesses/products/SMT outcomes, differential
 checks against real tokenizer/template libraries, and a Z3-backed finite
 contract layer over booleans, enums, integer ranges, membership, lengths, and

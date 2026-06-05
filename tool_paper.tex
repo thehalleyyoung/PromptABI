@@ -38,7 +38,8 @@ validated against real Hugging Face \texttt{tokenizers},
 \texttt{tiktoken}, and SentencePiece libraries, deterministic finite automata,
 finite-state transducers with composition and projection, executable
 specifications that replay witnesses, bounded product-language laws, and SMT
-proof objects, a finite-contract solver with compressed lazy product witnesses,
+proof objects, a declarative static contract language lowered to a
+finite-contract solver with compressed lazy product witnesses,
 incremental DFA minimization, indexed transducer composition/projection, solver
 timeouts, constraint-sliced finite enumeration, and a deterministic solver-query
 cache keyed by normalized Z3 formulas, artifact hashes, supported-fragment
@@ -1916,7 +1917,7 @@ Grammar emptiness & A real structured-schema fixture compiled to the bounded JSO
 \hline
 Stop checks & Stop-tokenizer alignment plus bounded stop-overreachability over structural JSON, markdown, XML-like tool-call, and provider-envelope regions. \\
 \hline
-Z3 static contracts & Cross-artifact finite obligations over prompt budgets, stop/control-token exclusion, and related constraints solved through the existing SMT layer or finite fallback. \\
+Z3 static contracts & Declarative interface rules for allowed roles, required regions, forbidden delimiters, schema obligations, stop policies, and finite budget invariants lowered to the existing SMT layer or finite fallback. \\
 \hline
 Budget checks & Segment accounting, tokenizer-derived content counts, vLLM-style reservations, truncation simulation, required-token overflow, and finding counts. \\
 \hline

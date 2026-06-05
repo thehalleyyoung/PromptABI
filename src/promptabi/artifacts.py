@@ -26,6 +26,7 @@ class ArtifactKind(StrEnum):
     TRAINING_MANIFEST = "training-manifest"
     EVALUATION_HARNESS = "evaluation-harness"
     PROMPT_PACK = "prompt-pack"
+    STATIC_CONTRACT = "static-contract"
 
 
 class TruncationStrategy(StrEnum):
@@ -1238,6 +1239,163 @@ class BaseArtifact:
 
 
 @dataclass(frozen=True, slots=True)
+class StaticContractSchemaObligation:
+    """Required JSON-object properties declared by a static contract rule."""
+
+    schema: str
+    requires: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        _require_non_empty("static contract schema obligation schema", self.schema)
+        object.__setattr__(
+            self,
+            "requires",
+            _unique_strings(self.requires, field_name="static contract schema obligation requires"),
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {"schema": self.schema}
+        if self.requires:
+            data["requires"] = list(self.requires)
+        return data
+
+
+@dataclass(frozen=True, slots=True)
+class StaticContractStopPolicy:
+    """Stop-policy obligation declared by a static contract rule."""
+
+    name: str
+    stops: tuple[str, ...] = ()
+    forbid_inside: str | None = None
+
+    def __post_init__(self) -> None:
+        _require_non_empty("static contract stop policy name", self.name)
+        object.__setattr__(self, "stops", _unique_strings(self.stops, field_name="static contract stop policy stops"))
+        _optional_non_empty("static contract stop policy forbid_inside", self.forbid_inside)
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {"name": self.name}
+        if self.stops:
+            data["stops"] = list(self.stops)
+        if self.forbid_inside is not None:
+            data["forbid_inside"] = self.forbid_inside
+        return data
+
+
+@dataclass(frozen=True, slots=True)
+class StaticContractInvariant:
+    """Finite metric invariant declared by a static contract rule."""
+
+    name: str
+    left: str
+    op: str
+    right: str
+
+    def __post_init__(self) -> None:
+        _require_non_empty("static contract invariant name", self.name)
+        _require_non_empty("static contract invariant left", self.left)
+        _require_non_empty("static contract invariant op", self.op)
+        _require_non_empty("static contract invariant right", self.right)
+        if self.op not in {"<=", "<", ">=", ">", "==", "!="}:
+            raise ValueError("static contract invariant op must be one of <=, <, >=, >, ==, !=")
+
+    def to_dict(self) -> dict[str, object]:
+        return {"name": self.name, "left": self.left, "op": self.op, "right": self.right}
+
+
+@dataclass(frozen=True, slots=True)
+class StaticContractRule:
+    """One human-authored static interface rule."""
+
+    name: str
+    rule_type: str = "interface"
+    severity: str = "error"
+    description: str | None = None
+    applies_to: tuple[str, ...] = ()
+    allowed_roles: tuple[str, ...] = ()
+    required_regions: tuple[str, ...] = ()
+    forbidden_delimiters: tuple[str, ...] = ()
+    schema_obligations: tuple[StaticContractSchemaObligation, ...] = ()
+    stop_policies: tuple[StaticContractStopPolicy, ...] = ()
+    invariants: tuple[StaticContractInvariant, ...] = ()
+
+    def __post_init__(self) -> None:
+        _require_non_empty("static contract rule name", self.name)
+        _require_non_empty("static contract rule type", self.rule_type)
+        if self.severity not in {"error", "warning", "info"}:
+            raise ValueError("static contract rule severity must be error, warning, or info")
+        _optional_non_empty("static contract rule description", self.description)
+        object.__setattr__(self, "applies_to", _unique_strings(self.applies_to, field_name="static contract applies_to"))
+        object.__setattr__(self, "allowed_roles", _unique_strings(self.allowed_roles, field_name="static contract allowed_roles"))
+        object.__setattr__(self, "required_regions", _unique_strings(self.required_regions, field_name="static contract required_regions"))
+        object.__setattr__(
+            self,
+            "forbidden_delimiters",
+            _unique_strings(self.forbidden_delimiters, field_name="static contract forbidden_delimiters"),
+        )
+        schemas = tuple(sorted(self.schema_obligations, key=lambda item: item.schema))
+        if len({item.schema for item in schemas}) != len(schemas):
+            raise ValueError("static contract schema obligation names must be unique")
+        object.__setattr__(self, "schema_obligations", schemas)
+        stops = tuple(sorted(self.stop_policies, key=lambda item: item.name))
+        if len({item.name for item in stops}) != len(stops):
+            raise ValueError("static contract stop policy names must be unique")
+        object.__setattr__(self, "stop_policies", stops)
+        invariants = tuple(sorted(self.invariants, key=lambda item: item.name))
+        if len({item.name for item in invariants}) != len(invariants):
+            raise ValueError("static contract invariant names must be unique")
+        object.__setattr__(self, "invariants", invariants)
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {
+            "name": self.name,
+            "type": self.rule_type,
+            "severity": self.severity,
+        }
+        if self.description is not None:
+            data["description"] = self.description
+        if self.applies_to:
+            data["applies_to"] = list(self.applies_to)
+        if self.allowed_roles:
+            data["allowed_roles"] = list(self.allowed_roles)
+        if self.required_regions:
+            data["required_regions"] = list(self.required_regions)
+        if self.forbidden_delimiters:
+            data["forbidden_delimiters"] = list(self.forbidden_delimiters)
+        if self.schema_obligations:
+            data["schema_obligations"] = [item.to_dict() for item in self.schema_obligations]
+        if self.stop_policies:
+            data["stop_policies"] = [item.to_dict() for item in self.stop_policies]
+        if self.invariants:
+            data["invariants"] = [item.to_dict() for item in self.invariants]
+        return data
+
+
+@dataclass(frozen=True, slots=True)
+class StaticContractArtifact(BaseArtifact):
+    """Declarative static contract language for prompt-interface obligations."""
+
+    contract_version: str = "promptabi.contract/v1"
+    rules: tuple[StaticContractRule, ...] = ()
+
+    def __post_init__(self) -> None:
+        BaseArtifact.__post_init__(self)
+        _require_kind(self.kind, ArtifactKind.STATIC_CONTRACT)
+        if self.contract_version != "promptabi.contract/v1":
+            raise ValueError("static contract contract_version must be 'promptabi.contract/v1'")
+        rules = tuple(sorted(self.rules, key=lambda rule: rule.name))
+        if len({rule.name for rule in rules}) != len(rules):
+            raise ValueError("static contract rule names must be unique")
+        object.__setattr__(self, "rules", rules)
+
+    def to_dict(self) -> dict[str, object]:
+        data = BaseArtifact.to_dict(self)
+        data["contract_version"] = self.contract_version
+        data["rules"] = [rule.to_dict() for rule in self.rules]
+        return data
+
+
+@dataclass(frozen=True, slots=True)
 class TokenizerArtifact(BaseArtifact):
     family: str | None = None
     added_tokens: tuple[str, ...] = ()
@@ -1771,6 +1929,7 @@ Artifact = (
     | TrainingManifestArtifact
     | EvaluationHarnessArtifact
     | PromptPackArtifact
+    | StaticContractArtifact
 )
 
 
@@ -1975,6 +2134,12 @@ def artifact_from_config(
             tool_schemas=_prompt_pack_tool_schemas(spec),
             stop_policies=_prompt_pack_stop_policies(spec),
             supported_model_families=_tuple_of_str(spec, "supported_model_families"),
+        )
+    if kind is ArtifactKind.STATIC_CONTRACT:
+        return StaticContractArtifact(
+            **common,
+            contract_version=_str(spec, "contract_version", default="promptabi.contract/v1"),
+            rules=_static_contract_rules(spec),
         )
     raise AssertionError(f"unhandled artifact kind: {kind}")
 
@@ -2414,6 +2579,94 @@ def _prompt_pack_stop_policies(spec: dict[str, Any]) -> tuple[PromptPackStopPoli
             )
         )
     return tuple(policies)
+
+
+def _static_contract_rules(spec: dict[str, Any]) -> tuple[StaticContractRule, ...]:
+    raw_rules = spec.get("rules", [])
+    if not isinstance(raw_rules, list):
+        raise ValueError("artifact field 'rules' must be a list")
+    rules: list[StaticContractRule] = []
+    for item in raw_rules:
+        if not isinstance(item, dict):
+            raise ValueError("static contract rules must be objects")
+        rules.append(
+            StaticContractRule(
+                name=_str(item, "name"),
+                rule_type=_static_contract_rule_type(item),
+                severity=_str(item, "severity", default="error"),
+                description=_optional_str(item, "description"),
+                applies_to=_tuple_of_str(item, "applies_to"),
+                allowed_roles=_tuple_of_str(item, "allowed_roles"),
+                required_regions=_tuple_of_str(item, "required_regions"),
+                forbidden_delimiters=_tuple_of_str(item, "forbidden_delimiters"),
+                schema_obligations=_static_contract_schema_obligations(item),
+                stop_policies=_static_contract_stop_policies(item),
+                invariants=_static_contract_invariants(item),
+            )
+        )
+    return tuple(rules)
+
+
+def _static_contract_schema_obligations(spec: dict[str, Any]) -> tuple[StaticContractSchemaObligation, ...]:
+    raw_obligations = spec.get("schema_obligations", [])
+    if not isinstance(raw_obligations, list):
+        raise ValueError("artifact field 'schema_obligations' must be a list")
+    obligations: list[StaticContractSchemaObligation] = []
+    for item in raw_obligations:
+        if not isinstance(item, dict):
+            raise ValueError("static contract schema obligations must be objects")
+        obligations.append(
+            StaticContractSchemaObligation(
+                schema=_str(item, "schema"),
+                requires=_tuple_of_str(item, "requires"),
+            )
+        )
+    return tuple(obligations)
+
+
+def _static_contract_rule_type(spec: dict[str, Any]) -> str:
+    if "rule_type" in spec:
+        return _str(spec, "rule_type")
+    if "type" in spec:
+        return _str(spec, "type")
+    return "interface"
+
+
+def _static_contract_stop_policies(spec: dict[str, Any]) -> tuple[StaticContractStopPolicy, ...]:
+    raw_policies = spec.get("stop_policies", [])
+    if not isinstance(raw_policies, list):
+        raise ValueError("artifact field 'stop_policies' must be a list")
+    policies: list[StaticContractStopPolicy] = []
+    for item in raw_policies:
+        if not isinstance(item, dict):
+            raise ValueError("static contract stop policies must be objects")
+        policies.append(
+            StaticContractStopPolicy(
+                name=_str(item, "name"),
+                stops=_tuple_of_str(item, "stops"),
+                forbid_inside=_optional_str(item, "forbid_inside"),
+            )
+        )
+    return tuple(policies)
+
+
+def _static_contract_invariants(spec: dict[str, Any]) -> tuple[StaticContractInvariant, ...]:
+    raw_invariants = spec.get("invariants", [])
+    if not isinstance(raw_invariants, list):
+        raise ValueError("artifact field 'invariants' must be a list")
+    invariants: list[StaticContractInvariant] = []
+    for item in raw_invariants:
+        if not isinstance(item, dict):
+            raise ValueError("static contract invariants must be objects")
+        invariants.append(
+            StaticContractInvariant(
+                name=_str(item, "name"),
+                left=_str(item, "left"),
+                op=_str(item, "op"),
+                right=_str(item, "right"),
+            )
+        )
+    return tuple(invariants)
 
 
 def _evaluation_few_shot_examples(spec: dict[str, Any]) -> tuple[EvaluationFewShotExample, ...]:

@@ -22,6 +22,11 @@ from promptabi.artifacts import (
     SchemaArtifact,
     SpecialToken,
     SpecialTokenMapArtifact,
+    StaticContractArtifact,
+    StaticContractInvariant,
+    StaticContractRule,
+    StaticContractSchemaObligation,
+    StaticContractStopPolicy,
     StopPolicyArtifact,
     TokenizerArtifact,
     ToolDefinitionArtifact,
@@ -156,6 +161,23 @@ def test_core_artifact_model_serializes_every_kind_deterministically() -> None:
             stop_policies=(PromptPackStopPolicy("tool-json", stop_sequences=("</tool_call>",)),),
             supported_model_families=("openai-compatible",),
         ),
+        StaticContractArtifact(
+            kind=ArtifactKind.STATIC_CONTRACT,
+            name="contract",
+            location=location,
+            rules=(
+                StaticContractRule(
+                    name="interface",
+                    rule_type="llm-app",
+                    allowed_roles=("system", "user", "assistant"),
+                    required_regions=("system-policy",),
+                    forbidden_delimiters=("<|im_start|>",),
+                    schema_obligations=(StaticContractSchemaObligation("schema", requires=("answer",)),),
+                    stop_policies=(StaticContractStopPolicy("json-stop", stops=("</answer>",)),),
+                    invariants=(StaticContractInvariant("budget", "required_prompt_tokens", "<=", "input_budget_tokens"),),
+                ),
+            ),
+        ),
     )
 
     bundle = ArtifactBundle(artifacts)
@@ -237,6 +259,28 @@ def test_config_artifact_parser_accepts_the_same_kinds_as_the_model(tmp_path: Pa
             "tool_schemas": [{"name": "refund_user", "provider": "openai"}],
             "stop_policies": [{"name": "tool-json", "stop_sequences": ["</tool_call>"]}],
             "supported_model_families": ["openai-compatible"],
+        },
+        ArtifactKind.STATIC_CONTRACT: {
+            "contract_version": "promptabi.contract/v1",
+            "rules": [
+                {
+                    "name": "interface",
+                    "type": "llm-app",
+                    "allowed_roles": ["system", "user", "assistant"],
+                    "required_regions": ["system-policy"],
+                    "forbidden_delimiters": ["<|im_start|>"],
+                    "schema_obligations": [{"schema": "schema", "requires": ["answer"]}],
+                    "stop_policies": [{"name": "json-stop", "stops": ["</answer>"]}],
+                    "invariants": [
+                        {
+                            "name": "budget",
+                            "left": "required_prompt_tokens",
+                            "op": "<=",
+                            "right": "input_budget_tokens",
+                        }
+                    ],
+                }
+            ],
         },
     }
 

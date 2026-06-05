@@ -185,6 +185,13 @@ class JsonSchemaNormalizationResult:
     def required_property_count(self) -> int:
         return sum(len(node.required) for node in self.root.walk())
 
+    @property
+    def required_property_names(self) -> tuple[str, ...]:
+        names: set[str] = set()
+        for node in self.root.walk():
+            names.update(node.required)
+        return tuple(sorted(names))
+
     def to_metadata(self) -> tuple[tuple[str, object], ...]:
         return (
             ("features", self.features),
@@ -194,6 +201,7 @@ class JsonSchemaNormalizationResult:
             ("node_count", self.node_count),
             ("property_paths", self.property_paths),
             ("required_property_count", self.required_property_count),
+            ("required_property_names", self.required_property_names),
             ("root_kind", self.root.kind.value),
             ("supported_fragment", self.supported_fragment),
         )

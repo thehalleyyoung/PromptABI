@@ -20,6 +20,7 @@ from .artifacts import (
     PromptSegmentArtifact,
     PromptPackArtifact,
     SchemaArtifact,
+    StaticContractArtifact,
     StopPolicyArtifact,
     ToolDefinitionArtifact,
     TrainingManifestArtifact,
@@ -210,6 +211,8 @@ class ArtifactLoader:
             return self._load_evaluation_harness(artifact, path)
         if artifact.kind is ArtifactKind.PROMPT_PACK:
             return self._load_prompt_pack(artifact, path)
+        if artifact.kind is ArtifactKind.STATIC_CONTRACT:
+            return self._load_static_contract(artifact, path)
         if artifact.kind is ArtifactKind.PROVIDER_CONFIG:
             return self._load_provider_snapshot(artifact, path)
         return self._load_file(artifact, path, source_type="local-file")
@@ -831,6 +834,69 @@ class ArtifactLoader:
                 ("stop_policy_count", stop_count),
             ),
             source_spans=_prompt_pack_source_spans(source_map, parsed_artifact) or loaded.source_spans,
+            warnings=loaded.warnings,
+        )
+
+    def _load_static_contract(self, artifact: Artifact, path: Path) -> LoadedArtifact:
+        if path.suffix.lower() != ".json":
+            return self._load_file(artifact, path, source_type="static-contract-file")
+        try:
+            text = path.read_text(encoding="utf-8")
+            raw = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"static-contract artifact '{artifact.name}' is not valid JSON",
+                suggestion="Store static contracts as deterministic JSON objects with contract_version and rules.",
+                steps=(("parse static contract JSON", str(path), exc.msg),),
+                span=SourceSpan(path=str(path), start_line=exc.lineno, start_column=exc.colno),
+            ) from exc
+        if not isinstance(raw, dict):
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"static-contract artifact '{artifact.name}' must be a JSON object",
+                suggestion="Use an object with contract_version='promptabi.contract/v1' and rules.",
+                steps=(("parse static contract root", str(path), type(raw).__name__),),
+            )
+        try:
+            source_map = build_json_source_map(text, path)
+            parsed = artifact_from_config(
+                artifact.name,
+                {**raw, "kind": ArtifactKind.STATIC_CONTRACT.value, "path": str(path)},
+                base_dir=Path("."),
+            )
+        except ValueError as exc:
+            raise ArtifactLoadError(
+                rule_id="artifact-load-failed",
+                message=f"static-contract artifact '{artifact.name}' could not be parsed",
+                suggestion="Declare rules with allowed_roles, required_regions, forbidden_delimiters, schema_obligations, stop_policies, and invariants in the supported contract language.",
+                steps=(("parse static contract fields", str(path), str(exc)),),
+            ) from exc
+        loaded = self._load_file(artifact, path, source_type="static-contract")
+        parsed_artifact = artifact
+        if isinstance(artifact, StaticContractArtifact) and isinstance(parsed, StaticContractArtifact):
+            parsed_artifact = replace(
+                parsed,
+                location=artifact.location,
+                provenance=artifact.provenance,
+                metadata=_merge_metadata(artifact.metadata, parsed.metadata),
+                source_span=artifact.source_span,
+            )
+        rule_count = len(parsed_artifact.rules) if isinstance(parsed_artifact, StaticContractArtifact) else 0
+        invariant_count = (
+            sum(len(rule.invariants) for rule in parsed_artifact.rules)
+            if isinstance(parsed_artifact, StaticContractArtifact)
+            else 0
+        )
+        return LoadedArtifact(
+            artifact=parsed_artifact,
+            source_type="static-contract",
+            pinned=loaded.pinned,
+            resolved=loaded.resolved,
+            actual_sha256=loaded.actual_sha256,
+            size_bytes=loaded.size_bytes,
+            metadata=(("rule_count", rule_count), ("invariant_count", invariant_count)),
+            source_spans=source_map.prefixed(()) or loaded.source_spans,
             warnings=loaded.warnings,
         )
 

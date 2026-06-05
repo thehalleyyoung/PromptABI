@@ -8,9 +8,14 @@ from .artifacts import (
     ArtifactKind,
     ChatTemplateArtifact,
     FrameworkTruncationConfigArtifact,
+    PromptPackArtifact,
     PreferencePairContract,
     PromptSegmentArtifact,
     SpecialTokenMapArtifact,
+    SchemaArtifact,
+    StaticContractArtifact,
+    StaticContractInvariant,
+    StaticContractRule,
     StopPolicyArtifact,
     TokenizerArtifact,
     ToolDefinitionArtifact,
@@ -23,10 +28,13 @@ from .formal import (
     Contains,
     EnumDomain,
     Eq,
+    Ge,
     FiniteContractProblem,
     Gt,
     InSet,
     IntRangeDomain,
+    Le,
+    Lt,
     NamedConstraint,
     Ne,
     Not,
@@ -88,6 +96,9 @@ def analyze_static_contracts(
     tokenizers = tuple(artifact for artifact in artifacts if isinstance(artifact, TokenizerArtifact))
     tools = tuple(artifact for artifact in artifacts if isinstance(artifact, ToolDefinitionArtifact))
     templates = tuple(artifact for artifact in artifacts if isinstance(artifact, ChatTemplateArtifact))
+    schemas = tuple(artifact for artifact in artifacts if isinstance(artifact, SchemaArtifact))
+    prompt_packs = tuple(artifact for artifact in artifacts if isinstance(artifact, PromptPackArtifact))
+    static_contracts = tuple(artifact for artifact in artifacts if isinstance(artifact, StaticContractArtifact))
     training_manifests = tuple(
         artifact for artifact in artifacts
         if isinstance(artifact, TrainingManifestArtifact)
@@ -112,6 +123,21 @@ def analyze_static_contracts(
     findings.extend(_training_source_leakage_obligation(training_manifests, prefer_z3=prefer_z3))
     findings.extend(_training_stage_consistency_obligation(training_manifests, prefer_z3=prefer_z3))
     findings.extend(_preference_pair_contract_obligation(training_manifests, prefer_z3=prefer_z3))
+    findings.extend(
+        _explicit_static_contract_obligations(
+            config,
+            static_contracts,
+            loaded_artifacts,
+            prompt_segments,
+            truncation_configs,
+            templates,
+            schemas,
+            stop_policies,
+            training_manifests,
+            prompt_packs,
+            prefer_z3=prefer_z3,
+        )
+    )
 
     if not findings:
         findings.append(
@@ -1065,6 +1091,474 @@ def _preference_pair_contract_obligation(
             artifacts=artifacts,
         ),
     )
+
+
+def _explicit_static_contract_obligations(
+    config: VerificationConfig,
+    contracts: tuple[StaticContractArtifact, ...],
+    loaded_artifacts: tuple[LoadedArtifact, ...],
+    prompt_segments: tuple[PromptSegmentArtifact, ...],
+    truncation_configs: tuple[FrameworkTruncationConfigArtifact, ...],
+    templates: tuple[ChatTemplateArtifact, ...],
+    schemas: tuple[SchemaArtifact, ...],
+    stop_policies: tuple[StopPolicyArtifact, ...],
+    training_manifests: tuple[TrainingManifestArtifact, ...],
+    prompt_packs: tuple[PromptPackArtifact, ...],
+    *,
+    prefer_z3: bool,
+) -> tuple[StaticContractFinding, ...]:
+    findings: list[StaticContractFinding] = []
+    for contract in contracts:
+        for rule in contract.rules:
+            findings.extend(_explicit_allowed_roles_obligation(contract, rule, prompt_segments, templates, training_manifests, prefer_z3=prefer_z3))
+            findings.extend(_explicit_required_regions_obligation(contract, rule, prompt_segments, prompt_packs, prefer_z3=prefer_z3))
+            findings.extend(_explicit_forbidden_delimiters_obligation(contract, rule, prompt_segments, prefer_z3=prefer_z3))
+            findings.extend(_explicit_schema_obligation(contract, rule, loaded_artifacts, schemas, prefer_z3=prefer_z3))
+            findings.extend(_explicit_stop_policy_obligation(contract, rule, stop_policies, prefer_z3=prefer_z3))
+            findings.extend(_explicit_invariant_obligation(contract, rule, config, prompt_segments, truncation_configs, stop_policies, prefer_z3=prefer_z3))
+    return tuple(findings)
+
+
+def _explicit_allowed_roles_obligation(
+    contract: StaticContractArtifact,
+    rule: StaticContractRule,
+    prompt_segments: tuple[PromptSegmentArtifact, ...],
+    templates: tuple[ChatTemplateArtifact, ...],
+    training_manifests: tuple[TrainingManifestArtifact, ...],
+    *,
+    prefer_z3: bool,
+) -> tuple[StaticContractFinding, ...]:
+    if not rule.allowed_roles:
+        return ()
+    observed_roles = tuple(
+        sorted(
+            {
+                role
+                for template in templates
+                for role in template.roles
+            }.union(
+                {
+                    segment.role
+                    for artifact in prompt_segments
+                    for segment in artifact.segments
+                    if segment.role is not None
+                },
+                {role for manifest in training_manifests for role in (*manifest.message_roles, *manifest.target_roles)},
+            )
+        )
+    )
+    if not observed_roles:
+        return (_explicit_unknown(contract, rule, "static-contract-allowed-roles", "allowed roles are declared but no role-bearing artifacts are loaded", "Load chat-template, prompt-segment, or training-manifest artifacts so declared role policy can be checked.", (("allowed_roles", ", ".join(rule.allowed_roles)),)),)
+    problem = FiniteContractProblem(
+        name="static-contract-allowed-roles",
+        variables=(EnumDomain("observed_role", observed_roles),),
+        constraints=(NamedConstraint("observed-role-outside-declared-allowed-roles", Not(InSet(Var("observed_role"), rule.allowed_roles))),),
+    )
+    result = problem.solve(prefer_z3=prefer_z3)
+    return (
+        StaticContractFinding(
+            name=problem.name,
+            status=result.status,
+            result=result,
+            problem=problem,
+            severity=_explicit_severity(rule, result.sat),
+            message=(
+                f"static contract rule {rule.name!r} found an observed role outside its allowed role set"
+                if result.sat
+                else f"static contract rule {rule.name!r} allows every observed role"
+            ),
+            suggestion=(
+                "Update the contract allowed_roles or normalize the artifact role labels before verification."
+                if result.sat
+                else "Keep role labels pinned in the contract when templates, data, or providers change."
+            ),
+            evidence=(
+                ("contract", contract.name),
+                ("rule", rule.name),
+                ("allowed_roles", ", ".join(rule.allowed_roles)),
+                ("observed_roles", ", ".join(observed_roles)),
+            ),
+            artifacts=(contract.name,),
+        ),
+    )
+
+
+def _explicit_required_regions_obligation(
+    contract: StaticContractArtifact,
+    rule: StaticContractRule,
+    prompt_segments: tuple[PromptSegmentArtifact, ...],
+    prompt_packs: tuple[PromptPackArtifact, ...],
+    *,
+    prefer_z3: bool,
+) -> tuple[StaticContractFinding, ...]:
+    if not rule.required_regions:
+        return ()
+    observed_regions = tuple(
+        sorted(
+            {segment.name for artifact in prompt_segments for segment in artifact.segments}.union(
+                {
+                    region
+                    for pack in prompt_packs
+                    for template in pack.exported_templates
+                    for region in template.required_regions
+                }
+            )
+        )
+    )
+    if not observed_regions:
+        return (_explicit_unknown(contract, rule, "static-contract-required-regions", "required prompt regions are declared but no region-bearing artifacts are loaded", "Load prompt-segment or prompt-pack artifacts so required regions can be checked.", (("required_regions", ", ".join(rule.required_regions)),)),)
+    problem = FiniteContractProblem(
+        name="static-contract-required-regions",
+        variables=(EnumDomain("required_region", rule.required_regions),),
+        constraints=(NamedConstraint("declared-required-region-missing-from-artifacts", Not(InSet(Var("required_region"), observed_regions))),),
+    )
+    result = problem.solve(prefer_z3=prefer_z3)
+    return (
+        StaticContractFinding(
+            name=problem.name,
+            status=result.status,
+            result=result,
+            problem=problem,
+            severity=_explicit_severity(rule, result.sat),
+            message=(
+                f"static contract rule {rule.name!r} requires a prompt region missing from loaded artifacts"
+                if result.sat
+                else f"static contract rule {rule.name!r} finds every required prompt region"
+            ),
+            suggestion=(
+                "Add the missing segment/pack region, or remove it from required_regions if it is no longer part of the interface."
+                if result.sat
+                else "Keep required region names stable across prompt-pack and application updates."
+            ),
+            evidence=(
+                ("contract", contract.name),
+                ("rule", rule.name),
+                ("required_regions", ", ".join(rule.required_regions)),
+                ("observed_regions", ", ".join(observed_regions)),
+            ),
+            artifacts=(contract.name,),
+        ),
+    )
+
+
+def _explicit_forbidden_delimiters_obligation(
+    contract: StaticContractArtifact,
+    rule: StaticContractRule,
+    prompt_segments: tuple[PromptSegmentArtifact, ...],
+    *,
+    prefer_z3: bool,
+) -> tuple[StaticContractFinding, ...]:
+    if not rule.forbidden_delimiters:
+        return ()
+    controlled = tuple(
+        segment
+        for artifact in prompt_segments
+        for segment in artifact.segments
+        if (segment.role or "").lower() in {"user", "tool", "function", "retrieval"} and segment.content is not None
+    )
+    if not controlled:
+        return (_explicit_unknown(contract, rule, "static-contract-forbidden-delimiters", "forbidden delimiters are declared but no controlled prompt content is materialized", "Provide content or bounded examples for user/tool/retrieval prompt segments so delimiter exclusion can be checked.", (("forbidden_delimiters", ", ".join(rule.forbidden_delimiters)),)),)
+    region_candidates = tuple(sorted(_region_candidate(segment.name, segment.content or "") for segment in controlled))
+    problem = FiniteContractProblem(
+        name="static-contract-forbidden-delimiters",
+        variables=(
+            EnumDomain("controlled_region", region_candidates),
+            EnumDomain("forbidden_delimiter", rule.forbidden_delimiters),
+        ),
+        constraints=(NamedConstraint("controlled-region-contains-forbidden-delimiter", Contains(Var("controlled_region"), Var("forbidden_delimiter"))),),
+    )
+    result = problem.solve(prefer_z3=prefer_z3)
+    evidence: list[tuple[str, str]] = [
+        ("contract", contract.name),
+        ("rule", rule.name),
+        ("forbidden_delimiters", ", ".join(rule.forbidden_delimiters)),
+        ("controlled_regions", ", ".join(segment.name for segment in controlled)),
+    ]
+    if result.assignment:
+        segment_name, content = _split_region_candidate(str(result.assignment.get("controlled_region", "")))
+        evidence.extend((("controlled_region", segment_name), ("malicious_content", content)))
+    return (
+        StaticContractFinding(
+            name=problem.name,
+            status=result.status,
+            result=result,
+            problem=problem,
+            severity=_explicit_severity(rule, result.sat),
+            message=(
+                f"static contract rule {rule.name!r} found a forbidden delimiter inside controlled prompt content"
+                if result.sat
+                else f"static contract rule {rule.name!r} excludes forbidden delimiters from controlled prompt content"
+            ),
+            suggestion=(
+                "Escape, reject, or encode controlled fields before rendering them through the chat template."
+                if result.sat
+                else "Keep delimiter and sanitizer assumptions in the checked contract."
+            ),
+            evidence=tuple(evidence),
+            artifacts=(contract.name,),
+        ),
+    )
+
+
+def _explicit_schema_obligation(
+    contract: StaticContractArtifact,
+    rule: StaticContractRule,
+    loaded_artifacts: tuple[LoadedArtifact, ...],
+    schemas: tuple[SchemaArtifact, ...],
+    *,
+    prefer_z3: bool,
+) -> tuple[StaticContractFinding, ...]:
+    findings: list[StaticContractFinding] = []
+    schema_by_name = {schema.name: schema for schema in schemas}
+    metadata_by_name = {loaded.artifact.name: dict(loaded.metadata) for loaded in loaded_artifacts if isinstance(loaded.artifact, SchemaArtifact)}
+    for obligation in rule.schema_obligations:
+        schema = schema_by_name.get(obligation.schema)
+        if schema is None:
+            findings.append(_explicit_unknown(contract, rule, "static-contract-schema-obligations", f"schema obligation {obligation.schema!r} targets no loaded schema artifact", "Load the referenced schema artifact or update the contract schema name.", (("schema", obligation.schema), ("requires", ", ".join(obligation.requires)))))
+            continue
+        required_names = _metadata_tuple(metadata_by_name.get(schema.name, {}).get("required_property_names"))
+        if not required_names:
+            findings.append(_explicit_unknown(contract, rule, "static-contract-schema-obligations", f"schema obligation {obligation.schema!r} cannot be checked because required properties were not extracted", "Use a JSON Schema object with a supported required list so PromptABI can prove schema obligations.", (("schema", obligation.schema), ("requires", ", ".join(obligation.requires)))))
+            continue
+        problem = FiniteContractProblem(
+            name="static-contract-schema-obligations",
+            variables=(EnumDomain("required_property", obligation.requires),),
+            constraints=(NamedConstraint("contract-required-schema-property-missing", Not(InSet(Var("required_property"), required_names))),),
+        )
+        result = problem.solve(prefer_z3=prefer_z3)
+        findings.append(
+            StaticContractFinding(
+                name=problem.name,
+                status=result.status,
+                result=result,
+                problem=problem,
+                severity=_explicit_severity(rule, result.sat),
+                message=(
+                    f"static contract rule {rule.name!r} requires a schema property missing from {schema.name!r}"
+                    if result.sat
+                    else f"static contract rule {rule.name!r} finds all required schema properties in {schema.name!r}"
+                ),
+                suggestion=(
+                    "Add the missing property to the schema required list or relax the contract obligation."
+                    if result.sat
+                    else "Keep schema required lists and contract obligations generated from the same interface source."
+                ),
+                evidence=(
+                    ("contract", contract.name),
+                    ("rule", rule.name),
+                    ("schema", schema.name),
+                    ("requires", ", ".join(obligation.requires)),
+                    ("schema_required_properties", ", ".join(required_names)),
+                ),
+                artifacts=(contract.name, schema.name),
+            )
+        )
+    return tuple(findings)
+
+
+def _explicit_stop_policy_obligation(
+    contract: StaticContractArtifact,
+    rule: StaticContractRule,
+    stop_policies: tuple[StopPolicyArtifact, ...],
+    *,
+    prefer_z3: bool,
+) -> tuple[StaticContractFinding, ...]:
+    findings: list[StaticContractFinding] = []
+    observed_stops = tuple(sorted({sequence for policy in stop_policies for sequence in policy.stop_sequences}))
+    for policy in rule.stop_policies:
+        if not policy.stops:
+            findings.append(_explicit_unknown(contract, rule, "static-contract-stop-policies", f"static contract stop policy {policy.name!r} declares no stops", "Add concrete stop strings to the contract stop policy before checking it.", (("stop_policy", policy.name),)))
+            continue
+        if not observed_stops:
+            findings.append(_explicit_unknown(contract, rule, "static-contract-stop-policies", "stop policy obligations are declared but no stop-policy artifact is loaded", "Load a stop-policy artifact so declared stops can be checked against real request/generation settings.", (("declared_stops", ", ".join(policy.stops)),)))
+            continue
+        problem = FiniteContractProblem(
+            name="static-contract-stop-policies",
+            variables=(EnumDomain("declared_stop", policy.stops),),
+            constraints=(NamedConstraint("contract-stop-missing-from-loaded-stop-policies", Not(InSet(Var("declared_stop"), observed_stops))),),
+        )
+        result = problem.solve(prefer_z3=prefer_z3)
+        findings.append(
+            StaticContractFinding(
+                name=problem.name,
+                status=result.status,
+                result=result,
+                problem=problem,
+                severity=_explicit_severity(rule, result.sat),
+                message=(
+                    f"static contract rule {rule.name!r} declares a stop string missing from loaded stop policies"
+                    if result.sat
+                    else f"static contract rule {rule.name!r} matches declared stop strings to loaded stop policies"
+                ),
+                suggestion=(
+                    "Update stop-policy artifacts or the contract so provider request stops and interface policy agree."
+                    if result.sat
+                    else "Keep stop declarations pinned across provider and framework adapters."
+                ),
+                evidence=(
+                    ("contract", contract.name),
+                    ("rule", rule.name),
+                    ("stop_policy", policy.name),
+                    ("declared_stops", ", ".join(policy.stops)),
+                    ("observed_stops", ", ".join(observed_stops)),
+                    ("forbid_inside", policy.forbid_inside or "<unspecified>"),
+                ),
+                artifacts=(contract.name,),
+            )
+        )
+    return tuple(findings)
+
+
+def _explicit_invariant_obligation(
+    contract: StaticContractArtifact,
+    rule: StaticContractRule,
+    config: VerificationConfig,
+    prompt_segments: tuple[PromptSegmentArtifact, ...],
+    truncation_configs: tuple[FrameworkTruncationConfigArtifact, ...],
+    stop_policies: tuple[StopPolicyArtifact, ...],
+    *,
+    prefer_z3: bool,
+) -> tuple[StaticContractFinding, ...]:
+    findings: list[StaticContractFinding] = []
+    metrics, missing_reason = _static_contract_metrics(config, prompt_segments, truncation_configs, stop_policies)
+    for invariant in rule.invariants:
+        left = _resolve_static_contract_operand(invariant.left, metrics)
+        right = _resolve_static_contract_operand(invariant.right, metrics)
+        if left is None or right is None:
+            missing = []
+            if left is None:
+                missing.append(invariant.left)
+            if right is None:
+                missing.append(invariant.right)
+            reason = missing_reason or f"unknown metric operand(s): {', '.join(missing)}"
+            findings.append(
+                _explicit_unknown(
+                    contract,
+                    rule,
+                    "static-contract-invariant",
+                    f"static contract invariant {invariant.name!r} could not be resolved",
+                    "Use supported finite metrics such as required_prompt_tokens, input_budget_tokens, reserved_tokens, max_context_tokens, required_region_count, and stop_policy_count, or integer constants.",
+                    (("invariant", invariant.name), ("expression", f"{invariant.left} {invariant.op} {invariant.right}"), ("reason", reason)),
+                )
+            )
+            continue
+        problem = FiniteContractProblem(
+            name="static-contract-invariant",
+            variables=(
+                IntRangeDomain("left_value", left, left),
+                IntRangeDomain("right_value", right, right),
+            ),
+            constraints=(NamedConstraint("contract-invariant-violated", _invariant_violation_expression(invariant)),),
+        )
+        result = problem.solve(prefer_z3=prefer_z3)
+        findings.append(
+            StaticContractFinding(
+                name=problem.name,
+                status=result.status,
+                result=result,
+                problem=problem,
+                severity=_explicit_severity(rule, result.sat),
+                message=(
+                    f"static contract invariant {invariant.name!r} is violated by loaded artifact metrics"
+                    if result.sat
+                    else f"static contract invariant {invariant.name!r} holds over loaded artifact metrics"
+                ),
+                suggestion=(
+                    "Adjust the contract, prompt region sizes, or truncation budget so the finite invariant is true."
+                    if result.sat
+                    else "Keep finite contract metrics regenerated from the same artifacts that CI verifies."
+                ),
+                evidence=(
+                    ("contract", contract.name),
+                    ("rule", rule.name),
+                    ("invariant", invariant.name),
+                    ("expression", f"{invariant.left} {invariant.op} {invariant.right}"),
+                    ("left_value", str(left)),
+                    ("right_value", str(right)),
+                ),
+                artifacts=(contract.name,),
+            )
+        )
+    return tuple(findings)
+
+
+def _explicit_unknown(
+    contract: StaticContractArtifact,
+    rule: StaticContractRule,
+    name: str,
+    message: str,
+    suggestion: str,
+    evidence: tuple[tuple[str, str], ...],
+) -> StaticContractFinding:
+    return StaticContractFinding(
+        name=name,
+        status=SolverStatus.UNKNOWN,
+        result=None,
+        problem=None,
+        severity="warning",
+        message=message,
+        suggestion=suggestion,
+        evidence=(("contract", contract.name), ("rule", rule.name), *evidence),
+        artifacts=(contract.name,),
+    )
+
+
+def _explicit_severity(rule: StaticContractRule, violated: bool) -> str:
+    if not violated:
+        return "info"
+    return rule.severity
+
+
+def _static_contract_metrics(
+    config: VerificationConfig,
+    prompt_segments: tuple[PromptSegmentArtifact, ...],
+    truncation_configs: tuple[FrameworkTruncationConfigArtifact, ...],
+    stop_policies: tuple[StopPolicyArtifact, ...],
+) -> tuple[dict[str, int], str | None]:
+    required = tuple(segment for artifact in prompt_segments for segment in artifact.segments if segment.required)
+    unknown_required = tuple(segment.name for segment in required if segment.token_count is None and segment.content is None)
+    if unknown_required:
+        return {}, f"required prompt segments have unknown token counts: {', '.join(unknown_required)}"
+    budget = truncation_configs[0] if truncation_configs else None
+    max_context = budget.max_context_tokens if budget is not None and budget.max_context_tokens is not None else config.max_context_tokens
+    if max_context is None:
+        return {}, "no finite max_context_tokens or framework truncation budget is declared"
+    reserved = 0
+    if budget is not None:
+        reserved = budget.reserve_output_tokens + budget.reserved_tool_tokens + budget.generation_prompt_tokens + budget.special_token_overhead
+    required_tokens = sum((segment.token_count if segment.token_count is not None else len(segment.content or "")) + segment.overhead_tokens for segment in required)
+    return {
+        "required_prompt_tokens": required_tokens,
+        "input_budget_tokens": max_context - reserved,
+        "reserved_tokens": reserved,
+        "max_context_tokens": max_context,
+        "required_region_count": len(required),
+        "prompt_segment_count": sum(len(artifact.segments) for artifact in prompt_segments),
+        "stop_policy_count": len(stop_policies),
+    }, None
+
+
+def _resolve_static_contract_operand(operand: str, metrics: dict[str, int]) -> int | None:
+    try:
+        return int(operand)
+    except ValueError:
+        return metrics.get(operand)
+
+
+def _invariant_violation_expression(invariant: StaticContractInvariant):
+    if invariant.op == "<=":
+        return Gt(Var("left_value"), Var("right_value"))
+    if invariant.op == "<":
+        return Ge(Var("left_value"), Var("right_value"))
+    if invariant.op == ">=":
+        return Lt(Var("left_value"), Var("right_value"))
+    if invariant.op == ">":
+        return Le(Var("left_value"), Var("right_value"))
+    if invariant.op == "==":
+        return Ne(Var("left_value"), Var("right_value"))
+    if invariant.op == "!=":
+        return Eq(Var("left_value"), Var("right_value"))
+    raise ValueError(f"unsupported static contract invariant op: {invariant.op}")
 
 
 def _role_boundary_markers(

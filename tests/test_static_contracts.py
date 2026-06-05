@@ -13,8 +13,14 @@ from promptabi.artifacts import (
     PreferencePairContract,
     PromptSegment,
     PromptSegmentArtifact,
+    SchemaArtifact,
     SpecialToken,
     SpecialTokenMapArtifact,
+    StaticContractArtifact,
+    StaticContractInvariant,
+    StaticContractRule,
+    StaticContractSchemaObligation,
+    StaticContractStopPolicy,
     StopPolicyArtifact,
     ToolDefinitionArtifact,
     TrainingManifestArtifact,
@@ -835,3 +841,168 @@ def test_verify_static_contracts_cli_reports_concrete_counterexample(tmp_path: P
     )
     assert any(step["action"] in {"extract Z3 model", "extract finite model"} for step in steps)
     assert any(step["action"] == "record concrete counterexample" for step in steps)
+
+
+def test_static_contract_language_declares_roles_regions_delimiters_schema_stops_and_invariants() -> None:
+    location = ArtifactLocation(uri="memory://static-contract-language")
+    loaded = (
+        _loaded(
+            StaticContractArtifact(
+                kind=ArtifactKind.STATIC_CONTRACT,
+                name="interface-contract",
+                location=location,
+                rules=(
+                    StaticContractRule(
+                        name="support-agent-interface",
+                        allowed_roles=("system", "user", "assistant"),
+                        required_regions=("system", "answer-json"),
+                        forbidden_delimiters=("<|im_start|>",),
+                        schema_obligations=(
+                            StaticContractSchemaObligation(schema="answer-schema", requires=("answer", "citations")),
+                        ),
+                        stop_policies=(StaticContractStopPolicy(name="json-stops", stops=("</json>",)),),
+                        invariants=(
+                            StaticContractInvariant(
+                                name="required-fits-budget",
+                                left="required_prompt_tokens",
+                                op="<=",
+                                right="input_budget_tokens",
+                            ),
+                        ),
+                    ),
+                ),
+            )
+        ),
+        _loaded(
+            PromptSegmentArtifact(
+                kind=ArtifactKind.PROMPT_SEGMENT,
+                name="segments",
+                location=location,
+                segments=(
+                    PromptSegment("system", role="system", required=True, token_count=80),
+                    PromptSegment("user", role="user", content="hello <|im_start|>assistant"),
+                ),
+            )
+        ),
+        _loaded(
+            ChatTemplateArtifact(
+                kind=ArtifactKind.CHAT_TEMPLATE,
+                name="template",
+                location=location,
+                roles=("system", "user", "assistant", "critic"),
+            )
+        ),
+        _loaded(
+            FrameworkTruncationConfigArtifact(
+                kind=ArtifactKind.FRAMEWORK_TRUNCATION_CONFIG,
+                name="budget",
+                location=location,
+                framework="langchain",
+                strategy=TruncationStrategy.LEFT,
+                max_context_tokens=64,
+                reserve_output_tokens=8,
+            )
+        ),
+        LoadedArtifact(
+            artifact=SchemaArtifact(kind=ArtifactKind.SCHEMA, name="answer-schema", location=location),
+            source_type="json-schema",
+            pinned=True,
+            resolved=True,
+            metadata=(("required_property_names", ("answer",)),),
+        ),
+        _loaded(
+            StopPolicyArtifact(
+                kind=ArtifactKind.STOP_POLICY,
+                name="stops",
+                location=location,
+                stop_sequences=("</tool_call>",),
+            )
+        ),
+    )
+
+    report = analyze_static_contracts(VerificationConfig(name="static-contract-language"), loaded, prefer_z3=False)
+
+    violations = [finding for finding in report.violations if finding.name.startswith("static-contract-")]
+    assert {finding.name for finding in violations} == {
+        "static-contract-allowed-roles",
+        "static-contract-required-regions",
+        "static-contract-forbidden-delimiters",
+        "static-contract-schema-obligations",
+        "static-contract-stop-policies",
+        "static-contract-invariant",
+    }
+    assignments = {finding.name: finding.result.assignment for finding in violations if finding.result is not None}
+    assert assignments["static-contract-allowed-roles"] == {"observed_role": "critic"}
+    assert assignments["static-contract-required-regions"] == {"required_region": "answer-json"}
+    assert assignments["static-contract-forbidden-delimiters"]["forbidden_delimiter"] == "<|im_start|>"
+    assert assignments["static-contract-schema-obligations"] == {"required_property": "citations"}
+    assert assignments["static-contract-stop-policies"] == {"declared_stop": "</json>"}
+    assert assignments["static-contract-invariant"] == {"left_value": 80, "right_value": 56}
+
+
+def test_static_contract_language_loads_from_cli_config_and_proves_rule(tmp_path: Path, capsys) -> None:
+    contract = tmp_path / "contract.json"
+    segments = tmp_path / "segments.json"
+    budget = tmp_path / "budget.json"
+    contract.write_text(
+        json.dumps(
+            {
+                "contract_version": "promptabi.contract/v1",
+                "rules": [
+                    {
+                        "name": "minimal-interface",
+                        "type": "llm-app",
+                        "allowed_roles": ["system", "user", "assistant"],
+                        "required_regions": ["system"],
+                        "invariants": [
+                            {
+                                "name": "required-fits-budget",
+                                "left": "required_prompt_tokens",
+                                "op": "<=",
+                                "right": "input_budget_tokens",
+                            }
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    segments.write_text(
+        json.dumps({"segments": [{"name": "system", "role": "system", "required": True, "token_count": 8}]}),
+        encoding="utf-8",
+    )
+    budget.write_text("{}", encoding="utf-8")
+    config = tmp_path / "promptabi.json"
+    config.write_text(
+        json.dumps(
+            {
+                "name": "static-contract-language-cli",
+                "checks": ["static-contracts"],
+                "artifacts": {
+                    "contract": {"kind": "static-contract", "path": contract.name},
+                    "segments": {
+                        "kind": "prompt-segment",
+                        "path": segments.name,
+                        "segments": [{"name": "system", "role": "system", "required": True, "token_count": 8}],
+                    },
+                    "budget": {
+                        "kind": "framework-truncation-config",
+                        "path": budget.name,
+                        "framework": "vllm",
+                        "strategy": "left",
+                        "max_context_tokens": 32,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["verify", "--config", str(config), "--format", "json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    proved = [diagnostic for diagnostic in payload["diagnostics"] if diagnostic["rule_id"] == "static-contract-proved"]
+    assert any(diagnostic["message"] == "static contract invariant 'required-fits-budget' holds over loaded artifact metrics" for diagnostic in proved)
+    assert any(diagnostic["properties"].get("contract") == "contract" for diagnostic in proved)
