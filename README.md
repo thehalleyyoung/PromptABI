@@ -1,327 +1,139 @@
 # PromptABI
 
 **CI for the tokenizer/template/tool-calling boundary of LLM apps.** PromptABI
-verifies the discrete interface layer around LLM systems before deployment:
-chat templates, tokenizers, special tokens, stop policies, tool schemas,
-structured-output grammars, provider contracts, and token budgets.
+verifies the discrete interface layer around an LLM system before deployment:
+chat templates, tokenizers, special tokens, stop policies, structured-output
+grammars, tool schemas, provider contracts, training manifests, and token
+budgets. It is CPU-only because its claims are structural: it does not load
+weights, call providers, or guess what a model will choose.
 
 ```bash
-promptabi verify --config examples/minimal/promptabi.json
-# self-contained local report:
-promptabi verify --config examples/token-budget/promptabi.json --format html --fail-on never > promptabi-report.html
-# scaffold a real stack contract:
-promptabi init --stack openai-tools --output-dir .promptabi-demo
-# explain one failing structural witness:
+python -m pip install -e ".[dev,grammars,solver,tokenizers]"
+
+# Prove a real ChatML-style template lets user content forge assistant control.
+promptabi verify --config examples/role-boundary/unsafe.promptabi.json --fail-on never
+
+# Expand one finding into source spans, formal property, witness, symptom, fix.
 promptabi explain --config examples/role-boundary/unsafe.promptabi.json --index 1
-# shrink a failing artifact into an upstreamable repro:
-promptabi minimize repro.json --keep-substring "<|im_start|>" --format json
-# file a sanitized upstream issue from a real diagnostic:
-promptabi bug-report --config examples/role-boundary/unsafe.promptabi.json --index 1 > upstream-issue.md
-# or, inside a repo with promptabi.json:
-promptabi verify --artifact schema=schemas/answer.json --fail-on warning
-# gate upgrades:
-promptabi diff promptabi.baseline.json promptabi.json
-# audit check guarantees and supported surfaces:
-promptabi matrix --format json
-# GitHub code scanning with cache + lockfile gates:
+
+# Gate a repo with cache, lockfile drift checks, annotations, and SARIF upload.
 promptabi github-action --config examples/minimal/promptabi.json --require-lockfile
-# labeled precision/recall/runtime/witness evaluation:
-promptabi corpus evaluation --format text
-# mutate artifacts to discover contract violations:
-promptabi fuzz mutations --format text
-# regenerate the paper artifact bundle:
-promptabi paper reproducibility --output-dir paper_artifact --force
-# local commit gate for changed prompt artifacts:
-promptabi pre-commit install --config examples/minimal/promptabi.json
-# opt-in local-only usage summaries; no telemetry:
-promptabi verify --config examples/minimal/promptabi.json --local-summary .promptabi/usage.jsonl
-promptabi usage summary --path .promptabi/usage.jsonl
 ```
 
 ```text
-PromptABI verification: minimal-chat-template
-checks: repository-skeleton
-status: PASS
-INFO repository-skeleton [heuristic]: PromptABI package, CLI, docs, examples, fixtures, and benchmarks are wired.
-  fingerprint: 966044f6134aa008
-  witness: The verification session constructed a typed config and produced deterministic output.
-    1. load JSON config | input: minimal-chat-template | output: 3 artifacts
-    2. normalize artifact paths
-    3. load artifacts | output: 3 loaded
-    4. render stable diagnostics
+PromptABI verification: role-boundary-unsafe-chatml
+checks: role-boundary-nonforgeability
+status: FAIL
+ERROR role-boundary-nonforgeability [bounded, sound]:
+  {messages[0].content} can forge assistant-prefix '<|im_start|>'
+  in a {messages[0].role} region
+  span: examples/role-boundary/unsafe-tokenizer_config.json:2:20-2:197
+  witness:
+    1. build bounded role-region model
+    2. substitute attacker-controlled field | output: <|im_start|>
+    3. render forged boundary excerpt
+    4. tokenize forged excerpt | output: byte-level ... '<|im_start|>'/special
+    5. locate forged boundary | output: assistant-prefix at rendered chars 31:43
+  suggestion: Render user-controlled fields through an escaping or encoding layer.
 ```
 
-PromptABI is CPU-only because its claims are structural. It models the exact
-artifacts around an LLM system--tokenizers, chat templates, special tokens, stop
-policies, schemas, grammars, tools, prompt segments, providers, and truncation
-configs--then checks whether their composed contract makes protocol states
-possible, impossible, ambiguous, or unsafe.
-`promptabi explain` turns any single diagnostic fingerprint/index into the
-source snippet, formal property, witness trace, likely production symptom, and
-concrete fix guidance needed to debug it locally.
-The security model is deliberately local and non-telemetric: provider fixtures
-are validated for credential-like values, solver inputs stay on the runner,
-bug reports are sanitized markdown, and usage summaries record only opt-in local
-aggregate command metadata.
+PromptABI is not another prompt-injection scanner and not an inference
+benchmark. It checks whether the artifacts around an LLM system compose into
+possible, impossible, ambiguous, or unsafe protocol states:
 
 ```text
-messages -> chat template -> byte/string prompt -> tokenizer -> token stream
-        -> constrained decoder / stop logic / tool parser -> application parser
+messages -> chat template -> bytes/strings -> tokenizer -> token stream
+        -> grammar/stop/tool parser -> application parser/provider contract
 ```
 
-PromptABI now includes the first formal core: deterministic finite automata,
-finite-state transducers, and a Z3-backed finite contract layer over booleans,
-enums, integer ranges, membership, lengths, and bounded strings. It derives real
-cross-artifact SMT obligations for prompt-budget survival, stop/control-token
-exclusion, role-region non-forgeability, tool-schema required-parameter
-satisfiability, provider/tool compatibility, and training target role alignment;
-diagnostics now classify safety proofs, incompatibilities, abstentions, and
-concrete counterexamples with extracted models or minimized unsat cores. When Z3
-is absent, tightly bounded contracts fall back to exhaustive finite enumeration
-without logits, GPUs, inference, or network calls. The formal core now uses
-compressed lazy intersection witnesses, incremental DFA minimization, indexed
-transducer composition/projection, solver timeouts, and constraint-sliced finite
-enumeration, while the byte-level tokenizer memoizes normalization results so
-the same proofs scale to tokenizer-sized alphabets without changing the public
-diagnostic contract. A typed plugin registry and default first-party plugin pack
-now expose Hugging Face, OpenAI-compatible, vLLM, llama.cpp, LangChain,
-LlamaIndex, Outlines, xgrammar, llguidance, Pydantic, MCP, and Z3 adapter
-surfaces without weakening deterministic sessions or CLI output; `promptabi
-matrix` reports the exact sound/bounded/Z3/heuristic/abstaining guarantees for
-each check across tokenizer, template, grammar, provider, framework, and
-training-manifest surfaces. `promptabi minimize` shrinks failing templates,
-schemas, stop strings, message sets, solver constraints, and provider fixtures
-while preserving a real failure predicate, producing compact repros for upstream
-issues. `--format html` emits a web-free report with
-diagnostic details, witnesses, budget charts, diff tables, and corpus summaries,
-while policy/suppression files keep CI strict with unexpired, justified
-accepted-risk records. `promptabi pre-commit` installs a PATH-independent local
-hook and fail-closed changed-artifact gate for schemas, templates, tokenizers,
-tools, budgets, training manifests, configs, and lockfiles before they reach CI.
-Opt-in `--local-summary` records only sanitized command counts, exits, durations,
-and aggregate diagnostic metadata to local JSONL, with `promptabi usage privacy`
-making the no-telemetry/no-artifact-content guarantee explicit.
+The same local verifier covers:
 
-PromptABI now ships a bounded, sanitizer-aware role-boundary non-forgeability check:
-unsanitized user/tool/function content and dynamic role fields are checked against
-provider/model control delimiters, special tokens, assistant prefixes, and
-tool-call sentinels from real chat-template artifacts, while JSON/escape/wrapper
-filters suppress false positives. Findings include minimized malicious inputs,
-rendered excerpts, byte-level token evidence, and exact forged-boundary
-locations; `examples/role-boundary/` demonstrates the unsafe and sanitized cases
-against the real CLI. Malformed artifacts, corrupt fixture packs, partial provider
-snapshots, missing or incompatible tokenizer backends, invalid schemas, and
-unsupported solver fragments now fail closed as source-mapped diagnostics or
-explicit abstentions rather than crashes. Stop policies are now normalized from OpenAI-compatible
-requests, Hugging Face generation configs, llama.cpp/Ollama options, vLLM sampling
-params, LiteLLM params, and common wrapper kwargs, then checked against real
-tokenizer adapters for byte/string/token alignments, multi-token stops,
-unreachable token IDs, normalization ambiguity, prefix/suffix collisions, and
-special/added-token interactions. Fixture-backed stop simulators replay
-OpenAI-compatible, Hugging Face, llama.cpp-style, and vLLM-compatible traces, while
-a bounded stop-overreachability checker proves when raw substring stops can fire
-inside schema/tool string fields or before JSON, markdown-fence, XML-like
-tool-call, and provider-envelope structures are parser-complete, with witnesses
-that pinpoint the firing line/column, parser state, valid prefix, and malformed or
-prematurely accepted result. A real-world bug corpus reduces public llama.cpp,
-vLLM, and Hugging Face reports into synthetic, offline fixtures and proves the
-current role-boundary and stop-overreachability checkers catch the same failure
-classes without copying upstream code. `promptabi corpus evaluation` now expands
-labeled real-bug and fixture-backed cases into precision/recall, abstention,
-runtime, peak-memory, witness-quality, solver-quality, and differential-agreement
-metrics; `promptabi paper reproducibility` writes the frozen fixture hashes,
-solver pins, regeneration script, and stable expected tables used by the paper
-artifact. `promptabi fuzz mutations` now mutates chat templates, tokenizers,
-stops, schemas, grammars, tools, truncation configs, and SMT encodings against
-real analyzers to surface newly introduced contract violations, and generated
-checker properties exercise every public analyzer over safe, unsafe, ambiguous,
-unsupported, satisfiable, unsatisfiable, and abstaining artifacts. Grammar
-ingestion now normalizes JSON
-Schema, regex, EBNF, Outlines, xgrammar, llguidance, and PromptABI grammars into
-typed rules, terminals, source spans, and explicit abstentions; the JSON Schema
-path compiles the supported subset into a bounded grammar IR and DFA witness with
-parser states, source maps, and real `jsonschema` validator round-trips for
-objects, arrays, required fields, unions, constraints, bounded local references,
-and additional-property semantics, then checks tokenizer x grammar emptiness and
-ambiguity by proving whether compiled witnesses and JSON lexical variants
-survive real tokenizer encode/decode assumptions without collapsing distinct
-values or hiding multiple token paths. A fixture-backed grammar differential
-corpus now replays hand-labeled Outlines, xgrammar, llguidance,
-lm-format-enforcer, Guidance, Instructor, and Pydantic-derived semantics through
-the real CLI, reporting agreement, mismatch, or abstention without heavyweight
-backend installs. Structured-output parser compatibility checks now replay
-bounded grammar/schema witnesses plus declared runtime samples against JSON,
-JSON Schema, XML-ish tool-call, markdown-fence, and custom-delimiter parser
-models, reporting parser-broader and grammar-broader disagreements without
-claiming full language equivalence; tool/function schema ingestion now normalizes
-OpenAI, Anthropic, LangChain, Pydantic, TypeScript-style, MCP, and provider
-tool-call envelopes into source-mapped typed schemas; tool-call serialization
-analysis now checks recorded provider/template/parser contracts for name,
-argument-encoding, escaping, ID, parallel-call, streaming-chunk, and stop-delimiter
-agreement; secret-free provider fixture packs now record and deterministically
-replay request/response shapes, tool-call encodings, stop behavior, streaming
-deltas, errors, limits, and edge cases without API calls; `promptabi corpus
-real-bug-benchmark` replays a labeled real-bug suite spanning popular
-templates, tokenizers, tool schemas, provider migrations, structured-output
-parsers, RAG truncation, and training manifests; provider migration analysis
-compares recorded OpenAI, Azure OpenAI, Anthropic, Gemini, Bedrock,
-Together, Groq, Ollama, llama.cpp, vLLM OpenAI, and LiteLLM contracts for
-request/response/tool/stop/streaming/context compatibility. Context-window
-modeling now proves must-survive prompt segments against bounded real framework
-truncation policies, emits token-budget visualizations across text/JSON/SARIF
-with truncation boundaries and dropped fields, and catches RAG tokenizer
-mismatch, boundary drift, citation loss, overlap accounting errors, metadata
-inflation, template overhead, and retrieval payload truncation. `promptabi diff` now compares two complete PromptABI configurations before an
-upgrade, reporting contract-breaking tokenizer, provider, framework, artifact,
-check-surface, and context-budget changes with concrete witnesses and migration
-guidance. Tokenizer/config drift detection now compares real tokenizer revisions for special-token IDs,
-added tokens, normalizers, chat templates, BOS/EOS behavior, and generation stop
-policy deltas before upgrades reach production; lockfiles now freeze verified
-artifact hashes, upstream revisions, library versions, supported fragments,
-provider fixture versions, and diagnostic baselines so CI can reject unreviewed
-contract drift. The bundled GitHub Action restores PromptABI caches, enforces
-lockfiles, skips unrelated pull requests by diffing configured artifacts, uploads
-SARIF, emits annotations, and writes markdown job summaries. A labeled structured-schema corpus turns open-source-agent reductions,
-anonymized patterns, and synthetic tool-call stress cases into manifest-pinned CLI fixtures. The repository
-already has the typed Python package,
-core artifact model, stable diagnostic contract, text/JSON/SARIF/GitHub-annotation renderers,
-code-scanning-ready relative artifact locations and fingerprints, snapshot-locked output stability, discoverable `promptabi verify` workflow,
-source-mapped diagnostics that point to exact config and artifact lines, offline
-version-pinned artifact loading, Hugging Face chat-template parsing plus bounded
-symbolic/concrete rendering, one-command scaffolds for OpenAI tools, Hugging Face
-local models, vLLM, llama.cpp, LangChain RAG, LlamaIndex agents, and custom JSON
-schemas, and role-region non-forgeability checked across the seed corpus and a
-delimiter-collision regression suite covering ChatML, Llama, Mistral,
-XML tool tags, markdown fences, and fine-tune headers. It also has a real tokenizer abstraction spanning byte-level, Hugging Face
-`tokenizers`, `tiktoken`, and SentencePiece backends, differential harnesses
-checked against actual libraries, an embedding API for custom checks and typed
-results, first-class plugin extension points, a curated CPU-only seed corpus with a reproducible manifest pipeline,
-fixture-backed performance benchmarks across tokenizer/template/grammar/stop/SMT/budget/corpus/cache paths,
-plus docs, examples, and a contribution path for growing checks without changing
-the public surface.
+| Surface | What PromptABI proves or detects |
+| --- | --- |
+| **Role boundaries** | user/tool/RAG fields that can render as assistant, system, tool-call, BOS/EOS, or provider control structure |
+| **Stops** | unreachable stops, tokenizer normalization ambiguity, special-token collisions, and stops that can fire inside JSON/tool/string fields |
+| **Grammars + schemas** | JSON Schema/regex/EBNF/Outlines/xgrammar/llguidance fragments that are empty, ambiguous, or parser-incompatible under tokenizer assumptions |
+| **Tools + providers** | OpenAI, Anthropic, MCP, LangChain, Pydantic, TypeScript-style, vLLM, llama.cpp, LiteLLM, Gemini, Bedrock, Groq, Together, and Ollama serialization drift |
+| **Budgets + RAG** | must-survive prompt segments, dropped citations, metadata inflation, tokenizer mismatch, framework truncation, and context-window overflow |
+| **Training/eval contracts** | target-role alignment, tokenizer/template drift, supervised-region checks, and fixture-backed real-bug benchmarks |
 
-## Why this is clearly distinct from TensorGuard
+Under the hood, PromptABI combines deterministic finite automata,
+finite-state transducers, differential checks against real tokenizer/template
+libraries, and a Z3-backed finite contract layer over booleans, enums, integer
+ranges, membership, lengths, and bounded strings. Every diagnostic states its
+guarantee mode--`sound`, `complete`, `bounded`, `z3-backed-smt`, `heuristic`,
+or `abstaining`--so CI can distinguish proof from best-effort evidence.
 
-TensorGuard verifies the numeric tensor-computation layer: shapes, devices, phases, dtypes, PyTorch operator contracts, checkpoint compatibility, export gates, and related model-execution invariants.
-
-PromptABI verifies the language/protocol layer around LLMs. Its artifacts are tokenizer JSON files, Jinja chat templates, stop strings, JSON schemas, grammar compilers, tool-call schemas, context-window policies, and provider API conventions. The overlap is methodological, not topical: both are static/differential verifiers for real ML failure modes, but they operate on different objects and catch different bugs.
-
-## The unifying formalism
-
-The project should not be pitched as a bag of LLM linters. The paper-worthy framing is:
-
-> LLM application interfaces are compositions of finite-state transducers over byte, string, and token alphabets, with partial parsers at the boundaries.
-
-Most high-value checks become automata-theoretic properties:
-
-- **Reachability:** can a declared stop sequence actually be produced under this tokenizer and grammar?
-- **Over-reachability:** can a stop sequence fire inside a valid JSON string, tool argument, code block, or user-controlled field?
-- **Emptiness:** is `tokenizer x grammar x schema` empty, meaning the constrained decoder can never produce a valid object?
-- **Non-forgeability:** can attacker-controlled text render as role delimiters, system-message markers, assistant prefixes, tool-call sentinels, BOS/EOS tokens, or provider-specific control tokens?
-- **Round-trip parseability:** does `render -> tokenize -> detokenize -> parse` preserve the intended message/tool structure?
-- **Must-survive budget constraints:** do system instructions, tool definitions, safety preambles, retrieval citations, or output-format requirements remain present under the framework's real truncation policy?
-
-The implementation combines finite-state automata and transducers, a Z3-backed
-finite-contract solver, differential checks against real tokenizer libraries,
-and an explicit static boundary: automata prove language/reachability facts,
-transducers model interface relations, SMT proves bounded symbolic
-compatibility, and differential tests validate abstractions against libraries
-people actually run.
-
-## Why no GPU genuinely does not limit applicability
-
-PromptABI's core claims are structural, not behavioral. It does not need to ask whether a model will choose a token, follow an instruction, or resist prompt injection. It asks whether the interface contract makes certain token/string/protocol states possible, impossible, ambiguous, or unsafe.
-
-That makes the CPU-only story honest:
-
-- Tokenization runs on CPU.
-- Chat-template rendering runs on CPU.
-- JSON Schema, grammar compilation, parser checks, and automata operations run on CPU.
-- Stop-string and token-boundary analysis is independent of model weights.
-- Provider request/response compatibility can be tested from recorded fixtures and SDK behavior.
-- Context-window and truncation checks depend on token counts and framework policies, not logits.
-
-The project must be explicit about this boundary. It can prove "an attacker-controlled field can structurally forge a role delimiter"; it cannot prove "the model will obey the forged role." It can prove "this stop string can terminate inside a valid JSON string"; it cannot prove "the model will emit that string in practice." That boundary is a strength because it keeps the tool broadly applicable without GPU access.
-
-## High-value bugs it would catch
-
-1. A chat template where user content containing a model's assistant delimiter can create an apparent assistant turn after rendering.
-2. A system prompt that is preserved in unit tests but silently dropped by LangChain/vLLM/llama.cpp style truncation in production.
-3. A JSON schema that is valid in Python but compiles to an empty or unsatisfiable constrained-decoding grammar under the selected tokenizer.
-4. A stop string that cannot be reached because its byte/string form does not align with the tokenizer or grammar.
-5. A stop string that can fire inside a legitimate tool argument, causing truncated JSON and flaky parsers.
-6. A provider migration that changes tool-call serialization enough to make a downstream parser accept a different AST than intended.
-7. A tokenizer/config update that introduces double-BOS, missing-EOS, changed special-token IDs, or changed role-control token spellings.
-8. A RAG chunking policy whose token accounting differs from the serving tokenizer, making citation-bearing spans disappear at the context-window boundary.
-
-## What would make it a 1000-star repo
-
-The README demo should be painfully concrete:
+## Daily workflows
 
 ```bash
-promptabi verify \
-  --tokenizer meta-llama/Meta-Llama-3.1-8B-Instruct \
-  --chat-template tokenizer_config.json \
-  --tools tools.json \
-  --schema answer.schema.json \
-  --max-context 8192 \
-  --framework vllm
+# Small deterministic smoke check.
+promptabi verify --config examples/minimal/promptabi.json
+
+# HTML report with witnesses, budgets, diff tables, and corpus summaries.
+promptabi verify --config examples/token-budget/promptabi.json --format html --fail-on never > promptabi-report.html
+
+# Scaffold a real stack contract.
+promptabi init --stack openai-tools --output-dir .promptabi-demo
+
+# Shrink a failure into an upstreamable repro and sanitized issue.
+promptabi minimize repro.json --keep-substring "<|im_start|>" --format json
+promptabi bug-report --config examples/role-boundary/unsafe.promptabi.json --index 1 > upstream-issue.md
+
+# Compare an upgrade before merge and audit supported guarantees.
+promptabi diff promptabi.baseline.json promptabi.json
+promptabi matrix --format text
+
+# Run labeled benchmarks, mutation fuzzing, and paper artifact regeneration.
+promptabi corpus evaluation --format text
+promptabi fuzz mutations --format text
+promptabi paper reproducibility --output-dir paper_artifact --force
+
+# Local changed-artifact gate and local-only usage summaries; no telemetry.
+promptabi pre-commit install --config examples/minimal/promptabi.json
+promptabi verify --config examples/minimal/promptabi.json --local-summary .promptabi/usage.jsonl
+promptabi usage privacy
 ```
 
-Example output:
+## GitHub Actions
 
-```text
-FAIL role-boundary-nonforgeability
-  user.content can render '<|start_header_id|>assistant<|end_header_id|>'
-  as a real assistant boundary after template expansion.
+```yaml
+permissions:
+  contents: read
+  security-events: write
 
-FAIL stop-string-overreachability
-  stop='</tool_call>' is reachable inside $.arguments.comment
-  before the JSON object is complete.
-
-FAIL must-survive-budget
-  under vLLM left-truncation, tool schema `refund_user` is dropped
-  while messages still reference it.
+jobs:
+  promptabi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.14" }
+      - uses: ./.github/actions/promptabi
+        with:
+          config: examples/minimal/promptabi.json
+          lockfile: examples/minimal/promptabi.lock.json
+          require-lockfile: "true"
+          changed-only: "true"
+          install-command: python -m pip install -e ".[dev,grammars,solver,tokenizers]"
 ```
 
-This is the kind of repo LLM app developers would star because it fits directly into CI and catches failures that are otherwise discovered through confusing production behavior.
+The action restores `.promptabi/cache`, skips unrelated pull requests, enforces
+lockfiles, emits workflow annotations, uploads SARIF to code scanning, and
+writes a markdown job summary.
 
-## What would make it paper-grade
+## Why the boundary matters
 
-The paper needs one deep abstraction and a real-bug corpus.
+PromptABI deliberately stays below model semantics. It can prove that a
+user-controlled field can structurally forge a role delimiter; it cannot prove
+the model will obey that forged role. It can prove a stop string can terminate
+inside a valid JSON string before the object is complete; it cannot prove the
+model will emit that string. This narrower claim is what makes the tool fast,
+offline, reproducible, and suitable for CI.
 
-The abstraction:
-
-- model chat templates, tokenizer encoders/decoders, grammars, stop criteria, and parsers as composed transducers;
-- define soundness/abstention contracts for each supported fragment;
-- abstain on arbitrary Jinja or provider behavior that cannot be modeled soundly;
-- differentially check the abstraction against the real Hugging Face tokenizer, `apply_chat_template`, grammar backends such as Outlines/xgrammar/llguidance, and provider SDK fixtures.
-
-The evaluation:
-
-- a corpus of popular tokenizers and templates: Llama, Mistral, Qwen, Gemma, Phi, DeepSeek, OpenAI-compatible adapters, llama.cpp GGUF metadata, and common fine-tune templates;
-- a corpus of real structured-output/tool-calling schemas from open-source agents;
-- upstreamable bugs with minimized repros;
-- version-drift tests showing that library/model updates break previously valid contracts.
-
-## Minimal viable scope
-
-Start with three checks that are both useful and formally interesting:
-
-1. **Role-boundary non-forgeability:** prove whether user/tool/RAG-controlled fields can create control-token or role-delimiter structure after template rendering.
-2. **Stop/grammar/tokenizer reachability:** determine whether stop strings are unreachable, ambiguous, or reachable inside valid structured outputs.
-3. **Must-survive token-budget verification:** check whether required prompt segments survive real truncation policies for the selected framework and context window.
-
-Everything else can be added later as breadth: schema linting, provider diffs, generation-config checks, tokenizer drift reports, and compatibility dashboards.
-
-## Suggested positioning
-
-**Tagline:** "CI for the tokenizer/template/tool-calling boundary of LLM apps."
-
-**Longer pitch:** PromptABI verifies that the non-neural parts of an LLM system compose correctly before deployment. It catches token-boundary, role-forgery, structured-output, stop-sequence, tool-schema, and truncation bugs without loading model weights or running inference.
-
-**Why now:** LLM engineering has moved from raw prompting to tool calling, structured decoding, model/provider swaps, RAG pipelines, OpenAI-compatible servers, and fragile chat templates. The interface layer is now complex enough to deserve its own verifier.
-
-## Main risk
-
-Avoid claiming semantic model safety. The tool should not promise to prevent prompt injection in the behavioral sense. It should promise structural non-forgeability of the prompt/interface representation. That narrower claim is still valuable, provable, CPU-only, and broadly applicable.
+The security model is local and non-telemetric: provider fixtures are validated
+for credential-like values, solver inputs stay on the runner, bug reports are
+sanitized markdown, and optional usage summaries record only aggregate command
+metadata. See [`docs/security-model.md`](docs/security-model.md) for the exact
+privacy and non-goal guarantees.

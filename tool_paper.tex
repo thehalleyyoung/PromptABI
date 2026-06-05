@@ -1496,16 +1496,18 @@ evaluation concrete.
 
 A 1000-star verification repo needs more than algorithms. It needs a first-run
 experience where a developer immediately understands what failed and how to fix
-it. The README now leads with a concrete CLI command, a CPU-only explanation,
-and the three high-value check families. The docs tree explains architecture,
-quickstart, check families, the artifact model, and a focused role-boundary page
-that separates structural non-forgeability from semantic prompt-injection
-resistance while linking to the runnable unsafe/sanitized example. It now also
-ships a security model that tells users exactly what is local, what is sensitive,
-what is outside scope, how provider fixtures and solver inputs are handled, and
-how to prepare a responsible upstream disclosure. The contribution guide
-states the central norms: deterministic output, CPU-only tests, minimized
-fixtures, typed public APIs, and explicit soundness boundaries.
+it. The README now leads with a runnable failing ChatML diagnostic, install
+commands, GitHub Actions wiring, a CPU-only/non-inference boundary, and the
+guarantee taxonomy for role boundaries, stops, grammars, tools, providers,
+budgets, RAG, training, and evaluation contracts. The docs tree explains
+architecture, quickstart, check families, the artifact model, and a focused
+role-boundary page that separates structural non-forgeability from semantic
+prompt-injection resistance while linking to the runnable unsafe/sanitized
+example. It also ships a security model that tells users exactly what is local,
+what is sensitive, what is outside scope, how provider fixtures and solver
+inputs are handled, and how to prepare a responsible upstream disclosure. The
+contribution guide states the central norms: deterministic output, CPU-only
+tests, minimized fixtures, typed public APIs, and explicit soundness boundaries.
 
 The examples directory is equally important. It now contains the minimal
 typed-artifact workflow, a role-delimiter injection example with failing and
