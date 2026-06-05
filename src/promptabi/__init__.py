@@ -1235,6 +1235,16 @@ from .counterexample_spans import (
     render_annotated_counterexample_json,
     render_annotated_counterexample_text,
 )
+from .timeout_degradation import (
+    TIMEOUT_DEGRADATION_VERSION,
+    DegradationFinding,
+    DegradationFindingKind,
+    DegradationReport,
+    TimeoutObservation,
+    profile_timeout_degradation,
+    render_degradation_json,
+    render_degradation_text,
+)
 from .provider_fixture_replay import (
     ProviderFixtureReplayCase,
     ProviderFixtureReplayFinding,
@@ -2226,6 +2236,14 @@ __all__ = [
     "annotate_counterexample",
     "render_annotated_counterexample_json",
     "render_annotated_counterexample_text",
+    "TIMEOUT_DEGRADATION_VERSION",
+    "DegradationFinding",
+    "DegradationFindingKind",
+    "DegradationReport",
+    "TimeoutObservation",
+    "profile_timeout_degradation",
+    "render_degradation_json",
+    "render_degradation_text",
     "analyze_parser_compatibility",
     "analyze_tokenizer_grammar_ambiguity",
     "analyze_tokenizer_grammar_emptiness",
