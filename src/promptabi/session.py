@@ -66,6 +66,7 @@ from .stop_overreachability import (
     StopOverreachabilityReport,
     analyze_stop_overreachability,
 )
+from .synthetic_generators import SyntheticGeneratorFinding, analyze_synthetic_generators
 from .tool_serialization import ToolSerializationFinding, analyze_tool_call_serialization
 from .tokenizer_drift import TokenizerDriftAbstention, TokenizerDriftFinding, analyze_tokenizer_config_drift
 from .tokenizers import TokenizerAdapter, TokenizerError, load_tokenizer
@@ -161,6 +162,11 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "training-invalid-interface-malformed-tool-call": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-invalid-interface-unreachable-stop-sequence": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-invalid-interface-verified": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "synthetic-generator-contracts-role-contract-violation": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "synthetic-generator-contracts-schema-contract-violation": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "synthetic-generator-contracts-tool-call-contract-violation": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "synthetic-generator-contracts-truncation-contract-violation": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "synthetic-generator-contracts-verified": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-redaction-hash-missing": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-redaction-policy-missing": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-redaction-raw-witness-field": (CheckMode.SOUND, CheckMode.BOUNDED),
@@ -371,6 +377,7 @@ CHECK_DEPENDENCIES: dict[str, CheckDependency] = {
     "training-bridge": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "training-drift": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "training-invalid-interface": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
+    "synthetic-generator-contracts": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "training-packing": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "training-redaction": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "tokenizer-config-drift": CheckDependency(artifact_kinds=(ArtifactKind.TOKENIZER,)),
@@ -562,6 +569,7 @@ class VerificationSession:
             "training-bridge": self._training_bridge_check,
             "training-drift": self._training_drift_check,
             "training-invalid-interface": self._training_invalid_interface_check,
+            "synthetic-generator-contracts": self._synthetic_generator_contracts_check,
             "training-packing": self._training_packing_check,
             "training-redaction": self._training_redaction_check,
             "tokenizer-config-drift": self._tokenizer_config_drift_check,
@@ -1090,6 +1098,15 @@ class VerificationSession:
                 continue
             report = analyze_training_invalid_interface(loaded.artifact)
             diagnostics.extend(_training_invalid_interface_finding_diagnostic(loaded, finding) for finding in report.findings)
+        return tuple(diagnostics)
+
+    def _synthetic_generator_contracts_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        diagnostics: list[Diagnostic] = []
+        for loaded in context.loaded_artifacts:
+            if not isinstance(loaded.artifact, TrainingManifestArtifact):
+                continue
+            report = analyze_synthetic_generators(loaded.artifact)
+            diagnostics.extend(_synthetic_generator_finding_diagnostic(loaded, finding) for finding in report.findings)
         return tuple(diagnostics)
 
     def _tokenizer_config_drift_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
@@ -2018,6 +2035,57 @@ def _training_invalid_interface_finding_diagnostic(
         suggestions=suggestions,
         witness=WitnessTrace(
             summary="PromptABI checked finite training-interface facts for impossible roles, malformed tool calls, invalid JSON outputs, and unreachable stops.",
+            steps=steps,
+            artifacts=(loaded.artifact.to_ref(),),
+        ),
+    )
+
+
+def _synthetic_generator_finding_diagnostic(
+    loaded: LoadedArtifact,
+    finding: SyntheticGeneratorFinding,
+) -> Diagnostic:
+    rule_id = f"synthetic-generator-contracts-{finding.kind.value}"
+    severity = {
+        "error": DiagnosticSeverity.ERROR,
+        "warning": DiagnosticSeverity.WARNING,
+        "info": DiagnosticSeverity.INFO,
+    }[finding.severity]
+    steps = tuple(
+        WitnessStep(action=action, input=input_value, output=output_value)
+        for action, input_value, output_value in finding.witness
+    )
+    properties: list[tuple[str, object]] = [
+        ("kind", finding.kind.value),
+        ("generator_name", finding.generator_name),
+    ]
+    if finding.subject is not None:
+        properties.append(("subject", finding.subject))
+    suggestions = {
+        "synthetic-generator-contracts-role-contract-violation": (
+            "Constrain the generator prompt or post-filter generated rows so emitted roles exactly match the declared synthetic-data role contract.",
+        ),
+        "synthetic-generator-contracts-schema-contract-violation": (
+            "Constrain, validate, or repair generated structured outputs before admitting them to training or eval datasets.",
+        ),
+        "synthetic-generator-contracts-tool-call-contract-violation": (
+            "Align generator tool-call envelopes and argument serialization with the serving tool schema before materializing examples.",
+        ),
+        "synthetic-generator-contracts-truncation-contract-violation": (
+            "Lower generator token budgets or require truncation policies that preserve all required prompt-interface roles.",
+        ),
+    }.get(rule_id, ())
+    return Diagnostic(
+        rule_id=rule_id,
+        severity=severity,
+        message=finding.message,
+        artifact=loaded.artifact.to_ref(),
+        span=_artifact_span(loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG[rule_id],
+        properties=tuple(properties),
+        suggestions=suggestions,
+        witness=WitnessTrace(
+            summary="PromptABI checked finite synthetic-data generator contracts before generated examples are materialized.",
             steps=steps,
             artifacts=(loaded.artifact.to_ref(),),
         ),

@@ -81,6 +81,7 @@ PUBLIC_CHECKER_EXPORTS = {
     "analyze_tool_call_serialization",
     "analyze_training_inference_bridge",
     "analyze_training_invalid_interface",
+    "analyze_synthetic_generators",
     "analyze_training_metadata_drift",
     "analyze_training_packing",
     "run_beta_program",

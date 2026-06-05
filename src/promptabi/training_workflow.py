@@ -27,6 +27,7 @@ TRAINING_WORKFLOW_CHECKS = (
     "training-invalid-interface",
     "training-bridge",
     "training-drift",
+    "synthetic-generator-contracts",
 )
 
 

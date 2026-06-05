@@ -795,6 +795,151 @@ class TrainingRedactionPolicy:
 
 
 @dataclass(frozen=True, slots=True)
+class SyntheticSchemaOutputContract:
+    """Finite schema/parser facts promised by a synthetic-data generator."""
+
+    case_id: str
+    valid: bool | None = None
+    parses: bool | None = None
+    schema_valid: bool | None = None
+    reason: str | None = None
+
+    def __post_init__(self) -> None:
+        _require_non_empty("synthetic schema output case_id", self.case_id)
+        _optional_non_empty("synthetic schema output reason", self.reason)
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {"id": self.case_id}
+        for key in ("valid", "parses", "schema_valid", "reason"):
+            value = getattr(self, key)
+            if value is not None:
+                data[key] = value
+        return data
+
+
+@dataclass(frozen=True, slots=True)
+class SyntheticToolCallContract:
+    """Finite tool-call envelope facts promised by a synthetic-data generator."""
+
+    case_id: str
+    valid: bool | None = None
+    malformed: bool | None = None
+    reason: str | None = None
+
+    def __post_init__(self) -> None:
+        _require_non_empty("synthetic tool-call case_id", self.case_id)
+        _optional_non_empty("synthetic tool-call reason", self.reason)
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {"id": self.case_id}
+        for key in ("valid", "malformed", "reason"):
+            value = getattr(self, key)
+            if value is not None:
+                data[key] = value
+        return data
+
+
+@dataclass(frozen=True, slots=True)
+class SyntheticTruncationContract:
+    """Finite truncation facts promised by a synthetic-data generator."""
+
+    case_id: str
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    max_context_tokens: int | None = None
+    preserved_required_roles: tuple[str, ...] = ()
+    truncated_required_roles: tuple[str, ...] = ()
+    reason: str | None = None
+
+    def __post_init__(self) -> None:
+        _require_non_empty("synthetic truncation case_id", self.case_id)
+        for field_name in ("input_tokens", "output_tokens", "max_context_tokens"):
+            _optional_non_negative(f"synthetic truncation {field_name}", getattr(self, field_name))
+        object.__setattr__(
+            self,
+            "preserved_required_roles",
+            _unique_strings(self.preserved_required_roles, field_name="synthetic truncation preserved_required_roles"),
+        )
+        object.__setattr__(
+            self,
+            "truncated_required_roles",
+            _unique_strings(self.truncated_required_roles, field_name="synthetic truncation truncated_required_roles"),
+        )
+        _optional_non_empty("synthetic truncation reason", self.reason)
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {"id": self.case_id}
+        for key in ("input_tokens", "output_tokens", "max_context_tokens"):
+            value = getattr(self, key)
+            if value is not None:
+                data[key] = value
+        if self.preserved_required_roles:
+            data["preserved_required_roles"] = list(self.preserved_required_roles)
+        if self.truncated_required_roles:
+            data["truncated_required_roles"] = list(self.truncated_required_roles)
+        if self.reason is not None:
+            data["reason"] = self.reason
+        return data
+
+
+@dataclass(frozen=True, slots=True)
+class SyntheticGeneratorSpec:
+    """Static contract for a synthetic-data generator before examples are materialized."""
+
+    name: str
+    generator_type: str = "synthetic-chat"
+    output_roles: tuple[str, ...] = ()
+    required_roles: tuple[str, ...] = ()
+    forbidden_roles: tuple[str, ...] = ()
+    max_prompt_tokens: int | None = None
+    max_completion_tokens: int | None = None
+    schema_outputs: tuple[SyntheticSchemaOutputContract, ...] = ()
+    tool_calls: tuple[SyntheticToolCallContract, ...] = ()
+    truncation_cases: tuple[SyntheticTruncationContract, ...] = ()
+    metadata: tuple[tuple[str, object], ...] = ()
+
+    def __post_init__(self) -> None:
+        _require_non_empty("synthetic generator name", self.name)
+        _require_non_empty("synthetic generator type", self.generator_type)
+        object.__setattr__(self, "output_roles", _unique_strings(self.output_roles, field_name="synthetic generator output_roles"))
+        object.__setattr__(self, "required_roles", _unique_strings(self.required_roles, field_name="synthetic generator required_roles"))
+        object.__setattr__(self, "forbidden_roles", _unique_strings(self.forbidden_roles, field_name="synthetic generator forbidden_roles"))
+        for field_name in ("max_prompt_tokens", "max_completion_tokens"):
+            value = getattr(self, field_name)
+            if value is not None and value <= 0:
+                raise ValueError(f"synthetic generator {field_name} must be positive")
+        object.__setattr__(self, "schema_outputs", tuple(sorted(self.schema_outputs, key=lambda item: item.case_id)))
+        object.__setattr__(self, "tool_calls", tuple(sorted(self.tool_calls, key=lambda item: item.case_id)))
+        object.__setattr__(self, "truncation_cases", tuple(sorted(self.truncation_cases, key=lambda item: item.case_id)))
+        object.__setattr__(self, "metadata", tuple(sorted(self.metadata, key=lambda item: item[0])))
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {
+            "name": self.name,
+            "generator_type": self.generator_type,
+        }
+        if self.output_roles:
+            data["output_roles"] = list(self.output_roles)
+        if self.required_roles:
+            data["required_roles"] = list(self.required_roles)
+        if self.forbidden_roles:
+            data["forbidden_roles"] = list(self.forbidden_roles)
+        if self.max_prompt_tokens is not None:
+            data["max_prompt_tokens"] = self.max_prompt_tokens
+        if self.max_completion_tokens is not None:
+            data["max_completion_tokens"] = self.max_completion_tokens
+        if self.schema_outputs:
+            data["schema_outputs"] = [case.to_dict() for case in self.schema_outputs]
+        if self.tool_calls:
+            data["tool_calls"] = [case.to_dict() for case in self.tool_calls]
+        if self.truncation_cases:
+            data["truncation_cases"] = [case.to_dict() for case in self.truncation_cases]
+        if self.metadata:
+            data["metadata"] = dict(self.metadata)
+        return data
+
+
+@dataclass(frozen=True, slots=True)
 class BaseArtifact:
     """Common artifact identity, location, provenance, and payload."""
 
@@ -1106,6 +1251,7 @@ class TrainingManifestArtifact(BaseArtifact):
     chat_template_version: ChatTemplateVersion | None = None
     pipeline_stages: tuple[TrainingPipelineStageVersion, ...] = ()
     redaction_policy: TrainingRedactionPolicy | None = None
+    synthetic_generators: tuple[SyntheticGeneratorSpec, ...] = ()
 
     def __post_init__(self) -> None:
         BaseArtifact.__post_init__(self)
@@ -1130,6 +1276,10 @@ class TrainingManifestArtifact(BaseArtifact):
         if len({stage.stage for stage in pipeline_stages}) != len(pipeline_stages):
             raise ValueError("training manifest pipeline stage names must be unique")
         object.__setattr__(self, "pipeline_stages", pipeline_stages)
+        synthetic_generators = tuple(sorted(self.synthetic_generators, key=lambda generator: generator.name))
+        if len({generator.name for generator in synthetic_generators}) != len(synthetic_generators):
+            raise ValueError("training manifest synthetic generator names must be unique")
+        object.__setattr__(self, "synthetic_generators", synthetic_generators)
         if not self.target_roles and self.loss_mask_policy is not None and self.loss_mask_policy.target_roles:
             object.__setattr__(self, "target_roles", self.loss_mask_policy.target_roles)
         if not self.message_roles and self.role_labels:
@@ -1173,6 +1323,8 @@ class TrainingManifestArtifact(BaseArtifact):
             data["pipeline_stages"] = [stage.to_dict() for stage in self.pipeline_stages]
         if self.redaction_policy is not None:
             data["redaction_policy"] = self.redaction_policy.to_dict()
+        if self.synthetic_generators:
+            data["synthetic_generators"] = [generator.to_dict() for generator in self.synthetic_generators]
         return data
 
 
@@ -1350,6 +1502,7 @@ def artifact_from_config(
             chat_template_version=_chat_template_version(spec),
             pipeline_stages=_training_pipeline_stages(spec),
             redaction_policy=_training_redaction_policy(spec),
+            synthetic_generators=_synthetic_generators(spec),
         )
     raise AssertionError(f"unhandled artifact kind: {kind}")
 
@@ -1691,6 +1844,102 @@ def _training_source_contributions(spec: dict[str, Any]) -> tuple[TrainingSource
             )
         )
     return tuple(contributions)
+
+
+def _synthetic_generators(spec: dict[str, Any]) -> tuple[SyntheticGeneratorSpec, ...]:
+    raw_generators = spec.get("synthetic_generators", spec.get("synthetic_data_generators", []))
+    if not isinstance(raw_generators, list):
+        raise ValueError("artifact field 'synthetic_generators' must be a list")
+    generators: list[SyntheticGeneratorSpec] = []
+    for item in raw_generators:
+        if not isinstance(item, dict):
+            raise ValueError("synthetic generator entries must be objects")
+        generators.append(
+            SyntheticGeneratorSpec(
+                name=_str(item, "name"),
+                generator_type=_str(item, "generator_type", default=_str(item, "type") if "type" in item else "synthetic-chat"),
+                output_roles=_tuple_of_str(item, "output_roles"),
+                required_roles=_tuple_of_str(item, "required_roles"),
+                forbidden_roles=_tuple_of_str(item, "forbidden_roles"),
+                max_prompt_tokens=_optional_int(item, "max_prompt_tokens"),
+                max_completion_tokens=_optional_int(item, "max_completion_tokens"),
+                schema_outputs=_synthetic_schema_outputs(item),
+                tool_calls=_synthetic_tool_calls(item),
+                truncation_cases=_synthetic_truncation_cases(item),
+                metadata=_metadata(item),
+            )
+        )
+    return tuple(generators)
+
+
+def _synthetic_schema_outputs(spec: dict[str, Any]) -> tuple[SyntheticSchemaOutputContract, ...]:
+    raw_cases = spec.get("schema_outputs", spec.get("json_outputs", []))
+    if not isinstance(raw_cases, list):
+        raise ValueError("synthetic generator field 'schema_outputs' must be a list")
+    cases: list[SyntheticSchemaOutputContract] = []
+    for index, item in enumerate(raw_cases):
+        if not isinstance(item, dict):
+            raise ValueError("synthetic schema output entries must be objects")
+        cases.append(
+            SyntheticSchemaOutputContract(
+                case_id=_case_id(item, index),
+                valid=_optional_bool(item, "valid"),
+                parses=_optional_bool(item, "parses"),
+                schema_valid=_optional_bool(item, "schema_valid"),
+                reason=_optional_str(item, "reason") or _optional_str(item, "parser_error") or _optional_str(item, "schema_error"),
+            )
+        )
+    return tuple(cases)
+
+
+def _synthetic_tool_calls(spec: dict[str, Any]) -> tuple[SyntheticToolCallContract, ...]:
+    raw_cases = spec.get("tool_calls", spec.get("tool_call_outputs", []))
+    if not isinstance(raw_cases, list):
+        raise ValueError("synthetic generator field 'tool_calls' must be a list")
+    cases: list[SyntheticToolCallContract] = []
+    for index, item in enumerate(raw_cases):
+        if not isinstance(item, dict):
+            raise ValueError("synthetic tool-call entries must be objects")
+        cases.append(
+            SyntheticToolCallContract(
+                case_id=_case_id(item, index),
+                valid=_optional_bool(item, "valid"),
+                malformed=_optional_bool(item, "malformed"),
+                reason=_optional_str(item, "reason") or _optional_str(item, "error"),
+            )
+        )
+    return tuple(cases)
+
+
+def _synthetic_truncation_cases(spec: dict[str, Any]) -> tuple[SyntheticTruncationContract, ...]:
+    raw_cases = spec.get("truncation_cases", [])
+    if not isinstance(raw_cases, list):
+        raise ValueError("synthetic generator field 'truncation_cases' must be a list")
+    cases: list[SyntheticTruncationContract] = []
+    for index, item in enumerate(raw_cases):
+        if not isinstance(item, dict):
+            raise ValueError("synthetic truncation entries must be objects")
+        cases.append(
+            SyntheticTruncationContract(
+                case_id=_case_id(item, index),
+                input_tokens=_optional_int(item, "input_tokens"),
+                output_tokens=_optional_int(item, "output_tokens"),
+                max_context_tokens=_optional_int(item, "max_context_tokens"),
+                preserved_required_roles=_tuple_of_str(item, "preserved_required_roles"),
+                truncated_required_roles=_tuple_of_str(item, "truncated_required_roles"),
+                reason=_optional_str(item, "reason"),
+            )
+        )
+    return tuple(cases)
+
+
+def _case_id(spec: dict[str, Any], index: int) -> str:
+    return (
+        _optional_str(spec, "id")
+        or _optional_str(spec, "case_id")
+        or _optional_str(spec, "example_id")
+        or f"{index}"
+    )
 
 
 def _preference_pair_contracts(spec: dict[str, Any]) -> tuple[PreferencePairContract, ...]:

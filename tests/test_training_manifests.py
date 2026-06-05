@@ -1005,6 +1005,7 @@ def test_verify_training_manifest_workflow_runs_real_training_checks(tmp_path: P
         "training-invalid-interface",
         "training-bridge",
         "training-drift",
+        "synthetic-generator-contracts",
     ]
     assert payload["ok"] is True
     assert "training-workflow-verified" in rule_ids

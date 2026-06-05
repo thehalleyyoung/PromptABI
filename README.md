@@ -60,7 +60,7 @@ The same local verifier covers:
 | **Budgets + RAG** | must-survive prompt segments, dropped citations, metadata inflation, tokenizer mismatch, framework truncation, and context-window overflow |
 | **Provenance** | artifact hashes, licenses, trusted sources, reproducible HF revisions, lockfile drift, and offline fixture integrity |
 | **Enterprise posture** | org policy packs for required checks, severity, supported fragments, solver caps, privacy rules, approved fixtures, and no-network mirrors |
-| **Training/eval contracts** | target-role alignment, invalid roles/tools/JSON/stops, dataset packing, loss masks, source leakage, redacted witnesses, training-to-serving drift, RLHF/DPO defects, tokenizer/template drift, and real-bug benchmarks |
+| **Training/eval contracts** | target-role alignment, synthetic-generator preflight, invalid roles/tools/JSON/stops, dataset packing, loss masks, source leakage, redacted witnesses, training-to-serving drift, RLHF/DPO defects, tokenizer/template drift, and real-bug benchmarks |
 
 Under the hood, PromptABI combines deterministic automata, finite-state
 transducers, executable specs for witnesses/products/SMT outcomes, differential

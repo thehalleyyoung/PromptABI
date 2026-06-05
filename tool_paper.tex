@@ -78,7 +78,10 @@ a dedicated \texttt{promptabi verify-training} workflow for training manifests,
 dataset declarations, tokenizer and chat-template pins, packing windows, loss
 masks, redaction policy, trained-on-invalid-interface checks for impossible
 roles, malformed tool calls, invalid JSON targets, and unreachable stop examples,
-training-to-serving bridge facts, and corpus-metadata drift checks that compare
+synthetic-data generator preflight checks that reject finite generator plans able
+to emit forbidden roles, invalid schema outputs, malformed tool-call envelopes,
+or truncation cases that drop required regions before any generated row is
+admitted, training-to-serving bridge facts, and corpus-metadata drift checks that compare
 training baselines against model-card facts, tokenizer/template pins, and serving
 lockfile summaries while keeping witnesses structural or hash-only rather than
 raw private dataset material,
@@ -287,7 +290,9 @@ model-card, serving-lockfile, role-delimiter, special-token, generation-prompt,
 tool-format consistency, and finite invalid-interface summaries that reject
 misspelled canonical roles, malformed trained tool-call envelopes, invalid
 structured-output targets, and stop examples unreachable under the declared
-training interface, with concrete models, explicit proof classifications, or
+training interface, plus synthetic-generator contracts that catch role, schema,
+tool-call, and truncation failures before private or large generated datasets are
+materialized, with concrete models, explicit proof classifications, or
 minimized unsat cores,
 a \texttt{promptabi solver replay} maintainer path that verifies such reduced
 solver obligations from portable JSON and treats solver backends, query hashes,
@@ -1839,7 +1844,7 @@ Maintainer refresh & \texttt{promptabi maintain refresh} regenerates model/corpu
 \hline
 Cold/warm cache & Direct measurement of token-budget analysis before and after per-session cache reuse, including an explicit cache-reused metric. \\
 \hline
-Real-bug benchmark & \texttt{promptabi corpus real-bug-benchmark} validates and replays the labeled real-bug suite across popular templates, tokenizers, tool schemas, provider migrations, structured-output parsers, RAG truncation, and training manifests, including target-role, source-leakage, and stage-drift contracts, emitting observed rule IDs and a stable manifest hash. \\
+Real-bug benchmark & \texttt{promptabi corpus real-bug-benchmark} validates and replays the labeled real-bug suite across popular templates, tokenizers, tool schemas, provider migrations, structured-output parsers, RAG truncation, and training manifests, including target-role, source-leakage, synthetic-generator, and stage-drift contracts, emitting observed rule IDs and a stable manifest hash. \\
 \hline
 Beta report & \texttt{promptabi corpus beta-report} replays open-source-style beta case studies, upstream issue records, tuned-absent false-positive expectations, and a synthetic abstention-message regression, requiring actionable abstention witnesses rather than success-shaped unknowns. \\
 \hline
@@ -1910,7 +1915,8 @@ replayable real-bug benchmark case and reports precision/recall/F1 over an
 explicit per-case rule universe. The training slice includes RLHF/DPO fixtures
 and the SFT quickstart; clean manifests prove safety, while defective manifests
 trigger static counterexamples for source leakage, prompt-hash, mask-policy,
-truncation, role-layout, response-start, and packing-boundary bugs. The same
+truncation, role-layout, response-start, packing-boundary, and synthetic
+generator role/schema/tool/truncation bugs. The same
 report measures abstentions, runtime, memory, witness completeness, Z3-backed
 solver decisiveness, and differential agreement against recorded real-library
 semantics.

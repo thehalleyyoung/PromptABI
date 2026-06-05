@@ -126,6 +126,13 @@ CHECK_RULE_IDS: dict[str, tuple[str, ...]] = {
         "training-invalid-interface-unreachable-stop-sequence",
         "training-invalid-interface-verified",
     ),
+    "synthetic-generator-contracts": (
+        "synthetic-generator-contracts-role-contract-violation",
+        "synthetic-generator-contracts-schema-contract-violation",
+        "synthetic-generator-contracts-tool-call-contract-violation",
+        "synthetic-generator-contracts-truncation-contract-violation",
+        "synthetic-generator-contracts-verified",
+    ),
     "training-packing": ("training-packing-boundary", "training-packing-mask", "training-packing-verified"),
     "training-redaction": (
         "training-redaction-hash-missing",
@@ -429,6 +436,7 @@ def _notes_for_check(check_name: str) -> str:
         "training-bridge": "compares training-time tokenizer, template, role delimiter, special-token, generation-prompt, and tool-format facts against serving-time assumptions",
         "training-drift": "compares training-corpus metadata against model-card, tokenizer, chat-template, and serving lockfile pins without materializing private datasets",
         "training-invalid-interface": "checks finite training-interface summaries for impossible canonical roles, malformed tool calls, invalid JSON targets, and unreachable stop examples",
+        "synthetic-generator-contracts": "preflights synthetic-data generators against finite role, structured-output, tool-call, and truncation contracts before examples are materialized",
         "training-redaction": "statically ensures training-manifest witnesses and reports use structural or hashed evidence instead of raw secrets, provider keys, restricted metadata, or dataset text",
         "tokenizer-config-drift": "alias retained for configs that select tokenizer drift under the older check name",
         "tokenizer-drift": "alias of tokenizer-config-drift for user-facing compatibility",
