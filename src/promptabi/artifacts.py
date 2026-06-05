@@ -110,6 +110,102 @@ class EvaluationFewShotExample:
 
 
 @dataclass(frozen=True, slots=True)
+class EvaluationTokenizerSnapshot:
+    """Benchmark-side tokenizer facts pinned by an evaluation harness."""
+
+    harness_family: str = "custom"
+    name: str | None = None
+    revision: str | None = None
+    special_tokens: tuple[tuple[str, str | int | None, int | None], ...] = ()
+    added_tokens: tuple[tuple[str, int | None, bool], ...] = ()
+    normalizer_signature: str | None = None
+    chat_template_sha256: str | None = None
+    chat_template_length: int | None = None
+    bos_token: str | None = None
+    bos_token_id: int | None = None
+    eos_token: str | None = None
+    eos_token_id: int | None = None
+    add_bos_token: bool | None = None
+    add_eos_token: bool | None = None
+    stop_sequences: tuple[str, ...] = ()
+    stop_token_ids: tuple[int, ...] = ()
+
+    def __post_init__(self) -> None:
+        _require_non_empty("evaluation tokenizer harness_family", self.harness_family)
+        for field_name in ("name", "revision", "normalizer_signature", "chat_template_sha256", "bos_token", "eos_token"):
+            _optional_non_empty(f"evaluation tokenizer {field_name}", getattr(self, field_name))
+        for field_name in ("chat_template_length", "bos_token_id", "eos_token_id"):
+            _optional_non_negative(f"evaluation tokenizer {field_name}", getattr(self, field_name))
+        object.__setattr__(
+            self,
+            "special_tokens",
+            tuple(sorted(self.special_tokens, key=lambda item: (item[0], str(item[1]), -1 if item[2] is None else item[2]))),
+        )
+        object.__setattr__(
+            self,
+            "added_tokens",
+            tuple(sorted(self.added_tokens, key=lambda item: (item[0], -1 if item[1] is None else item[1], item[2]))),
+        )
+        object.__setattr__(self, "stop_sequences", _unique_strings(self.stop_sequences, field_name="evaluation tokenizer stop_sequences"))
+        object.__setattr__(self, "stop_token_ids", tuple(sorted(dict.fromkeys(self.stop_token_ids))))
+
+    @property
+    def pinned_fields(self) -> tuple[str, ...]:
+        fields = (
+            "special_tokens",
+            "added_tokens",
+            "normalizer_signature",
+            "chat_template_sha256",
+            "chat_template_length",
+            "bos_token",
+            "bos_token_id",
+            "eos_token",
+            "eos_token_id",
+            "add_bos_token",
+            "add_eos_token",
+            "stop_sequences",
+            "stop_token_ids",
+        )
+        return tuple(field for field in fields if getattr(self, field) not in (None, ()))
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {"harness_family": self.harness_family}
+        if self.name is not None:
+            data["name"] = self.name
+        if self.revision is not None:
+            data["revision"] = self.revision
+        if self.special_tokens:
+            data["special_tokens"] = [
+                {"name": name, "value": value, "token_id": token_id}
+                for name, value, token_id in self.special_tokens
+            ]
+        if self.added_tokens:
+            data["added_tokens"] = [
+                {"content": content, "id": token_id, "special": special}
+                for content, token_id, special in self.added_tokens
+            ]
+        for key in (
+            "normalizer_signature",
+            "chat_template_sha256",
+            "chat_template_length",
+            "bos_token",
+            "bos_token_id",
+            "eos_token",
+            "eos_token_id",
+            "add_bos_token",
+            "add_eos_token",
+        ):
+            value = getattr(self, key)
+            if value is not None:
+                data[key] = value
+        if self.stop_sequences:
+            data["stop_sequences"] = list(self.stop_sequences)
+        if self.stop_token_ids:
+            data["stop_token_ids"] = list(self.stop_token_ids)
+        return data
+
+
+@dataclass(frozen=True, slots=True)
 class ArtifactLocation:
     """Where an artifact came from.
 
@@ -1372,6 +1468,7 @@ class EvaluationHarnessArtifact(BaseArtifact):
     chain_of_thought_variables: tuple[str, ...] = ()
     few_shot_examples: tuple[EvaluationFewShotExample, ...] = ()
     max_prompt_tokens: int | None = None
+    benchmark_tokenizer: EvaluationTokenizerSnapshot | None = None
 
     def __post_init__(self) -> None:
         BaseArtifact.__post_init__(self)
@@ -1433,6 +1530,8 @@ class EvaluationHarnessArtifact(BaseArtifact):
             data["few_shot_examples"] = [example.to_dict() for example in self.few_shot_examples]
         if self.max_prompt_tokens is not None:
             data["max_prompt_tokens"] = self.max_prompt_tokens
+        if self.benchmark_tokenizer is not None:
+            data["benchmark_tokenizer"] = self.benchmark_tokenizer.to_dict()
         return data
 
 
@@ -1632,6 +1731,7 @@ def artifact_from_config(
             chain_of_thought_variables=_tuple_of_str_aliases(spec, "chain_of_thought_variables", "chain_of_thought_fields"),
             few_shot_examples=_evaluation_few_shot_examples(spec),
             max_prompt_tokens=_optional_int(spec, "max_prompt_tokens"),
+            benchmark_tokenizer=_evaluation_tokenizer_snapshot(spec),
         )
     raise AssertionError(f"unhandled artifact kind: {kind}")
 
@@ -2025,6 +2125,75 @@ def _evaluation_few_shot_examples(spec: dict[str, Any]) -> tuple[EvaluationFewSh
             )
         )
     return tuple(examples)
+
+
+def _evaluation_tokenizer_snapshot(spec: dict[str, Any]) -> EvaluationTokenizerSnapshot | None:
+    raw = spec.get("benchmark_tokenizer", spec.get("tokenizer_snapshot"))
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError("artifact field 'benchmark_tokenizer' must be an object")
+    return EvaluationTokenizerSnapshot(
+        harness_family=_str(raw, "harness_family", default=_str(raw, "source", default="custom") if "source" in raw else "custom"),
+        name=_optional_str(raw, "name") or _optional_str(raw, "tokenizer"),
+        revision=_optional_str(raw, "revision") or _optional_str(raw, "tokenizer_revision"),
+        special_tokens=_evaluation_special_token_snapshot(raw),
+        added_tokens=_evaluation_added_token_snapshot(raw),
+        normalizer_signature=_optional_str(raw, "normalizer_signature"),
+        chat_template_sha256=_optional_str(raw, "chat_template_sha256"),
+        chat_template_length=_optional_int(raw, "chat_template_length"),
+        bos_token=_optional_str(raw, "bos_token"),
+        bos_token_id=_optional_int(raw, "bos_token_id"),
+        eos_token=_optional_str(raw, "eos_token"),
+        eos_token_id=_optional_int(raw, "eos_token_id"),
+        add_bos_token=_optional_bool(raw, "add_bos_token"),
+        add_eos_token=_optional_bool(raw, "add_eos_token"),
+        stop_sequences=_tuple_of_str(raw, "stop_sequences"),
+        stop_token_ids=_tuple_of_int(raw, "stop_token_ids"),
+    )
+
+
+def _evaluation_special_token_snapshot(spec: dict[str, Any]) -> tuple[tuple[str, str | int | None, int | None], ...]:
+    raw = spec.get("special_tokens", [])
+    if isinstance(raw, dict):
+        tokens: list[tuple[str, str | int | None, int | None]] = []
+        for name, value in sorted(raw.items()):
+            if not isinstance(name, str) or not name:
+                raise ValueError("evaluation tokenizer special_tokens names must be non-empty strings")
+            if not isinstance(value, str | int) and value is not None:
+                raise ValueError("evaluation tokenizer special_tokens values must be strings, integers, or null")
+            tokens.append((name, value, None))
+        return tuple(tokens)
+    if not isinstance(raw, list):
+        raise ValueError("evaluation tokenizer special_tokens must be an object or list")
+    tokens = []
+    for item in raw:
+        if not isinstance(item, dict):
+            raise ValueError("evaluation tokenizer special_tokens entries must be objects")
+        name = _str(item, "name")
+        value = item.get("value", item.get("text", item.get("content")))
+        if value is not None and not isinstance(value, str | int):
+            raise ValueError("evaluation tokenizer special token value must be a string, integer, or null")
+        tokens.append((name, value, _optional_int(item, "token_id") if "token_id" in item else _optional_int(item, "id")))
+    return tuple(tokens)
+
+
+def _evaluation_added_token_snapshot(spec: dict[str, Any]) -> tuple[tuple[str, int | None, bool], ...]:
+    raw = spec.get("added_tokens", [])
+    if not isinstance(raw, list):
+        raise ValueError("evaluation tokenizer added_tokens must be a list")
+    tokens: list[tuple[str, int | None, bool]] = []
+    for item in raw:
+        if isinstance(item, str) and item:
+            tokens.append((item, None, False))
+            continue
+        if not isinstance(item, dict):
+            raise ValueError("evaluation tokenizer added_tokens entries must be strings or objects")
+        content = _optional_str(item, "content") or _optional_str(item, "text")
+        if content is None:
+            raise ValueError("evaluation tokenizer added token entries must declare content")
+        tokens.append((content, _optional_int(item, "id"), _bool(item, "special", default=False)))
+    return tuple(tokens)
 
 
 def _synthetic_schema_outputs(spec: dict[str, Any]) -> tuple[SyntheticSchemaOutputContract, ...]:

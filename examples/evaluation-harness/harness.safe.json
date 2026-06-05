@@ -13,6 +13,18 @@
   "answer_key_variables": ["expected_answer"],
   "grading_rubric_variables": ["private_grading_rubric"],
   "chain_of_thought_variables": ["grader_chain_of_thought"],
+  "benchmark_tokenizer": {
+    "harness_family": "lm-eval",
+    "name": "byte-bpe",
+    "chat_template_sha256": "578572a7fcbcfc27e5c4dc0918426cd4b4eda803584ce27df024a6c6a39bfc8b",
+    "chat_template_length": 141,
+    "special_tokens": [
+      {"name": "bos_token", "value": "<s>"},
+      {"name": "eos_token", "value": "</s>"}
+    ],
+    "bos_token": "<s>",
+    "eos_token": "</s>"
+  },
   "max_prompt_tokens": 64,
   "few_shot_examples": [
     {

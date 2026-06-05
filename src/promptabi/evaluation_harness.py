@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -200,7 +201,181 @@ def _tokenizer_findings(
                 suggestion="Use the same tokenizer artifact in the evaluation harness and production/provider contract.",
             ),
         )
-    return ()
+    matching = _matching_tokenizers(harness.tokenizer, tokenizers)
+    return _benchmark_tokenizer_drift_findings(harness, matching, spans)
+
+
+def _matching_tokenizers(tokenizer_name: str, tokenizers: Sequence[TokenizerArtifact]) -> tuple[TokenizerArtifact, ...]:
+    exact = tuple(tokenizer for tokenizer in tokenizers if tokenizer.name == tokenizer_name)
+    if exact:
+        return exact
+    return tuple(tokenizer for tokenizer in tokenizers if tokenizer.family == tokenizer_name)
+
+
+def _benchmark_tokenizer_drift_findings(
+    harness: EvaluationHarnessArtifact,
+    tokenizers: Sequence[TokenizerArtifact],
+    spans: Mapping[str, SourceSpan],
+) -> tuple[EvaluationHarnessFinding, ...]:
+    pin = harness.benchmark_tokenizer
+    if pin is None or not pin.pinned_fields:
+        return (
+            EvaluationHarnessFinding(
+                rule_id="evaluation-harness-tokenizer-unpinned",
+                severity="warning",
+                message="evaluation harness does not pin benchmark tokenizer revision/config facts for reproducible scores",
+                suggestion=(
+                    "Add benchmark_tokenizer with the HELM, lm-eval, custom, or provider-hosted tokenizer revision "
+                    "and the tokenizer fields that affect prompt rendering, stopping, and scoring."
+                ),
+                subject="benchmark_tokenizer",
+                span=spans.get("benchmark_tokenizer") or spans.get("tokenizer"),
+                witness=(
+                    ("inspect benchmark tokenizer pin", harness.benchmark_name, "missing finite tokenizer snapshot"),
+                    ("classify harness family", None, "provider-hosted" if pin and pin.harness_family == "provider-hosted" else "unpinned local/custom harness"),
+                ),
+            ),
+        )
+    if pin.name is not None and pin.name not in {tokenizer.name for tokenizer in tokenizers}.union(
+        tokenizer.family for tokenizer in tokenizers if tokenizer.family
+    ):
+        return (
+            _mismatch(
+                "evaluation-harness-tokenizer-drift",
+                "benchmark_tokenizer.name",
+                "benchmark tokenizer pin names a tokenizer that is not represented by configured tokenizer artifacts",
+                expected=", ".join(sorted({tokenizer.name for tokenizer in tokenizers})) or "<none>",
+                actual=pin.name,
+                span=spans.get("benchmark_tokenizer.name") or spans.get("benchmark_tokenizer"),
+                suggestion="Point benchmark_tokenizer.name at the same tokenizer artifact or family used by the evaluation harness.",
+            ),
+        )
+    if pin.harness_family == "provider-hosted":
+        return (
+            EvaluationHarnessFinding(
+                rule_id="evaluation-harness-tokenizer-unpinned",
+                severity="warning",
+                message="provider-hosted evaluation tokenizer pin cannot be compared without a local reproducible tokenizer snapshot",
+                suggestion="Mirror provider-hosted benchmark tokenizer configs locally and declare them as tokenizer artifacts before publishing scores.",
+                subject="benchmark_tokenizer",
+                span=spans.get("benchmark_tokenizer") or spans.get("tokenizer"),
+                witness=(
+                    ("classify harness family", pin.harness_family, "provider-hosted"),
+                    ("compare benchmark tokenizer snapshot", None, "abstained: no local provider tokenizer files"),
+                ),
+            ),
+        )
+    if not tokenizers:
+        return ()
+
+    findings: list[EvaluationHarnessFinding] = []
+    for tokenizer in tokenizers:
+        if tokenizer.location.path is None:
+            findings.append(
+                EvaluationHarnessFinding(
+                    rule_id="evaluation-harness-tokenizer-unpinned",
+                    severity="warning",
+                    message="evaluation tokenizer artifact is not a local file, so benchmark tokenizer drift cannot be replayed",
+                    suggestion="Use a local pinned tokenizer directory or file for benchmark drift checks.",
+                    subject=f"benchmark_tokenizer.{tokenizer.name}",
+                    span=spans.get("benchmark_tokenizer") or spans.get("tokenizer"),
+                    witness=(
+                        ("select tokenizer artifact", tokenizer.name, tokenizer.location.ref_path),
+                        ("load tokenizer snapshot", None, "abstained: non-local artifact"),
+                    ),
+                )
+            )
+            continue
+        snapshot_path = _snapshot_path(Path(tokenizer.location.path))
+        try:
+            from .tokenizer_drift import load_tokenizer_config_snapshot
+
+            current = load_tokenizer_config_snapshot(
+                snapshot_path,
+                revision=tokenizer.provenance.revision or tokenizer.provenance.version,
+            )
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            findings.append(
+                EvaluationHarnessFinding(
+                    rule_id="evaluation-harness-tokenizer-unpinned",
+                    severity="warning",
+                    message="evaluation tokenizer artifact could not be loaded for benchmark drift comparison",
+                    suggestion="Point the tokenizer artifact at a directory containing tokenizer_config.json, tokenizer.json, or generation_config.json.",
+                    subject=f"benchmark_tokenizer.{tokenizer.name}",
+                    span=spans.get("benchmark_tokenizer") or spans.get("tokenizer"),
+                    witness=(
+                        ("select tokenizer artifact", tokenizer.name, str(snapshot_path)),
+                        ("load tokenizer snapshot", None, str(exc)),
+                    ),
+                )
+            )
+            continue
+        findings.extend(_compare_benchmark_tokenizer_pin(harness, tokenizer, current, spans))
+    return tuple(findings)
+
+
+def _snapshot_path(path: Path) -> Path:
+    if path.is_file():
+        sibling_names = {"tokenizer_config.json", "tokenizer.json", "special_tokens_map.json", "generation_config.json"}
+        if any((path.parent / name).is_file() for name in sibling_names):
+            return path.parent
+    return path
+
+
+def _compare_benchmark_tokenizer_pin(
+    harness: EvaluationHarnessArtifact,
+    tokenizer: TokenizerArtifact,
+    current,
+    spans: Mapping[str, SourceSpan],
+) -> tuple[EvaluationHarnessFinding, ...]:
+    pin = harness.benchmark_tokenizer
+    if pin is None:
+        return ()
+    findings: list[EvaluationHarnessFinding] = []
+    for field in pin.pinned_fields:
+        expected = getattr(pin, field)
+        actual = getattr(current, field)
+        if expected == actual:
+            continue
+        findings.append(
+            EvaluationHarnessFinding(
+                rule_id="evaluation-harness-tokenizer-drift",
+                severity="error",
+                message=f"benchmark tokenizer pin for {field} differs from configured tokenizer artifact '{tokenizer.name}'",
+                suggestion="Regenerate the benchmark harness tokenizer snapshot from the same tokenizer files used by the provider/model contract.",
+                subject=f"benchmark_tokenizer.{field}",
+                expected=_display_value(expected),
+                actual=_display_value(actual),
+                span=spans.get(f"benchmark_tokenizer.{field}") or spans.get("benchmark_tokenizer") or spans.get("tokenizer"),
+                witness=(
+                    ("select benchmark harness", harness.benchmark_name, harness.name),
+                    ("classify harness family", pin.harness_family, "local reproducible snapshot"),
+                    ("load configured tokenizer snapshot", tokenizer.name, current.path),
+                    ("compare benchmark tokenizer field", field, f"{_drift_kind(field)}: mismatch"),
+                ),
+            )
+        )
+    return tuple(findings)
+
+
+def _drift_kind(field: str) -> str:
+    if field in {"special_tokens", "bos_token", "bos_token_id", "eos_token", "eos_token_id"}:
+        return "special-token-id-change" if field == "special_tokens" else "bos-eos-change"
+    if field == "added_tokens":
+        return "added-token-change"
+    if field == "normalizer_signature":
+        return "normalization-change"
+    if field in {"chat_template_sha256", "chat_template_length"}:
+        return "chat-template-change"
+    if field in {"stop_sequences", "stop_token_ids"}:
+        return "stop-policy-change"
+    return "normalization-change"
+
+
+def _display_value(value: object) -> str:
+    if isinstance(value, tuple):
+        return json.dumps(value, sort_keys=True, separators=(",", ":"))
+    return str(value)
 
 
 def _template_findings(
