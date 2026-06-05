@@ -1,0 +1,26 @@
+name: Corpus fixture contribution
+description: Submit a sanitized model, schema, provider, RAG, training, or benchmark fixture.
+title: "[Corpus]: "
+labels: ["area: corpus"]
+body:
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Provenance, license, and revision
+      description: Include source URL or origin, license, exact revision/hash, and fixture minimization notes.
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy and secret review
+      description: Confirm the fixture contains no secrets, private prompts, customer data, or credential-like values.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected diagnostics
+      description: List expected rule IDs, severities, fingerprints if known, and why each finding is real.
+    validations:
+      required: true

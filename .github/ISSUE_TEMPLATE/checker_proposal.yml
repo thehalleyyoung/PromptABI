@@ -1,0 +1,26 @@
+name: Checker proposal
+description: Propose a new PromptABI check with its contract, mode, and evidence plan.
+title: "[Checker]: "
+labels: ["type: proposal", "area: checker"]
+body:
+  - type: textarea
+    id: contract
+    attributes:
+      label: Contract to verify
+      description: Define the artifact boundary, unsafe state, supported fragment, and non-goals.
+    validations:
+      required: true
+  - type: textarea
+    id: guarantee
+    attributes:
+      label: Guarantee mode and witnesses
+      description: State whether the check is sound, complete, bounded, SMT-backed, heuristic, or abstaining.
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: Fixtures and differential evidence
+      description: Name minimized safe/unsafe fixtures, property tests, and any real-library comparisons.
+    validations:
+      required: true

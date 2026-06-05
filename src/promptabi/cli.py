@@ -30,6 +30,12 @@ from .compatibility_matrix import (
     render_compatibility_matrix_json,
     render_compatibility_matrix_text,
 )
+from .contributor_validation import (
+    ContributorValidationError,
+    render_contributor_validation_json,
+    render_contributor_validation_text,
+    validate_contributor_infrastructure,
+)
 from .corpus_verification import (
     CorpusVerificationError,
     CorpusVerificationThresholds,
@@ -696,6 +702,23 @@ def build_parser() -> argparse.ArgumentParser:
         "--force",
         action="store_true",
         help="overwrite existing maintainer refresh files in the output directory",
+    )
+
+    contribute = subparsers.add_parser("contribute", help="contributor infrastructure and onboarding workflows")
+    contribute_subparsers = contribute.add_subparsers(dest="contribute_command", required=True)
+    contribute_validate = contribute_subparsers.add_parser(
+        "validate",
+        help="validate issue templates, labels, contributor guides, and CI contributor gates",
+    )
+    contribute_validate.add_argument(
+        "--repo-root",
+        help="repository root to validate (default: installed PromptABI repository root)",
+    )
+    contribute_validate.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
     )
 
     minimize = subparsers.add_parser(
@@ -1404,6 +1427,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"{refresh.output_dir} ({len(refresh.written_files)} files, diff={refresh.diff['status']})"
         )
         return 0 if refresh.snapshot["corpus_verification"]["ok"] else 1  # type: ignore[index]
+
+    if args.command == "contribute" and args.contribute_command == "validate":
+        try:
+            report = validate_contributor_infrastructure(args.repo_root)
+            output = (
+                render_contributor_validation_json(report)
+                if args.format == "json"
+                else render_contributor_validation_text(report)
+            )
+        except ContributorValidationError as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        print(output, end="")
+        return 0 if report.ok else 1
 
     if args.command == "minimize":
         try:

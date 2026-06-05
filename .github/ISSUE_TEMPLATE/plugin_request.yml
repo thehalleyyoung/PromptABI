@@ -1,0 +1,26 @@
+name: Plugin request
+description: Propose or discuss a loader, check, renderer, provider, grammar, or solver plugin.
+title: "[Plugin]: "
+labels: ["area: plugin"]
+body:
+  - type: textarea
+    id: capability
+    attributes:
+      label: Capability
+      description: Describe the plugin capability, supported fragment, and first-party integration points.
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy and determinism
+      description: Explain network behavior, secret handling, deterministic output, and CPU-only test strategy.
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility plan
+      description: List public APIs used, compatibility tests, docs, and deprecation considerations.
+    validations:
+      required: true

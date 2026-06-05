@@ -121,6 +121,10 @@ a maintainer refresh workflow that regenerates model-artifact manifests,
 structured-schema manifests, provider fixture pack manifests, real-bug benchmark
 manifests, portable expected-diagnostic baselines, corpus diffs, and release
 notes from real verification output,
+a contributor-infrastructure gate that validates structured GitHub issue
+templates, a label manifest with good-first-issue and area labels, MkDocs-linked
+plugin/checker/corpus author guides, and CI path triggers through
+\texttt{promptabi contribute validate},
 a \texttt{promptabi init} workflow that writes verifiable starter contracts and
 local fixture stubs for OpenAI tools, Hugging Face local models, vLLM
 OpenAI-compatible servers, llama.cpp, LangChain RAG, LlamaIndex agents, and
@@ -486,7 +490,9 @@ environment metadata, and one-command regeneration scripts, plus a maintainer
 artifact bundle with model/corpus/provider manifests, expected diagnostic
 baselines, corpus diffs, generated release notes, and a launch asset bundle whose
 comparison table, diagram, benchmark chart, bug gallery, demo script, and concise
-positioning are checked by focused tests.
+positioning are checked by focused tests, and validates contribution
+infrastructure---issue templates, labels, contributor guides, docs navigation, and
+CI triggers---through the same local CLI/API path used by maintainers.
 
 The repository layout is designed to scale:
 
@@ -500,6 +506,8 @@ The repository layout is designed to scale:
 \texttt{src/promptabi/plugins.py} & Typed extension registry for artifact loaders, dependency-aware checks, diagnostic renderers, and capability metadata covering provider adapters, grammar backends, template dialects, truncation policies, and solver encodings. \\
 \hline
 \texttt{src/promptabi/api\_stability.py} & Generated public-API manifest, stable/provisional/deprecated symbol taxonomy, deprecation decorator, Markdown/JSON API reference renderers, and baseline compatibility comparison for downstream plugin authors. \\
+\hline
+\texttt{src/promptabi/contributor\_validation.py} & Dependency-free validation for issue templates, label manifests, plugin author docs, checker design rules, corpus contribution rules, MkDocs navigation, and CI contributor-test gates exposed as \texttt{promptabi contribute validate}. \\
 \hline
 \texttt{editors/vscode} & Minimal VS Code extension shim that invokes \texttt{promptabi diagnostics lsp} and \texttt{promptabi explain}, publishes inline diagnostics, contributes quick-check/code-action commands, and renders witness previews from real verification payloads. \\
 \hline

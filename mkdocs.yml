@@ -5,6 +5,10 @@ nav:
   - Quickstart: quickstart.md
   - Integration guides: integrations.md
   - Public API: public-api.md
+  - Contributing:
+      - Plugin author guide: contributing/plugin-author-guide.md
+      - Checker design: contributing/checker-design.md
+      - Corpus contributions: contributing/corpus-contributions.md
   - Architecture: architecture.md
   - Security model: security-model.md
   - Check families: checks.md

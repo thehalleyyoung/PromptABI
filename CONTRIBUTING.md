@@ -9,6 +9,7 @@ is sound, bounded, heuristic, or an abstention.
 ```bash
 python -m pip install -e ".[dev]"
 python -m pytest tests/test_public_api.py tests/test_config.py tests/test_cli.py
+promptabi contribute validate
 ```
 
 ## Expectations
@@ -25,3 +26,11 @@ python -m pytest tests/test_public_api.py tests/test_config.py tests/test_cli.py
 Fixture packs should include provenance, license notes, revision pins, expected
 diagnostics, and a statement that no secrets or private prompts are included.
 
+See the focused contributor guides for larger changes:
+
+- [`docs/contributing/plugin-author-guide.md`](docs/contributing/plugin-author-guide.md)
+  for `PluginRegistry` extensions, privacy expectations, and compatibility tests.
+- [`docs/contributing/checker-design.md`](docs/contributing/checker-design.md)
+  for `CheckMode`, witness, abstention, and differential-evidence standards.
+- [`docs/contributing/corpus-contributions.md`](docs/contributing/corpus-contributions.md)
+  for provenance, license, no secrets, and expected-diagnostic requirements.

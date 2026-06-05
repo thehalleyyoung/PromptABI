@@ -12,6 +12,12 @@ from .compatibility_matrix import (
     render_compatibility_matrix_json,
     render_compatibility_matrix_text,
 )
+from .contributor_validation import (
+    ContributorValidationReport,
+    render_contributor_validation_json,
+    render_contributor_validation_text,
+    validate_contributor_infrastructure,
+)
 from .corpus_verification import (
     CorpusVerificationReport,
     CorpusVerificationThresholds,
@@ -495,6 +501,23 @@ def refresh_maintainer_tooling(
         repo_root=repo_root,
         force=force,
     )
+
+
+def contributor_infrastructure(
+    repo_root: str | Path | None = None,
+    *,
+    output_format: str | None = None,
+) -> ContributorValidationReport | str:
+    """Validate contributor templates, labels, docs, and CI gates."""
+
+    report = validate_contributor_infrastructure(repo_root)
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_contributor_validation_json(report)
+    if output_format == "text":
+        return render_contributor_validation_text(report)
+    raise ValueError("output_format must be one of: text, json")
 
 
 def fuzz_mutations(

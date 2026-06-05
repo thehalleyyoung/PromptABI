@@ -1,0 +1,26 @@
+name: Bug report
+description: Report a deterministic PromptABI failure, false positive, or regression.
+title: "[Bug]: "
+labels: ["type: bug"]
+body:
+  - type: textarea
+    id: symptom
+    attributes:
+      label: What happened?
+      description: Include the command, expected behavior, actual behavior, and minimized output.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction artifacts
+      description: Link or paste sanitized configs, fixtures, lockfiles, and diagnostic fingerprints.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include PromptABI version, Python version, optional backends, and OS.
+    validations:
+      required: true
