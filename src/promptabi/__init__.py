@@ -1258,6 +1258,16 @@ from .solver_fragment_conformance import (
     run_fragment_conformance_suite,
     standard_fragment_conformance_suite,
 )
+from .unicode_normalization import (
+    UNICODE_NORMALIZATION_VERSION,
+    CharacterModel,
+    NormalizationFinding,
+    NormalizationFindingKind,
+    NormalizationReport,
+    analyze_normalization,
+    render_normalization_json,
+    render_normalization_text,
+)
 from .provider_fixture_replay import (
     ProviderFixtureReplayCase,
     ProviderFixtureReplayFinding,
@@ -2268,6 +2278,14 @@ __all__ = [
     "render_conformance_text",
     "run_fragment_conformance_suite",
     "standard_fragment_conformance_suite",
+    "UNICODE_NORMALIZATION_VERSION",
+    "CharacterModel",
+    "NormalizationFinding",
+    "NormalizationFindingKind",
+    "NormalizationReport",
+    "analyze_normalization",
+    "render_normalization_json",
+    "render_normalization_text",
     "analyze_parser_compatibility",
     "analyze_tokenizer_grammar_ambiguity",
     "analyze_tokenizer_grammar_emptiness",
