@@ -40,6 +40,12 @@ from .local_workflows import (
     render_local_workflow_text,
     run_local_workflow,
 )
+from .localization import (
+    LocalizationError,
+    build_diagnostic_catalog,
+    render_diagnostic_catalog_json,
+    render_diagnostic_catalog_text,
+)
 from .lockfiles import (
     LockfileError,
     build_lockfile,
@@ -522,6 +528,31 @@ def build_parser() -> argparse.ArgumentParser:
     )
     usage_subparsers.add_parser("privacy", help="print local-summary privacy guarantees")
 
+    diagnostics = subparsers.add_parser("diagnostics", help="diagnostic metadata and localization workflows")
+    diagnostics_subparsers = diagnostics.add_subparsers(dest="diagnostics_command", required=True)
+    diagnostics_catalog = diagnostics_subparsers.add_parser(
+        "catalog",
+        help="emit a localization-ready message catalog from real verification diagnostics",
+    )
+    diagnostics_catalog.add_argument(
+        "--config",
+        help="path to a PromptABI JSON config; defaults to discovering promptabi.json upward from cwd",
+    )
+    diagnostics_catalog.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        metavar="NAME=PATH_OR_URI",
+        help="override or add an artifact location for this run; may be repeated",
+    )
+    diagnostics_catalog.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="json",
+        help="output format (default: json)",
+    )
+    diagnostics_catalog.add_argument("--output", help="write the catalog to this path instead of stdout")
+
     maintain = subparsers.add_parser("maintain", help="maintainer corpus, fixture, and release-note workflows")
     maintain_subparsers = maintain.add_subparsers(dest="maintain_command", required=True)
     maintain_refresh = maintain_subparsers.add_parser(
@@ -821,6 +852,30 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         except OSError as exc:
             print(f"promptabi: cannot write bug report: {exc}", file=sys.stderr)
+            return 2
+        return 0
+
+    if args.command == "diagnostics" and args.diagnostics_command == "catalog":
+        try:
+            config_path = Path(args.config).resolve() if args.config else discover_config()
+            overrides = _parse_artifact_overrides(args.artifact, parser)
+            config = load_config(config_path).with_artifact_overrides(overrides, base_dir=Path.cwd())
+            result = VerificationSession(config).run()
+            catalog = build_diagnostic_catalog(result.diagnostics)
+            output = (
+                render_diagnostic_catalog_text(catalog)
+                if args.format == "text"
+                else render_diagnostic_catalog_json(catalog)
+            )
+            if args.output:
+                Path(args.output).write_text(output, encoding="utf-8")
+            else:
+                print(output, end="")
+        except (ConfigError, LocalizationError, ValueError) as exc:
+            print(f"promptabi: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"promptabi: cannot write diagnostic catalog: {exc}", file=sys.stderr)
             return 2
         return 0
 

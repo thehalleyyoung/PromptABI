@@ -7,7 +7,9 @@ PromptABI proved a property, searched a bounded fragment, used Z3-backed SMT,
 reported heuristic evidence, or abstained outside the supported model.
 The same diagnostics render to text, JSON, SARIF, GitHub annotations, and the
 bundled GitHub Action summary, so CI and local debugging share one source of
-truth.
+truth. Diagnostic messages also expose stable localization keys and optional
+placeholder metadata; see [Diagnostic localization](localization.md) for the
+catalog format and `promptabi diagnostics catalog` workflow.
 
 | Mode | Meaning |
 | --- | --- |

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
@@ -67,6 +68,9 @@ CHECK_MODE_DESCRIPTIONS: dict[CheckMode, str] = {
     CheckMode.HEURISTIC: "The check is useful evidence but is not a proof over a fully modeled fragment.",
     CheckMode.ABSTAINING: "The check explicitly declines to decide cases outside its supported fragment.",
 }
+
+LOCALIZATION_ID_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
+LOCALIZATION_ARG_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +208,8 @@ class Diagnostic:
     suggestions: tuple[str, ...] = field(default_factory=tuple)
     check_modes: tuple[CheckMode | str, ...] = field(default_factory=tuple)
     properties: tuple[tuple[str, Any], ...] = field(default_factory=tuple)
+    message_id: str | None = None
+    message_args: tuple[tuple[str, Any], ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
         if not self.rule_id:
@@ -220,6 +226,23 @@ class Diagnostic:
         if any(not key for key, _value in self.properties):
             raise ValueError("diagnostic property keys must be non-empty")
         object.__setattr__(self, "properties", tuple(sorted(self.properties, key=lambda item: item[0])))
+        if self.message_id is not None and not LOCALIZATION_ID_PATTERN.fullmatch(self.message_id):
+            raise ValueError("diagnostic message_id must be a stable dotted lowercase identifier")
+        if any(not LOCALIZATION_ARG_PATTERN.fullmatch(key) for key, _value in self.message_args):
+            raise ValueError("diagnostic message_args keys must be valid placeholder identifiers")
+        message_args = tuple(sorted(self.message_args, key=lambda item: item[0]))
+        if len({key for key, _value in message_args}) != len(message_args):
+            raise ValueError("diagnostic message_args must not contain duplicate keys")
+        object.__setattr__(self, "message_args", message_args)
+
+    @property
+    def localization_key(self) -> str:
+        """Return the stable catalog key used for future translations."""
+
+        if self.message_id is not None:
+            return self.message_id
+        normalized_rule = re.sub(r"[^a-z0-9]+", ".", self.rule_id.lower()).strip(".")
+        return f"promptabi.diagnostic.{normalized_rule}"
 
     @property
     def fingerprint(self) -> str:
@@ -257,6 +280,12 @@ class Diagnostic:
             data["witness"] = self.witness.to_dict()
         if self.properties:
             data["properties"] = dict(self.properties)
+        if self.message_id is not None or self.message_args:
+            data["localization"] = {
+                "message_id": self.localization_key,
+                "default_locale": "en",
+                "message_args": dict(self.message_args),
+            }
         return data
 
 

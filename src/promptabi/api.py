@@ -30,6 +30,12 @@ from .bug_reports import BugReport, generate_bug_report, render_bug_report
 from .explain import DiagnosticExplanation, explain_diagnostic, render_explanation_json, render_explanation_text
 from .loaders import ArtifactLoader, LoadedArtifact
 from .first_party_plugins import create_first_party_plugin_registry
+from .localization import (
+    DiagnosticCatalogEntry,
+    build_diagnostic_catalog,
+    render_diagnostic_catalog_json,
+    render_diagnostic_catalog_text,
+)
 from .maintainer import MaintainerRefresh, refresh_maintainer_artifacts
 from .minimization import (
     FailurePredicate,
@@ -259,6 +265,23 @@ def render_minimization(result: MinimizationResult, *, output_format: str = "tex
         return render_minimization_text(result)
     if output_format == "json":
         return render_minimization_json(result)
+    raise ValueError("output_format must be one of: text, json")
+
+
+def diagnostic_message_catalog(
+    diagnostics: Sequence[Diagnostic],
+    *,
+    output_format: str | None = None,
+) -> tuple[DiagnosticCatalogEntry, ...] | str:
+    """Build or render a localization-ready catalog from diagnostic objects."""
+
+    catalog = build_diagnostic_catalog(diagnostics)
+    if output_format is None:
+        return catalog
+    if output_format == "json":
+        return render_diagnostic_catalog_json(catalog)
+    if output_format == "text":
+        return render_diagnostic_catalog_text(catalog)
     raise ValueError("output_format must be one of: text, json")
 
 

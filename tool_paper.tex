@@ -218,6 +218,10 @@ deduplicates repeated logical diagnostics, selects one finding by fingerprint,
 rule, or index, and renders a tutorial explanation with source snippets, the
 checked formal property, proof-mode descriptions, witness steps, likely
 production symptoms, and concrete fixes in text or JSON.
+Diagnostic messages now also expose localization-ready catalog keys and strict
+placeholder metadata, with \texttt{promptabi diagnostics catalog} emitting a
+deterministic English source catalog from real verification output while existing
+CI renderers continue to display stable English text.
 The adjacent \texttt{promptabi bug-report} command uses the same selector and
 verification path but emits an upstream-ready markdown issue rather than a local
 tutorial, so the strongest evaluation unit---a maintainer-actionable bug

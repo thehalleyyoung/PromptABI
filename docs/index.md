@@ -6,7 +6,8 @@ around an LLM without loading model weights or running inference.
 
 The repository includes the public Python package, CLI entrypoint, GitHub Action,
 integration guides, tests, examples, fixture corpus layout, benchmark layout, and
-docs structure needed for formal PromptABI checks to run in real CI.
+docs structure needed for formal PromptABI checks to run in real CI, including a
+localization-ready diagnostic catalog for future translated interfaces.
 
 Its security model is intentionally local and structural: PromptABI does not
 claim semantic model safety, and it does not need live provider calls to prove

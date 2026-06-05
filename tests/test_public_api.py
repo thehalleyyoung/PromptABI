@@ -16,6 +16,7 @@ from promptabi import (
     collect_diagnostics,
     create_bug_report,
     create_session,
+    diagnostic_message_catalog,
     load_artifacts,
     render_result,
     render_bug_report,
@@ -106,6 +107,15 @@ def test_collect_diagnostics_reports_unknown_embedded_check() -> None:
 
     assert diagnostics[0].rule_id == "check-unknown"
     assert diagnostics[0].severity is DiagnosticSeverity.ERROR
+
+
+def test_public_api_builds_diagnostic_message_catalog() -> None:
+    result = run_verification("examples/minimal/promptabi.json")
+
+    rendered = diagnostic_message_catalog(result.diagnostics, output_format="text")
+
+    assert "PromptABI diagnostic message catalog" in rendered
+    assert "promptabi.diagnostic.repository.skeleton" in rendered
 
 
 def test_diagnostic_to_dict_omits_absent_optional_fields() -> None:
