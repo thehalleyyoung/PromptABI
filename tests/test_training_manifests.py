@@ -1002,6 +1002,7 @@ def test_verify_training_manifest_workflow_runs_real_training_checks(tmp_path: P
         "training-workflow",
         "training-packing",
         "training-redaction",
+        "training-invalid-interface",
         "training-bridge",
         "training-drift",
     ]
@@ -1009,6 +1010,7 @@ def test_verify_training_manifest_workflow_runs_real_training_checks(tmp_path: P
     assert "training-workflow-verified" in rule_ids
     assert "training-packing-verified" in rule_ids
     assert "training-redaction-verified" in rule_ids
+    assert "training-invalid-interface-contract-missing" in rule_ids
     assert "training-bridge-verified" in rule_ids
     assert "training-drift-verified" in rule_ids
     assert captured.err == ""

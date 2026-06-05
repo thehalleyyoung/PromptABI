@@ -24,6 +24,7 @@ TRAINING_WORKFLOW_CHECKS = (
     "training-workflow",
     "training-packing",
     "training-redaction",
+    "training-invalid-interface",
     "training-bridge",
     "training-drift",
 )

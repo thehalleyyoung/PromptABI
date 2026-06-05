@@ -337,6 +337,12 @@ from .training_drift import (
     TrainingDriftReport,
     analyze_training_metadata_drift,
 )
+from .training_invalid_interface import (
+    TrainingInvalidInterfaceFinding,
+    TrainingInvalidInterfaceFindingKind,
+    TrainingInvalidInterfaceReport,
+    analyze_training_invalid_interface,
+)
 from .training_packing import (
     TrainingPackingFinding,
     TrainingPackingFindingKind,
@@ -1114,6 +1120,7 @@ __all__ = [
     "analyze_stop_policy_tokenizer",
     "analyze_tool_call_serialization",
     "analyze_training_inference_bridge",
+    "analyze_training_invalid_interface",
     "analyze_training_metadata_drift",
     "analyze_training_packing",
     "analyze_tokenizer_config_drift",

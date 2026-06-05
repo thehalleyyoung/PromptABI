@@ -76,10 +76,12 @@ supply-chain diagnostics for missing hashes, license metadata, trusted-source
 annotations, and non-reproducible remote revisions,
 a dedicated \texttt{promptabi verify-training} workflow for training manifests,
 dataset declarations, tokenizer and chat-template pins, packing windows, loss
-masks, redaction policy, training-to-serving bridge facts, and corpus-metadata
-drift checks that compare training baselines against model-card facts,
-tokenizer/template pins, and serving lockfile summaries while keeping witnesses
-structural or hash-only rather than raw private dataset material,
+masks, redaction policy, trained-on-invalid-interface checks for impossible
+roles, malformed tool calls, invalid JSON targets, and unreachable stop examples,
+training-to-serving bridge facts, and corpus-metadata drift checks that compare
+training baselines against model-card facts, tokenizer/template pins, and serving
+lockfile summaries while keeping witnesses structural or hash-only rather than
+raw private dataset material,
 a curated \texttt{promptabi gallery} that reruns real pinned configurations,
 emits compatibility badges, summarizes actual solver backends rather than merely
 advertised solver capability, and explains abstentions plus accepted risks,
@@ -282,8 +284,11 @@ boundaries, including a CPU-only RLHF/DPO fixture pack with synthetic and
 anonymized clean, prompt-mismatched, mask/truncation-defective, and
 role-layout/packing-defective manifests, plus tokenizer, chat-template,
 model-card, serving-lockfile, role-delimiter, special-token, generation-prompt,
-and tool-format consistency from training through serving, with concrete models,
-explicit proof classifications, or minimized unsat cores,
+tool-format consistency, and finite invalid-interface summaries that reject
+misspelled canonical roles, malformed trained tool-call envelopes, invalid
+structured-output targets, and stop examples unreachable under the declared
+training interface, with concrete models, explicit proof classifications, or
+minimized unsat cores,
 a \texttt{promptabi solver replay} maintainer path that verifies such reduced
 solver obligations from portable JSON and treats solver backends, query hashes,
 and Z3 versions as provenance rather than brittle equality requirements, a
@@ -463,7 +468,8 @@ behavior, streaming deltas, error envelopes, and edge-case limits for offline
 replay,
 ships paired end-to-end buggy/fixed mini applications for tool calling, JSON
 structured output, RAG truncation, provider migration, supervised
-training-data alignment, and transform-attributed training source leakage, with each pair verified by the exact checker that
+training-data alignment, trained-on-invalid-interface examples, and
+transform-attributed training source leakage, with each pair verified by the exact checker that
 catches the bug and by the fixed contract that removes it,
 models context-window budgets from named prompt segments, must-survive flags,
 declared or real-tokenizer token counts, output reservations, reserved tool

@@ -71,6 +71,7 @@ from .tokenizer_drift import TokenizerDriftAbstention, TokenizerDriftFinding, an
 from .tokenizers import TokenizerAdapter, TokenizerError, load_tokenizer
 from .training_bridge import TrainingBridgeFinding, analyze_training_inference_bridge
 from .training_drift import TrainingDriftFinding, analyze_training_metadata_drift
+from .training_invalid_interface import TrainingInvalidInterfaceFinding, analyze_training_invalid_interface
 from .training_packing import TrainingPackingFinding, analyze_training_packing
 from .training_redaction import TrainingRedactionFinding, analyze_training_redaction
 
@@ -154,6 +155,12 @@ CHECK_MODE_CATALOG: dict[str, tuple[CheckMode, ...]] = {
     "training-drift-template-mismatch": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-drift-tokenizer-mismatch": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-drift-verified": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-invalid-interface-contract-missing": (CheckMode.ABSTAINING, CheckMode.BOUNDED),
+    "training-invalid-interface-impossible-role": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-invalid-interface-invalid-json-output": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-invalid-interface-malformed-tool-call": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-invalid-interface-unreachable-stop-sequence": (CheckMode.SOUND, CheckMode.BOUNDED),
+    "training-invalid-interface-verified": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-redaction-hash-missing": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-redaction-policy-missing": (CheckMode.SOUND, CheckMode.BOUNDED),
     "training-redaction-raw-witness-field": (CheckMode.SOUND, CheckMode.BOUNDED),
@@ -363,6 +370,7 @@ CHECK_DEPENDENCIES: dict[str, CheckDependency] = {
     ),
     "training-bridge": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "training-drift": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
+    "training-invalid-interface": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "training-packing": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "training-redaction": CheckDependency(artifact_kinds=(ArtifactKind.TRAINING_MANIFEST,)),
     "tokenizer-config-drift": CheckDependency(artifact_kinds=(ArtifactKind.TOKENIZER,)),
@@ -553,6 +561,7 @@ class VerificationSession:
             "tool-serialization": self._tool_serialization_check,
             "training-bridge": self._training_bridge_check,
             "training-drift": self._training_drift_check,
+            "training-invalid-interface": self._training_invalid_interface_check,
             "training-packing": self._training_packing_check,
             "training-redaction": self._training_redaction_check,
             "tokenizer-config-drift": self._tokenizer_config_drift_check,
@@ -1072,6 +1081,15 @@ class VerificationSession:
                 continue
             report = analyze_training_redaction(loaded.artifact)
             diagnostics.extend(_training_redaction_finding_diagnostic(loaded, finding) for finding in report.findings)
+        return tuple(diagnostics)
+
+    def _training_invalid_interface_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
+        diagnostics: list[Diagnostic] = []
+        for loaded in context.loaded_artifacts:
+            if not isinstance(loaded.artifact, TrainingManifestArtifact):
+                continue
+            report = analyze_training_invalid_interface(loaded.artifact)
+            diagnostics.extend(_training_invalid_interface_finding_diagnostic(loaded, finding) for finding in report.findings)
         return tuple(diagnostics)
 
     def _tokenizer_config_drift_check(self, context: CheckContext) -> tuple[Diagnostic, ...]:
@@ -1949,6 +1967,57 @@ def _training_drift_finding_diagnostic(
         suggestions=suggestions,
         witness=WitnessTrace(
             summary="PromptABI compared training-corpus metadata against model-card, tokenizer, template, and serving lockfile pins.",
+            steps=steps,
+            artifacts=(loaded.artifact.to_ref(),),
+        ),
+    )
+
+
+def _training_invalid_interface_finding_diagnostic(
+    loaded: LoadedArtifact,
+    finding: TrainingInvalidInterfaceFinding,
+) -> Diagnostic:
+    rule_id = f"training-invalid-interface-{finding.kind.value}"
+    severity = {
+        "error": DiagnosticSeverity.ERROR,
+        "warning": DiagnosticSeverity.WARNING,
+        "info": DiagnosticSeverity.INFO,
+    }[finding.severity]
+    steps = tuple(
+        WitnessStep(action=action, input=input_value, output=output_value)
+        for action, input_value, output_value in finding.witness
+    )
+    properties: list[tuple[str, object]] = [("kind", finding.kind.value)]
+    if finding.subject is not None:
+        properties.append(("subject", finding.subject))
+    suggestions = {
+        "training-invalid-interface-contract-missing": (
+            "Add metadata.training_interface_contract with finite role, tool-call, JSON-output, and stop reachability summaries from data preparation.",
+        ),
+        "training-invalid-interface-impossible-role": (
+            "Map dataset role aliases to supported canonical roles or declare intentional custom roles in metadata.training_interface_contract.allowed_roles.",
+        ),
+        "training-invalid-interface-malformed-tool-call": (
+            "Regenerate or filter tool-call examples so every trained tool envelope parses under the serving tool-call contract.",
+        ),
+        "training-invalid-interface-invalid-json-output": (
+            "Filter or repair structured-output examples so trained assistant targets parse and satisfy the declared JSON schema.",
+        ),
+        "training-invalid-interface-unreachable-stop-sequence": (
+            "Remove unreachable stop examples or align the tokenizer/template/stop policy used when generating training data.",
+        ),
+    }.get(rule_id, ())
+    return Diagnostic(
+        rule_id=rule_id,
+        severity=severity,
+        message=finding.message,
+        artifact=loaded.artifact.to_ref(),
+        span=_artifact_span(loaded.artifact),
+        check_modes=CHECK_MODE_CATALOG[rule_id],
+        properties=tuple(properties),
+        suggestions=suggestions,
+        witness=WitnessTrace(
+            summary="PromptABI checked finite training-interface facts for impossible roles, malformed tool calls, invalid JSON outputs, and unreachable stops.",
             steps=steps,
             artifacts=(loaded.artifact.to_ref(),),
         ),
