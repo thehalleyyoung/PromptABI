@@ -76,6 +76,8 @@ promptabi verify --config examples/token-budget/promptabi.json --format html --f
 # Scaffold a real stack contract.
 promptabi init --stack openai-tools --output-dir .promptabi-demo
 
+# Follow stack guides for LangChain, LlamaIndex, vLLM, llama.cpp, HF, LiteLLM, MCP, and training.
+
 # Shrink a failure into an upstreamable repro and sanitized issue.
 promptabi minimize repro.json --keep-substring "<|im_start|>" --format json
 promptabi bug-report --config examples/role-boundary/unsafe.promptabi.json --index 1 > upstream-issue.md

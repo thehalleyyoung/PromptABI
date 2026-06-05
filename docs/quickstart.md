@@ -25,6 +25,10 @@ action restores `.promptabi/cache`, enforces a lockfile, skips pull requests tha
 do not touch configured PromptABI inputs, uploads SARIF to code scanning, and
 writes a markdown job summary.
 
+For stack-specific setup, see the integration guides for LangChain, LlamaIndex,
+vLLM, llama.cpp, Hugging Face Transformers, OpenAI-compatible servers, LiteLLM,
+MCP tools, custom agent frameworks, and training pipelines.
+
 For a concrete structural security check, run the role-boundary example. The
 unsafe ChatML-style template fails because raw message fields can render as
 role/control delimiters; the paired sanitized config shows the same template

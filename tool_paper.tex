@@ -1,5 +1,5 @@
 \documentclass[10pt]{article}
-\usepackage[margin=0.8in]{geometry}
+\usepackage[margin=0.7in]{geometry}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
 \usepackage{hyperref}
@@ -71,6 +71,11 @@ tokenizer/template composition, Z3/SMT-backed finite contracts,
 role-boundary non-forgeability, stop reachability, grammar emptiness, and
 must-survive budget proofs, with tests that tie the documented examples and
 API names back to executable code,
+stack integration guides for LangChain RAG, LlamaIndex agents, vLLM
+OpenAI-compatible servers, llama.cpp/Ollama local servers, Hugging Face
+Transformers, OpenAI-compatible providers, LiteLLM routers, MCP tools, custom
+agent frameworks, and training/fine-tuning data pipelines, with guide tests that
+verify referenced repository artifacts and run representative CLI commands,
 policy and suppression files that match diagnostics by stable fingerprints,
 artifacts, or paths; require reviewed justifications, owners, accepted-risk
 statements, and expiration dates; enforce repository severity thresholds; and
@@ -340,6 +345,11 @@ adds MkDocs concept chapters for formal automata/transducers, tokenizer-template
 composition, Z3/SMT finite contracts, role-boundary non-forgeability, stop
 reachability, grammar emptiness, and must-survive budgets, and verifies those
 chapters against live symbols and executable examples in the test suite,
+adds a MkDocs-linked integration guide that maps PromptABI artifacts and checks to
+LangChain, LlamaIndex, vLLM, llama.cpp/Ollama, Hugging Face Transformers,
+OpenAI-compatible servers, LiteLLM, MCP tools, internal agent frameworks, and
+training pipelines, and tests that the documented stack scaffolds, fixture paths,
+and smoke commands execute against the real CLI,
 packages releases as checked PyPI distributions, standalone executables,
 Docker images, signed/attested GitHub assets, changelogged semantic-version tags,
 and GHCR container images,
@@ -392,7 +402,7 @@ The repository layout is designed to scale:
 \hline
 \texttt{benchmarks} and \texttt{promptabi fuzz} & CPU-only benchmark entrypoints plus deterministic mutation fuzzing for tokenizer analysis, symbolic template execution, grammar products, stop checks, SMT contracts, budget modeling, corpus verification, cache reuse, and cross-artifact violation discovery. \\
 \hline
-\texttt{docs} & MkDocs-ready documentation for architecture, check families, artifact modeling, the formal transducer/SMT basis, tokenizer-template composition, role boundaries, stop reachability, grammar emptiness, must-survive budgets, and the local structural security model. \\
+\texttt{docs} & MkDocs-ready documentation for architecture, check families, artifact modeling, integration guides for major LLM stacks, the formal transducer/SMT basis, tokenizer-template composition, role boundaries, stop reachability, grammar emptiness, must-survive budgets, and the local structural security model. \\
 \hline
 \end{tabular}
 \end{center}
