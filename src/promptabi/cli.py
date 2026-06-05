@@ -303,6 +303,12 @@ from .multi_agent_handoffs import (
     render_multi_agent_handoff_json,
     render_multi_agent_handoff_text,
 )
+from .nested_tool_calls import (
+    NestedToolCallError,
+    load_nested_tool_call_manifest,
+    render_nested_tool_call_json,
+    render_nested_tool_call_text,
+)
 from .lockfiles import (
     LockfileError,
     build_lockfile,
@@ -699,6 +705,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     _add_local_summary_argument(handoff_witness)
+
+    nested_tool_call = subparsers.add_parser(
+        "nested-tool-call",
+        help="verify nested tool-call encodings for framing and round-trip soundness",
+    )
+    nested_tool_call.add_argument(
+        "--manifest",
+        required=True,
+        help="nested tool-call manifest JSON path",
+    )
+    nested_tool_call.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    _add_local_summary_argument(nested_tool_call)
 
     explain = subparsers.add_parser("explain", help="expand one diagnostic into a tutorial-style explanation")
     explain.add_argument(
@@ -3358,6 +3381,37 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "agent_count": len(report.agents),
                 "format": args.format,
                 "handoff_count": len(report.handoffs),
+                "violation_count": len(report.violations),
+            },
+        ):
+            return 2
+        print(output, end="")
+        return exit_code
+
+    if args.command == "nested-tool-call":
+        started_at = time.perf_counter()
+        try:
+            raw = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+            report = load_nested_tool_call_manifest(raw)
+        except (OSError, json.JSONDecodeError, NestedToolCallError, ValueError) as exc:
+            print(f"promptabi: cannot verify nested tool-call encoding: {exc}", file=sys.stderr)
+            return 2
+        output = (
+            render_nested_tool_call_json(report)
+            if args.format == "json"
+            else render_nested_tool_call_text(report)
+        )
+        exit_code = 0 if report.ok else 1
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="nested-tool-call",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={
+                "depth": report.depth,
+                "format": args.format,
+                "node_count": report.node_count,
+                "style": report.encoding.style,
                 "violation_count": len(report.violations),
             },
         ):
