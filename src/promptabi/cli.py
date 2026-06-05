@@ -315,6 +315,12 @@ from .attestation_gate_composition import (
     render_attestation_gate_json,
     render_attestation_gate_text,
 )
+from .template_abstract_interpretation import (
+    TemplateAbstractInterpretationError,
+    interpret_chat_template_file,
+    render_template_abstract_interpretation_json,
+    render_template_abstract_interpretation_text,
+)
 from .lockfiles import (
     LockfileError,
     build_lockfile,
@@ -763,6 +769,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     _add_local_summary_argument(attestation_gate)
+
+    template_ai = subparsers.add_parser(
+        "template-ai",
+        help="abstractly interpret a chat-template dialect and prove structural marker invariants",
+    )
+    template_ai.add_argument(
+        "--tokenizer-config",
+        required=True,
+        help="Hugging Face tokenizer_config.json path with a chat_template",
+    )
+    template_ai.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    _add_local_summary_argument(template_ai)
 
     explain = subparsers.add_parser("explain", help="expand one diagnostic into a tutorial-style explanation")
     explain.add_argument(
@@ -3489,6 +3512,34 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "environment": report.environment,
                 "finding_count": len(report.findings),
                 "format": args.format,
+            },
+        ):
+            return 2
+        print(output, end="")
+        return exit_code
+
+    if args.command == "template-ai":
+        started_at = time.perf_counter()
+        try:
+            report = interpret_chat_template_file(args.tokenizer_config)
+        except (OSError, TemplateAbstractInterpretationError, ValueError) as exc:
+            print(f"promptabi: cannot abstractly interpret chat template: {exc}", file=sys.stderr)
+            return 2
+        output = (
+            render_template_abstract_interpretation_json(report)
+            if args.format == "json"
+            else render_template_abstract_interpretation_text(report)
+        )
+        exit_code = 0 if report.ok else 1
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="template-ai",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={
+                "format": args.format,
+                "supported": report.supported,
+                "violation_count": len(report.violations),
             },
         ):
             return 2
