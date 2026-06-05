@@ -70,6 +70,15 @@ from .api_stability import (
     render_public_api_manifest_json,
     render_public_api_manifest_markdown,
 )
+from .agent_frameworks import (
+    AgentFrameworkIntegrationError,
+    AgentPromptPackAssembly,
+    DynamicContextSource,
+    agent_prompt_pack_assembly_from_mapping,
+    load_agent_prompt_pack_assembly,
+    render_agent_prompt_pack_plan,
+    write_agent_promptabi_config,
+)
 from .bug_reports import BugReport, BugReportError, generate_bug_report
 from .bundles import (
     VERIFICATION_BUNDLE_VERSION,

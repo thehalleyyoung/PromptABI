@@ -1,0 +1,41 @@
+{
+  "name": "support-agent-buggy",
+  "framework": "llamaindex-workflow",
+  "prompt_pack": {
+    "path": "../prompt-packs/support.prompt-pack.json",
+    "template": "support-chat",
+    "version": "1.0.0"
+  },
+  "provider": "anthropic",
+  "model_family": "anthropic",
+  "segments": [
+    {
+      "name": "system-policy",
+      "role": "system",
+      "required": true,
+      "content": "Follow the support policy and call tools for refunds."
+    },
+    {
+      "name": "user-request",
+      "role": "user",
+      "required": true,
+      "content": "Refund order A123."
+    },
+    {
+      "name": "assistant-answer",
+      "role": "assistant",
+      "required": false
+    }
+  ],
+  "dynamic_context_sources": [
+    {
+      "name": "retrieval_context",
+      "segment": "user-request",
+      "role": "user",
+      "source_type": "retriever",
+      "required": true
+    }
+  ],
+  "tools": ["lookup_order"],
+  "stops": ["<END>"]
+}

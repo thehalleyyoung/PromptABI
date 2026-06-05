@@ -1,0 +1,41 @@
+{
+  "name": "support-agent-safe",
+  "framework": "langchain-runnable-graph",
+  "prompt_pack": {
+    "path": "../prompt-packs/support.prompt-pack.json",
+    "template": "support-chat",
+    "version": "1.0.0"
+  },
+  "provider": "openai",
+  "model_family": "openai-compatible",
+  "segments": [
+    {
+      "name": "system-policy",
+      "role": "system",
+      "required": true,
+      "content": "Follow the support policy and call tools for refunds."
+    },
+    {
+      "name": "user-request",
+      "role": "user",
+      "required": true,
+      "content": "Refund order A123."
+    },
+    {
+      "name": "assistant-answer",
+      "role": "assistant",
+      "required": false
+    }
+  ],
+  "dynamic_context_sources": [
+    {
+      "name": "ticket_memory",
+      "segment": "user-request",
+      "role": "user",
+      "source_type": "agent-memory",
+      "required": true
+    }
+  ],
+  "tools": ["refund_user"],
+  "stops": ["</tool_call>"]
+}

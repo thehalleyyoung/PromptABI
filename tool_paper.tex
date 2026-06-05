@@ -116,7 +116,10 @@ and revalidates them offline before use,
 validating, pinning, and proving upgrade preservation for exported templates,
 role-boundary and budget hashes, tool schemas, stop policies, supported
 model/provider families, package hashes, and diagnostic baselines against
-downstream application artifacts,
+downstream application artifacts, plus an agent-framework adapter that turns
+LangChain/LlamaIndex-style runtime prompt assembly specs into ordinary PromptABI
+configs and proves the selected reusable prompt pack still matches dynamic
+segments, tools, stops, and provider family choices,
 a curated \texttt{promptabi gallery} that reruns real pinned configurations,
 emits compatibility badges, summarizes actual solver backends rather than merely
 advertised solver capability, and explains abstentions plus accepted risks,
@@ -642,6 +645,8 @@ The repository layout is designed to scale:
 \hline
 \texttt{src/promptabi/prompt\_packs.py} & Prompt-pack compatibility checker for reusable prompt libraries, package lock/upgrade gates, public registry manifests with non-sensitive proof hashes, signed provenance manifests, and checksum-verified local mirror manifests for air-gapped private prompt-pack indexes. \\
 \hline
+\texttt{src/promptabi/agent\_frameworks.py} & Dynamic agent-framework adapter that loads prompt-pack assembly specs, validates selected templates against runtime segments and dynamic context sources, renders previews, and writes ordinary PromptABI configs verified by the real prompt-pack checker. \\
+\hline
 \texttt{src/promptabi/api\_stability.py} & Generated public-API manifest, stable/provisional/deprecated symbol taxonomy, deprecation decorator, Markdown/JSON API reference renderers, and baseline compatibility comparison for downstream plugin authors. \\
 \hline
 \texttt{src/promptabi/contributor\_validation.py} & Dependency-free validation for issue templates, label manifests, plugin author docs, checker design rules, corpus contribution rules, MkDocs navigation, and CI contributor-test gates exposed as \texttt{promptabi contribute validate}. \\
@@ -653,6 +658,8 @@ The repository layout is designed to scale:
 \texttt{examples/minimal} & A typed artifact config, messages file, tool schema, and answer schema used by tests and docs. \\
 \hline
 \texttt{examples/prompt-packs} & A reusable support prompt-pack fixture and downstream app contract proving prompt-library imports preserve role, tool, stop, and model-family assumptions. \\
+\hline
+\texttt{examples/agent-frameworks} & Safe and intentionally drifted dynamic agent prompt-pack specs plus a runnable generator that materializes runtime prompt assembly into \texttt{promptabi.json} before deployment. \\
 \hline
 \texttt{examples/role-boundary} & Paired unsafe and sanitized ChatML-style \texttt{tokenizer\_config.json} artifacts that exercise the real role-boundary non-forgeability CLI check. \\
 \hline
@@ -764,7 +771,7 @@ The public API now provides \texttt{ArtifactKind}, \texttt{ArtifactLocation},
 \texttt{ArtifactProvenance}, \texttt{ArtifactBundle}, and typed artifacts for
 tokenizers, chat templates, special-token maps, stop policies, schemas,
 grammars, tool definitions, prompt segments, provider configs, framework
-truncation configs, and training/fine-tuning manifests that explicitly model
+truncation configs, reusable prompt packs, and training/fine-tuning manifests that explicitly model
 supervised and preference datasets, system-message policies, role-label
 canonicalization, loss-mask construction, packing windows, and pinned
 chat-template versions. Preference-pair contracts now include branch-level prompt
@@ -1333,6 +1340,7 @@ promptabi verify --artifact schema=schemas/answer.json --fail-on warning
 promptabi verify --config examples/minimal/promptabi.json --format json
 promptabi verify --config examples/minimal/promptabi.json --format sarif
 promptabi verify --cache-dir .cache/promptabi --verbose
+python examples/agent-frameworks/dynamic_support_agent.py examples/agent-frameworks/safe.agent-prompt-pack.json --write-config /tmp/support-agent.promptabi.json
 \end{verbatim}
 
 In the current milestone the workflow validates repository wiring, local
@@ -1407,6 +1415,12 @@ It also exposes \texttt{build\_public\_api\_manifest},
 \texttt{compare\_public\_api\_manifests}, and
 \texttt{public\_api\_reference}, so plugin authors can pin a JSON baseline and
 fail upgrades only when a stable import path or required signature is removed.
+The new \texttt{promptabi.agent\_frameworks} helpers load dynamic prompt-pack
+agent specs, validate that selected pack templates expose the required roles and
+regions, render a deterministic prompt preview, and write a normal
+\texttt{promptabi.json}; safe and intentionally drifted examples are then checked
+by the same \texttt{prompt-pack-contracts} rule rather than a special-case
+example-only verifier.
 The gallery command uses the same session path, but changes the unit of
 presentation: each curated entry is a real config run with resolved/pinned
 artifacts, deterministic diagnostic counts, compatibility badges, actual finite
@@ -1777,7 +1791,7 @@ The testing strategy has three tiers:
 \item stop-tokenizer, stop-differential, and stop-overreachability tests that exercise byte/string/token alignments, multi-token stops, invalid stop-token IDs, normalization collisions, prefix/suffix collisions, added/special-token interactions, OpenAI-compatible and Hugging Face delimiter-retention semantics, provider fixture replay, CLI mismatch diagnostics, serialized stop offsets, parser-state truncation witnesses, supported schema/tool string witnesses, structural delimiter collisions, real-world Qwen/Gemma/llama.cpp stop bug reductions, and a real Hugging Face \texttt{tokenizers} BPE fixture;
 \item token-budget and RAG chunking tests that exercise context-window reservation arithmetic, required-segment overflow over declared counts, prompt-segment file/message merging, config-versus-framework budget precedence, LangChain/vLLM/custom-RAG truncation simulation, optional retrieval dropping, required segment truncation, order preservation, proven must-survive cases, minimized counterexample extraction, text/JSON/SARIF budget visualizations with token spans and dropped-field properties, real CLI diagnostics for output, tool, generation-prompt, and special-token overhead, plus tokenizer mismatch, chunk-boundary drift, citation loss, overlap accounting, metadata inflation, prompt-template overhead, and retrieval payload truncation over repository fixtures;
 \item tokenizer/config drift and configuration-diff tests that build baseline and current tokenizer directories, provider snapshots, and framework truncation artifacts, then verify special-token ID drift, added-token changes, normalizer changes, chat-template hash changes, BOS insertion changes, generation stop-policy deltas, provider-contract regressions, removed checks, context-budget regressions, and loader-abstention behavior through real CLI diagnostics;
-\item fixture and corpus tests for minimized tokenizer/chat-template bundles, public real-bug provenance, expected behaviors, sentinel consistency, artifact materialization, deterministic manifest generation, labeled structured-schema reductions, anonymized contracts, synthetic parser stress cases, tool-definition bundles, secret-free provider fixture packs with request/response/tool/stop/streaming/error/limit coverage and credential-pattern rejection, and real CLI replay of every included structured-schema config;
+\item fixture and corpus tests for minimized tokenizer/chat-template bundles, public real-bug provenance, expected behaviors, sentinel consistency, artifact materialization, deterministic manifest generation, labeled structured-schema reductions, anonymized contracts, synthetic parser stress cases, tool-definition bundles, dynamic agent prompt-pack integration specs that generate real PromptABI configs, secret-free provider fixture packs with request/response/tool/stop/streaming/error/limit coverage and credential-pattern rejection, and real CLI replay of every included structured-schema config;
 \item future corpus tests for popular model and framework configurations pinned by immutable upstream revisions.
 \end{itemize}
 
@@ -1948,7 +1962,9 @@ The examples directory is equally important. It now contains the minimal
 typed-artifact workflow, role-delimiter injection, token-budget overflow, RAG
 chunking, provider migration, structured-output, and a chat SFT quickstart that
 checks rendered roles, token spans, packing, loss masks, stage pins, and
-redacted witnesses without model weights. PromptABI should keep adding small
+redacted witnesses without model weights, plus dynamic agent-framework examples
+that materialize prompt-pack runtime assembly into verifiable configs and catch
+tool, stop, and provider drift before deployment. PromptABI should keep adding small
 buggy/fixed applications for stop overreach, provider AST drift, tokenizer drift,
 and training/eval contracts; each pair gives users a recipe and maintainers a
 stable regression.

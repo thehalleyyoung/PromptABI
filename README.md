@@ -95,6 +95,7 @@ promptabi prompt-pack registry --config examples/prompt-packs/promptabi.json --o
 promptabi prompt-pack provenance create --config examples/prompt-packs/promptabi.json --output /tmp/prompt-pack.provenance.json --key local-review-key
 promptabi prompt-pack mirror build --config examples/prompt-packs/promptabi.json --mirror-dir /tmp/prompt-pack-mirror
 promptabi prompt-pack upgrade --config examples/prompt-packs/promptabi.json --baseline-lockfile /tmp/prompt-pack.lock.json
+python examples/agent-frameworks/dynamic_support_agent.py examples/agent-frameworks/safe.agent-prompt-pack.json --write-config /tmp/support-agent.promptabi.json
 promptabi verify --config examples/end-to-end/training-quickstart/fixed.promptabi.json
 promptabi verify-training --manifest examples/end-to-end/training-quickstart/fixed.training-manifest.json
 
