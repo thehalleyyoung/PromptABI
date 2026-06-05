@@ -39,8 +39,8 @@ validated against real Hugging Face \texttt{tokenizers},
 finite-state transducers with composition and projection, executable
 specifications that replay witnesses, bounded product-language laws, and SMT
 proof objects, a declarative static contract language with a canonical
-\texttt{.pabi} parser, formatter, JSON lowering path, CLI check mode, and
-reviewable examples for LLM apps, fine-tuning datasets, RAG systems, and
+\texttt{.pabi} parser, formatter, linter, JSON lowering path, CLI check mode,
+and reviewable examples for LLM apps, fine-tuning datasets, RAG systems, and
 evaluation harnesses, now compiled into source-mapped finite obligations whose
 diagnostics preserve human rule names, rule-line spans, solver models, and proof
 or counterexample classification, lowered to a finite-contract solver with compressed lazy product witnesses,
@@ -1930,7 +1930,7 @@ Grammar emptiness & A real structured-schema fixture compiled to the bounded JSO
 \hline
 Stop checks & Stop-tokenizer alignment plus bounded stop-overreachability over structural JSON, markdown, XML-like tool-call, and provider-envelope regions. \\
 \hline
-Z3 static contracts & Declarative interface rules for allowed roles, required regions, forbidden delimiters, schema obligations, stop policies, layered policy/app/pack/training composition, and finite budget invariants lowered to the existing SMT layer or finite fallback. \\
+Z3 static contracts & Declarative interface rules for allowed roles, required regions, forbidden delimiters, schema obligations, stop policies, linted impossibility/vacuity/fragment/suppression hazards, layered policy/app/pack/training composition, and finite budget invariants lowered to the existing SMT layer or finite fallback. \\
 \hline
 Budget checks & Segment accounting, tokenizer-derived content counts, vLLM-style reservations, truncation simulation, required-token overflow, and finding counts. \\
 \hline

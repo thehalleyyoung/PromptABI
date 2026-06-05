@@ -39,6 +39,12 @@ from .contract_language import (
     parse_static_contract_file,
     render_static_contract_json,
 )
+from .contract_linting import (
+    lint_static_contract,
+    load_contract_lint_policy,
+    render_contract_lint_json,
+    render_contract_lint_text,
+)
 from .contract_composition import (
     compose_static_contracts,
     contract_contributions_from_files,
@@ -805,6 +811,30 @@ def build_parser() -> argparse.ArgumentParser:
         "--check",
         action="store_true",
         help="exit non-zero if the .pabi file is not already in canonical format",
+    )
+    contract_lint = contract_subparsers.add_parser(
+        "lint",
+        help="lint .pabi contracts for impossible rules, vacuous guarantees, unsupported fragments, contradictions, and broad suppressions",
+    )
+    contract_lint.add_argument("path", help="PromptABI .pabi contract file")
+    contract_lint.add_argument(
+        "--policy-file",
+        action="append",
+        default=[],
+        help="optional PromptABI policy/suppression JSON to lint for overly broad suppressions; may be repeated",
+    )
+    contract_lint.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    contract_lint.add_argument("--output", help="write lint output to this path instead of stdout")
+    contract_lint.add_argument(
+        "--fail-on",
+        choices=("error", "warning", "never"),
+        default="error",
+        help="minimum lint severity that exits with code 1 (default: error)",
     )
     contract_compose = contract_subparsers.add_parser(
         "compose",
@@ -1696,6 +1726,27 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(rendered, end="")
         return 0
+
+    if args.command == "contract" and args.contract_command == "lint":
+        try:
+            contract = parse_static_contract_file(Path(args.path))
+            policy = load_contract_lint_policy(tuple(args.policy_file))
+            report = lint_static_contract(contract, policy=policy)
+            rendered = render_contract_lint_json(report) if args.format == "json" else render_contract_lint_text(report)
+        except (OSError, ContractLanguageError, ValueError) as exc:
+            print(f"promptabi: cannot lint static contract: {exc}", file=sys.stderr)
+            return 2
+        if args.output:
+            output = Path(args.output)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(rendered, encoding="utf-8")
+        else:
+            print(rendered, end="")
+        if args.fail_on == "never":
+            return 0
+        if args.fail_on == "warning" and report.findings:
+            return 1
+        return 1 if report.error_count else 0
 
     if args.command == "prompt-pack" and args.prompt_pack_command == "registry":
         started_at = time.perf_counter()
