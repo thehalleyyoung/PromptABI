@@ -272,6 +272,12 @@ from .mechanized_proofs import (
     render_mechanized_proof_experiments_text,
     run_mechanized_proof_experiments,
 )
+from .certified import (
+    CertifiedVerificationReport,
+    render_certified_verification_json,
+    render_certified_verification_text,
+    run_certified_verification,
+)
 from .prompt_calculus import (
     MetatheoryReport,
     render_metatheory_json,
@@ -603,6 +609,25 @@ def mechanized_proof_experiments(*, output_format: str | None = None) -> Mechani
         return render_mechanized_proof_experiments_json(report)
     if output_format == "text":
         return render_mechanized_proof_experiments_text(report)
+    raise ValueError("output_format must be 'json' or 'text'")
+
+
+def certified_verification(*, output_format: str | None = None) -> CertifiedVerificationReport | str:
+    """Independently re-check PromptABI's machine-checkable proof certificates.
+
+    A small trusted kernel re-derives each finite theorem (role-boundary
+    soundness, tokenizer round-trip injectivity, stop-policy totality,
+    token-budget arithmetic, abstract-interpretation soundness, the JSON-Schema
+    decision procedure, and multi-agent handoff non-confusion) without trusting
+    the production analyzer (roadmap steps 401-415)."""
+
+    report = run_certified_verification()
+    if output_format is None:
+        return report
+    if output_format == "json":
+        return render_certified_verification_json(report)
+    if output_format == "text":
+        return render_certified_verification_text(report)
     raise ValueError("output_format must be 'json' or 'text'")
 
 

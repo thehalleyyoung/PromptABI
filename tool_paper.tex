@@ -579,6 +579,64 @@ zero counterexamples for every proved obligation; the per-theorem domain sizes
 and pass/fail status are emitted as stable JSON for the artifact appendix.
 
 
+\section{Certified Verification and Proof-Carrying Diagnostics}
+\label{sec:certified}
+
+The executable metatheory of Section~\ref{sec:metatheory} trusts the harness
+that discharges each theorem. PromptABI tightens this with a \emph{certified}
+layer (\texttt{promptabi.\allowbreak certified}, command \texttt{promptabi
+certify}) that separates the analyzer that \emph{produces} a result from a small
+trusted kernel that \emph{re-checks} it. The kernel is the only trusted
+component: it never calls the production solver, the optional Z3 backend, or any
+rule implementation. Instead it reads a serialized \emph{proof certificate} and
+re-derives the verdict from first principles over a finite model space, either by
+re-evaluating an explicit witness assignment (claim \textsc{Witness}) or by
+exhaustively enumerating the bounded product space to confirm that no
+counterexample exists (claim \textsc{No-counterexample}), optionally checking a
+declared unsat-core for genuine minimality. Obligations whose model space exceeds
+an explicit bound are \emph{abstained} on rather than silently trusted.
+
+\begin{theorem}[Independent re-checkability]
+If the trusted kernel accepts a certificate with claim \textsc{No-coun\-ter\-example}
+over a finite obligation $\Phi$ within its state bound, then $\Phi$ has no
+satisfying assignment, regardless of how the certificate was produced.
+\end{theorem}
+\begin{proof}
+The kernel re-parses $\Phi$ from its serialized JSON form (so it depends on no
+analyzer-side object), enumerates the full finite product of the declared
+variable domains, and evaluates the trusted finite-domain semantics of every
+constraint on each assignment. Acceptance is reported only after the entire space
+is checked with no model found; soundness and completeness of the decision are
+immediate from exhaustiveness over a finite domain.
+\end{proof}
+
+Seven theorems ship with machine-checkable certificates, each grounded in real
+PromptABI code rather than a standalone formalization: role-boundary
+non-forgeability under escaping; \texttt{ByteLevelTokenizer} round-trip
+injectivity (the certificate's empirical flag is computed by the \emph{real}
+encoder/decoder over a bounded corpus); stop-policy totality over the
+finish-reason domain; token-budget arithmetic soundness via an affine
+interval-bound checker; abstract-interpretation transfer-function soundness for
+control-token interval counts; a JSON-Schema subset decision procedure proved
+equivalent to its reference acceptor; and multi-agent handoff non-confusion as a
+two-party session-type theorem. Each result declares an explicit
+soundness/completeness boundary and its supported fragment, so the guarantees are
+honest about where they stop.
+
+The same certificates drive three deployment-facing capabilities.
+\emph{Proof-carrying diagnostics} attach a content-addressed certificate
+(SHA-256 digest) to a finding, so a downstream consumer can re-verify the claim
+without trusting the producer. A \emph{proof-regression gate}
+(\texttt{promptabi certify}) fails CI if any certificate stops checking. And a
+\texttt{-{}-certified} gating mode restricts a run to exactly the check families
+backed by a currently passing certificate. For independent audit, PromptABI emits
+a trusted-computing-base report (\texttt{-{}-tcb-audit}) enumerating every
+unproven assumption, a formal-semantics technical report with mechanized
+certificate digests (\texttt{-{}-report}), and extracted verified-by-construction
+kernels in OCaml and Rust (\texttt{-{}-extract}) that mirror the
+no-counterexample procedure for cross-implementation checking.
+
+
 \section{Implementation}
 
 PromptABI is a Python tool with a deterministic command-line interface and an

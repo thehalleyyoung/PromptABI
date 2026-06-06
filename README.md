@@ -141,6 +141,10 @@ promptabi proofs --traceability --format text
 promptabi proofs --experiments --format text
 promptabi metatheory --format text
 promptabi metatheory --appendix
+# Independently re-check machine-checkable proof certificates with a tiny trusted
+# kernel (no analyzer/Z3 trust): proof-carrying diagnostics, --certified gating,
+# TCB audit, and extracted OCaml/Rust kernels.
+promptabi certify --format text
 # Replay the production analyzers over a >=10k-case labeled prompt corpus:
 # sound (recall 1.0, zero false negatives), F1 0.90, ablation, drift, leaderboard, CVEs.
 promptabi scaled-eval --format text

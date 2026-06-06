@@ -2120,6 +2120,31 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="render the standalone formal appendix (Markdown) instead of the theorem report",
     )
+    certify = subparsers.add_parser(
+        "certify",
+        help="independently re-check machine-checkable proof certificates with the trusted kernel (steps 401-415)",
+    )
+    certify.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    certify.add_argument(
+        "--report",
+        action="store_true",
+        help="render the formal-semantics technical report (Markdown) instead of the kernel verdicts",
+    )
+    certify.add_argument(
+        "--tcb-audit",
+        action="store_true",
+        help="print the trusted-computing-base audit (JSON) enumerating unproven assumptions",
+    )
+    certify.add_argument(
+        "--extract",
+        choices=("ocaml", "rust"),
+        help="emit an extracted verified-by-construction kernel in the chosen language",
+    )
     ci = subparsers.add_parser(
         "ci",
         help="run the offline live-provider conformance CI gate and emit text/json/SARIF (steps 331-345)",
@@ -5250,6 +5275,34 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(render_formal_appendix_markdown(report), end="")
             return 0 if report.passed else 1
         output = render_metatheory_json(report) if args.format == "json" else render_metatheory_text(report)
+        print(output, end="")
+        return 0 if report.passed else 1
+
+    if args.command == "certify":
+        from .certified import (
+            extracted_kernel_source,
+            formal_semantics_report,
+            render_certified_verification_json,
+            render_certified_verification_text,
+            run_certified_verification,
+            trusted_computing_base_audit,
+        )
+
+        if args.extract:
+            print(extracted_kernel_source(args.extract), end="")
+            return 0
+        if args.tcb_audit:
+            print(json.dumps(trusted_computing_base_audit(), indent=2, sort_keys=True))
+            return 0
+        if args.report:
+            print(formal_semantics_report(), end="")
+            return 0
+        report = run_certified_verification()
+        output = (
+            render_certified_verification_json(report)
+            if args.format == "json"
+            else render_certified_verification_text(report)
+        )
         print(output, end="")
         return 0 if report.passed else 1
 
