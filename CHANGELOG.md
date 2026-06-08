@@ -5,6 +5,19 @@ releases; this file keeps the high-level human contract for notable changes.
 
 ## Unreleased
 
+- New capability: `promptabi scan-parser-source <file.py>` (and
+  `promptabi.scan_parser_source`) statically scans real serving-stack parser
+  source for tool-call **boundary-confusion** candidates — code that locates a
+  tool-call boundary by naively splitting/searching for a closing sentinel
+  (`</tool_call>`, `</function_calls>`, `[/TOOL_CALLS]`, ...) or capturing
+  arguments with a greedy regex over a buffer that also holds attacker-influenced
+  JSON `arguments`. Findings are honest heuristic *candidates*; when PromptABI's
+  streaming JSON boundary parser can place the sentinel inside a protected
+  JSON-string state, the candidate carries a concrete `bounded` witness.
+  Reasoning chain-of-thought delimiters are excluded to stay high-precision.
+  Running it across 46 current vLLM tool parsers (412 functions) surfaced one
+  focused candidate (`olmo3` greedy `<function_calls>(.*?)</function_calls>`
+  capture).
 - Certified verification layer (`promptabi.certified`, `promptabi certify`): a
   small trusted proof kernel independently re-checks machine-checkable proof
   certificates for seven finite theorems (role-boundary non-forgeability,

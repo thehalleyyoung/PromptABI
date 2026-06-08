@@ -93,13 +93,30 @@ _KNOWN_TOOL_SENTINELS = frozenset(
         "</tool_call>",
         "<tool_call>",
         "</function>",
+        "</function_calls>",
         "</tool_response>",
         "</tools>",
         "[/TOOL_CALLS]",
         "[TOOL_CALLS]",
         "</tool>",
         "<|tool_call|>",
+    }
+)
+
+# Reasoning chain-of-thought delimiters. Their content is model-authored, not
+# attacker-supplied tool data, so boundary confusion here is a *different*,
+# weaker class (reasoning-boundary) handled elsewhere; exclude from the
+# tool-call detectors to keep this scan high-precision.
+_REASONING_SENTINELS = frozenset(
+    {
+        "<think>",
         "</think>",
+        "<thinking>",
+        "</thinking>",
+        "<reasoning>",
+        "</reasoning>",
+        "<reason>",
+        "</reason>",
     }
 )
 
@@ -121,7 +138,7 @@ def _looks_like_tool_sentinel(literal: str) -> bool:
 
 
 _KNOWN_CLOSING_SENTINELS = frozenset(
-    {"</tool_call>", "</function>", "</tool_response>", "</tools>", "</tool>", "[/TOOL_CALLS]", "</think>"}
+    {"</tool_call>", "</function>", "</function_calls>", "</tool_response>", "</tools>", "</tool>", "[/TOOL_CALLS]"}
 )
 
 
@@ -134,6 +151,8 @@ def _looks_like_closing_sentinel(literal: str) -> bool:
     detector to closing sentinels keeps it high-precision.
     """
 
+    if literal in _REASONING_SENTINELS:
+        return False
     if literal in _KNOWN_CLOSING_SENTINELS:
         return True
     low = literal.lower()
@@ -324,6 +343,9 @@ class _FunctionScanner(ast.NodeVisitor):
         if not _CAPTURE_BETWEEN_SENTINELS_RE.search(pattern):
             return
         sentinel = _closing_sentinel_in(pattern)
+        if sentinel is None or sentinel in _REASONING_SENTINELS:
+            # Reasoning chain-of-thought capture is a separate, weaker class.
+            return
         self._add(
             rule_id="greedy-tool-call-capture-regex",
             bug_class="tool-call-corruption",
