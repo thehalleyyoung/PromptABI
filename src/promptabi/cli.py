@@ -197,6 +197,11 @@ from .streaming_parser_products import (
     render_streaming_parser_product_json,
     render_streaming_parser_product_text,
 )
+from .parser_source_scan import (
+    scan_parser_source_file,
+    render_parser_source_report_json,
+    render_parser_source_report_text,
+)
 from .roadmap import (
     RoadmapError,
     build_annual_corpus_refresh_report,
@@ -781,6 +786,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format (default: text)",
     )
     _add_local_summary_argument(streaming_parser)
+
+    scan_parser_source_cmd = subparsers.add_parser(
+        "scan-parser-source",
+        help="scan real parser source code for tool-call boundary-confusion candidates",
+    )
+    scan_parser_source_cmd.add_argument(
+        "path",
+        help="path to a Python parser source file to scan",
+    )
+    scan_parser_source_cmd.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+    scan_parser_source_cmd.add_argument(
+        "--fail-on-candidate",
+        action="store_true",
+        help="exit non-zero when any candidate is found (default: exit 0)",
+    )
+    _add_local_summary_argument(scan_parser_source_cmd)
 
     handoff_witness = subparsers.add_parser(
         "handoff-witness",
@@ -3819,6 +3845,39 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "chunk_count": len(chunks),
                 "event_count": len(report.replay.events),
                 "violation_count": len(report.violations),
+            },
+        ):
+            return 2
+        print(output, end="")
+        return exit_code
+
+    if args.command == "scan-parser-source":
+        started_at = time.perf_counter()
+        try:
+            report = scan_parser_source_file(args.path)
+        except OSError as exc:
+            print(f"promptabi: cannot read parser source: {exc}", file=sys.stderr)
+            return 2
+        output = (
+            render_parser_source_report_json(report)
+            if args.format == "json"
+            else render_parser_source_report_text(report)
+        )
+        if report.parse_error is not None:
+            exit_code = 2
+        elif args.fail_on_candidate and report.candidates:
+            exit_code = 1
+        else:
+            exit_code = 0
+        if not _write_local_summary_if_requested(
+            args.local_summary,
+            command="scan-parser-source",
+            exit_code=exit_code,
+            started_at=started_at,
+            metadata={
+                "output_format": args.format,
+                "functions_scanned": report.functions_scanned,
+                "candidate_count": len(report.candidates),
             },
         ):
             return 2
