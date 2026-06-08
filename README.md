@@ -83,9 +83,10 @@ claims use automata, Z3, composed products, or principled abstention. Those
 guarantees are then measured at scale: a deterministic, network-free corpus of
 10,080 labeled chat-template configurations replays the production analyzers and
 reports the verifier *sound* (recall 1.0, zero false negatives) at F1 0.90, with
-a sanitizer-pass ablation, 12-month drift study, inter-rater agreement,
-million-token throughput, fuzzing, a provider leaderboard, and reproduced
-prompt-injection CVE vectors (`promptabi scaled-eval`).
+ablation, drift, inter-rater agreement, million-token throughput, fuzzing, and
+reproduced prompt-injection CVE vectors (`promptabi scaled-eval`). That corpus
+also powers **PromptABI-Bench**, a signed public leaderboard with a
+soundness-weighted rubric on which PromptABI alone has zero false negatives.
 For disconnected deployments, the [air-gapped installation guide](docs/air-gapped.md)
 shows how to vendor wheels, Z3, corpora, provider fixtures, prompt-pack mirrors,
 and reproducibility checks without live network access.

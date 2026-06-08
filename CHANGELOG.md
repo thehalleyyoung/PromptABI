@@ -5,6 +5,26 @@ releases; this file keeps the high-level human contract for notable changes.
 
 ## Unreleased
 
+- Scale, adoption, frontiers, performance, benchmarks, and ecosystem layers
+  (program steps 416-500): `promptabi.conformance_scale` (cross-provider
+  differential testing over the 10k-case corpus with confusion matrices, kappa,
+  and drift); `promptabi.adoption_tooling` (a shared `verify_chat_template`
+  kernel plus CI/SARIF/pre-commit adoption helpers); `promptabi.verification_frontiers`
+  (Z3-backed budget/array-bounds SMT with exact fallback, homoglyph/confusable
+  canonicalization, and a Biba-integrity authorization lattice);
+  `promptabi.performance_scaling` (memoized, incremental, parallel-shardable
+  verification with monotonicity guarantees); `promptabi.bench_suite` —
+  **PromptABI-Bench**, a signed, content-hashed public leaderboard with a
+  soundness-weighted rubric, SARIF submissions, naive-linter/LLM-grader/PromptABI
+  baselines (PromptABI alone has zero false negatives), a capture-the-contract
+  CTF, bootstrap-CI leaderboards, an adversarial track, a pinned evaluation
+  container, DOI/archival metadata, and a certification gate; and
+  `promptabi.ecosystem_impact` (a signed/certified plugin marketplace, a
+  CVE-coordination disclosure workflow, auto-graded teaching labs verified
+  against the real analyzer, reproducible adopter case studies, governance and a
+  roadmap, verified multi-language diagnostic catalogs, signed quarterly releases
+  with SBOMs, measurable-impact aggregation, and a milestone tracker).
+
 - New capability: `promptabi scan-parser-source <file.py>` (and
   `promptabi.scan_parser_source`) statically scans real serving-stack parser
   source for tool-call **boundary-confusion** candidates — code that locates a

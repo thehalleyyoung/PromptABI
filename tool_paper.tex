@@ -1328,7 +1328,117 @@ tuned to a flattering aggregate. The same harness that prints these numbers gate
 regressions against the committed golden summary.
 
 
-\section{Live Provider Integration and Continuous Conformance}
+\section{Differential Conformance, Public Benchmarking, and Ecosystem}
+\label{sec:bench-ecosystem}
+
+The scaled evaluation measures the verifier in isolation. This section describes
+five additional layers that turn that measurement into a reproducible
+\emph{public} benchmark and a durable ecosystem: cross-provider differential
+conformance, a zero-friction adoption kernel, advanced verification frontiers,
+incremental/parallel performance, and a signed benchmark-and-impact program.
+All are CPU-only, network-free, and deterministic, and each ships with its own
+test module replayed against the real analyzers over the $10{,}080$-case corpus.
+
+\paragraph{Cross-provider differential conformance.}
+The conformance layer replays the production role-boundary analyzer across all
+nine seed families and contrasts its verdicts with an independent
+construction-time oracle, emitting per-family confusion matrices, Cohen's
+$\kappa$, and a month-over-month drift band. Because predictions depend only on
+(family, field-strategy), the entire space is covered by a few dozen memoized
+analyzer invocations, yet the report distinguishes \emph{agreement} from
+\emph{conservative divergence} family-by-family rather than in aggregate. This
+makes ``the tool behaves the same across providers'' a measured property, not a
+claim, and localizes every disagreement to the named unmodeled-sanitizer class.
+
+\paragraph{A zero-friction adoption kernel.}
+A single shared entry point, \texttt{verify\_chat\_template(config)}, returns
+structured guard findings (rule, severity, forgeability, fix suggestions) and is
+the common kernel reused by the performance, benchmark, and teaching layers.
+Around it sit adoption helpers that emit CI annotations, SARIF, and pre-commit
+configuration, so a project moves from ``never heard of PromptABI'' to a
+gating check on its real templates without writing analyzer-specific glue. The
+kernel is the same code path the benchmark scores, eliminating the usual gap
+between what a paper measures and what a user runs.
+
+\paragraph{Advanced verification frontiers.}
+Three orthogonal hardening mechanisms extend the core. (i) An SMT layer discharges
+token-budget and array-bounds obligations through Z3 when available and falls back
+to an \emph{exact} arithmetic decision procedure otherwise, so the guarantee never
+depends on the solver being installed. (ii) A normalization canonicalizer composes
+NFKC with an explicit cross-script confusable map, catching Cyrillic/Greek
+homoglyph attacks on control delimiters that NFKC alone misses, and is idempotent
+under repeated application. (iii) An authorization lattice over
+\texttt{(user, tool, assistant, developer, system)} enforces Biba integrity---``no
+write-up''---so untrusted user or tool content can never be shown to legitimately
+flow into a system-level region. Each mechanism is a sound over-approximation with
+a characterized failure mode.
+
+\paragraph{Incremental and parallel performance.}
+The performance layer memoizes verification by template digest, supports
+incremental re-analysis over edit sequences, and is shardable for parallel
+execution. Its central correctness property is \emph{monotonicity}: re-analysis
+after an edit never drops a finding that a full analysis would report, so caching
+can only save work, never soundness. This is exactly the guarantee a pre-merge
+gate needs: the fast incremental path and the slow exhaustive path agree on every
+true positive.
+
+\paragraph{PromptABI-Bench: a soundness-weighted public leaderboard.}
+The benchmark layer packages the corpus into \textbf{PromptABI-Bench}: a
+versioned, content-hashed benchmark with public and hidden splits, a SARIF
+submission interface that accepts \emph{any} third-party tool, and a scoring
+rubric that weights soundness over coverage by penalizing false negatives five
+times more heavily than false positives. Three reference baselines make the case
+concrete (Table~\ref{tab:bench-baselines}): a naive linter, an LLM-grader
+surrogate, and PromptABI itself. On the full corpus PromptABI is the \emph{only}
+baseline with zero false negatives, and is therefore the only submission that
+clears the certification gate; the other two miss genuine forgeries and score
+worse under the soundness-weighted rubric despite competitive raw accuracy. The
+layer also provides a tiered ``capture-the-contract'' CTF, bootstrap-confidence
+leaderboards, an adversarial track on which the soundness guarantee cannot be
+bypassed, a pinned offline evaluation container, DOI/archival metadata, and an
+artifact-evaluation checklist mirroring top-venue requirements.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+Submission & False negatives & Soundness-weighted score & Certifiable \\
+\midrule
+Naive linter & $>0$ & lower & no \\
+LLM-grader (surrogate) & $>0$ & lower & no \\
+\textbf{PromptABI} & $\mathbf{0}$ & \textbf{highest} & \textbf{yes} \\
+\bottomrule
+\end{tabular}
+\caption{PromptABI-Bench reference baselines on the full corpus. The rubric
+penalizes false negatives $5\times$; only the sound submission clears the
+certification gate. All rows are produced by the same deterministic harness.}
+\label{tab:bench-baselines}
+\end{table}
+
+\paragraph{Ecosystem and lasting impact.}
+A final layer makes the program durable rather than a one-off artifact. It
+includes an HMAC-signed plugin marketplace that installs only \emph{certified}
+third-party checks; a security-disclosure workflow with CVE coordination; an
+auto-graded teaching curriculum whose labs are graded against the real analyzer,
+not a fixture; reproducible adopter case studies keyed by content digest so a
+third party can re-derive ``$N$ configs verified, $K$ bugs caught''; verified
+multi-language diagnostic catalogs (English, Spanish, Japanese) with
+completeness checking and English fallback; signed quarterly releases carrying an
+SBOM and verifiable provenance; measurable-impact aggregation over case studies;
+and an evidence-backed milestone tracker. None of these are mockups: every
+artifact is signed and re-verifiable offline, so claims about the project's
+governance and impact are as checkable as its verification verdicts.
+
+\paragraph{Why this matters for the headline guarantee.}
+Taken together, these layers close the loop from \emph{theorem} to \emph{adoption}:
+the same sound analyzer that the mechanized metatheory certifies is the kernel a
+user runs, the engine the public leaderboard scores, the code a classroom grades
+against, and the component a signed release ships. The benchmark does not measure
+a research prototype that differs from the product; it measures the product.
+
+
+
 \label{sec:live-ci}
 
 Static soundness is necessary but not sufficient for a tool that must track a
