@@ -1,0 +1,1199 @@
+perl: warning: Setting locale failed.
+perl: warning: Please check that your locale settings:
+	LC_ALL = "C.UTF-8",
+	LC_CTYPE = "C.UTF-8",
+	LC_NUMERIC = (unset),
+	LC_COLLATE = (unset),
+	LC_TIME = (unset),
+	LC_MESSAGES = (unset),
+	LC_MONETARY = (unset),
+	LANG = "C.UTF-8"
+    are supported and installed on your system.
+perl: warning: Falling back to the standard locale ("C").
+Rc files read:
+  NONE
+Latexmk: This is Latexmk, John Collins, 15 June 2025. Version 4.87.
+No existing .aux file, so I'll make a simple one, and require run of *latex.
+Latexmk: applying rule 'pdflatex'...
+Rule 'pdflatex':  Reasons for rerun
+Category 'other':
+  Rerun of 'pdflatex' forced or previously required:
+    Reason or flag: 'Initial setup'
+
+------------
+Run number 1 of rule 'pdflatex'
+------------
+------------
+Running 'pdflatex  -interaction=nonstopmode -halt-on-error -recorder  "tool_paper.tex"'
+------------
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026/Homebrew) (preloaded format=pdflatex)
+ restricted \write18 enabled.
+entering extended mode
+(./tool_paper.tex
+LaTeX2e <2025-11-01>
+L3 programming layer <2026-01-19>
+
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/ieeetran/IEEE
+tran.cls
+Document Class: IEEEtran 2015/08/26 V1.8b by Michael Shell
+-- See the "IEEEtran_HOWTO" manual for usage information.
+-- http://www.michaelshell.org/tex/ieeetran/
+
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/psnfss/ot1ptm
+.fd)
+-- Using 8.5in x 11in (letter) paper.
+-- Using PDF output.
+-- This is a 10 point document.
+)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/base/fontenc.
+sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/psnfss/t1ptm.
+fd))
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/lm/lmodern.st
+y)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsmath/amsma
+th.sty
+For additional information on amsmath, use the `?' option.
+
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsmath/amste
+xt.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsmath/amsge
+n.sty))
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsmath/amsbs
+y.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsmath/amsop
+n.sty))
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsfonts/amss
+ymb.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsfonts/amsf
+onts.sty))
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/booktabs/book
+tabs.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/url/url.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/tools/xspace.
+sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/hyperref/hype
+rref.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/iftex/iftex
+.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/graphics/keyv
+al.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/kvsetkeys/kvs
+etkeys.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/kvdefinekey
+s/kvdefinekeys.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/pdfescape/p
+dfescape.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/ltxcmds/ltx
+cmds.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/pdftexcmds/
+pdftexcmds.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/infwarerr/i
+nfwarerr.sty)))
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/hycolor/hycol
+or.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/hyperref/name
+ref.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/refcount/refc
+ount.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/gettitlestr
+ing/gettitlestring.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/kvoptions/kvo
+ptions.sty)))
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/etoolbox/etoo
+lbox.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/stringenc/s
+tringenc.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/hyperref/pd1e
+nc.def)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/intcalc/int
+calc.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/hyperref/puen
+c.def)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/bitset/bits
+et.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/bigintcalc/
+bigintcalc.sty)))
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/hyperref/hpdf
+tex.def
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/rerunfilechec
+k/rerunfilecheck.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/uniquecount
+er/uniquecounter.sty))) (./numbers.tex)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/lm/t1lmr.fd)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/l3backend/l3b
+ackend-pdftex.def) (./tool_paper.aux)
+-- Lines per column: 56 (exact).
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/lm/t1lmtt.fd)
+
+LaTeX Warning: Citation `perez2022ignore' on page 1 undefined on input line 54.
+
+
+
+LaTeX Warning: Citation `greshake2023indirect' on page 1 undefined on input lin
+e 54.
+
+
+LaTeX Warning: Citation `liu2024formalizing' on page 1 undefined on input line 
+54.
+
+
+LaTeX Warning: Citation `chen2025struq' on page 1 undefined on input line 57.
+
+
+LaTeX Warning: Citation `chen2024secalign' on page 1 undefined on input line 59
+.
+
+
+LaTeX Warning: Citation `wallace2024hierarchy' on page 1 undefined on input lin
+e 59.
+
+
+LaTeX Warning: Citation `hines2024spotlighting' on page 1 undefined on input li
+ne 60.
+
+
+LaTeX Warning: Citation `wolf2020transformers' on page 1 undefined on input lin
+e 66.
+
+
+LaTeX Warning: Citation `kwon2023vllm' on page 1 undefined on input line 66.
+
+
+LaTeX Warning: Citation `su2006essence' on page 1 undefined on input line 74.
+
+
+LaTeX Warning: Citation `hf2024issue29279' on page 1 undefined on input line 75
+.
+
+
+LaTeX Warning: Citation `jiang2025chatbug' on page 1 undefined on input line 76
+.
+
+
+LaTeX Warning: Citation `zhou2024virtual' on page 1 undefined on input line 76.
+
+
+
+Underfull \hbox (badness 3746) in paragraph at lines 63--77
+\T1/lmr/m/n/10 duces those to-kens is the chat tem-plate. A Hug-
+
+Underfull \hbox (badness 1460) in paragraph at lines 63--77
+\T1/lmr/m/n/10 sult-ing string. The tem-plate writes mark-ers such as
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/lm/ot1lmr.fd)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/lm/omllmm.fd)
+
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/lm/omslmsy.fd
+)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/lm/omxlmex.fd
+)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsfonts/umsa
+.fd)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsfonts/umsb
+.fd)
+
+LaTeX Warning: Reference `sec:problem' on page 1 undefined on input line 84.
+
+
+LaTeX Warning: Reference `sec:approach' on page 1 undefined on input line 88.
+
+
+LaTeX Warning: Reference `sec:impl' on page 1 undefined on input line 88.
+
+
+LaTeX Warning: Reference `sec:eval' on page 1 undefined on input line 92.
+
+
+LaTeX Warning: Citation `sennrich2016bpe' on page 1 undefined on input line 109
+.
+
+
+Underfull \hbox (badness 2134) in paragraph at lines 99--111
+ \T1/lmr/m/it/10 a) Chat tem-plates: [][] \T1/lmr/m/n/10 A chat tem-plate is a 
+Jinja
+
+Underfull \hbox (badness 10000) in paragraph at lines 99--111
+\T1/lmr/m/n/10 pro-gram eval-u-ated in a sand-boxed en-vi-ron-ment
+
+Underfull \hbox (badness 5036) in paragraph at lines 99--111
+\T1/lmr/m/n/10 with \T1/lmtt/m/n/10 messages\T1/lmr/m/n/10 , \T1/lmtt/m/n/10 to
+ols\T1/lmr/m/n/10 , special-token vari-ables, and
+
+Underfull \hbox (badness 2547) in paragraph at lines 99--111
+\T1/lmr/m/n/10 an \T1/lmtt/m/n/10 add_generation_prompt \T1/lmr/m/n/10 flag. Th
+e Hug-ging Face
+
+Underfull \hbox (badness 7273) in paragraph at lines 99--111
+\T1/lmr/m/n/10 adds \T1/lmtt/m/n/10 raise_exception\T1/lmr/m/n/10 , and re-plac
+es \T1/lmtt/m/n/10 tojson \T1/lmr/m/n/10 with
+
+Underfull \hbox (badness 1796) in paragraph at lines 99--111
+\T1/lmtt/m/n/10 json.dumps(..., ensure_ascii=False)\T1/lmr/m/n/10 , which leave
+s
+
+Underfull \hbox (badness 1389) in paragraph at lines 99--111
+\T1/lmr/m/n/10 be reg-is-tered as non-special, and those are matched
+
+LaTeX Warning: Citation `perez2022ignore' on page 1 undefined on input line 113
+.
+
+
+LaTeX Warning: Citation `greshake2023indirect' on page 1 undefined on input lin
+e 114.
+
+
+LaTeX Warning: Citation `liu2024formalizing' on page 1 undefined on input line 
+115.
+
+
+LaTeX Warning: Citation `chen2025struq' on page 1 undefined on input line 117.
+
+
+LaTeX Warning: Citation `chen2024secalign' on page 1 undefined on input line 11
+9.
+
+
+LaTeX Warning: Citation `wallace2024hierarchy' on page 1 undefined on input lin
+e 119.
+
+
+LaTeX Warning: Citation `hines2024spotlighting' on page 1 undefined on input li
+ne 120.
+
+[1{/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/map/pdftex/updm
+ap/pdftex.map}{/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/enc
+/dvips/lm/lm-ec.enc}{/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fon
+ts/enc/dvips/lm/lm-mathsy.enc}]
+
+LaTeX Warning: Citation `jiang2025chatbug' on page 2 undefined on input line 12
+7.
+
+
+LaTeX Warning: Citation `zhou2024virtual' on page 2 undefined on input line 128
+.
+
+
+Underfull \hbox (badness 4193) in paragraph at lines 125--131
+ \T1/lmr/m/it/10 c) Special-token and tem-plate at-tacks: [][] \T1/lmr/m/n/10 C
+hat-Bug
+
+LaTeX Warning: Citation `shen2026templatefuzz' on page 2 undefined on input lin
+e 134.
+
+
+LaTeX Warning: Citation `jovanovic2006pixy' on page 2 undefined on input line 1
+43.
+
+
+LaTeX Warning: Citation `su2006essence' on page 2 undefined on input line 144.
+
+
+LaTeX Warning: Citation `samuel2011autosanitization' on page 2 undefined on inp
+ut line 145.
+
+
+LaTeX Warning: Citation `willard2023outlines' on page 2 undefined on input line
+ 151.
+
+
+LaTeX Warning: Citation `dong2024xgrammar' on page 2 undefined on input line 15
+1.
+
+
+LaTeX Warning: Citation `geng2023grammar' on page 2 undefined on input line 151
+.
+
+
+Underfull \hbox (badness 3803) in paragraph at lines 205--226
+\T1/lmr/m/n/10 and \T1/lmtt/m/n/10 raise_exception\T1/lmr/m/n/10 . To cover the
+ full lan-guage,
+[2{/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/enc/dvips/lm/lm
+-mathit.enc}{/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/enc/d
+vips/lm/lm-rm.enc}]
+
+LaTeX Warning: Reference `sec:problem' on page 3 undefined on input line 288.
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 284--301
+\T1/lmr/m/n/10 5.19.0 (falling back to \T1/lmtt/m/n/10 PreTrainedTokenizerFast
+
+Underfull \hbox (badness 10000) in paragraph at lines 284--301
+\T1/lmtt/m/n/10 apply_chat_template\T1/lmr/m/n/10 , and to-k-enizes with de-fau
+lt
+
+Underfull \hbox (badness 3209) in paragraph at lines 284--301
+\T1/lmr/m/n/10 set-tings. For RQ2 it com-putes the sep-a-ra-tor $\OML/lmm/m/it/
+10 s$ \T1/lmr/m/n/10 of
+
+Underfull \hbox (badness 10000) in paragraph at lines 319--329
+\T1/lmr/m/n/10 for ex-am-ple \T1/lmtt/m/n/10 <|im_end|>\n<|im_start|>assistant\
+n
+
+Underfull \hbox (badness 2828) in paragraph at lines 319--329
+\T1/lmr/m/n/10 in the ChatML fam-ily, \T1/lmtt/m/n/10 <|end|><|start|>assistant
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 319--329
+\T1/lmtt/m/n/10 <|channel|>final<|message|> \T1/lmr/m/n/10 in gpt-oss, and
+
+Underfull \hbox (badness 3536) in paragraph at lines 319--329
+\T1/lmtt/m/n/10 <|Assistant|> \T1/lmr/m/n/10 (with full-width bars) in DeepSeek
+-
+[3]
+
+LaTeX Warning: Reference `tab:rq2' on page 4 undefined on input line 347.
+
+
+LaTeX Warning: Reference `tab:rq3' on page 4 undefined on input line 360.
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 426--443
+[]\T1/lmr/m/n/10 We froze 20 syn-thetic Jinja con-struc-
+
+Underfull \hbox (badness 10000) in paragraph at lines 426--443
+\T1/lmr/m/n/10 tions and six pay-loads be-fore ex-e-cu-tion
+
+Underfull \hbox (badness 10000) in paragraph at lines 426--443
+\T1/lmr/m/n/10 (\T1/lmtt/m/n/10 research/wave2/plans/probe.md\T1/lmr/m/n/10 ). 
+A syn-thetic
+
+Underfull \hbox (badness 2088) in paragraph at lines 426--443
+\T1/lmr/m/n/10 to-ken com-pared with ren-der-ing empty con-tent. The
+
+Underfull \hbox (badness 7012) in paragraph at lines 426--443
+\T1/lmr/m/n/10 ex-po-sure un-der this port-fo-lio. A sin-gle complete-
+
+Underfull \hbox (badness 6125) in paragraph at lines 426--443
+\T1/lmr/m/n/10 fragment and nu-meric re-con-struc-tion. The orig-i-nal
+
+Underfull \hbox (badness 4832) in paragraph at lines 426--443
+\T1/lmr/m/n/10 pre-serv-ing operand taint re-pairs both misses. The
+
+Underfull \hbox (badness 3098) in paragraph at lines 426--443
+\T1/lmr/m/n/10 two con-ser-va-tive warn-ings. This re-run is re-gres-sion
+
+Underfull \hbox (badness 2181) in paragraph at lines 444--451
+\T1/lmr/m/n/10 pass mea-sure-ments sup-port no hardware-independent
+[4]
+
+LaTeX Warning: Citation `jiang2025chatbug' on page 5 undefined on input line 46
+9.
+
+
+LaTeX Warning: Citation `zhou2024virtual' on page 5 undefined on input line 469
+.
+
+
+Underfull \hbox (badness 3168) in paragraph at lines 487--495
+\T1/lmr/m/n/10 role-boundary forgery, which ren-der-ing can con-firm.
+No file tool_paper.bbl.
+
+** Conference Paper **
+Before submitting the final camera ready copy, remember to:
+
+ 1. Manually equalize the lengths of two columns on the last page
+ of your paper;
+
+ 2. Ensure that any PostScript and/or PDF output post-processing
+ uses only Type 1 fonts and that every step in the generation
+ process uses the appropriate paper size.
+
+[5] (./tool_paper.aux)
+
+LaTeX Warning: There were undefined references.
+
+
+LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
+
+
+Package rerunfilecheck Warning: File `tool_paper.out' has changed.
+(rerunfilecheck)                Rerun to get outlines right
+(rerunfilecheck)                or use package `bookmark'.
+
+ )
+(see the transcript file for additional information)</opt/homebrew/Cellar/texli
+ve/20260301/share/texmf-dist/fonts/type1/public/lm/lmbx10.pfb></opt/homebrew/Ce
+llar/texlive/20260301/share/texmf-dist/fonts/type1/public/lm/lmbx9.pfb></opt/ho
+mebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/type1/public/lm/lmbxi10.p
+fb></opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/type1/public/l
+m/lmcsc10.pfb></opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/typ
+e1/public/lm/lmmi10.pfb></opt/homebrew/Cellar/texlive/20260301/share/texmf-dist
+/fonts/type1/public/lm/lmmi7.pfb></opt/homebrew/Cellar/texlive/20260301/share/t
+exmf-dist/fonts/type1/public/lm/lmr10.pfb></opt/homebrew/Cellar/texlive/2026030
+1/share/texmf-dist/fonts/type1/public/lm/lmr12.pfb></opt/homebrew/Cellar/texliv
+e/20260301/share/texmf-dist/fonts/type1/public/lm/lmr17.pfb></opt/homebrew/Cell
+ar/texlive/20260301/share/texmf-dist/fonts/type1/public/lm/lmr8.pfb></opt/homeb
+rew/Cellar/texlive/20260301/share/texmf-dist/fonts/type1/public/lm/lmri10.pfb><
+/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/type1/public/lm/lm
+sy7.pfb></opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/type1/pub
+lic/lm/lmtk10.pfb></opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts
+/type1/public/lm/lmtt10.pfb></opt/homebrew/Cellar/texlive/20260301/share/texmf-
+dist/fonts/type1/public/lm/lmtt9.pfb>
+Output written on tool_paper.pdf (5 pages, 355613 bytes).
+Transcript written on tool_paper.log.
+Latexmk: Getting log file 'tool_paper.log'
+Latexmk: Examining 'tool_paper.fls'
+Latexmk: Examining 'tool_paper.log'
+Latexmk: Missing bbl file 'tool_paper.bbl' in following:
+ No file tool_paper.bbl.
+Latexmk: References changed.
+Latexmk: References changed.
+Latexmk: Log file says output to 'tool_paper.pdf'
+Latexmk: Using bibtex to make bibliography file(s).
+  ===Source file 'tool_paper.bbl' for 'pdflatex'
+Create bibtex tool_paper
+Latexmk: Found bibliography file(s):
+  ./references.bib
+Latexmk: applying rule 'bibtex tool_paper'...
+Rule 'bibtex tool_paper':  Reasons for rerun
+Category 'other':
+  Rerun of 'bibtex tool_paper' forced or previously required:
+    Reason or flag: 'Initial set up of rule'
+
+------------
+Run number 1 of rule 'bibtex tool_paper'
+------------
+------------
+Running 'bibtex  "tool_paper.aux"'
+------------
+This is BibTeX, Version 0.99e (TeX Live 2026/Homebrew)
+The top-level auxiliary file: tool_paper.aux
+The style file: IEEEtran.bst
+Database file #1: references.bib
+-- IEEEtran.bst version 1.14 (2015/08/26) by Michael Shell.
+-- http://www.michaelshell.org/tex/ieeetran/bibtex/
+-- See the "IEEEtran_bst_HOWTO.pdf" manual for usage information.
+
+Done.
+Latexmk: applying rule 'pdflatex'...
+Rule 'pdflatex':  Reasons for rerun
+Changed files or newly in use/created:
+  tool_paper.aux
+  tool_paper.bbl
+  tool_paper.out
+
+------------
+Run number 2 of rule 'pdflatex'
+------------
+------------
+Running 'pdflatex  -interaction=nonstopmode -halt-on-error -recorder  "tool_paper.tex"'
+------------
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026/Homebrew) (preloaded format=pdflatex)
+ restricted \write18 enabled.
+entering extended mode
+(./tool_paper.tex
+LaTeX2e <2025-11-01>
+L3 programming layer <2026-01-19>
+
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/ieeetran/IEEE
+tran.cls
+Document Class: IEEEtran 2015/08/26 V1.8b by Michael Shell
+-- See the "IEEEtran_HOWTO" manual for usage information.
+-- http://www.michaelshell.org/tex/ieeetran/
+
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/psnfss/ot1ptm
+.fd)
+-- Using 8.5in x 11in (letter) paper.
+-- Using PDF output.
+-- This is a 10 point document.
+)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/base/fontenc.
+sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/psnfss/t1ptm.
+fd))
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/lm/lmodern.st
+y)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsmath/amsma
+th.sty
+For additional information on amsmath, use the `?' option.
+
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsmath/amste
+xt.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsmath/amsge
+n.sty))
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsmath/amsbs
+y.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsmath/amsop
+n.sty))
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsfonts/amss
+ymb.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsfonts/amsf
+onts.sty))
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/booktabs/book
+tabs.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/url/url.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/tools/xspace.
+sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/hyperref/hype
+rref.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/iftex/iftex
+.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/graphics/keyv
+al.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/kvsetkeys/kvs
+etkeys.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/kvdefinekey
+s/kvdefinekeys.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/pdfescape/p
+dfescape.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/ltxcmds/ltx
+cmds.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/pdftexcmds/
+pdftexcmds.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/infwarerr/i
+nfwarerr.sty)))
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/hycolor/hycol
+or.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/hyperref/name
+ref.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/refcount/refc
+ount.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/gettitlestr
+ing/gettitlestring.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/kvoptions/kvo
+ptions.sty)))
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/etoolbox/etoo
+lbox.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/stringenc/s
+tringenc.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/hyperref/pd1e
+nc.def)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/intcalc/int
+calc.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/hyperref/puen
+c.def)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/bitset/bits
+et.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/bigintcalc/
+bigintcalc.sty)))
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/hyperref/hpdf
+tex.def
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/rerunfilechec
+k/rerunfilecheck.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/uniquecount
+er/uniquecounter.sty))) (./numbers.tex)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/lm/t1lmr.fd)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/l3backend/l3b
+ackend-pdftex.def) (./tool_paper.aux)
+-- Lines per column: 56 (exact).
+(./tool_paper.out) (./tool_paper.out)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/lm/t1lmtt.fd)
+
+LaTeX Warning: Citation `perez2022ignore' on page 1 undefined on input line 54.
+
+
+
+LaTeX Warning: Citation `greshake2023indirect' on page 1 undefined on input lin
+e 54.
+
+
+LaTeX Warning: Citation `liu2024formalizing' on page 1 undefined on input line 
+54.
+
+
+LaTeX Warning: Citation `chen2025struq' on page 1 undefined on input line 57.
+
+
+LaTeX Warning: Citation `chen2024secalign' on page 1 undefined on input line 59
+.
+
+
+LaTeX Warning: Citation `wallace2024hierarchy' on page 1 undefined on input lin
+e 59.
+
+
+LaTeX Warning: Citation `hines2024spotlighting' on page 1 undefined on input li
+ne 60.
+
+
+LaTeX Warning: Citation `wolf2020transformers' on page 1 undefined on input lin
+e 66.
+
+
+LaTeX Warning: Citation `kwon2023vllm' on page 1 undefined on input line 66.
+
+
+LaTeX Warning: Citation `su2006essence' on page 1 undefined on input line 74.
+
+
+LaTeX Warning: Citation `hf2024issue29279' on page 1 undefined on input line 75
+.
+
+
+LaTeX Warning: Citation `jiang2025chatbug' on page 1 undefined on input line 76
+.
+
+
+LaTeX Warning: Citation `zhou2024virtual' on page 1 undefined on input line 76.
+
+
+
+Underfull \hbox (badness 3746) in paragraph at lines 63--77
+\T1/lmr/m/n/10 duces those to-kens is the chat tem-plate. A Hug-
+
+Underfull \hbox (badness 1460) in paragraph at lines 63--77
+\T1/lmr/m/n/10 sult-ing string. The tem-plate writes mark-ers such as
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/lm/ot1lmr.fd)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/lm/omllmm.fd)
+
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/lm/omslmsy.fd
+)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/lm/omxlmex.fd
+)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsfonts/umsa
+.fd)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsfonts/umsb
+.fd)
+
+LaTeX Warning: Citation `sennrich2016bpe' on page 1 undefined on input line 109
+.
+
+
+Underfull \hbox (badness 2134) in paragraph at lines 99--111
+ \T1/lmr/m/it/10 a) Chat tem-plates: [][] \T1/lmr/m/n/10 A chat tem-plate is a 
+Jinja
+
+Underfull \hbox (badness 10000) in paragraph at lines 99--111
+\T1/lmr/m/n/10 pro-gram eval-u-ated in a sand-boxed en-vi-ron-ment
+
+Underfull \hbox (badness 5036) in paragraph at lines 99--111
+\T1/lmr/m/n/10 with \T1/lmtt/m/n/10 messages\T1/lmr/m/n/10 , \T1/lmtt/m/n/10 to
+ols\T1/lmr/m/n/10 , special-token vari-ables, and
+
+Underfull \hbox (badness 2547) in paragraph at lines 99--111
+\T1/lmr/m/n/10 an \T1/lmtt/m/n/10 add_generation_prompt \T1/lmr/m/n/10 flag. Th
+e Hug-ging Face
+
+Underfull \hbox (badness 7273) in paragraph at lines 99--111
+\T1/lmr/m/n/10 adds \T1/lmtt/m/n/10 raise_exception\T1/lmr/m/n/10 , and re-plac
+es \T1/lmtt/m/n/10 tojson \T1/lmr/m/n/10 with
+
+Underfull \hbox (badness 1796) in paragraph at lines 99--111
+\T1/lmtt/m/n/10 json.dumps(..., ensure_ascii=False)\T1/lmr/m/n/10 , which leave
+s
+
+Underfull \hbox (badness 1389) in paragraph at lines 99--111
+\T1/lmr/m/n/10 be reg-is-tered as non-special, and those are matched
+
+LaTeX Warning: Citation `perez2022ignore' on page 1 undefined on input line 113
+.
+
+
+LaTeX Warning: Citation `greshake2023indirect' on page 1 undefined on input lin
+e 114.
+
+
+LaTeX Warning: Citation `liu2024formalizing' on page 1 undefined on input line 
+115.
+
+
+LaTeX Warning: Citation `chen2025struq' on page 1 undefined on input line 117.
+
+
+LaTeX Warning: Citation `chen2024secalign' on page 1 undefined on input line 11
+9.
+
+
+LaTeX Warning: Citation `wallace2024hierarchy' on page 1 undefined on input lin
+e 119.
+
+
+LaTeX Warning: Citation `hines2024spotlighting' on page 1 undefined on input li
+ne 120.
+
+[1{/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/map/pdftex/updm
+ap/pdftex.map}{/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/enc
+/dvips/lm/lm-ec.enc}{/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fon
+ts/enc/dvips/lm/lm-mathsy.enc}]
+
+LaTeX Warning: Citation `jiang2025chatbug' on page 2 undefined on input line 12
+7.
+
+
+LaTeX Warning: Citation `zhou2024virtual' on page 2 undefined on input line 128
+.
+
+
+Underfull \hbox (badness 4193) in paragraph at lines 125--131
+ \T1/lmr/m/it/10 c) Special-token and tem-plate at-tacks: [][] \T1/lmr/m/n/10 C
+hat-Bug
+
+LaTeX Warning: Citation `shen2026templatefuzz' on page 2 undefined on input lin
+e 134.
+
+
+LaTeX Warning: Citation `jovanovic2006pixy' on page 2 undefined on input line 1
+43.
+
+
+LaTeX Warning: Citation `su2006essence' on page 2 undefined on input line 144.
+
+
+LaTeX Warning: Citation `samuel2011autosanitization' on page 2 undefined on inp
+ut line 145.
+
+
+LaTeX Warning: Citation `willard2023outlines' on page 2 undefined on input line
+ 151.
+
+
+LaTeX Warning: Citation `dong2024xgrammar' on page 2 undefined on input line 15
+1.
+
+
+LaTeX Warning: Citation `geng2023grammar' on page 2 undefined on input line 151
+.
+
+
+Underfull \hbox (badness 3803) in paragraph at lines 205--226
+\T1/lmr/m/n/10 and \T1/lmtt/m/n/10 raise_exception\T1/lmr/m/n/10 . To cover the
+ full lan-guage,
+[2{/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/enc/dvips/lm/lm
+-mathit.enc}{/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/enc/d
+vips/lm/lm-rm.enc}]
+Underfull \hbox (badness 10000) in paragraph at lines 284--301
+\T1/lmr/m/n/10 5.19.0 (falling back to \T1/lmtt/m/n/10 PreTrainedTokenizerFast
+
+Underfull \hbox (badness 10000) in paragraph at lines 284--301
+\T1/lmtt/m/n/10 apply_chat_template\T1/lmr/m/n/10 , and to-k-enizes with de-fau
+lt
+
+Underfull \hbox (badness 3209) in paragraph at lines 284--301
+\T1/lmr/m/n/10 set-tings. For RQ2 it com-putes the sep-a-ra-tor $\OML/lmm/m/it/
+10 s$ \T1/lmr/m/n/10 of
+
+Underfull \hbox (badness 10000) in paragraph at lines 319--329
+\T1/lmr/m/n/10 for ex-am-ple \T1/lmtt/m/n/10 <|im_end|>\n<|im_start|>assistant\
+n
+
+Underfull \hbox (badness 2828) in paragraph at lines 319--329
+\T1/lmr/m/n/10 in the ChatML fam-ily, \T1/lmtt/m/n/10 <|end|><|start|>assistant
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 319--329
+\T1/lmtt/m/n/10 <|channel|>final<|message|> \T1/lmr/m/n/10 in gpt-oss, and
+
+Underfull \hbox (badness 3536) in paragraph at lines 319--329
+\T1/lmtt/m/n/10 <|Assistant|> \T1/lmr/m/n/10 (with full-width bars) in DeepSeek
+-
+[3]
+Underfull \hbox (badness 10000) in paragraph at lines 426--443
+[]\T1/lmr/m/n/10 We froze 20 syn-thetic Jinja con-struc-
+
+Underfull \hbox (badness 10000) in paragraph at lines 426--443
+\T1/lmr/m/n/10 tions and six pay-loads be-fore ex-e-cu-tion
+
+Underfull \hbox (badness 10000) in paragraph at lines 426--443
+\T1/lmr/m/n/10 (\T1/lmtt/m/n/10 research/wave2/plans/probe.md\T1/lmr/m/n/10 ). 
+A syn-thetic
+
+Underfull \hbox (badness 2088) in paragraph at lines 426--443
+\T1/lmr/m/n/10 to-ken com-pared with ren-der-ing empty con-tent. The
+
+Underfull \hbox (badness 7012) in paragraph at lines 426--443
+\T1/lmr/m/n/10 ex-po-sure un-der this port-fo-lio. A sin-gle complete-
+
+Underfull \hbox (badness 6125) in paragraph at lines 426--443
+\T1/lmr/m/n/10 fragment and nu-meric re-con-struc-tion. The orig-i-nal
+
+Underfull \hbox (badness 4832) in paragraph at lines 426--443
+\T1/lmr/m/n/10 pre-serv-ing operand taint re-pairs both misses. The
+
+Underfull \hbox (badness 3098) in paragraph at lines 426--443
+\T1/lmr/m/n/10 two con-ser-va-tive warn-ings. This re-run is re-gres-sion
+
+Underfull \hbox (badness 2181) in paragraph at lines 444--451
+\T1/lmr/m/n/10 pass mea-sure-ments sup-port no hardware-independent
+[4]
+
+LaTeX Warning: Citation `jiang2025chatbug' on page 5 undefined on input line 46
+9.
+
+
+LaTeX Warning: Citation `zhou2024virtual' on page 5 undefined on input line 469
+.
+
+
+Underfull \hbox (badness 3168) in paragraph at lines 487--495
+\T1/lmr/m/n/10 role-boundary forgery, which ren-der-ing can con-firm.
+(./tool_paper.bbl
+Underfull \hbox (badness 1466) in paragraph at lines 46--49
+[]\T1/lmr/m/n/8 S. Chen, A. Zhar-magam-be-tov, S. Mahlou-ji-far, K. Chaud-
+
+Underfull \hbox (badness 1360) in paragraph at lines 81--85
+\T1/lmr/m/n/8 is-sue #29279, []$https : / / github . com / huggingface / transf
+ormers /
+[5])
+
+** Conference Paper **
+Before submitting the final camera ready copy, remember to:
+
+ 1. Manually equalize the lengths of two columns on the last page
+ of your paper;
+
+ 2. Ensure that any PostScript and/or PDF output post-processing
+ uses only Type 1 fonts and that every step in the generation
+ process uses the appropriate paper size.
+
+[6] (./tool_paper.aux)
+
+LaTeX Warning: There were undefined references.
+
+
+LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
+
+
+Package rerunfilecheck Warning: File `tool_paper.out' has changed.
+(rerunfilecheck)                Rerun to get outlines right
+(rerunfilecheck)                or use package `bookmark'.
+
+ )
+(see the transcript file for additional information)</opt/homebrew/Cellar/texli
+ve/20260301/share/texmf-dist/fonts/type1/public/lm/lmbx10.pfb></opt/homebrew/Ce
+llar/texlive/20260301/share/texmf-dist/fonts/type1/public/lm/lmbx9.pfb></opt/ho
+mebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/type1/public/lm/lmbxi10.p
+fb></opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/type1/public/l
+m/lmcsc10.pfb></opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/typ
+e1/public/lm/lmmi10.pfb></opt/homebrew/Cellar/texlive/20260301/share/texmf-dist
+/fonts/type1/public/lm/lmmi7.pfb></opt/homebrew/Cellar/texlive/20260301/share/t
+exmf-dist/fonts/type1/public/lm/lmr10.pfb></opt/homebrew/Cellar/texlive/2026030
+1/share/texmf-dist/fonts/type1/public/lm/lmr12.pfb></opt/homebrew/Cellar/texliv
+e/20260301/share/texmf-dist/fonts/type1/public/lm/lmr17.pfb></opt/homebrew/Cell
+ar/texlive/20260301/share/texmf-dist/fonts/type1/public/lm/lmr8.pfb></opt/homeb
+rew/Cellar/texlive/20260301/share/texmf-dist/fonts/type1/public/lm/lmri10.pfb><
+/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/type1/public/lm/lm
+ri8.pfb></opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/type1/pub
+lic/lm/lmsy7.pfb></opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/
+type1/public/lm/lmtk10.pfb></opt/homebrew/Cellar/texlive/20260301/share/texmf-d
+ist/fonts/type1/public/lm/lmtt10.pfb></opt/homebrew/Cellar/texlive/20260301/sha
+re/texmf-dist/fonts/type1/public/lm/lmtt8.pfb></opt/homebrew/Cellar/texlive/202
+60301/share/texmf-dist/fonts/type1/public/lm/lmtt9.pfb>
+Output written on tool_paper.pdf (6 pages, 412437 bytes).
+Transcript written on tool_paper.log.
+Latexmk: Getting log file 'tool_paper.log'
+Latexmk: Examining 'tool_paper.fls'
+Latexmk: Examining 'tool_paper.log'
+Latexmk: Found input bbl file 'tool_paper.bbl'
+Latexmk: References changed.
+Latexmk: References changed.
+Latexmk: Log file says output to 'tool_paper.pdf'
+Latexmk: Using bibtex to make bibliography file(s).
+  ===Source file 'tool_paper.bbl' for 'pdflatex'
+Latexmk: Found bibliography file(s):
+  ./references.bib
+Latexmk: applying rule 'bibtex tool_paper'...
+Rule 'bibtex tool_paper':  Reasons for rerun
+Changed files or newly in use/created:
+  tool_paper.aux
+
+------------
+Run number 2 of rule 'bibtex tool_paper'
+------------
+------------
+Running 'bibtex  "tool_paper.aux"'
+------------
+This is BibTeX, Version 0.99e (TeX Live 2026/Homebrew)
+The top-level auxiliary file: tool_paper.aux
+The style file: IEEEtran.bst
+Database file #1: references.bib
+-- IEEEtran.bst version 1.14 (2015/08/26) by Michael Shell.
+-- http://www.michaelshell.org/tex/ieeetran/bibtex/
+-- See the "IEEEtran_bst_HOWTO.pdf" manual for usage information.
+
+Done.
+Latexmk: applying rule 'pdflatex'...
+Rule 'pdflatex':  Reasons for rerun
+Changed files or newly in use/created:
+  tool_paper.aux
+  tool_paper.out
+
+------------
+Run number 3 of rule 'pdflatex'
+------------
+------------
+Running 'pdflatex  -interaction=nonstopmode -halt-on-error -recorder  "tool_paper.tex"'
+------------
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026/Homebrew) (preloaded format=pdflatex)
+ restricted \write18 enabled.
+entering extended mode
+(./tool_paper.tex
+LaTeX2e <2025-11-01>
+L3 programming layer <2026-01-19>
+
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/ieeetran/IEEE
+tran.cls
+Document Class: IEEEtran 2015/08/26 V1.8b by Michael Shell
+-- See the "IEEEtran_HOWTO" manual for usage information.
+-- http://www.michaelshell.org/tex/ieeetran/
+
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/psnfss/ot1ptm
+.fd)
+-- Using 8.5in x 11in (letter) paper.
+-- Using PDF output.
+-- This is a 10 point document.
+)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/base/fontenc.
+sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/psnfss/t1ptm.
+fd))
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/lm/lmodern.st
+y)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsmath/amsma
+th.sty
+For additional information on amsmath, use the `?' option.
+
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsmath/amste
+xt.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsmath/amsge
+n.sty))
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsmath/amsbs
+y.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsmath/amsop
+n.sty))
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsfonts/amss
+ymb.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsfonts/amsf
+onts.sty))
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/booktabs/book
+tabs.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/url/url.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/tools/xspace.
+sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/hyperref/hype
+rref.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/iftex/iftex
+.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/graphics/keyv
+al.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/kvsetkeys/kvs
+etkeys.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/kvdefinekey
+s/kvdefinekeys.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/pdfescape/p
+dfescape.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/ltxcmds/ltx
+cmds.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/pdftexcmds/
+pdftexcmds.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/infwarerr/i
+nfwarerr.sty)))
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/hycolor/hycol
+or.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/hyperref/name
+ref.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/refcount/refc
+ount.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/gettitlestr
+ing/gettitlestring.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/kvoptions/kvo
+ptions.sty)))
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/etoolbox/etoo
+lbox.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/stringenc/s
+tringenc.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/hyperref/pd1e
+nc.def)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/intcalc/int
+calc.sty)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/hyperref/puen
+c.def)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/bitset/bits
+et.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/bigintcalc/
+bigintcalc.sty)))
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/hyperref/hpdf
+tex.def
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/rerunfilechec
+k/rerunfilecheck.sty
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/generic/uniquecount
+er/uniquecounter.sty))) (./numbers.tex)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/lm/t1lmr.fd)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/l3backend/l3b
+ackend-pdftex.def) (./tool_paper.aux)
+-- Lines per column: 56 (exact).
+(./tool_paper.out) (./tool_paper.out)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/lm/t1lmtt.fd)
+
+Underfull \hbox (badness 3746) in paragraph at lines 63--77
+\T1/lmr/m/n/10 duces those to-kens is the chat tem-plate. A Hug-
+
+Underfull \hbox (badness 1460) in paragraph at lines 63--77
+\T1/lmr/m/n/10 sult-ing string. The tem-plate writes mark-ers such as
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/lm/ot1lmr.fd)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/lm/omllmm.fd)
+
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/lm/omslmsy.fd
+)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/lm/omxlmex.fd
+)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsfonts/umsa
+.fd)
+(/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/tex/latex/amsfonts/umsb
+.fd)
+Underfull \hbox (badness 2134) in paragraph at lines 99--111
+ \T1/lmr/m/it/10 a) Chat tem-plates: [][] \T1/lmr/m/n/10 A chat tem-plate is a 
+Jinja
+
+Underfull \hbox (badness 10000) in paragraph at lines 99--111
+\T1/lmr/m/n/10 pro-gram eval-u-ated in a sand-boxed en-vi-ron-ment
+
+Underfull \hbox (badness 5036) in paragraph at lines 99--111
+\T1/lmr/m/n/10 with \T1/lmtt/m/n/10 messages\T1/lmr/m/n/10 , \T1/lmtt/m/n/10 to
+ols\T1/lmr/m/n/10 , special-token vari-ables, and
+
+Underfull \hbox (badness 2547) in paragraph at lines 99--111
+\T1/lmr/m/n/10 an \T1/lmtt/m/n/10 add_generation_prompt \T1/lmr/m/n/10 flag. Th
+e Hug-ging Face
+
+Underfull \hbox (badness 7273) in paragraph at lines 99--111
+\T1/lmr/m/n/10 adds \T1/lmtt/m/n/10 raise_exception\T1/lmr/m/n/10 , and re-plac
+es \T1/lmtt/m/n/10 tojson \T1/lmr/m/n/10 with
+
+Underfull \hbox (badness 1796) in paragraph at lines 99--111
+\T1/lmtt/m/n/10 json.dumps(..., ensure_ascii=False)\T1/lmr/m/n/10 , which leave
+s
+
+Underfull \hbox (badness 1389) in paragraph at lines 99--111
+\T1/lmr/m/n/10 be reg-is-tered as non-special, and those are matched
+[1{/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/map/pdftex/updm
+ap/pdftex.map}{/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/enc
+/dvips/lm/lm-ec.enc}{/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fon
+ts/enc/dvips/lm/lm-mathsy.enc}]
+Underfull \hbox (badness 4193) in paragraph at lines 125--131
+ \T1/lmr/m/it/10 c) Special-token and tem-plate at-tacks: [][] \T1/lmr/m/n/10 C
+hat-Bug
+
+Underfull \hbox (badness 3803) in paragraph at lines 205--226
+\T1/lmr/m/n/10 and \T1/lmtt/m/n/10 raise_exception\T1/lmr/m/n/10 . To cover the
+ full lan-guage,
+[2{/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/enc/dvips/lm/lm
+-mathit.enc}{/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/enc/d
+vips/lm/lm-rm.enc}]
+Underfull \hbox (badness 10000) in paragraph at lines 284--301
+\T1/lmr/m/n/10 5.19.0 (falling back to \T1/lmtt/m/n/10 PreTrainedTokenizerFast
+
+Underfull \hbox (badness 10000) in paragraph at lines 284--301
+\T1/lmtt/m/n/10 apply_chat_template\T1/lmr/m/n/10 , and to-k-enizes with de-fau
+lt
+
+Underfull \hbox (badness 3209) in paragraph at lines 284--301
+\T1/lmr/m/n/10 set-tings. For RQ2 it com-putes the sep-a-ra-tor $\OML/lmm/m/it/
+10 s$ \T1/lmr/m/n/10 of
+
+Underfull \hbox (badness 10000) in paragraph at lines 319--329
+\T1/lmr/m/n/10 for ex-am-ple \T1/lmtt/m/n/10 <|im_end|>\n<|im_start|>assistant\
+n
+
+Underfull \hbox (badness 2828) in paragraph at lines 319--329
+\T1/lmr/m/n/10 in the ChatML fam-ily, \T1/lmtt/m/n/10 <|end|><|start|>assistant
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 319--329
+\T1/lmtt/m/n/10 <|channel|>final<|message|> \T1/lmr/m/n/10 in gpt-oss, and
+
+Underfull \hbox (badness 3536) in paragraph at lines 319--329
+\T1/lmtt/m/n/10 <|Assistant|> \T1/lmr/m/n/10 (with full-width bars) in DeepSeek
+-
+[3]
+Underfull \hbox (badness 10000) in paragraph at lines 426--443
+[]\T1/lmr/m/n/10 We froze 20 syn-thetic Jinja con-struc-
+
+Underfull \hbox (badness 10000) in paragraph at lines 426--443
+\T1/lmr/m/n/10 tions and six pay-loads be-fore ex-e-cu-tion
+
+Underfull \hbox (badness 10000) in paragraph at lines 426--443
+\T1/lmr/m/n/10 (\T1/lmtt/m/n/10 research/wave2/plans/probe.md\T1/lmr/m/n/10 ). 
+A syn-thetic
+
+Underfull \hbox (badness 2088) in paragraph at lines 426--443
+\T1/lmr/m/n/10 to-ken com-pared with ren-der-ing empty con-tent. The
+
+Underfull \hbox (badness 7012) in paragraph at lines 426--443
+\T1/lmr/m/n/10 ex-po-sure un-der this port-fo-lio. A sin-gle complete-
+
+Underfull \hbox (badness 6125) in paragraph at lines 426--443
+\T1/lmr/m/n/10 fragment and nu-meric re-con-struc-tion. The orig-i-nal
+
+Underfull \hbox (badness 4832) in paragraph at lines 426--443
+\T1/lmr/m/n/10 pre-serv-ing operand taint re-pairs both misses. The
+
+Underfull \hbox (badness 3098) in paragraph at lines 426--443
+\T1/lmr/m/n/10 two con-ser-va-tive warn-ings. This re-run is re-gres-sion
+
+Underfull \hbox (badness 2181) in paragraph at lines 444--451
+\T1/lmr/m/n/10 pass mea-sure-ments sup-port no hardware-independent
+[4]
+Underfull \hbox (badness 3168) in paragraph at lines 487--495
+\T1/lmr/m/n/10 role-boundary forgery, which ren-der-ing can con-firm.
+(./tool_paper.bbl
+Underfull \hbox (badness 1466) in paragraph at lines 46--49
+[]\T1/lmr/m/n/8 S. Chen, A. Zhar-magam-be-tov, S. Mahlou-ji-far, K. Chaud-
+
+Underfull \hbox (badness 1360) in paragraph at lines 81--85
+\T1/lmr/m/n/8 is-sue #29279, []$https : / / github . com / huggingface / transf
+ormers /
+[5])
+
+** Conference Paper **
+Before submitting the final camera ready copy, remember to:
+
+ 1. Manually equalize the lengths of two columns on the last page
+ of your paper;
+
+ 2. Ensure that any PostScript and/or PDF output post-processing
+ uses only Type 1 fonts and that every step in the generation
+ process uses the appropriate paper size.
+
+[6] (./tool_paper.aux) )
+(see the transcript file for additional information)</opt/homebrew/Cellar/texli
+ve/20260301/share/texmf-dist/fonts/type1/public/lm/lmbx10.pfb></opt/homebrew/Ce
+llar/texlive/20260301/share/texmf-dist/fonts/type1/public/lm/lmbx9.pfb></opt/ho
+mebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/type1/public/lm/lmbxi10.p
+fb></opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/type1/public/l
+m/lmcsc10.pfb></opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/typ
+e1/public/lm/lmmi10.pfb></opt/homebrew/Cellar/texlive/20260301/share/texmf-dist
+/fonts/type1/public/lm/lmmi7.pfb></opt/homebrew/Cellar/texlive/20260301/share/t
+exmf-dist/fonts/type1/public/lm/lmr10.pfb></opt/homebrew/Cellar/texlive/2026030
+1/share/texmf-dist/fonts/type1/public/lm/lmr12.pfb></opt/homebrew/Cellar/texliv
+e/20260301/share/texmf-dist/fonts/type1/public/lm/lmr17.pfb></opt/homebrew/Cell
+ar/texlive/20260301/share/texmf-dist/fonts/type1/public/lm/lmr8.pfb></opt/homeb
+rew/Cellar/texlive/20260301/share/texmf-dist/fonts/type1/public/lm/lmri10.pfb><
+/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/type1/public/lm/lm
+ri8.pfb></opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/type1/pub
+lic/lm/lmsy7.pfb></opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/
+type1/public/lm/lmtk10.pfb></opt/homebrew/Cellar/texlive/20260301/share/texmf-d
+ist/fonts/type1/public/lm/lmtt10.pfb></opt/homebrew/Cellar/texlive/20260301/sha
+re/texmf-dist/fonts/type1/public/lm/lmtt8.pfb></opt/homebrew/Cellar/texlive/202
+60301/share/texmf-dist/fonts/type1/public/lm/lmtt9.pfb>
+Output written on tool_paper.pdf (6 pages, 413685 bytes).
+Transcript written on tool_paper.log.
+Latexmk: Getting log file 'tool_paper.log'
+Latexmk: Examining 'tool_paper.fls'
+Latexmk: Examining 'tool_paper.log'
+Latexmk: Found input bbl file 'tool_paper.bbl'
+Latexmk: Log file says output to 'tool_paper.pdf'
+Latexmk: Using bibtex to make bibliography file(s).
+  ===Source file 'tool_paper.bbl' for 'pdflatex'
+Latexmk: Found bibliography file(s):
+  ./references.bib
+Latexmk: All targets (tool_paper.pdf) are up-to-date
+
+perl: warning: Setting locale failed.
+perl: warning: Please check that your locale settings:
+	LC_ALL = "C.UTF-8",
+	LC_CTYPE = "C.UTF-8",
+	LC_NUMERIC = (unset),
+	LC_COLLATE = (unset),
+	LC_TIME = (unset),
+	LC_MESSAGES = (unset),
+	LC_MONETARY = (unset),
+	LANG = "C.UTF-8"
+    are supported and installed on your system.
+perl: warning: Falling back to the standard locale ("C").
+Rc files read:
+  NONE
+Latexmk: This is Latexmk, John Collins, 15 June 2025. Version 4.87.
+No specific requests made, so using default for latexmk.
+Latexmk: Doing main clean up for 'tool_paper.tex'
+  (all but extensions dvi dviF hnt ps psF pdf synctex synctex.gz).
+

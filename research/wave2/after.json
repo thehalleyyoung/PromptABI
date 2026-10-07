@@ -1,0 +1,1391 @@
+{
+  "scope": "synthetic fixed constructions and fixed payload portfolio; negatives mean not observed by portfolio",
+  "cases_sha256": "98074930bbe1c2e414ed6dd9908680068ff9b3529ad261a67705bfb839133a15",
+  "python": "3.14.7",
+  "jinja2": "3.1.6",
+  "tokenizers": "0.22.2",
+  "payloads": [
+    "<|turn|>",
+    "|turn|",
+    "turn",
+    "1",
+    "<|tuxxrn|>",
+    "benign"
+  ],
+  "renders": 140,
+  "summary": {
+    "static": {
+      "tp": 12,
+      "fp": 2,
+      "fn": 0,
+      "tn": 6
+    },
+    "direct_single": {
+      "tp": 10,
+      "fp": 0,
+      "fn": 2,
+      "tn": 8
+    },
+    "portfolio": {
+      "tp": 12,
+      "fp": 0,
+      "fn": 0,
+      "tn": 8
+    }
+  },
+  "rows": [
+    {
+      "name": "raw",
+      "expression": "m.content",
+      "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content }}{% endfor %}",
+      "static_flag": true,
+      "static_ns": 6518875,
+      "portfolio_ns": 1933209,
+      "baseline_render": "<|turn|>user:",
+      "renders": [
+        {
+          "payload": "<|turn|>",
+          "rendered": "<|turn|>user:<|turn|>",
+          "ids": [
+            1,
+            0,
+            1
+          ],
+          "extra_marker": true
+        },
+        {
+          "payload": "|turn|",
+          "rendered": "<|turn|>user:|turn|",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "turn",
+          "rendered": "<|turn|>user:turn",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "1",
+          "rendered": "<|turn|>user:1",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "<|tuxxrn|>",
+          "rendered": "<|turn|>user:<|tuxxrn|>",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "benign",
+          "rendered": "<|turn|>user:benign",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        }
+      ],
+      "observed_positive": true,
+      "direct_single": true
+    },
+    {
+      "name": "html",
+      "expression": "m.content|e",
+      "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content|e }}{% endfor %}",
+      "static_flag": false,
+      "static_ns": 1991792,
+      "portfolio_ns": 1652250,
+      "baseline_render": "<|turn|>user:",
+      "renders": [
+        {
+          "payload": "<|turn|>",
+          "rendered": "<|turn|>user:&lt;|turn|&gt;",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "|turn|",
+          "rendered": "<|turn|>user:|turn|",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "turn",
+          "rendered": "<|turn|>user:turn",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "1",
+          "rendered": "<|turn|>user:1",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "<|tuxxrn|>",
+          "rendered": "<|turn|>user:&lt;|tuxxrn|&gt;",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "benign",
+          "rendered": "<|turn|>user:benign",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        }
+      ],
+      "observed_positive": false,
+      "direct_single": false
+    },
+    {
+      "name": "forceescape",
+      "expression": "m.content|forceescape",
+      "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content|forceescape }}{% endfor %}",
+      "static_flag": false,
+      "static_ns": 579291,
+      "portfolio_ns": 7084083,
+      "baseline_render": "<|turn|>user:",
+      "renders": [
+        {
+          "payload": "<|turn|>",
+          "rendered": "<|turn|>user:&lt;|turn|&gt;",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "|turn|",
+          "rendered": "<|turn|>user:|turn|",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "turn",
+          "rendered": "<|turn|>user:turn",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "1",
+          "rendered": "<|turn|>user:1",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "<|tuxxrn|>",
+          "rendered": "<|turn|>user:&lt;|tuxxrn|&gt;",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "benign",
+          "rendered": "<|turn|>user:benign",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        }
+      ],
+      "observed_positive": false,
+      "direct_single": false
+    },
+    {
+      "name": "urlencode",
+      "expression": "m.content|urlencode",
+      "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content|urlencode }}{% endfor %}",
+      "static_flag": false,
+      "static_ns": 676375,
+      "portfolio_ns": 1669084,
+      "baseline_render": "<|turn|>user:",
+      "renders": [
+        {
+          "payload": "<|turn|>",
+          "rendered": "<|turn|>user:%3C%7Cturn%7C%3E",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "|turn|",
+          "rendered": "<|turn|>user:%7Cturn%7C",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "turn",
+          "rendered": "<|turn|>user:turn",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "1",
+          "rendered": "<|turn|>user:1",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "<|tuxxrn|>",
+          "rendered": "<|turn|>user:%3C%7Ctuxxrn%7C%3E",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "benign",
+          "rendered": "<|turn|>user:benign",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        }
+      ],
+      "observed_positive": false,
+      "direct_single": false
+    },
+    {
+      "name": "replace_all",
+      "expression": "m.content|replace('<','&lt;')",
+      "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content|replace('<','&lt;') }}{% endfor %}",
+      "static_flag": true,
+      "static_ns": 1100625,
+      "portfolio_ns": 1817583,
+      "baseline_render": "<|turn|>user:",
+      "renders": [
+        {
+          "payload": "<|turn|>",
+          "rendered": "<|turn|>user:&lt;|turn|>",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "|turn|",
+          "rendered": "<|turn|>user:|turn|",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "turn",
+          "rendered": "<|turn|>user:turn",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "1",
+          "rendered": "<|turn|>user:1",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "<|tuxxrn|>",
+          "rendered": "<|turn|>user:&lt;|tuxxrn|>",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "benign",
+          "rendered": "<|turn|>user:benign",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        }
+      ],
+      "observed_positive": false,
+      "direct_single": false
+    },
+    {
+      "name": "constant",
+      "expression": "'benign'",
+      "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ 'benign' }}{% endfor %}",
+      "static_flag": false,
+      "static_ns": 2977917,
+      "portfolio_ns": 1409666,
+      "baseline_render": "<|turn|>user:benign",
+      "renders": [
+        {
+          "payload": "<|turn|>",
+          "rendered": "<|turn|>user:benign",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "|turn|",
+          "rendered": "<|turn|>user:benign",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "turn",
+          "rendered": "<|turn|>user:benign",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "1",
+          "rendered": "<|turn|>user:benign",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "<|tuxxrn|>",
+          "rendered": "<|turn|>user:benign",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "benign",
+          "rendered": "<|turn|>user:benign",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        }
+      ],
+      "observed_positive": false,
+      "direct_single": false
+    },
+    {
+      "name": "length",
+      "expression": "m.content|length",
+      "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content|length }}{% endfor %}",
+      "static_flag": false,
+      "static_ns": 560958,
+      "portfolio_ns": 1385750,
+      "baseline_render": "<|turn|>user:0",
+      "renders": [
+        {
+          "payload": "<|turn|>",
+          "rendered": "<|turn|>user:8",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "|turn|",
+          "rendered": "<|turn|>user:6",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "turn",
+          "rendered": "<|turn|>user:4",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "1",
+          "rendered": "<|turn|>user:1",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "<|tuxxrn|>",
+          "rendered": "<|turn|>user:10",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "benign",
+          "rendered": "<|turn|>user:6",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        }
+      ],
+      "observed_positive": false,
+      "direct_single": false
+    },
+    {
+      "name": "integer",
+      "expression": "m.content|int",
+      "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content|int }}{% endfor %}",
+      "static_flag": false,
+      "static_ns": 511083,
+      "portfolio_ns": 1847834,
+      "baseline_render": "<|turn|>user:0",
+      "renders": [
+        {
+          "payload": "<|turn|>",
+          "rendered": "<|turn|>user:0",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "|turn|",
+          "rendered": "<|turn|>user:0",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "turn",
+          "rendered": "<|turn|>user:0",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "1",
+          "rendered": "<|turn|>user:1",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "<|tuxxrn|>",
+          "rendered": "<|turn|>user:0",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "benign",
+          "rendered": "<|turn|>user:0",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        }
+      ],
+      "observed_positive": false,
+      "direct_single": false
+    },
+    {
+      "name": "or",
+      "expression": "m.content or \"benign\"",
+      "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content or \"benign\" }}{% endfor %}",
+      "static_flag": true,
+      "static_ns": 592334,
+      "portfolio_ns": 1226417,
+      "baseline_render": "<|turn|>user:benign",
+      "renders": [
+        {
+          "payload": "<|turn|>",
+          "rendered": "<|turn|>user:<|turn|>",
+          "ids": [
+            1,
+            0,
+            1
+          ],
+          "extra_marker": true
+        },
+        {
+          "payload": "|turn|",
+          "rendered": "<|turn|>user:|turn|",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "turn",
+          "rendered": "<|turn|>user:turn",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "1",
+          "rendered": "<|turn|>user:1",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "<|tuxxrn|>",
+          "rendered": "<|turn|>user:<|tuxxrn|>",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "benign",
+          "rendered": "<|turn|>user:benign",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        }
+      ],
+      "observed_positive": true,
+      "direct_single": true
+    },
+    {
+      "name": "and",
+      "expression": "m.content and m.content",
+      "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content and m.content }}{% endfor %}",
+      "static_flag": true,
+      "static_ns": 501291,
+      "portfolio_ns": 1293875,
+      "baseline_render": "<|turn|>user:",
+      "renders": [
+        {
+          "payload": "<|turn|>",
+          "rendered": "<|turn|>user:<|turn|>",
+          "ids": [
+            1,
+            0,
+            1
+          ],
+          "extra_marker": true
+        },
+        {
+          "payload": "|turn|",
+          "rendered": "<|turn|>user:|turn|",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "turn",
+          "rendered": "<|turn|>user:turn",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "1",
+          "rendered": "<|turn|>user:1",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "<|tuxxrn|>",
+          "rendered": "<|turn|>user:<|tuxxrn|>",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "benign",
+          "rendered": "<|turn|>user:benign",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        }
+      ],
+      "observed_positive": true,
+      "direct_single": true
+    },
+    {
+      "name": "conditional",
+      "expression": "m.content if m.content else \"benign\"",
+      "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content if m.content else \"benign\" }}{% endfor %}",
+      "static_flag": true,
+      "static_ns": 546250,
+      "portfolio_ns": 1318875,
+      "baseline_render": "<|turn|>user:benign",
+      "renders": [
+        {
+          "payload": "<|turn|>",
+          "rendered": "<|turn|>user:<|turn|>",
+          "ids": [
+            1,
+            0,
+            1
+          ],
+          "extra_marker": true
+        },
+        {
+          "payload": "|turn|",
+          "rendered": "<|turn|>user:|turn|",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "turn",
+          "rendered": "<|turn|>user:turn",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "1",
+          "rendered": "<|turn|>user:1",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "<|tuxxrn|>",
+          "rendered": "<|turn|>user:<|tuxxrn|>",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "benign",
+          "rendered": "<|turn|>user:benign",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        }
+      ],
+      "observed_positive": true,
+      "direct_single": true
+    },
+    {
+      "name": "join",
+      "expression": "[m.content]|join",
+      "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ [m.content]|join }}{% endfor %}",
+      "static_flag": true,
+      "static_ns": 561541,
+      "portfolio_ns": 1437250,
+      "baseline_render": "<|turn|>user:",
+      "renders": [
+        {
+          "payload": "<|turn|>",
+          "rendered": "<|turn|>user:<|turn|>",
+          "ids": [
+            1,
+            0,
+            1
+          ],
+          "extra_marker": true
+        },
+        {
+          "payload": "|turn|",
+          "rendered": "<|turn|>user:|turn|",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "turn",
+          "rendered": "<|turn|>user:turn",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "1",
+          "rendered": "<|turn|>user:1",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "<|tuxxrn|>",
+          "rendered": "<|turn|>user:<|tuxxrn|>",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "benign",
+          "rendered": "<|turn|>user:benign",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        }
+      ],
+      "observed_positive": true,
+      "direct_single": true
+    },
+    {
+      "name": "select_max",
+      "expression": "[m.content]|max",
+      "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ [m.content]|max }}{% endfor %}",
+      "static_flag": true,
+      "static_ns": 511666,
+      "portfolio_ns": 11380625,
+      "baseline_render": "<|turn|>user:",
+      "renders": [
+        {
+          "payload": "<|turn|>",
+          "rendered": "<|turn|>user:<|turn|>",
+          "ids": [
+            1,
+            0,
+            1
+          ],
+          "extra_marker": true
+        },
+        {
+          "payload": "|turn|",
+          "rendered": "<|turn|>user:|turn|",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "turn",
+          "rendered": "<|turn|>user:turn",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "1",
+          "rendered": "<|turn|>user:1",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "<|tuxxrn|>",
+          "rendered": "<|turn|>user:<|tuxxrn|>",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "benign",
+          "rendered": "<|turn|>user:benign",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        }
+      ],
+      "observed_positive": true,
+      "direct_single": true
+    },
+    {
+      "name": "slice",
+      "expression": "m.content[:]",
+      "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content[:] }}{% endfor %}",
+      "static_flag": true,
+      "static_ns": 1630583,
+      "portfolio_ns": 1288458,
+      "baseline_render": "<|turn|>user:",
+      "renders": [
+        {
+          "payload": "<|turn|>",
+          "rendered": "<|turn|>user:<|turn|>",
+          "ids": [
+            1,
+            0,
+            1
+          ],
+          "extra_marker": true
+        },
+        {
+          "payload": "|turn|",
+          "rendered": "<|turn|>user:|turn|",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "turn",
+          "rendered": "<|turn|>user:turn",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "1",
+          "rendered": "<|turn|>user:1",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "<|tuxxrn|>",
+          "rendered": "<|turn|>user:<|tuxxrn|>",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "benign",
+          "rendered": "<|turn|>user:benign",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        }
+      ],
+      "observed_positive": true,
+      "direct_single": true
+    },
+    {
+      "name": "format",
+      "expression": "'%s'|format(m.content)",
+      "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ '%s'|format(m.content) }}{% endfor %}",
+      "static_flag": true,
+      "static_ns": 718042,
+      "portfolio_ns": 1411709,
+      "baseline_render": "<|turn|>user:",
+      "renders": [
+        {
+          "payload": "<|turn|>",
+          "rendered": "<|turn|>user:<|turn|>",
+          "ids": [
+            1,
+            0,
+            1
+          ],
+          "extra_marker": true
+        },
+        {
+          "payload": "|turn|",
+          "rendered": "<|turn|>user:|turn|",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "turn",
+          "rendered": "<|turn|>user:turn",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "1",
+          "rendered": "<|turn|>user:1",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "<|tuxxrn|>",
+          "rendered": "<|turn|>user:<|tuxxrn|>",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "benign",
+          "rendered": "<|turn|>user:benign",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        }
+      ],
+      "observed_positive": true,
+      "direct_single": true
+    },
+    {
+      "name": "html_rebuild",
+      "expression": "'<' ~ (m.content|e) ~ '>'",
+      "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ '<' ~ (m.content|e) ~ '>' }}{% endfor %}",
+      "static_flag": true,
+      "static_ns": 605291,
+      "portfolio_ns": 1761959,
+      "baseline_render": "<|turn|>user:<>",
+      "renders": [
+        {
+          "payload": "<|turn|>",
+          "rendered": "<|turn|>user:<&lt;|turn|&gt;>",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "|turn|",
+          "rendered": "<|turn|>user:<|turn|>",
+          "ids": [
+            1,
+            0,
+            1
+          ],
+          "extra_marker": true
+        },
+        {
+          "payload": "turn",
+          "rendered": "<|turn|>user:<turn>",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "1",
+          "rendered": "<|turn|>user:<1>",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "<|tuxxrn|>",
+          "rendered": "<|turn|>user:<&lt;|tuxxrn|&gt;>",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "benign",
+          "rendered": "<|turn|>user:<benign>",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        }
+      ],
+      "observed_positive": true,
+      "direct_single": false
+    },
+    {
+      "name": "numeric_rebuild",
+      "expression": "m.content|int|string|replace('1','<|turn|>')",
+      "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content|int|string|replace('1','<|turn|>') }}{% endfor %}",
+      "static_flag": true,
+      "static_ns": 636458,
+      "portfolio_ns": 6757708,
+      "baseline_render": "<|turn|>user:0",
+      "renders": [
+        {
+          "payload": "<|turn|>",
+          "rendered": "<|turn|>user:0",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "|turn|",
+          "rendered": "<|turn|>user:0",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "turn",
+          "rendered": "<|turn|>user:0",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "1",
+          "rendered": "<|turn|>user:<|turn|>",
+          "ids": [
+            1,
+            0,
+            1
+          ],
+          "extra_marker": true
+        },
+        {
+          "payload": "<|tuxxrn|>",
+          "rendered": "<|turn|>user:0",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "benign",
+          "rendered": "<|turn|>user:0",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        }
+      ],
+      "observed_positive": true,
+      "direct_single": false
+    },
+    {
+      "name": "replace_collapse",
+      "expression": "m.content|replace('xx','')",
+      "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content|replace('xx','') }}{% endfor %}",
+      "static_flag": true,
+      "static_ns": 724875,
+      "portfolio_ns": 1883000,
+      "baseline_render": "<|turn|>user:",
+      "renders": [
+        {
+          "payload": "<|turn|>",
+          "rendered": "<|turn|>user:<|turn|>",
+          "ids": [
+            1,
+            0,
+            1
+          ],
+          "extra_marker": true
+        },
+        {
+          "payload": "|turn|",
+          "rendered": "<|turn|>user:|turn|",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "turn",
+          "rendered": "<|turn|>user:turn",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "1",
+          "rendered": "<|turn|>user:1",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "<|tuxxrn|>",
+          "rendered": "<|turn|>user:<|turn|>",
+          "ids": [
+            1,
+            0,
+            1
+          ],
+          "extra_marker": true
+        },
+        {
+          "payload": "benign",
+          "rendered": "<|turn|>user:benign",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        }
+      ],
+      "observed_positive": true,
+      "direct_single": true
+    },
+    {
+      "name": "safe_escape",
+      "expression": "(m.content|safe)|e",
+      "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ (m.content|safe)|e }}{% endfor %}",
+      "static_flag": true,
+      "static_ns": 624584,
+      "portfolio_ns": 1739166,
+      "baseline_render": "<|turn|>user:",
+      "renders": [
+        {
+          "payload": "<|turn|>",
+          "rendered": "<|turn|>user:<|turn|>",
+          "ids": [
+            1,
+            0,
+            1
+          ],
+          "extra_marker": true
+        },
+        {
+          "payload": "|turn|",
+          "rendered": "<|turn|>user:|turn|",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "turn",
+          "rendered": "<|turn|>user:turn",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "1",
+          "rendered": "<|turn|>user:1",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "<|tuxxrn|>",
+          "rendered": "<|turn|>user:<|tuxxrn|>",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "benign",
+          "rendered": "<|turn|>user:benign",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        }
+      ],
+      "observed_positive": true,
+      "direct_single": true
+    },
+    {
+      "name": "upper",
+      "expression": "m.content|upper",
+      "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content|upper }}{% endfor %}",
+      "static_flag": true,
+      "static_ns": 661458,
+      "portfolio_ns": 1352125,
+      "baseline_render": "<|turn|>user:",
+      "renders": [
+        {
+          "payload": "<|turn|>",
+          "rendered": "<|turn|>user:<|TURN|>",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "|turn|",
+          "rendered": "<|turn|>user:|TURN|",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "turn",
+          "rendered": "<|turn|>user:TURN",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "1",
+          "rendered": "<|turn|>user:1",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "<|tuxxrn|>",
+          "rendered": "<|turn|>user:<|TUXXRN|>",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        },
+        {
+          "payload": "benign",
+          "rendered": "<|turn|>user:BENIGN",
+          "ids": [
+            1,
+            0
+          ],
+          "extra_marker": false
+        }
+      ],
+      "observed_positive": false,
+      "direct_single": false
+    }
+  ]
+}

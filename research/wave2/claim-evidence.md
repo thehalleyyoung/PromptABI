@@ -1,0 +1,7 @@
+# Claim evidence
+- 20 fresh synthetic constructions, frozen in cases.json and plans/probe.md: before.json preserves two boolean false negatives and two conservative warnings; after.json preserves the repair and all 140 raw renders/token IDs. Cases are hand selected, not random independent units.
+- 12 witnessed extra-marker constructions; repaired static flags 12, with 2 additional unconfirmed warnings. Whole-marker direct baseline witnesses 10; six-payload portfolio witnesses 12, which defines the observed label. No claim of production precision or portfolio completeness.
+- Static median 0.630521 ms, portfolio median 1.660667 ms: after.json, compilation included, one pass, descriptive only.
+- Boolean regression plus 49 prior focused checks: tests.log (51 passed dots, exit 0). Pipeline's later timing-print typo failed separately and did not invalidate pytest; corrected timing recomputation saved in checks.json.
+- Archived Hub scope: 100 selected model positives, 51 templates. No real negative class, held-out generalization or downstream behavior inference. Genuine-reference denominator remains 281, not 351.
+- TemplateFuzz primary HTML v1 inspected: sections 3.1--3.4 (mutating template and response feedback), 4.3 (ASR/AQJ), 4.4 (model query budget). Difference: fixed-template field attribution and metadata/token witnesses. No empirical superiority comparison against TemplateFuzz or novel vulnerability premise.

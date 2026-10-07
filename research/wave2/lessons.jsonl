@@ -1,0 +1,1 @@
+{"weakness": "missing direct baseline", "intervention": "fixed six-payload synthetic rendering comparison", "prediction": "static may add coverage", "evidence": "direct portfolio witnesses 12 positives, static retains 2 extra flags; boolean losses repaired", "cost_usd": 0, "limits": "constructed cases and portfolio-defined labels"}

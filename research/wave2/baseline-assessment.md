@@ -1,0 +1,2 @@
+# Baseline assessment
+Metadata-only diagnostic tool; selected Hub positives are already repaired and scoped heuristically. Binding weaknesses: no matched dynamic alternative; no production negative sample; exact TemplateFuzz overlap/consequence unresolved. The 351 reachable marker observations comprise 281 genuine-reference matches and 70 without reference occurrences; never pool them as 351 genuine matches. Original paper preserved in versions/baseline.tex and original repository commit recorded in external snapshot.

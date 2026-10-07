@@ -1,0 +1,1 @@
+New paid spending $0; pending paid exposure $0. Historical cumulative spending unknown. Campaign ceilings $5 Modal / $5 OpenRouter. Paid calls frozen until root reconciliation. No reset budget was created.

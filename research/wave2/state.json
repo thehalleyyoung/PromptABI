@@ -1,0 +1,11 @@
+{
+  "proposal_id": "promptabi",
+  "original_path": "paper/tool_paper.tex",
+  "original_sha256": "eaf74dcbf98cafef715fc5428962b6c5b9a95f4c9cc175fba74360272f2dbd35",
+  "canonical_work_directory": "/Users/halley/Documents/repo-upgrades/journal-campaign/wave2/promptabi/repo",
+  "budget_store": "../../../STATE.json",
+  "claim_version": "wave2-complementary-diagnostic",
+  "stage": "improved-checkpoint",
+  "active_job_ids": [],
+  "next_action": "independent peer review and root integration"
+}

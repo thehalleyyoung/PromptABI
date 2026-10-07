@@ -1,0 +1,463 @@
+\documentclass[10pt,conference]{IEEEtran}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{url}
+\usepackage{xspace}
+\usepackage[hidelinks]{hyperref}
+
+\input{numbers}
+
+\newcommand{\tool}{PromptABI\xspace}
+
+\begin{document}
+
+\title{Static Detection of Role-Boundary Forgery\\in LLM Chat Templates}
+
+\author{\IEEEauthorblockN{PromptABI contributors}\IEEEauthorblockA{Preprint}}
+
+\maketitle
+
+\begin{abstract}
+A chat model receives a conversation as one token sequence. The chat
+template, a Jinja program distributed with the model, serializes the messages
+and inserts the markers that separate one role's turn from the next. When
+message content is interpolated without neutralization and the tokenizer maps a
+marker typed by a user to the same token id the template uses, the user can
+forge a turn: the model receives exactly the tokens of a genuine assistant or
+system turn. We examine this property using the template and
+tokenizer files, and we present \tool, a static checker that reports each
+attacker-reachable field, each marker it can reproduce, the template line, and
+the marker's token ids. \tool combines a bounded symbolic executor with exact
+witness paths, a may-taint analysis over the full Jinja AST, and a composition
+step that classifies each marker against the real tokenizer. On the
+\NModels{} most-downloaded text-generation models on the Hugging Face Hub
+(\NTemplates{} distinct templates), an independent oracle that renders with
+\texttt{transformers} confirms token-exact forgery of an assistant turn for
+every model. \tool flags all of them in a median of \TaintMedianMs{}\,ms per
+template; of the markers it classifies as control tokens, \ConfCtrlConfirmed{}
+of \ConfCtrlDecided{} are reproduced in user content; 281 have matching genuine
+rendered occurrences and 70 have no reference occurrence in the probe conversations. We also evaluate a
+serving-side fix: tokenizing message content separately with
+\texttt{split\_special\_tokens} removes the forged control tokens in only
+\MitBlockedSplit{} of \MitForgeable{} templates, because \MitResidualSplit{}
+templates use added tokens that are not marked special, while escaping all
+added tokens in content removes them in all \MitBlockedEscape{} templates whose
+turn separator contains a control token.
+\end{abstract}
+
+\section{Introduction}
+
+Prompt-injection attacks place instructions in data that an LLM-integrated
+application passes to a
+model~\cite{perez2022ignore,greshake2023indirect,liu2024formalizing}. Most
+defenses assume that the application can tell the model which part of its input
+is trusted. Structured queries separate instructions from data with reserved
+delimiters~\cite{chen2025struq}; preference optimization and instruction
+hierarchies train models to respect role
+privileges~\cite{chen2024secalign,wallace2024hierarchy}; spotlighting marks
+untrusted text~\cite{hines2024spotlighting}. Each relies on role and delimiter
+tokens that untrusted text cannot produce.
+
+In open-weight deployments the component that produces those tokens is the
+chat template. A Hugging Face model repository ships a Jinja template in
+\texttt{tokenizer\_config.json} or \texttt{chat\_template.jinja}, and
+\texttt{transformers}~\cite{wolf2020transformers}, vLLM~\cite{kwon2023vllm},
+and similar servers render the conversation through it and tokenize the
+resulting string. The template writes markers such as
+\texttt{<|im\_start|>assistant} around each message's content. If the content
+is interpolated verbatim and the tokenizer matches the marker as an added token
+anywhere in the string, a user who types the marker produces the template's own
+token id, and the model sees a forged turn. This is injection in the sense of
+Su and Wassermann: untrusted input changes the parse structure of the generated
+program~\cite{su2006essence}. The problem has been raised in issue
+trackers~\cite{hf2024issue29279} and used for
+jailbreaks~\cite{jiang2025chatbug,zhou2024virtual}, and motivate checking structural exposure across deployed templates.
+
+Our claim is that \emph{role-boundary forgery is a property of the template and
+tokenizer files that static analyses can flag per field and marker,
+with rendering used to establish token-exact witnesses.} The contributions are:
+\begin{itemize}
+\item a definition of token-exact role-transition forgery and of per-marker
+forgery, separating control-token markers from plain-text markers
+(Section~\ref{sec:problem});
+\item \tool, a checker that combines bounded symbolic execution,
+whole-template taint analysis on the Jinja AST, and tokenizer composition, and
+reports field, roles, template line, marker, and token ids
+(Sections~\ref{sec:approach} and~\ref{sec:impl});
+\item a study of the \NModels{} most-downloaded Hub chat models, together
+accounting for \DownloadsMillions{} million downloads in 30 days, with an
+independent dynamic oracle, and an evaluation of two serving-side fixes
+(Section~\ref{sec:eval}). Scripts, pinned model list, and raw outputs are
+released with the tool.
+\end{itemize}
+
+\section{Background and Related Work}
+\label{sec:related}
+
+\paragraph{Chat templates} A chat template is a Jinja program evaluated in a
+sandboxed environment with \texttt{messages}, \texttt{tools}, special-token
+variables, and an \texttt{add\_generation\_prompt} flag. The Hugging Face
+environment enables \texttt{trim\_blocks} and \texttt{lstrip\_blocks}, adds
+\texttt{raise\_exception}, and replaces \texttt{tojson} with
+\texttt{json.dumps(\ldots, ensure\_ascii=False)}, which leaves \texttt{<} and
+\texttt{>} unescaped. A fast tokenizer matches its added tokens in the rendered
+string before the subword model runs. The \texttt{split\_special\_tokens}
+option turns this off for tokens marked special, but added tokens can also be
+registered as non-special, and those are matched regardless. For plain text,
+subword tokenizers such as BPE~\cite{sennrich2016bpe} make a string's ids
+depend on its neighbors.
+
+\paragraph{Prompt injection and defenses} Perez and Ribeiro introduced goal
+hijacking and prompt leaking~\cite{perez2022ignore}; Greshake et al.\ showed
+indirect injection through retrieved content~\cite{greshake2023indirect}; Liu
+et al.\ formalized attacks and benchmarked defenses~\cite{liu2024formalizing}.
+StruQ separates prompt and data with reserved delimiters and a front end that
+keeps the delimiters out of the data~\cite{chen2025struq}; SecAlign and the
+instruction hierarchy train role-aware
+behavior~\cite{chen2024secalign,wallace2024hierarchy}; spotlighting transforms
+untrusted text so the model can recognize it~\cite{hines2024spotlighting}.
+\tool checks the precondition these defenses share, that untrusted fields
+cannot reproduce role and delimiter tokens, for the templates that open-weight
+deployments use.
+
+\paragraph{Special-token and template attacks} ChatBug shows that aligned
+models misbehave when inputs depart from the chat format the model was tuned
+on~\cite{jiang2025chatbug}. Virtual Context injects special tokens so that a
+model treats attacker text as its own output~\cite{zhou2024virtual}. Both
+measure model behavior once the structure is forged. \tool reports candidate structural exposures before deployment, with
+tokenizer composition and rendering distinguishing their token-level behavior.
+
+\paragraph{Static analysis of templates} Taint analysis is a standard way to
+find injection vulnerabilities in web applications, from Pixy for
+PHP~\cite{jovanovic2006pixy} to the parse-structure definition of
+injection~\cite{su2006essence}. Samuel et al.\ infer context-sensitive
+sanitization for web templating languages~\cite{samuel2011autosanitization}.
+\tool applies the source, sink, and sanitizer view to Jinja chat templates.
+The difference is that the meaning of a sink is decided by a tokenizer: whether
+a string is a role boundary depends on the ids the tokenizer gives it.
+
+\paragraph{Structured generation} Grammar-constrained decoding
+libraries~\cite{willard2023outlines,dong2024xgrammar,geng2023grammar} constrain
+model output to a grammar over tokens. \tool also checks output-side artifacts,
+such as stop sequences and grammars, against the tokenizer; this paper
+evaluates the input-side role-boundary check.
+
+\section{Problem Definition}
+\label{sec:problem}
+
+Let $T$ be a template, $\mathit{render}_T(c)$ the string it produces for
+conversation $c$, and $\tau$ a tokenizer mapping strings to id sequences. A
+\emph{field} $f$ is a path into the conversation, such as
+\texttt{messages[*].content}; it is \emph{attacker-reachable} when an untrusted
+party controls its value for some role (we use the user and tool roles). A
+\emph{marker} is a string that $T$ emits outside every field: a literal or a
+string constant that reaches an output, or a special token the template emits.
+
+\emph{Role-transition forgery.} Let $g$ be the conversation [user: $u$,
+assistant: $a$] and $s$ the substring of $\mathit{render}_T(g)$ between $u$
+and $a$. $T$ and $\tau$ admit token-exact role-transition forgery when, for the
+single-message conversation $h$ = [user: $u\,s\,a$], the ids
+$\tau(\mathit{render}_T(h))$ agree with $\tau(\mathit{render}_T(g))$ on every
+token before the start of $a$. The model then receives an assistant turn that
+the user wrote.
+
+\emph{Marker forgery.} A marker $m$ is forgeable through $f$ when some value of
+$f$ places $m$ in the rendered string inside that value's span and $\tau$ gives
+this occurrence the same ids as an occurrence the template emits. If $m$ is an
+added token with context-independent matching that the tokenizer does not split, $\tau$ maps it to one id in any
+context; we call $m$ a \emph{control-token marker}. Otherwise $m$ is a
+\emph{plain-text marker}, and equality depends on the surrounding characters.
+
+\section{Approach}
+\label{sec:approach}
+
+\paragraph{Marker catalog} \tool collects the strings a template can emit, namely
+literal text and string constants that reach an output. Constants used only in
+comparisons, filter arguments, or \texttt{raise\_exception} messages are
+excluded. From these it extracts markers with a small set of patterns:
+angle-bracket and \texttt{<|\ldots|>} tokens, bracketed tags such as
+\texttt{[INST]}, code fences, hash headers, plain-text role headers such as
+\texttt{Assistant:}, and short compound runs such as
+\texttt{<|im\_start|>assistant}. Special tokens declared by the tokenizer that
+the template emits are added; declared tokens the template never emits, such as
+reserved tokens, are counted separately.
+
+\paragraph{Bounded symbolic execution} For templates in a supported fragment
+(simple loops over \texttt{messages}, conditionals on role and index,
+\texttt{set}, and a fixed list of filters) \tool enumerates symbolic render
+paths up to two messages, one tool, and 128 paths, maps each path's segments to
+role regions, and reports a witness for each attacker-controlled expression and
+marker: the path, the rendered excerpt with the marker substituted, and the
+marker's offset. Outside the fragment or beyond the bounds the executor records
+an abstention and keeps the witnesses from the paths it explored.
+
+\paragraph{Whole-template taint analysis} Production templates use
+\texttt{namespace()} objects, reversed and filtered loops, macros, string
+methods such as \texttt{split} and \texttt{strip}, and
+\texttt{raise\_exception}. To cover the full language, \tool parses the template
+with Jinja2's own parser, without rendering, and computes a flow-insensitive
+may-taint over the AST, iterated to a fixed point. Sources are
+\texttt{messages}, \texttt{tools}, and \texttt{documents}; an attribute or item
+access on a message record yields a label such as
+\texttt{messages[*].content}. Taint flows through assignments (including
+namespace attributes and \texttt{set} blocks), loops, slicing, indexing,
+concatenation, formatting, conditional expressions, string methods, filters
+that return text, and macro calls, whose bodies are analyzed with the call's
+argument taints. Direct numeric or boolean outputs are excluded from sinks; their taint is
+retained for downstream transformations. Selection filters preserve taint. Replacement preserves candidate taint: deleting a marker can join its
+surrounding characters into another occurrence. Jinja's HTML-escaping filters
+neutralize directly interpolated string markers that contain \texttt{<},
+\texttt{>}, \texttt{\&}, or quotes. \texttt{tojson} is not a sanitizer under the
+Hugging Face environment. Each sink records the role guards that dominate it
+(\texttt{message.role == 'assistant'} and its negations), so a finding names
+the roles whose content reaches the sink, and sinks reachable only from
+assistant or system content are reported separately.
+
+\paragraph{Tokenizer composition} For each finding \tool loads
+\texttt{tokenizer.json} with the \texttt{tokenizers} library, encodes the
+marker, and checks whether it is a single added token with
+\texttt{single\_word=False} and no longer overlapping added token, and whether
+\texttt{tokenizer\_config.json} sets \texttt{split\_special\_tokens}. The marker
+is classified as \emph{control-token}, \emph{split-by-config}, or \emph{text}.
+This step reads the tokenizer but never renders the template.
+
+\section{Implementation}
+\label{sec:impl}
+
+\tool is a Python package with no required dependencies; the taint analysis
+uses \texttt{jinja2} and the composition step uses \texttt{tokenizers}. The
+symbolic executor and role-region model are about 2,400 lines, the taint
+analysis about 580, and the tokenizer composition about 130.
+\texttt{promptabi template-scan DIR} reads a model directory with the file
+precedence of \texttt{transformers} (\texttt{chat\_template.jinja}, then
+\texttt{chat\_template.json}, then \texttt{tokenizer\_config.json}) and prints
+one line per finding, for example
+\begin{center}\small\ttfamily
+messages[*].content (roles user, line 23) can render\\
+'<tool\_call>' [control-token [151657]]
+\end{center}
+It exits non-zero when user content can render a control-token marker, so it
+can gate a CI job. The symbolic check is also the
+\texttt{role-boundary-nonforgeability} rule of \texttt{promptabi verify}, which
+emits SARIF.
+
+\section{Evaluation}
+\label{sec:eval}
+
+\textbf{RQ1} (applicability and cost): on how many deployed templates does each
+analysis produce a verdict, and at what cost?
+\textbf{RQ2} (model-level detection): does the static verdict agree with
+token-exact role-transition forgery observed by rendering?
+\textbf{RQ3} (marker-level precision): how many reported markers can user
+content reproduce at the token level, and does tokenizer composition predict
+which?
+\textbf{RQ4} (fixes): does tokenizing message content separately remove the
+forgery without changing benign inputs?
+
+\subsection{Setup}
+
+\paragraph{Subjects} The Hub analysis uses checker revision \texttt{4131479};
+the synthetic boundary controls evaluate the revised implementation.
+On \SnapshotDate{} we listed Hub models with pipeline tag
+\texttt{text-generation} by 30-day downloads and kept, in rank order, each
+repository that ships a non-empty chat template and a \texttt{tokenizer.json}
+at its current commit, until we had \NModels{}; this reached rank
+\LastRank{}. Of the \SkipTotal{} repositories skipped, \SkipGGUF{} were
+GGUF-only, \SkipNoTemplate{} had no chat template (mostly base models),
+\SkipNoTokenizer{} had no \texttt{tokenizer.json}, and \SkipGated{} were gated
+without access for our account. The \NModels{} models use \NTemplates{}
+distinct templates, because quantized and fine-tuned repositories usually copy
+their base model's template; we report per-template counts where duplication
+would inflate them. Every file is pinned by commit sha and sha256.
+
+\paragraph{Dynamic oracle} The oracle shares no code with \tool. It loads each
+tokenizer with \texttt{transformers} 5.19.0 (falling back to
+\texttt{PreTrainedTokenizerFast} when a repository requires remote code),
+renders with \texttt{apply\_chat\_template}, and tokenizes with default
+settings. For RQ2 it computes the separator $s$ of Section~\ref{sec:problem}
+with $u$ = \texttt{Hello there} and a unique string $a$, adding a system
+message when a template rejects the first form, and tests token-exact
+agreement. For RQ3 it injects each reported marker $m$ into a user message as
+\texttt{a~m~b} and compares the ids that cover $m$ with the ids at each place
+the template emits $m$ in three genuine conversations: plain, with a system
+message, and with a tool call and tool result. If the ids differ it retries
+with the two characters that surround a genuine occurrence, as an attacker
+would. The outcome is \emph{confirmed}, \emph{confirmed with context},
+\emph{confirmed special} (the marker is one of the tokenizer's added tokens
+but the probe conversations do not emit it, as with vision or tool-response
+tokens), \emph{not confirmed}, or \emph{unobserved} (a plain-text marker the
+probe conversations never emit, so there is no reference occurrence).
+
+\subsection{RQ1: Applicability and cost}
+
+The taint analysis parsed all \TaintParsedTpl{} templates with Jinja2's parser
+and took a median of \TaintMedianMs{}\,ms per template, \TaintMaxSec{}\,s for
+the largest; classifying a marker against a loaded tokenizer took about
+\CompMedianMs{}\,ms. The symbolic executor produced witnesses for
+\SymFlagModels{} models (\SymFlagTpl{} templates), \SymCompleteTpl{} of them
+fully explored within bounds, in a median of \SymMedianSec{}\,s. On the other
+\SymAbstainTpl{} templates its fragment does not cover the top-level control
+flow, typically a \texttt{namespace()} declaration or a reversed loop over
+\texttt{messages}, and it abstains. The taint analysis is therefore the
+analysis that scales to the Hub, and the symbolic executor supplies exact
+render-path witnesses where its fragment applies. None of the \NModels{}
+tokenizer configurations sets \texttt{split\_special\_tokens}.
+
+\subsection{RQ2: Role-transition forgery}
+
+The oracle found token-exact role-transition forgery in all \NModels{} models
+and all \NTemplates{} templates. In \SepSpecialTpl{} templates the forged
+separator contains at least one added token, for example
+\texttt{<|im\_end|>\textbackslash n}\allowbreak\texttt{<|im\_start|>assistant\textbackslash n} in
+the ChatML family,
+\texttt{<|end|>}\allowbreak\texttt{<|start|>assistant}\allowbreak\texttt{<|channel|>final}\allowbreak\texttt{<|message|>} in gpt-oss, and
+\texttt{<\textbar{}Assistant\textbar{}>} (with full-width bars) in DeepSeek-V3;
+in the other \MitPlainText{} it is plain text, such as \texttt{[/INST]} in a
+Mistral tokenizer where the instruction tags are not added tokens, or
+\texttt{Assistant:} in DeepSeek-Coder-V2.
+
+\begin{table}[t]
+\centering
+\caption{Static verdict against the oracle's token-exact role-transition
+forgery. Every subject is forgeable, so the table measures recall.}
+\label{tab:rq2}
+\begin{tabular}{lrrr}
+\toprule
+ & flagged & not flagged & recall \\
+\midrule
+Taint, models & \TaintMTP & \TaintMFN & \TaintMRecall \\
+Taint, templates & \TaintTTP & \TaintTFN & \TaintTRecall \\
+Symbolic, models & \SymbolicMTP & \SymbolicMFN & \SymbolicMRecall \\
+Symbolic, templates & \SymbolicTTP & \SymbolicTFN & \SymbolicTRecall \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:rq2} shows that the taint analysis flags every model and the
+symbolic executor flags the \SymFlagModels{} models whose templates its
+fragment covers. Because the sample contains no template that resists the
+forgery, model-level precision is not measurable here; RQ3 measures precision
+per reported marker instead.
+
+\subsection{RQ3: Marker-level precision}
+
+The oracle checked every marker either analysis reported for
+\texttt{messages[*].content}, per distinct template. Of the symbolic executor's
+markers, \SrcSymbolicConfirmed{} of \SrcSymbolicDecided{} decided markers were
+confirmed (\SrcSymbolicPrecision{}); of the taint analysis's,
+\SrcTaintConfirmed{} of \SrcTaintDecided{} (\SrcTaintPrecision{}).
+Table~\ref{tab:rq3} splits the taint analysis's markers by tokenizer class.
+
+\begin{table}[t]
+\centering
+\caption{Oracle outcome for the taint analysis's markers, per distinct
+template, by tokenizer-composition class. Precision is confirmed over decided
+(all outcomes except unobserved).}
+\label{tab:rq3}
+\begin{tabular}{lrr}
+\toprule
+ & control-token & text \\
+\midrule
+confirmed & \ConfCtrlOutConfirmed & \ConfTextOutConfirmed \\
+confirmed with context & \ConfCtrlOutConfirmedContext & \ConfTextOutConfirmedContext \\
+confirmed special & \ConfCtrlOutConfirmedSpecial & \ConfTextOutConfirmedSpecial \\
+not confirmed & \ConfCtrlOutNotConfirmed & \ConfTextOutNotConfirmed \\
+unobserved & \ConfCtrlUnobserved & \ConfTextUnobserved \\
+\midrule
+precision & \ConfCtrlPrecision & \ConfTextPrecision \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For control-token markers, 281 findings matched a genuine rendered
+occurrence (280 directly and one with context), and 70 additional findings
+reproduced an added-token id in user content without a genuine reference
+occurrence. These 70 outcomes establish token reachability rather than a
+rendered role-boundary comparison. Text markers were confirmed in
+\ConfTextConfirmed{} of \ConfTextDecided{} cases, \ConfTextOutConfirmedContext{}
+of them only after the attacker reproduces the neighboring characters. The
+\ConfTextOutNotConfirmed{} unconfirmed text markers are mostly tags inside tool
+instructions, such as \texttt{</IMPORTANT>}, whose boundary BPE pieces merge
+with the neighboring characters differently in user content than at the
+template's own occurrence, where the next character belongs to a control
+token. Tokenizer composition thus gives a severity split: a CI gate on
+control-token findings raised no unconfirmed alarm in this sample, and text
+findings form a short review list.
+
+\subsection{RQ4: Serving-side fixes}
+
+Both fixes render the conversation with a unique placeholder per message,
+tokenize the template's own text normally, and tokenize each message's content
+separately. The first tokenizes content with
+\texttt{split\_special\_tokens=True}. The second also encodes any added-token
+string found in content one character at a time.
+
+For benign conversations both fixes reproduce ordinary tokenization exactly in
+\MitBenignIdentical{} of \MitBenignEvaluated{} templates; in the other four,
+tokenizing content separately changes a token at a segment boundary. With
+\texttt{split\_special\_tokens} alone, every control token of the forged
+separator is removed from the user's span in \MitBlockedSplit{} of
+\MitForgeable{} templates. In \MitResidualSplit{} templates some separator
+tokens survive because they are registered as non-special added tokens (for
+example \texttt{<think>} in the Qwen3 family), and in
+\MitExactAfterSplitNonPlain{} of them the role
+tokens themselves are non-special, so the forged turn remains token-exact;
+these are the DeepSeek-V3 and R1 templates and one derivative, whose
+\texttt{<\textbar{}User\textbar{}>} and \texttt{<\textbar{}Assistant\textbar{}>}
+tokens are added tokens with \texttt{special=false}.
+Escaping all added tokens removes every separator control token in all
+\MitBlockedEscape{} templates whose separator contains one, leaving no
+token-exact forgery among them. The \MitPlainText{} templates with plain-text
+separators need a template-side change, because no tokenizer setting
+distinguishes a typed \texttt{Assistant:} from the template's.
+
+\subsection{Threats to validity}
+
+The sample is one snapshot of one ranking and omits gated models we could not
+access and GGUF-only repositories, whose templates are embedded in the weight
+files. Per-model counts are dominated by a few template families, which is why
+we also report distinct templates. The oracle renders fixed conversation
+shapes: an \emph{unobserved} marker may occur in a conversation we did not
+render, and \emph{not confirmed} covers the two contexts we tried. The marker
+patterns, in particular the plain-text role-header pattern, were refined while
+inspecting this sample, so the recall figures are not a held-out estimate. The taint analysis is heuristic: parsing the full Jinja AST does not establish
+soundness for arbitrary transformations. A fixed synthetic stress test
+(artifact \texttt{study/audit\_stress.py}) checks eight sanitizer cases:
+five single-pass replacement cases reconstruct a removed marker, so replacement
+is treated conservatively. Two added-token settings with
+\texttt{single\_word=True} also fail context-independent matching and are
+classified as text. These diagnostics are synthetic boundary checks. The
+property is structural; we measure that the model receives a forged turn, and
+prior work measures how models respond to one~\cite{jiang2025chatbug,zhou2024virtual}.
+
+\section{Discussion}
+
+None of the templates in the sample neutralizes message content, so the
+protection of role boundaries in these deployments rests entirely on the
+serving layer. \texttt{apply\_chat\_template} with default settings passes the
+forgery through. Our results suggest two concrete changes. Servers that accept
+untrusted message content should tokenize it separately from the template's
+text and escape every added token, special or not; RQ4 shows that
+\texttt{split\_special\_tokens} alone is insufficient for models that register
+role tokens as non-special. Model publishers that use plain-text role headers
+should either move to added tokens or escape the header strings in the
+template. \tool's \texttt{template-scan} reports both cases and distinguishes
+them through the tokenizer class of each finding.
+
+\section{Conclusion}
+
+Template and tokenizer analysis identifies candidate role-boundary
+forgery, which rendering can confirm. \tool analyzes all \NTemplates{} distinct templates of
+the \NModels{} most-downloaded Hub chat models in milliseconds per template,
+flags every model that the rendering oracle shows to be forgeable, and all 281 control-token findings with genuine rendered reference
+occurrences match at the token level. The same study shows
+that the common serving-side switch, \texttt{split\_special\_tokens}, does not
+cover role tokens registered as non-special, and that escaping all added tokens
+in content does.
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

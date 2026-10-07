@@ -1,0 +1,12 @@
+{
+  "focused_tests": 51,
+  "focused_tests_exit": 0,
+  "static_median_ms": 0.630521,
+  "portfolio_median_ms": 1.660667,
+  "render_errors": 0,
+  "scope": "synthetic portfolio-conditioned diagnostic",
+  "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m pytest -q tests/test_template_taint.py tests/test_chat_templates.py tests/test_template_abstract_interpretation.py tests/test_air_gapped_docs.py tests/test_wave2_boolean_taint.py",
+  "pdf_visual": "six-page contact sheet inspected; pages 4/5 rerendered after denominator-label repair",
+  "final_focused_tests": 53,
+  "peer_repairs": "Compare/Not reconstruction, post-freeze regressions"
+}

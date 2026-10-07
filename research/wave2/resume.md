@@ -1,0 +1,2 @@
+# Next falsifier
+Freeze an independently sourced negative/positive real-template set with sanitizer ground truth and compare matched field coverage, human triage effort and wall time against a competent weight-free direct renderer. Use user/tool/document inputs, all known delimiters and equivalent tokenizer context. Determine whether field attribution changes a deployment decision beyond simply inspecting rendering witnesses. Larger behavioral safety evaluation would require model access and a separately reconciled budget.

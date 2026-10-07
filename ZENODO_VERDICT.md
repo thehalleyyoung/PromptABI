@@ -1,0 +1,4 @@
+# YES — scoped research artifact release
+Worth archiving on Zenodo as an auditable tool/preprint artifact, after the owner chooses to publish. Raw synthetic counterexamples, repaired heuristic code, archived Hub observations and a reproducible manuscript have reusable value. This verdict authorizes no upload and predicts no journal acceptance.
+Journal status: NOT_YET. No production negative class or held-out specificity; six-payload rendering is a strong cheap alternative on the synthetic suite; field-attribution utility and downstream consequence are unmeasured. TemplateFuzz overlap is distinguished in threat model/output but novelty superiority is unproved. The single-pass timing and post-repair regression suite support only their stated local scope.
+No paid work was performed this round. Historical Modal/OpenRouter spending is unknown; the campaign's $5/provider ceilings stay frozen pending reconciliation.

@@ -1,0 +1,102 @@
+[
+  {
+    "name": "raw",
+    "expression": "m.content",
+    "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content }}{% endfor %}"
+  },
+  {
+    "name": "html",
+    "expression": "m.content|e",
+    "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content|e }}{% endfor %}"
+  },
+  {
+    "name": "forceescape",
+    "expression": "m.content|forceescape",
+    "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content|forceescape }}{% endfor %}"
+  },
+  {
+    "name": "urlencode",
+    "expression": "m.content|urlencode",
+    "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content|urlencode }}{% endfor %}"
+  },
+  {
+    "name": "replace_all",
+    "expression": "m.content|replace('<','&lt;')",
+    "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content|replace('<','&lt;') }}{% endfor %}"
+  },
+  {
+    "name": "constant",
+    "expression": "'benign'",
+    "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ 'benign' }}{% endfor %}"
+  },
+  {
+    "name": "length",
+    "expression": "m.content|length",
+    "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content|length }}{% endfor %}"
+  },
+  {
+    "name": "integer",
+    "expression": "m.content|int",
+    "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content|int }}{% endfor %}"
+  },
+  {
+    "name": "or",
+    "expression": "m.content or \"benign\"",
+    "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content or \"benign\" }}{% endfor %}"
+  },
+  {
+    "name": "and",
+    "expression": "m.content and m.content",
+    "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content and m.content }}{% endfor %}"
+  },
+  {
+    "name": "conditional",
+    "expression": "m.content if m.content else \"benign\"",
+    "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content if m.content else \"benign\" }}{% endfor %}"
+  },
+  {
+    "name": "join",
+    "expression": "[m.content]|join",
+    "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ [m.content]|join }}{% endfor %}"
+  },
+  {
+    "name": "select_max",
+    "expression": "[m.content]|max",
+    "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ [m.content]|max }}{% endfor %}"
+  },
+  {
+    "name": "slice",
+    "expression": "m.content[:]",
+    "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content[:] }}{% endfor %}"
+  },
+  {
+    "name": "format",
+    "expression": "'%s'|format(m.content)",
+    "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ '%s'|format(m.content) }}{% endfor %}"
+  },
+  {
+    "name": "html_rebuild",
+    "expression": "'<' ~ (m.content|e) ~ '>'",
+    "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ '<' ~ (m.content|e) ~ '>' }}{% endfor %}"
+  },
+  {
+    "name": "numeric_rebuild",
+    "expression": "m.content|int|string|replace('1','<|turn|>')",
+    "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content|int|string|replace('1','<|turn|>') }}{% endfor %}"
+  },
+  {
+    "name": "replace_collapse",
+    "expression": "m.content|replace('xx','')",
+    "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content|replace('xx','') }}{% endfor %}"
+  },
+  {
+    "name": "safe_escape",
+    "expression": "(m.content|safe)|e",
+    "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ (m.content|safe)|e }}{% endfor %}"
+  },
+  {
+    "name": "upper",
+    "expression": "m.content|upper",
+    "template": "{% for m in messages %}<|turn|>{{ m.role }}:{{ m.content|upper }}{% endfor %}"
+  }
+]
